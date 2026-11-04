@@ -55,7 +55,10 @@ function fillLive(r: Repos) {
   r.tasks.markSync(task.id, { syncState: "synced", ghItemId: "PVTI_real" }, now);
   r.db.prepare("INSERT INTO settings (key, value) VALUES ('gh_project.id', '\"PVT_real\"'), ('gh_project.url', '\"https://github.com/x\"')").run();
   emitWake(r.db, { sessionId: "lead", kind: "ticket.created", entityType: "ticket", entityId: t.id, payload: {} }, now);
-  return { ticket: t, pending, approved, released, scheduled, sent, task: task.id };
+  // A card handed to Claude on the live board: linked ticket both ways, ticket.created wake to the lead.
+  const card = r.tasks.create({ title: "Revisar backups", source: "claude" }, now);
+  const dispatched = r.dispatch.dispatch(card.id, {}, now);
+  return { ticket: t, pending, approved, released, scheduled, sent, task: task.id, card: card.id, dispatched: dispatched.ticket };
 }
 
 const fingerprint = (f: string) => ({ sha: createHash("sha256").update(fs.readFileSync(f)).digest("hex"), mtime: fs.statSync(f).mtimeMs, size: fs.statSync(f).size });
@@ -93,6 +96,17 @@ describe("resetSandbox --from live", () => {
       expect(r.tasks.pendingSync()).toEqual([]);
       expect(db.prepare("SELECT COUNT(*) AS n FROM settings WHERE key LIKE 'gh_project.%'").get()).toEqual({ n: 0 });
       expect(r.tasks.list().some((t) => t.title === "después")).toBe(false);
+      // Task <-> ticket links survive the copy; the live dispatch's wake does not.
+      expect(r.tasks.get(ids.card).ticketId).toBe(ids.dispatched.id);
+      expect(r.tickets.detail(ids.dispatched.id)).toMatchObject({ taskId: ids.card, ownerSession: null });
+      // Dispatch works on the sandbox: a new card gets its ticket and one ticket.created wake to the lead.
+      const fresh = r.tasks.create({ title: "Probar el flujo", source: "claude" });
+      const d = r.dispatch.dispatch(fresh.id);
+      expect(d.created).toBe(true);
+      expect(db.prepare("SELECT session_id, kind, entity_id FROM wake_events").all()).toEqual([{ session_id: "lead", kind: "ticket.created", entity_id: d.ticket.id }]);
+      // Re-dispatching the copied card is idempotent (its ticket is still open): no second wake.
+      expect(r.dispatch.dispatch(ids.card).created).toBe(false);
+      expect(db.prepare("SELECT COUNT(*) AS n FROM wake_events").get()).toEqual({ n: 1 });
     } finally {
       db.close();
     }

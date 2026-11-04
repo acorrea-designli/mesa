@@ -53,6 +53,10 @@ know they are in the sandbox even if the env does not reach them. It refuses `G:
   item ids and the `gh_project.*` settings are removed, and every task becomes `local`, so nothing can sync. A
   `sandbox.copy` settings row records the origin, the time, the row counts and what was scrubbed; the band shows
   it.
+- Cards handed to Claude keep their task ↔ ticket links (`tasks.ticket_id`, `tickets.task_id`, migration 0500).
+  Their `ticket.created` wakes are dropped, and `mesa-start` resumes those open tickets from the state.
+  Dispatch works on the sandbox as on the live board: "Dárselo a Claude", batch dispatch and `mesa task
+  create|dispatch` create the linked ticket and wake the sandbox lead (`lead`). Nothing goes outward.
 - Salidas the live board already sent keep their real permalink. The sandbox refuses to delete or restore them.
 
 ## What the server does differently
