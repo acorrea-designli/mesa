@@ -80,13 +80,13 @@ describe("ticket read state", () => {
 
   it("tickets that exist when the migration runs start as seen", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesa-mig-"));
-    for (const f of fs.readdirSync(MIGRATIONS_DIR)) if (f < "0600") fs.copyFileSync(path.join(MIGRATIONS_DIR, f), path.join(dir, f));
+    for (const f of fs.readdirSync(MIGRATIONS_DIR)) if (f !== "0610_ticket_reads.sql") fs.copyFileSync(path.join(MIGRATIONS_DIR, f), path.join(dir, f));
     const db = new DatabaseSync(":memory:");
     db.exec("PRAGMA foreign_keys = ON;");
     migrate(db, dir);
     const old = createRepos(db);
     const t = old.tickets.create({ direction: "claude_asks", title: "viejo", body: "viejo", ownerSession: "lead" }, new Date("2026-01-01T00:00:00.000Z"));
-    expect(migrate(db)).toEqual(["0600_ticket_reads.sql"]);
+    expect(migrate(db)).toEqual(["0610_ticket_reads.sql"]);
     expect(old.tickets.unreadIds().has(t.id)).toBe(false);
     old.tickets.addMessage(t.id, { author: "claude", body: "nuevo" }, new Date(Date.now() + 5000));
     expect(old.tickets.unreadIds().has(t.id)).toBe(true);
