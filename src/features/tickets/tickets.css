@@ -1155,12 +1155,13 @@
   .tk-foot {
     position: sticky;
     bottom: calc(var(--phone-tabs-h) + var(--sbx-h));
+    z-index: 2; /* above the messages that scroll under it, below the tab bar (30) */
+    box-shadow: 0 var(--sbx-h) 0 0 var(--deep); /* fills the gap above the tab bar left by the SANDBOX tab (0 live) */
     padding: 10px 16px 14px;
   }
-  /* The page scrolls here and .tk-pane clips (overflow: hidden), so the pill is fixed to the viewport above the tab bar. */
+  /* The pill rides on the sticky composer (it is inside .tk-foot): just above it, with the same 14 px gap as the toasts. */
   .tk-newmsg {
-    position: fixed;
-    bottom: calc(var(--phone-tabs-h) + 40px); /* clears the sandbox banner that sits on the tab bar */
+    bottom: calc(100% + 14px);
   }
   .tk-bar .hint {
     flex: 1;
