@@ -74,8 +74,8 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 3. `MESA salida sent <id> --permalink <url>` with the URL the tool returned, or
    `MESA salida failed <id> --error "<message>"`. Tell the writer `SENT <ref> <salida>`.
 4. Source down at send time (the MCP call fails as unreachable or rate limited): `MESA salida hold <id> --reason
-   "<error>"` ("Aprobar al volver") and `MESA health set <slack|basecamp> down|limited --note "<error>"`. When the
-   source is set back to `ok` Mesa resumes every held salida with `recheckThread: true` (step 0).
+   "<error>"` ("Aprobar al volver") and `MESA source set <slack|basecamp> --health down --note "<error>"`. When the
+   source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with `recheckThread: true` (step 0).
 
 Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases the salida and the same
 `salida.released` arrives. Never use `slack_schedule_message` (hook G5).

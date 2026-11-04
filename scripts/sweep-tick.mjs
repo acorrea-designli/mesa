@@ -9,11 +9,12 @@
 //   node scripts/sweep-tick.mjs force [--source slack|basecamp]...   the lead, on sweep.requested ("Barrer ahora")
 //
 // Every number lives in config/sweep.json. State per source lives in Mesa (`GET /api/sources`,
-// `PATCH /api/sources/:name`: watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError; plus
-// `lastInteractionAt` for the whole board). While Mesa has no sources API (404) the state falls back to a local file
-// and every output says `"store": "local"`. Health goes to Mesa's `POST /api/sources/health` (ok | limited | down),
-// which the rail shows (Estados B). "Barrer ahora" wakes the LEAD with `sweep.requested`; the lead runs `force`,
-// which drops a flag that `wait` checks every forceCheckSec, so the blocked sweeper wakes without any relay.
+// `PATCH /api/sources/:name`: watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError, cadenceS;
+// plus `lastInteractionAt` for the whole board). If Mesa answers 404 (an older build) the state falls back to a local file
+// and every output says `"store": "local"`. Health (ok | degraded | down, down after downAfterErrors consecutive
+// failures that are not rate limits) rides on the same PATCH and feeds the rail (Estados B); leaving "down" resumes
+// salidas held for that source. "Barrer ahora" emits `sweep.requested` to the session "sweeper", which `wait`
+// long-polls; `force` is the lead's manual equivalent.
 //
 // Cadence: during work hours every source is probed every activeIntervalSec; after idleAfterMin minutes with no new
 // item and no interaction from Andrés it backs off to idleIntervalSec, and it snaps back on the next new item or
@@ -99,7 +100,7 @@ export function applyReport(config, s = {}, report, now) {
       ...s,
       lastChecked: iso,
       errorCount,
-      health: "degraded",
+      health: errorCount >= (config.downAfterErrors ?? 3) && !report.rateLimited ? "down" : "degraded",
       lastError: `${report.rateLimited ? "rate limited: " : ""}${report.error}`.slice(0, 300),
       backoffUntil: new Date(now + waitSec * 1000).toISOString(),
     };
@@ -146,8 +147,17 @@ function takeForce(path) {
   }
 }
 
-export function makeStore({ fetchImpl = fetch, base = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""), localPath = LOCAL_STORE, forcePath = FORCE_FLAG } = {}) {
+const PATCH_KEYS = ["health", "note", "watermark", "lastChecked", "lastNewAt", "backoffUntil", "cadenceS", "errorCount", "lastError"];
+
+export function makeStore({
+  fetchImpl = fetch,
+  base = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""),
+  localPath = LOCAL_STORE,
+  forcePath = FORCE_FLAG,
+  session = process.env.MESA_SWEEPER_SESSION ?? "sweeper",
+} = {}) {
   let local = false;
+  let registered = false;
   const readLocal = () => {
     try {
       return JSON.parse(readFileSync(localPath, "utf8"));
@@ -179,7 +189,8 @@ export function makeStore({ fetchImpl = fetch, base = (process.env.MESA_URL ?? "
         writeLocal(st);
         return;
       }
-      const r = await http(`/api/sources/${encodeURIComponent(name)}`, { method: "PATCH", body: s, fetchImpl, base });
+      const body = Object.fromEntries(PATCH_KEYS.filter((k) => s[k] !== undefined).map((k) => [k, s[k]]));
+      const r = await http(`/api/sources/${encodeURIComponent(name)}`, { method: "PATCH", body, fetchImpl, base });
       if (r.status === 404) {
         local = true;
         return this.save(name, s);
@@ -187,21 +198,30 @@ export function makeStore({ fetchImpl = fetch, base = (process.env.MESA_URL ?? "
       if (r.status >= 400) throw new Error(`Mesa answered ${r.status}`);
     },
     // Sleeps up to `sec` in small steps; returns the forced sources when the lead dropped the flag ("Barrer ahora").
-    async forcedWithin(sec, stepSec = 5) {
+    // Blocks up to `sec`. Returns the forced sources when "Barrer ahora" was pressed (`sweep.requested` on the Mesa
+    // session MESA_SWEEPER_SESSION, default "sweeper") or the lead dropped the force flag; null on timeout.
+    async forcedWithin(sec, stepSec = 25) {
       const end = Date.now() + sec * 1000;
+      if (!registered) {
+        registered = true;
+        await http("/api/sessions", { method: "POST", body: { id: session, label: "sweeper" }, fetchImpl, base }).catch(() => {});
+      }
       for (;;) {
         const f = takeForce(forcePath);
         if (f) return f;
-        const left = end - Date.now();
+        const left = (end - Date.now()) / 1000;
         if (left <= 0) return null;
-        await new Promise((r) => setTimeout(r, Math.min(stepSec * 1000, left)));
-      }
-    },
-    async health(name, state, note) {
-      try {
-        await http("/api/sources/health", { method: "POST", body: { source: name, state, ...(note ? { note } : {}) }, fetchImpl, base });
-      } catch {
-        /* health is best effort; the next tick reports again */
+        const step = Math.max(1, Math.round(Math.min(stepSec, left)));
+        try {
+          const r = await http(`/api/wait?session=${encodeURIComponent(session)}&timeout=${step}`, { fetchImpl, base, timeoutMs: (step + 10) * 1000 });
+          const events = Array.isArray(r.data?.events) ? r.data.events : null;
+          if (!events) throw new Error(`wait answered ${r.status}`);
+          if (events.length) await http("/api/wait/ack", { method: "POST", body: { session, cursor: r.data.cursor }, fetchImpl, base }).catch(() => {});
+          const ev = events.find((e) => e.kind === "sweep.requested");
+          if (ev) return { sources: ev.payload?.sources ?? null };
+        } catch {
+          await new Promise((r) => setTimeout(r, Math.min(5000, Math.max(0, end - Date.now()))));
+        }
       }
     },
   };
@@ -224,7 +244,7 @@ export async function wait(config, store, { now = Date.now, maxSec = config.wait
     if (left <= 0) return { due: false, reason: "timeout", store: store.kind };
     const next = Math.min(...Object.values(dueTimes(config, state, now())), until);
     const sec = Math.max(1, Math.min((next - now()) / 1000, left / 1000));
-    const f = await store.forcedWithin(sec, config.forceCheckSec);
+    const f = await store.forcedWithin(sec, config.longPollSec);
     if (f) {
       const st = await store.load();
       const forced = dueSources(config, st, now(), { forced: true }).filter((n) => !f.sources || f.sources.includes(n));
@@ -239,8 +259,8 @@ export async function report(config, store, name, rep, { now = Date.now } = {}) 
   if (!config.sources[name]) throw new Error(`unknown source ${name}`);
   const state = await store.load();
   const next = applyReport(config, state.sources?.[name], rep, now());
+  next.cadenceS = intervalSec(config, { ...state, sources: { ...(state.sources ?? {}), [name]: next } }, now());
   await store.save(name, next);
-  if (store.health) await store.health(name, rep.error ? (rep.rateLimited ? "limited" : "down") : "ok", rep.error ? next.lastError : undefined);
   state.sources = { ...(state.sources ?? {}), [name]: next };
   return { ok: true, source: name, state: next, intervalSec: intervalSec(config, state, now()), store: store.kind };
 }

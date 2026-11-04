@@ -194,8 +194,8 @@ registered with the node that ran the installer. Re-run after every pull. Restar
    creates those salidas pending instead; the team's flow does not change.
 4. **One review per decision** (decided): Post sends ONE batched GitHub review with every new inline comment of that
    click, and continues existing threads as replies (`mesa-review` § Lead writes).
-5. **Two test runners.** The team hooks and scripts use node:test so they run without an install; `vitest.config.ts`
-   excludes `scripts/hooks/test/**` and `scripts/test/**`, and `pnpm check` runs them as `pnpm test:team`.
+5. **Two test runners.** The team hooks and scripts use node:test so they run without an install. Vitest covers
+   `src` and `bin`; `pnpm test` runs vitest and then `pnpm test:team`.
 6. **Who applies infra** (asked to Andrés). devops never applies. Proposed: `apply_infra` is a `needs_ok` plan action the lead runs
    from the devops worktree with the saved plan file after approval, or the repo's CI applies on merge. Andrés decides.
 7. **Hook payloads to verify live.** Whether `PermissionRequest` fires for background in-process teammates, and
@@ -219,12 +219,8 @@ registered with the node that ran the installer. Re-run after every pull. Restar
     also matches writes with `-f`; hook G4 blocks those for everyone.
 14. **Lead question guard.** medix's Stop hook that refuses a lead turn ending in a question with no ticket is not
     included; the lead talks to Andrés in his own terminal. Add it if questions keep getting lost in chat.
-15. **Watermarks in Mesa.** Health (`/api/sources/health`) and "Barrer ahora" (`/api/sweep`) exist; per-source
-    watermarks and `lastInteractionAt` do not. `sweep-tick.mjs` asks `GET /api/sources` (`{sources: {slack,
-    basecamp}, lastInteractionAt}`) and `PATCH /api/sources/:name` (watermark, lastChecked, lastNewAt, errorCount,
-    backoffUntil, lastError) and, on 404, keeps them in `%TEMP%/mesa-team/sources.json` (outputs say
-    `"store": "local"`). Until Mesa stores them there is no snap-back to 60 s when Andrés interacts with Mesa (a new
-    item still snaps it back).
+15. **Sweep state** (resolved): `source_state` and `lastInteractionAt` shipped on main (migration 0003); the
+    sweeper's state lives in Mesa.
 16. **Slack probe query.** The probe uses one search, `(to:me OR <@U06E2UBDC73>)`. If Slack search does not honour
     `OR` with `to:`, the probe becomes two calls (`to:me`, then the mention) and stays under the same limit.
 17. **Sweeper approvals.** The sweeper has no ticket, so a permission card it raises has `ticketRef: null` and
@@ -244,13 +240,15 @@ procedure and the lead's on-demand pass.
   interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit and the
   ticks per instance. `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
   records a tick's outcome. Any new item or any interaction by Andrés snaps the cadence back to 60 s.
-- **Barrer ahora** (or `mesa sweep`) wakes the lead with `sweep.requested`. The sweeper is blocked in a foreground
-  `wait` and cannot read a message, so the lead runs `sweep-tick.mjs force [--source s]`, which drops a flag that
-  `wait` checks every `forceCheckSec` (5 s); it returns with every listed source not in backoff, even outside work
-  hours.
-- **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its Mesa health
-  (`POST /api/sources/health`) to `limited` or `down`, which the rail shows (Estados B). The next good probe sets it
-  back to `ok`, and Mesa then resumes the salidas held for that source.
+- **Barrer ahora** (or `mesa sweep`) emits `sweep.requested` to the Mesa session `sweeper`
+  (`MESA_SWEEPER_SESSION`); `sweep-tick.mjs wait` long-polls that session and returns at once with every listed
+  source, even outside work hours. `sweep-tick.mjs force [--source s]` does the same by hand.
+- **State in Mesa.** `GET /api/sources` and `PATCH /api/sources/:name` (`source_state`: watermark, lastChecked,
+  lastNewAt, backoffUntil, cadenceS, errorCount, lastError, health) plus `lastInteractionAt`, stamped by any UI
+  action of Andrés. An older Mesa without them (404) falls back to `%TEMP%/mesa-team/sources.json`.
+- **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its health to
+  `degraded`, or `down` after `downAfterErrors` consecutive failures that are not rate limits; the rail shows it
+  (Estados B). The next good probe sets it back to `ok`, and leaving `down` resumes the salidas held for it.
 - **Context.** The sweeper waits in the foreground, so its turn never ends between ticks: no idle notifications
   reach the lead and no tick costs the lead any context. After `maxTicksPerInstance` ticks it sends `DONE` and the
   lead spawns the next one; the watermarks carry over in Mesa.

@@ -26,10 +26,11 @@ watermarks.
 
 The clock is `scripts/sweep-tick.mjs`; every number (60 s active, 5 min after 30 quiet minutes, exponential
 backoff to 30 min on errors, work hours, probe limit) is in `config/sweep.json`. It snaps back to 60 s on any new
-item or when Andrés interacts with Mesa. "Barrer ahora" (or `mesa sweep`) wakes the lead with `sweep.requested`; the
-lead runs `sweep-tick.mjs force` and the sweeper's `wait` returns within 5 s with an immediate probe. A 429 or an
-MCP error backs that source off and sets its Mesa health to `limited` or `down` (Estados B); the next good probe
-sets it back to `ok`, which also resumes the salidas held for that source.
+item or when Andrés interacts with Mesa (`lastInteractionAt`). "Barrer ahora" (or `mesa sweep`) emits
+`sweep.requested` to the Mesa session `sweeper`, which `wait` long-polls, so the probe runs at once
+(`sweep-tick.mjs force` is the lead's manual equivalent). A 429 or an MCP error backs that source off and sets its
+health to `degraded` (`down` after repeated failures that are not rate limits) in `source_state`, which the rail
+shows (Estados B); the next good probe sets it back to `ok`, which also resumes the salidas held for that source.
 
 **On demand (the lead).** "Barre" from Andrés: if the sweeper is alive, nothing to do but tell him the button does
 it; for a wider window ("qué hay desde el viernes") or with the sweeper down, run § 1-3 over the window yourself

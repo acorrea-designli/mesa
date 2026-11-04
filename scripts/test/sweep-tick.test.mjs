@@ -146,12 +146,47 @@ test("force drops a flag the waiting store picks up once, limited to the named s
   assert.deepEqual(r.sources, ["slack", "basecamp"]);
 });
 
-test("report sends health to Mesa: ok, limited on a 429, down on other errors", async () => {
-  const sent = [];
-  const store = memStore({ sources: {} });
-  store.health = async (name, state) => sent.push([name, state]);
-  await report(config, store, "slack", { new: 0 }, { now: () => tue10 });
-  await report(config, store, "slack", { error: "429", rateLimited: true }, { now: () => tue10 });
-  await report(config, store, "basecamp", { error: "boom" }, { now: () => tue10 });
-  assert.deepEqual(sent, [["slack", "ok"], ["slack", "limited"], ["basecamp", "down"]]);
+test("health: degraded on errors, down after repeated non-rate-limit failures, ok again on success", () => {
+  let s1 = {};
+  s1 = applyReport(config, s1, { error: "boom" }, tue10);
+  assert.equal(s1.health, "degraded");
+  s1 = applyReport(config, s1, { error: "boom" }, tue10);
+  s1 = applyReport(config, s1, { error: "boom" }, tue10);
+  assert.equal(s1.health, "down");
+  let s2 = {};
+  for (let k = 0; k < 5; k++) s2 = applyReport(config, s2, { error: "429", rateLimited: true }, tue10);
+  assert.equal(s2.health, "degraded");
+  assert.equal(applyReport(config, s1, { new: 0 }, tue10).health, "ok");
+});
+
+test("report PATCHes Mesa with only the source fields, including the current cadence", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url, method: init.method ?? "GET", body: init.body ? JSON.parse(init.body) : undefined });
+    if (url.endsWith("/api/sources")) return { status: 200, json: async () => ({ sources: { slack: { source: "slack", health: "ok", updatedAt: "x", watermark: "w0" } }, lastInteractionAt: iso(tue10) }) };
+    return { status: 200, json: async () => ({ source: {} }) };
+  };
+  const store = makeStore({ fetchImpl, base: "http://m" });
+  await report(config, store, "slack", { new: 1, watermark: "w1" }, { now: () => tue10 });
+  const patch = calls.find((c) => c.method === "PATCH");
+  assert.ok(patch.url.endsWith("/api/sources/slack"));
+  assert.deepEqual(Object.keys(patch.body).sort(), ["backoffUntil", "cadenceS", "errorCount", "health", "lastChecked", "lastError", "lastNewAt", "watermark"]);
+  assert.equal(patch.body.cadenceS, 60);
+  assert.equal(store.kind, "mesa");
+});
+
+test("Barrer ahora: wait returns on sweep.requested for the sweeper session", async () => {
+  const seen = [];
+  const fetchImpl = async (url, init = {}) => {
+    seen.push(`${init.method ?? "GET"} ${new URL(url).pathname}`);
+    if (url.includes("/api/wait?session=sweeper")) return { status: 200, json: async () => ({ events: [{ kind: "sweep.requested", payload: { sources: ["basecamp"] } }], cursor: 7 }) };
+    if (url.endsWith("/api/sources")) return { status: 200, json: async () => ({ sources: {}, lastInteractionAt: null }) };
+    return { status: 200, json: async () => ({}) };
+  };
+  const dir = mkdtempSync(join(tmpdir(), "sweep-wake-"));
+  const store = makeStore({ fetchImpl, base: "http://m", forcePath: join(dir, "f.json") });
+  const r = await wait(config, store, { now: () => at("2026-11-03T23:00:00"), maxSec: 60 });
+  assert.equal(r.forced, true);
+  assert.deepEqual(r.sources, ["basecamp"]);
+  assert.ok(seen.includes("POST /api/sessions") && seen.includes("POST /api/wait/ack"));
 });

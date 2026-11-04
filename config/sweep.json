@@ -19,8 +19,9 @@
     "factor": 2,
     "maxSec": 1800
   },
+  "downAfterErrors": 3,
   "waitMaxSec": 540,
-  "forceCheckSec": 5,
+  "longPollSec": 25,
   "probeLimit": 10,
   "maxTicksPerInstance": 60,
   "sweeperModel": "haiku",

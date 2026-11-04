@@ -78,7 +78,7 @@ from the brief and the handoffs and asks for its teammates again with NEED. Do n
 | `salida.delete_requested` / `salida.restore_requested` | `mesa-salida` § Delete |
 | `salida.queued` | nothing: approved while its source is down; it comes back as `salida.released` with `recheckThread` |
 | `review.action` | `ANSWER <ref> review.action <action> <findingNs> <salidaIds>` to the reviewer (spawn one if none); approve and post salidas arrive as `salida.released` 20 s later |
-| `sweep.requested` ("Barrer ahora") | `node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs force` (add `--source <s>` per listed source); the sweeper wakes within 5 s. No sweeper alive: spawn one, or run `mesa-sweep` on demand for GitHub |
+| `sweep.requested` | never reaches you: "Barrer ahora" wakes the session `sweeper` directly. If Andrés says it did nothing, check `MESA team list --status live` has a sweeper and spawn one (§ 4) |
 | `task.moved` | nothing (the server syncs the GitHub Project) |
 
 Teammate messages (`docs/TEAM.md` § Messages): `NEED` → spawn (TEAM.md § 2), `DONE` → retire (§ 2), `BLOCKED` →

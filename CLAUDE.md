@@ -9,7 +9,7 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 - Node **22.23.2** (`mise.toml`; `.npmrc` sets `use-node-version` so pnpm scripts use it even if the `node` on PATH is older). `node:sqlite` needs ≥ 22.13.
 - `pnpm install`
 - `pnpm dev` serves on `0.0.0.0:8790` (never 8770 or 8771: other boards use them). Open http://localhost:8790.
-- `pnpm check` runs typecheck, lint and tests (vitest, plus `node --test` for the approval hook). `pnpm build` must pass before a PR.
+- `pnpm check` runs typecheck, lint and tests (vitest, plus `pnpm test:team`: node:test for the team hooks and scripts). `pnpm build` must pass before a PR.
 - Data lives in `data/mesa.db` (gitignored; `MESA_DB` overrides). Migrations in `db/migrations` apply on startup; `pnpm db:migrate` applies them by hand.
 - `/kit` shows every shared component in both themes.
 - CLI for sessions: `node bin/mesa help` (`bin/mesa.cmd` on Windows). Set `MESA_SESSION` to the session id.
