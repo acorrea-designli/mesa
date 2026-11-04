@@ -1,0 +1,142 @@
+/* <ApprovalCard>: permission request inline in a ticket thread (and on Hoy). */
+.ap-card {
+  margin-top: 12px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-panel);
+  background: var(--raise);
+  padding: 10px 12px 10px;
+  display: grid;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.ap-card.off,
+.ap-card.done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-style: dashed;
+  border-color: var(--edge);
+  background: transparent;
+  color: var(--ink2);
+  font-size: 13px;
+  padding: 8px 12px;
+}
+.ap-card.done {
+  border-style: solid;
+  border-color: var(--rule);
+}
+.ap-card b {
+  font-weight: 700;
+  color: var(--ink);
+}
+.ap-line {
+  display: inline-block;
+  width: 16px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--cl);
+  flex: none;
+}
+.ap-card.off .ap-line {
+  background: none;
+  height: 0;
+  border-top: 5px dotted var(--cl);
+}
+.ap-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.ap-agent {
+  color: var(--mute);
+  font-weight: 600;
+}
+.ap-left {
+  margin-left: auto;
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ap-tool {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  min-width: 0;
+}
+.ap-tool span:last-child {
+  overflow-wrap: anywhere;
+}
+.ap-tag {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--ink2);
+  border-radius: var(--r-tag);
+  padding: 0 6px;
+  line-height: 18px;
+}
+.ap-detail {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--gnd);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  padding: 8px 10px;
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* Diff lines: shape, not colour (lines carry source only). */
+.ap-detail .add {
+  font-weight: 700;
+}
+.ap-detail .del {
+  color: var(--mute);
+  text-decoration: line-through;
+}
+.ap-detail .hunk {
+  color: var(--mute);
+}
+.ap-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--mute);
+}
+.ap-facts code {
+  font: 600 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--ink);
+}
+.ap-acts,
+.ap-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.ap-note input {
+  flex: 1;
+  min-width: 160px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  background: var(--gnd);
+  font-size: 13px;
+}
+.ap-why {
+  font-size: 12px;
+  color: var(--mute);
+}
+@media (max-width: 720px) {
+  .ap-acts .btn {
+    flex: 1 1 auto;
+    height: 44px;
+  }
+}

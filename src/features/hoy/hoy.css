@@ -223,97 +223,7 @@
   height: 22px;
   margin-bottom: 6px;
 }
-.ap-card {
-  background: var(--raise);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-panel);
-  padding: 12px 14px 14px;
-  margin-bottom: 8px;
-}
-.ap-card.is-expired {
-  background: transparent;
-  border-style: dashed;
-  color: var(--mute);
-  font-size: 13.5px;
-}
-.ap-card.is-expired b {
-  color: var(--ink);
-}
-.ap-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mute);
-}
-.ap-top b {
-  color: var(--ink);
-}
-.ap-ring {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2.5px solid var(--cl);
-  background: var(--raise);
-  flex: none;
-}
-.ap-left {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-.ap-sum {
-  margin-top: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-.ap-detail {
-  margin-top: 8px;
-  max-height: 132px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font: 500 12.5px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
-  background: var(--gnd);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-control);
-  padding: 8px 10px;
-}
-.ap-cwd {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--mute);
-}
-.ap-hints {
-  list-style: none;
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.ap-hints code {
-  font: 600 12px ui-monospace, Consolas, monospace;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-tag);
-  padding: 2px 7px;
-  background: var(--gnd);
-}
-.ap-note {
-  display: block;
-  margin-top: 10px;
-}
-.ap-note input {
-  width: 100%;
-  height: 36px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-control);
-  background: var(--gnd);
-  padding: 0 10px;
-}
-.ap-card .hy-acts {
-  margin-top: 12px;
-}
+/* Permission cards are <ApprovalCard> (src/features/approvals, own CSS). */
 
 /* ---------- detail pane ---------- */
 .hy-detail {
@@ -724,9 +634,6 @@
 .hy-detail .hy-done + .hy-meta,
 .hy-detail .hy-fs > div > .k:first-child {
   margin-top: 0;
-}
-.ap-card .k {
-  margin-top: 10px;
 }
 @media (max-width: 720px) {
   .hy-detail .hy-acts > :nth-child(2):last-child {
