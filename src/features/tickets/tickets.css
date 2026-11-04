@@ -1113,6 +1113,9 @@
   }
   .tk-app[data-open] .tk-pane {
     display: flex;
+    /* clip, not hidden: hidden makes the pane a scroll container and position: sticky on .tk-foot never sticks */
+    overflow: clip;
+    padding-bottom: var(--sbx-h); /* room for the SANDBOX tab the composer sits above (0 live) */
     border-left: 0;
     min-height: calc(100dvh - var(--phone-tabs-h));
     background: var(--gnd);
@@ -1151,7 +1154,7 @@
   }
   .tk-foot {
     position: sticky;
-    bottom: var(--phone-tabs-h);
+    bottom: calc(var(--phone-tabs-h) + var(--sbx-h));
     padding: 10px 16px 14px;
   }
   /* The page scrolls here and .tk-pane clips (overflow: hidden), so the pill is fixed to the viewport above the tab bar. */
