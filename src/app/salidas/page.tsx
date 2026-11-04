@@ -1,18 +1,15 @@
-// Salidas B (one card at a time, free order, queue strip). Placeholder until lane B builds it.
+// Salidas B: one card at a time, free order, queue strip.
 import type { Metadata } from "next";
-import { ScreenFrame } from "@/components/shell/ScreenFrame";
+import { loadSalidas } from "@/features/salidas/read";
+import { SalidasScreen } from "@/features/salidas/SalidasScreen";
 import { repos } from "@/lib/repo";
+import "@/features/salidas/salidas.css";
 
 export const metadata: Metadata = { title: "Salidas" };
 
-export default function SalidasPage() {
-  const pending = repos().salidas.list({ status: ["pending", "scheduled"] });
-  return (
-    <ScreenFrame title="Salidas" meta="Nada sale sin tu firma">
-      <p>
-        {pending.length === 1 ? "1 pendiente" : `${pending.length} pendientes`}. Cada mensaje muestra su destino exacto y su texto exacto antes de
-        que lo apruebes, con 20 s para deshacer.
-      </p>
-    </ScreenFrame>
-  );
+export default async function SalidasPage({ searchParams }: { searchParams: Promise<{ s?: string }> }) {
+  const { s } = await searchParams;
+  const r = repos();
+  r.sweep();
+  return <SalidasScreen data={loadSalidas(r)} initial={s} />;
 }
