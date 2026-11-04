@@ -122,19 +122,21 @@ test("report persists the new state", async () => {
   await assert.rejects(report(config, store, "email", { new: 0 }), /unknown source/);
 });
 
-test("the store falls back to a local file while Mesa has no sources API", async () => {
+test("there is no local fallback: Mesa errors surface", async () => {
   const fetchImpl = async () => ({ status: 404, json: async () => ({ error: { code: "not_found" } }) });
-  const store = makeStore({ fetchImpl, base: "http://x", localPath: join(mkdtempSync(join(tmpdir(), "sweep-")), "s.json") });
-  await report(config, store, "slack", { new: 0 }, { now: () => tue10 });
-  assert.equal(store.kind, "local");
-  assert.equal((await store.load()).sources.slack.health, "ok");
+  const store = makeStore({ fetchImpl, base: "http://x" });
+  await assert.rejects(report(config, store, "slack", { new: 0 }, { now: () => tue10 }), /404 on GET \/api\/sources/);
+  const r = await wait(config, store, { now: () => tue10, maxSec: 5 });
+  assert.equal(r.reason, "mesa_down");
 });
 
 test("force drops a flag the waiting store picks up once, limited to the named sources", async () => {
   const dir = mkdtempSync(join(tmpdir(), "sweep-force-"));
   const forcePath = join(dir, "force.json");
-  const fetchImpl = async () => ({ status: 404, json: async () => ({}) });
-  const store = makeStore({ fetchImpl, base: "http://x", localPath: join(dir, "s.json"), forcePath });
+  // Mesa has the sources but its wait endpoint fails: only the flag can wake the store.
+  const fetchImpl = async (url) =>
+    url.endsWith("/api/sources") ? { status: 200, json: async () => ({ sources: {}, lastInteractionAt: null }) } : { status: 500, json: async () => ({}) };
+  const store = makeStore({ fetchImpl, base: "http://x", forcePath });
   assert.equal(await store.forcedWithin(0.05, 0.01), null);
   writeForce(["slack"], forcePath);
   assert.deepEqual(await store.forcedWithin(1, 0.01), { sources: ["slack"] });
