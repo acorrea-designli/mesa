@@ -310,6 +310,8 @@ export interface LearnedChip {
   label: string;
   phrasings: string[];
   uses: number;
+  /** Sample data from `pnpm seed`. */
+  isSample: boolean;
   lastUsedAt: string;
 }
 
@@ -435,6 +437,8 @@ export interface Approval {
   decidedBy: string | null;
   decidedAt: string | null;
   expiresAt: string;
+  /** Sample data from `pnpm seed` ("Datos de muestra."). */
+  isSample: boolean;
   createdAt: string;
 }
 

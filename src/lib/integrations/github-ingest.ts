@@ -118,9 +118,10 @@ export function toItemInput(rr: ReviewRequest, d: PrDetail | null): ItemInput {
     source: "github",
     externalId: prExternalId(rr.repo, rr.number),
     kind: "pr_review",
-    title: `${rr.repo.split("/")[1] ?? rr.repo}#${rr.number} ${rr.title}`,
+    // Hoy shows "<project> · <title>": project is the repo name, the title starts at the number.
+    title: `#${rr.number} · ${rr.title}`,
     excerpt: d ? prExcerpt(d) : "",
-    project: rr.repo,
+    project: rr.repo.split("/")[1] ?? rr.repo,
     url: rr.url,
     need: "approve_pr",
     waitOn: "you",

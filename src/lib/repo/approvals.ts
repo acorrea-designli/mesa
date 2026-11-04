@@ -8,7 +8,7 @@ import { signal, waitSignal } from "../wake/wake";
 import { ticketsRepo } from "./tickets";
 import { touchInteraction } from "./interaction";
 
-const SPEC = { json: ["hints"] };
+const SPEC = { json: ["hints"], bool: ["is_sample"] };
 export const DEFAULT_APPROVAL_TTL_MS = 9 * 60_000;
 export const MAX_APPROVAL_TTL_MS = 60 * 60_000;
 

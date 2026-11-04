@@ -79,7 +79,8 @@ function approvedBody(s) {
 async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
   const source = tool.includes("Slack") ? "slack" : "basecamp";
   const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
-  const list = (data.salidas ?? data ?? []).filter((s) => s.source === source && (s.releasedAt ?? s.released_at));
+  // Sample salidas ("Datos de muestra.") never match: they can never be sent.
+  const list = (data.salidas ?? data ?? []).filter((s) => s.source === source && (s.releasedAt ?? s.released_at) && !s.isSample);
   const want = tokens(sentText(ti)).join(" ");
   for (const item of list) {
     let s = item;
@@ -99,7 +100,7 @@ async function releasedGithubSalida(repo, pr, { fetchImpl, base }) {
   return (
     (data.salidas ?? data ?? []).find((s) => {
       const d = typeof s.destination === "string" ? JSON.parse(s.destination) : (s.destination ?? {});
-      return s.source === "github" && (s.releasedAt ?? s.released_at) && d.repo === repo && Number(d.pr) === Number(pr);
+      return s.source === "github" && !s.isSample && (s.releasedAt ?? s.released_at) && d.repo === repo && Number(d.pr) === Number(pr);
     }) ?? null
   );
 }

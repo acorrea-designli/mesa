@@ -1,11 +1,13 @@
 "use client";
-// Live updates for Hoy and Tablero. Fallback until lane C's src/lib/live/useLive.ts
-// (SSE on /api/stream) lands: refresh every 5 s and watch /api/health so the phone
-// knows when the tunnel to the PC is down ("Sin conexión con tu PC").
+// Live updates for Hoy and Tablero: refresh on every change pushed by /api/stream (SSE,
+// src/lib/live/useLive.ts), coalesced to one router.refresh() per burst. A light
+// /api/health ping tells the phone when the tunnel to the PC is down ("Sin conexión con tu PC").
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLive as useLiveStream } from "@/lib/live/useLive";
 
-const POLL_MS = 5000;
+const HEALTH_MS = 15_000;
+const DEBOUNCE_MS = 250;
 
 export interface Connection {
   offline: boolean;
@@ -16,7 +18,7 @@ export interface Connection {
   retry: () => void;
 }
 
-/** Calls `onChange` (default: router.refresh) on every tick while the PC answers. */
+/** Calls `onChange` (default: router.refresh) whenever something changes on the board. */
 export function useLive(onChange?: () => void): Connection {
   const router = useRouter();
   const cb = useRef(onChange);
@@ -28,24 +30,47 @@ export function useLive(onChange?: () => void): Connection {
     lastOk: null,
     downSince: null,
   });
+  const offlineRef = useRef(false);
 
-  const tick = useCallback(async () => {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refresh = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      if (cb.current) cb.current();
+      else router.refresh();
+    }, DEBOUNCE_MS);
+  }, [router]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  useLiveStream(refresh);
+
+  const ping = useCallback(async () => {
     try {
       const res = await fetch("/api/health", { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
-      setState((s) => ({ offline: false, lastOk: new Date(), downSince: s.offline ? null : s.downSince }));
-      if (cb.current) cb.current();
-      else router.refresh();
+      const wasOffline = offlineRef.current;
+      offlineRef.current = false;
+      setState({ offline: false, lastOk: new Date(), downSince: null });
+      if (wasOffline) refresh();
     } catch {
+      offlineRef.current = true;
       setState((s) => (s.offline ? s : { ...s, offline: true, downSince: new Date() }));
     }
-  }, [router]);
+  }, [refresh]);
 
   useEffect(() => {
     let alive = true;
-    const run = () => alive && document.visibilityState === "visible" && void tick();
-    const id = window.setInterval(run, POLL_MS);
-    const offline = () => setState((s) => ({ ...s, offline: true, downSince: s.downSince ?? new Date() }));
+    const run = () => alive && document.visibilityState === "visible" && void ping();
+    const id = window.setInterval(run, HEALTH_MS);
+    const offline = () => {
+      offlineRef.current = true;
+      setState((s) => ({ ...s, offline: true, downSince: s.downSince ?? new Date() }));
+    };
     window.addEventListener("online", run);
     window.addEventListener("offline", offline);
     document.addEventListener("visibilitychange", run);
@@ -56,7 +81,7 @@ export function useLive(onChange?: () => void): Connection {
       window.removeEventListener("offline", offline);
       document.removeEventListener("visibilitychange", run);
     };
-  }, [tick]);
+  }, [ping]);
 
-  return { ...state, retry: () => void tick() };
+  return { ...state, retry: () => void ping() };
 }

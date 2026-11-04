@@ -25,7 +25,29 @@ export interface WakeInput {
   payload?: Record<string, unknown>;
 }
 
+const SAMPLE_TABLE: Partial<Record<WakeEvent["entityType"], string>> = {
+  ticket: "tickets",
+  salida: "salidas",
+  task: "tasks",
+  review: "reviews",
+};
+
+/** True when the entity is sample data ("Datos de muestra."). */
+export function isSampleEntity(db: Db, entityType: WakeEvent["entityType"], entityId: string): boolean {
+  const table = SAMPLE_TABLE[entityType];
+  if (!table) return false;
+  const row = db.prepare(`SELECT is_sample FROM ${table} WHERE id = ?`).get(entityId) as { is_sample: number } | undefined;
+  return Boolean(row?.is_sample);
+}
+
+/**
+ * Persist a wake event and push it to waiting long-polls. Sample entities never wake
+ * anyone: the event is returned unsaved (id 0) and not emitted.
+ */
 export function emitWake(db: Db, e: WakeInput, now: Date = new Date()): WakeEvent {
+  if (isSampleEntity(db, e.entityType, e.entityId)) {
+    return { id: 0, sessionId: e.sessionId, kind: e.kind, entityType: e.entityType, entityId: e.entityId, payload: e.payload ?? {}, createdAt: nowIso(now) };
+  }
   const row = db
     .prepare(
       `INSERT INTO wake_events (session_id, kind, entity_type, entity_id, payload, created_at)

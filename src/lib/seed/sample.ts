@@ -647,7 +647,8 @@ function seedBoard(repos: Repos, now: Date, tk: SampleTickets): void {
 // ---------- salidas and reviews ----------
 
 function seedSalidasAndReviews(repos: Repos, now: Date, tk: SampleTickets): string[] {
-  const S = repos.salidas;
+  // The seed may build sent, failed and held samples; nothing else can (salidasRepo.transition).
+  const S = { ...repos.salidas, transition: (id: string, ev: Parameters<Repos["salidas"]["transition"]>[1], now?: Date) => repos.salidas.transition(id, ev, now, { seed: true }) };
   const { db } = repos;
   const create = (input: Omit<SalidaInput, "isSample" | "ownerSession">, min: number) =>
     S.create({ ...input, isSample: true, ownerSession: SAMPLE_SESSION }, at(now, min));
@@ -926,7 +927,8 @@ function seedSalidasAndReviews(repos: Repos, now: Date, tk: SampleTickets): stri
 function seedReviews(repos: Repos, now: Date, tk: SampleTickets): string[] {
   const { db } = repos;
   const R = repos.reviews;
-  const S = repos.salidas;
+  // The seed may build sent, failed and held samples; nothing else can (salidasRepo.transition).
+  const S = { ...repos.salidas, transition: (id: string, ev: Parameters<Repos["salidas"]["transition"]>[1], now?: Date) => repos.salidas.transition(id, ev, now, { seed: true }) };
   const created: string[] = [];
   const flagReview = (repo: string, pr: number) =>
     db.prepare("UPDATE reviews SET is_sample = 1 WHERE repo = ? AND pr = ?").run(repo, pr);
