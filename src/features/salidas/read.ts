@@ -2,6 +2,7 @@
 // the ticket it came from and that ticket's history as a line of stations.
 import type { Repos } from "@/lib/repo";
 import type { SalidaStatus } from "@/lib/domain/types";
+import { destinationUrl, type DestinationConfig } from "./model";
 import type { HistoryEvent, SalidaView, SalidasData, TicketBrief } from "./types";
 
 const OPEN: SalidaStatus[] = ["pending", "scheduled", "queued_until_back", "sending", "failed"];
@@ -69,9 +70,14 @@ export function ticketBrief(r: Repos, ticketId: string | null): TicketBrief | nu
   }
 }
 
-export function salidaView(r: Repos, id: string): SalidaView {
+/** Slack domain and Basecamp account id for "Abrir destino": MESA_SLACK_DOMAIN and MESA_BASECAMP_ACCOUNT (.env.example). */
+export function destinationConfig(env: Record<string, string | undefined> = process.env): DestinationConfig {
+  return { slackDomain: env.MESA_SLACK_DOMAIN, basecampAccount: env.MESA_BASECAMP_ACCOUNT };
+}
+
+export function salidaView(r: Repos, id: string, cfg: DestinationConfig = destinationConfig()): SalidaView {
   const s = r.salidas.detail(id);
-  return { ...s, ticket: ticketBrief(r, s.ticketId), history: s.ticketId ? ticketHistory(r, s.ticketId, s.id) : [] };
+  return { ...s, ticket: ticketBrief(r, s.ticketId), history: s.ticketId ? ticketHistory(r, s.ticketId, s.id) : [], destinationUrl: destinationUrl(s, cfg) };
 }
 
 /** Open salidas plus today's decided ones (they stay in the strip, dashed). */

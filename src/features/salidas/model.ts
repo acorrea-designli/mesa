@@ -216,6 +216,88 @@ export function destShort(d: Destination): string {
   return `${d.repo}#${d.pr}`;
 }
 
+// ---------- destination link ("Abrir destino") ----------
+
+/** Where Mesa cannot know the host from the destination alone: the Slack domain and the Basecamp account id. */
+export interface DestinationConfig {
+  /** Slack workspace subdomain: "designli" for designli.slack.com. */
+  slackDomain?: string | null;
+  /** Basecamp account id, the number in https://3.basecamp.com/<account>/. */
+  basecampAccount?: string | null;
+}
+
+const SLACK_SUB = /^[a-z0-9][a-z0-9-]*$/i;
+const DIGITS = /^\d+$/;
+const REPO = /^[\w.-]+\/[\w.-]+$/;
+const SLACK_TS = /^\d+\.\d+$/;
+
+/** "designli", "designli.slack.com" or "https://designli.slack.com/x" -> "designli"; anything else -> null. */
+export function slackSubdomain(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").trim().replace(/^https?:\/\//i, "").split("/")[0]!.replace(/\.slack\.com$/i, "");
+  return SLACK_SUB.test(v) && !v.includes(".") ? v.toLowerCase() : null;
+}
+
+/** Basecamp account id from "1234567" or from a basecamp.com URL ("https://3.basecamp.com/1234567/..."). */
+export function basecampAccountId(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").trim();
+  if (DIGITS.test(v)) return v;
+  return /^https:\/\/(?:[a-z0-9]+\.)?basecamp\.com\/(\d+)(?:\/|$)/i.exec(v)?.[1] ?? null;
+}
+
+/** Fill the gaps in the config from the origin links of the salida when they are URLs of the same place. */
+function resolvedConfig(s: Pick<Salida, "links" | "destination">, cfg: DestinationConfig) {
+  let slack = slackSubdomain(cfg.slackDomain);
+  let basecamp = basecampAccountId(cfg.basecampAccount);
+  for (const l of s.links) {
+    if (!l.url) continue;
+    if (!slack && l.source === "slack") slack = /^https:\/\/([a-z0-9-]+)\.slack\.com\//i.exec(l.url)?.[1]?.toLowerCase() ?? null;
+    if (!basecamp && l.source === "basecamp") basecamp = basecampAccountId(l.url);
+  }
+  // A Slack destination can carry its workspace as a host ("designli.slack.com").
+  const d = s.destination;
+  if (!slack && (d.kind === "slack_thread" || d.kind === "slack_channel") && /\.slack\.com$/i.test(d.workspace.trim())) slack = slackSubdomain(d.workspace);
+  return { slack, basecamp };
+}
+
+/**
+ * The web URL of where a salida is (or was) published, so Andrés can check it. After the send the
+ * permalink wins. A missing field gives null: never a guessed URL.
+ */
+export function destinationUrl(s: Pick<Salida, "destination" | "permalink" | "links">, cfg: DestinationConfig = {}): string | null {
+  if (s.permalink && /^https?:\/\//i.test(s.permalink)) return s.permalink;
+  const d = s.destination;
+  const { slack, basecamp } = resolvedConfig(s, cfg);
+  switch (d.kind) {
+    case "slack_channel":
+    case "slack_thread": {
+      if (!slack || !d.channelId || !/^[A-Z0-9]+$/i.test(d.channelId)) return null;
+      const base = `https://${slack}.slack.com/archives/${d.channelId}`;
+      if (d.kind === "slack_channel") return base;
+      return d.threadTs && SLACK_TS.test(d.threadTs) ? `${base}/p${d.threadTs.replace(".", "")}` : null;
+    }
+    case "basecamp_comment":
+    case "basecamp_message":
+    case "basecamp_campfire": {
+      if (!basecamp || !d.projectId || !d.recordingId || !DIGITS.test(d.projectId) || !DIGITS.test(d.recordingId)) return null;
+      const seg = d.kind === "basecamp_campfire" ? "chats" : "recordings";
+      return `https://3.basecamp.com/${basecamp}/buckets/${d.projectId}/${seg}/${d.recordingId}`;
+    }
+    case "github_review":
+    case "github_comment": {
+      if (!REPO.test(d.repo) || !Number.isInteger(d.pr) || d.pr <= 0) return null;
+      const pr = `https://github.com/${d.repo}/pull/${d.pr}`;
+      if (d.kind === "github_comment") {
+        if (d.inReplyTo && DIGITS.test(d.inReplyTo)) return `${pr}#discussion_r${d.inReplyTo}`;
+        if (d.path) return `${pr}/files`;
+      }
+      return pr;
+    }
+  }
+}
+
+/** Aria label for the "Abrir destino" link: names the place it opens. */
+export const destinationLinkLabel = (d: Destination) => `Abrir destino: ${destShort(d)}`;
+
 export const sourceLabel = (s: Salida["source"]) => (s === "slack" ? "Slack" : s === "basecamp" ? "Basecamp" : "GitHub");
 
 /** The exact text of a version, as it will be sent. GitHub batched reviews carry it in comments. */

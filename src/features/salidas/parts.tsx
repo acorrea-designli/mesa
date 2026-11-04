@@ -8,7 +8,7 @@ import { isSimulated } from "@/lib/domain/sandbox";
 import { Chip, srcClass } from "@/components/ui/primitives";
 import { confirmPick, rise, travel } from "@/lib/motion";
 import { IcCheck, IcClock, IcCopy, IcExternal, IcStar, IcUndo } from "./icons";
-import { age, comparedWith, destShort, hhmm, routeStops, scheduleChoices, secondsElapsed, secondsLeft, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
+import { age, comparedWith, destinationLinkLabel, destShort, hhmm, routeStops, scheduleChoices, secondsElapsed, secondsLeft, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -29,6 +29,17 @@ export function Route({ d, source }: { d: Destination; source: SalidaDetail["sou
         </div>
       ))}
     </div>
+  );
+}
+
+/** "Abrir destino": where the salida will be published (the permalink once sent). Nothing when the URL cannot be known. */
+export function DestLink({ d, url }: { d: Destination; url: string | null | undefined }) {
+  if (!url) return null;
+  return (
+    <a className="sa-destlink" href={url} target="_blank" rel="noopener noreferrer" aria-label={destinationLinkLabel(d)}>
+      Abrir destino
+      <IcExternal />
+    </a>
   );
 }
 
