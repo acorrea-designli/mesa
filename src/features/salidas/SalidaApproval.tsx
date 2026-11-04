@@ -86,7 +86,8 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
       )}
       <StateBlocks c={c} now={now} confirmDel={confirmDel} setConfirmDel={setConfirmDel} compact={compact} />
       {s.status === "pending" && c.mode === "view" ? (
-        <div className="acts">
+        // In Hoy (compact) the row docks at the bottom of the phone detail via .hy-acts.
+        <div className={compact ? "acts hy-acts" : "acts"}>
           <SplitApprove version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button
             className="btn"
