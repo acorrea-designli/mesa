@@ -113,7 +113,7 @@ from the brief and the handoffs and asks for its teammates again with NEED. Do n
 | Event | Do |
 |---|---|
 | `ticket.created` (Andrés asked, or handed a card to Claude) | payload `{ ticketRef, taskId, kind? }`. Idempotent: `MESA ticket show <ticketRef>` and `MESA team list --ticket <ticketRef>`; closed or a live owner already → nothing. Else triage by `kind` (`docs/TEAM.md` § 4): `review` → reviewer, `request` → tl (+team by NEED), `investigation` → researcher, `reply` → writer; no kind: read the ticket and its card's links, and ask Andrés in the ticket only if it stays unclear. Then `MESA ticket claim <ref>`, write the brief, `MESA team add <ref> --agent <name> --role <role> --owner`, spawn the owner. Never send anything outward from this event |
-| `ticket.answered` | `ANSWER <ref> <message id>` to the live owner; no live owner: spawn one |
+| `ticket.answered` | Read the message by the payload `messageId`, never "the last message" (yours may be newer), plus any other Andrés message after the last one you handled; then `ANSWER <ref> <message id>` to the live owner (no live owner: spawn one), or act on it yourself when you own the ticket |
 | `ticket.plan_approved` | `ANSWER <ref> plan_approved` to the owner |
 | `ticket.permission_requested` | payload `{ ticketRef, messageId }` ("Pídeme permiso" on the ticket): `ANSWER <ref> permission_requested <messageId>` to the live owner, who relays it to the blocked teammate (`docs/TEAM.md` § 6). Nothing live: leave it, it shows in `ticket context`. Never edit a settings file yourself; for your own prompts use `mesa lead focus <ref>` |
 | `ticket.closed` / `ticket.reopened` | `CLOSED <ref>` / `REOPENED <ref>` to the owner (spawn one if needed) |
