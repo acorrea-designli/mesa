@@ -61,20 +61,36 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
   const [composing, setComposing] = useState(false);
   const [expanded, setExpanded] = useState(false); // the rail's own control, until he stops writing
   const restore = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // `refocus`: the composer just took focus again, so a list expanded by hand folds back into the rail.
-  const onComposing = useCallback((on: boolean, refocus = false) => {
+  const held = useRef(false); // a restore is due but focus is still inside the rail
+  const startRestore = useCallback(() => {
     if (restore.current) clearTimeout(restore.current);
-    restore.current = null;
-    if (on) {
-      setComposing(true);
-      if (refocus) setExpanded(false);
-      return;
-    }
     restore.current = setTimeout(() => {
+      restore.current = null;
+      if (document.activeElement?.closest(".tk-rail")) {
+        held.current = true; // keyboard focus is on a rail entry: keep the rail mounted until it leaves
+        return;
+      }
+      held.current = false;
       setComposing(false);
       setExpanded(false);
     }, RESTORE_MS);
   }, []);
+  // `refocus`: the composer just took focus again, so a list expanded by hand folds back into the rail.
+  const onComposing = useCallback(
+    (on: boolean, refocus = false) => {
+      if (restore.current) clearTimeout(restore.current);
+      restore.current = null;
+      held.current = false;
+      if (on) {
+        setComposing(true);
+        if (refocus) setExpanded(false);
+        return;
+      }
+      startRestore();
+    },
+    [startRestore],
+  );
+  const focusList = useRef(false); // the expand control was used from the keyboard: land on the list
   useEffect(
     () => () => {
       if (restore.current) clearTimeout(restore.current);
@@ -87,6 +103,10 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
   useLayoutEffect(() => {
     // The rail starts at its top; the list gets its place back.
     if (mainRef.current) mainRef.current.scrollTop = rail ? 0 : saved.current;
+    if (!rail && focusList.current) {
+      focusList.current = false;
+      mainRef.current?.querySelector<HTMLElement>(".tk-row.sel, .tk-row")?.focus(); // the control he pressed is gone
+    }
   }, [rail]);
 
   return (
@@ -101,7 +121,23 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
           if (!e.currentTarget.closest("[data-rail]")) saved.current = e.currentTarget.scrollTop;
         }}
       >
-        {rail ? <Rail rows={[...data.rows, ...data.closedToday]} sel={sel?.id} tab={tab} onExpand={() => setExpanded(true)} /> : null}
+        {rail ? (
+          <Rail
+            rows={[...data.rows, ...data.closedToday]}
+            sel={sel?.id}
+            tab={tab}
+            onExpand={() => {
+              focusList.current = Boolean(document.activeElement?.closest(".tk-rail"));
+              setExpanded(true);
+            }}
+            onLeave={() => {
+              if (held.current) {
+                held.current = false;
+                startRestore();
+              }
+            }}
+          />
+        ) : null}
         <div className="tk-full">
           <div className="tk-head">
             <h1>
@@ -199,10 +235,17 @@ function Row({ t, sel, tab }: { t: TicketRow; sel: boolean; tab?: string }) {
 }
 
 /** The list while he writes: ref, status dot and the "new" flag per ticket; the control expands it. */
-function Rail({ rows, sel, tab, onExpand }: { rows: TicketRow[]; sel?: string; tab?: string; onExpand: () => void }) {
+function Rail({ rows, sel, tab, onExpand, onLeave }: { rows: TicketRow[]; sel?: string; tab?: string; onExpand: () => void; onLeave: () => void }) {
   return (
     // Mouse presses keep the composer focused (a click on the rail must not end the writing).
-    <nav className="tk-rail" aria-label="Tickets" onMouseDown={(e) => e.preventDefault()}>
+    <nav
+      className="tk-rail"
+      aria-label="Tickets"
+      onMouseDown={(e) => e.preventDefault()}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onLeave();
+      }}
+    >
       <button className="tk-rail-open" type="button" aria-label="Mostrar la lista de tickets" aria-expanded="false" title="Mostrar la lista" onClick={onExpand}>
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
           <path d="M3 3l5 5-5 5M9 3l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

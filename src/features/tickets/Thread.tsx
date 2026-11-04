@@ -14,7 +14,7 @@ import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/feature
 import { ticketApi } from "./api";
 import { DirLine, dirLabel, hm } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
-import { isNearBottom, onNewMessage } from "./follow";
+import { isNearBottom, onNewMessage, type ScrollBox } from "./follow";
 import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
 import type { PickTicket, ThreadData } from "./read";
 
@@ -49,30 +49,50 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
 
   // Autoscroll (follow.ts): opening a ticket and sending land on the last message; a message from
   // Claude scrolls only when he is already near the bottom, otherwise the "nuevo mensaje" pill shows.
-  // Only the thread's own scroll moves: never the list, the focus or the composer.
+  // On desktop the thread scrolls itself; on the phone the page does, and the same rule applies to
+  // it. Only scroll positions move: never the list, the focus or the composer.
   const [pill, setPill] = useState(false);
   const nearBottom = useRef(true);
   const lastMsg = t.messages[t.messages.length - 1];
   const seenMsg = useRef(lastMsg?.id);
-  const scrollable = () => {
+  /** What scrolls the thread right now, or null while it is not on screen (phone list view). */
+  const scroller = (): { el: HTMLElement | null; box: ScrollBox } | null => {
     const el = bodyRef.current;
-    return el && getComputedStyle(el).overflowY === "auto" ? el : null; // on the phone the page scrolls, not the thread
+    if (!el || el.getClientRects().length === 0) return null;
+    if (getComputedStyle(el).overflowY === "auto") return { el, box: el };
+    const d = document.documentElement;
+    return { el: null, box: { scrollTop: window.scrollY, clientHeight: window.innerHeight, scrollHeight: d.scrollHeight } };
   };
+  // Scroll events caused by our own instant jump arrive a frame later, when a resize may already have
+  // pushed the end away: they are not him scrolling up, so they are not measured.
+  const quiet = useRef(0);
   const toBottom = (smooth: boolean) => {
-    const el = scrollable();
-    if (!el) return;
-    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth && !calm ? "smooth" : "auto" });
+    const s = scroller();
+    if (!s) return;
+    const behavior = smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto";
+    if (behavior === "auto") quiet.current = performance.now() + 150;
+    if (s.el) s.el.scrollTo({ top: s.el.scrollHeight, behavior });
+    else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+  };
+  const measured = (near: boolean) => {
+    nearBottom.current = near;
+    // Pinned to the bottom we re-pin ourselves on every resize; the browser's scroll anchoring would read its own
+    // correction as him scrolling up. Reading history keeps the anchoring.
+    if (bodyRef.current) bodyRef.current.style.overflowAnchor = near ? "none" : "";
+    if (near) setPill(false);
   };
   useLayoutEffect(() => {
     toBottom(false); // opening: already at the end on first paint, no jump from the top
     nearBottom.current = true;
+    if (bodyRef.current) bodyRef.current.style.overflowAnchor = "none";
+    // On a hard load the server HTML is hidden (tickets.css) until here, so it is never painted at the top.
+    bodyRef.current?.removeAttribute("data-pin");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useLayoutEffect(() => {
     if (!lastMsg || seenMsg.current === lastMsg.id) return;
     seenMsg.current = lastMsg.id;
-    if (!scrollable()) return;
+    if (!scroller()) return;
     if (onNewMessage({ own: lastMsg.author === "andres", wasNearBottom: nearBottom.current }) === "scroll") {
       toBottom(true);
     } else {
@@ -80,6 +100,32 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMsg?.id]);
+  // The page scrolls on the phone: measure it too.
+  useEffect(() => {
+    const on = () => {
+      const s = scroller();
+      if (s && !s.el && performance.now() >= quiet.current) measured(isNearBottom(s.box));
+    };
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  // Staying at the bottom when sizes change under him (the list rail opening or closing re-wraps
+  // the text and resizes the composer; the thread appearing on the phone): re-pin if he was there.
+  const resizes = useRef<ResizeObserver | null>(null);
+  useEffect(() => {
+    resizes.current = new ResizeObserver(() => {
+      if (nearBottom.current) toBottom(false);
+    });
+    return () => resizes.current?.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const el = bodyRef.current;
+    const ro = resizes.current;
+    if (!el || !ro) return;
+    ro.observe(el);
+    for (const child of el.children) ro.observe(child);
+  });
 
   const first = t.messages[0];
   const rest = t.messages.slice(1);
@@ -136,10 +182,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
         <div
           className="tk-scroll"
           ref={bodyRef}
+          data-pin="1"
           onScroll={(e) => {
-            const near = isNearBottom(e.currentTarget);
-            nearBottom.current = near;
-            if (near) setPill(false);
+            if (performance.now() >= quiet.current) measured(isNearBottom(e.currentTarget));
           }}
         >
           <div className="kind">
@@ -204,6 +249,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
           <StatusLine t={t} listening={listening} />
           <Agents data={data} />
         </div>
+      </div>
+
+      <div className="tk-foot">
         {pill ? (
           <button
             className="tk-newmsg"
@@ -218,9 +266,6 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
             nuevo mensaje <span aria-hidden="true">↓</span>
           </button>
         ) : null}
-      </div>
-
-      <div className="tk-foot">
         {closed ? (
           <div className="acts">
             <button className="btn sm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.reopen(t.id), "Ticket reabierto · Claude despierta")}>
