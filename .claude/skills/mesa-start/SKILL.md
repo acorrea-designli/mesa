@@ -12,16 +12,33 @@ outward. Nothing you knew before this run counts: rebuild from Mesa and engram. 
 `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa` (Bash tool, bare). `MESA_SESSION=lead` comes from settings `env`;
 if `echo $MESA_SESSION` is empty, pass `--session lead` on every call.
 
-Say one line to Andrés before you start and one line per phase. Stop at the first failing check and say which.
+**Andrés reads the board, never the CLI.** A ticket opened for him means you need something from him, and when he
+needs something from you he opens one himself. So:
+- There is no session or log ticket. Routine status (start, phases, the § 6 report, spawns) gets no ticket. Progress
+  on a piece of work goes in that work's own ticket. A failure he must act on is a question (next point).
+- A question or decision (including `AskUserQuestion`-style choices): never ask it in the terminal. If it belongs to
+  one ticket, use `MESA ticket reply <ref>` there. Otherwise, e.g. a batch of tickets or anything about the team or
+  protocol, use `MESA ticket ask`. Always give `--option A:… --option B:… --recommend A --why …` and one `--ref tN`
+  per ticket involved. Then wait for `ticket.answered`.
+- The CLI is only a fallback while Mesa itself is down (preflight § 1). Say there that you will move to the board
+  as soon as it is up.
 
-**Sandbox check first.** Run `echo $MESA_ENV`. If it prints `sandbox`, your first line to Andrés is
-"Sandbox: Mesa de prueba en :8796, nada sale de aquí." and these replace the steps below (`docs/SANDBOX.md`):
+Stop at the first failing check and say which: as a `MESA ticket ask` with the fix options, or in the CLI if Mesa
+is down.
+
+**Protocol changes from Andrés.** When Andrés corrects how the team works (in the sandbox or live), write it into
+the skill, preamble or doc it belongs to, in `ops/.claude/...` or `ops/docs/...`. Mirror the change into the
+sandbox copies under `designli-sandbox/.claude/` and save it in engram (`mesa/protocol/<slug>`). Then put one line in
+the ticket where he gave the correction, saying what changed and where. Never leave a correction only in the
+conversation.
+
+**Sandbox check first.** Run `echo $MESA_ENV`. If it prints `sandbox`, these replace the steps below (`docs/SANDBOX.md`):
 
 - § 0: `pwd` is `/g/WorkSpace/designli-sandbox`. § 1: Mesa is `curl -s -m 3 http://127.0.0.1:8796/api/health` and
   must answer `"env":"sandbox"`; down: ask Andrés to run `pnpm -C G:/WorkSpace/designli/ops sandbox` (never start or
   call the live board on :8790). Hooks: `G:/WorkSpace/designli-sandbox/.claude/settings.json`.
-- engram: pass `project: "mesa-sandbox"` on every call (yours and, through the spawn prompt, every teammate's); the
-  session summary key is `session/mesa-sandbox-lead`. Skip § 1b.
+- engram: pass `project: "designli-sandbox"` on every call (yours and, through the spawn prompt, every teammate's); the
+  session summary key is `session/designli-sandbox-lead`. Skip § 1b.
 - § 4: no sweeper (`mesa-sweep` is a no-op here). Sends follow the sandbox notes in `mesa-salida` and `mesa-review`.
 
 ## 0. Where you are
@@ -108,12 +125,24 @@ from the brief and the handoffs and asks for its teammates again with NEED. Do n
 | `sweep.requested` | never reaches you: "Barrer ahora" wakes the session `sweeper` directly. If Andrés says it did nothing, check `MESA team list --status live` has a sweeper and spawn one (§ 4) |
 | `task.moved` | nothing (the server syncs the GitHub Project) |
 
+**Tickets and Tablero cards move together** (Andrés: "todo está relacionado"). Every ticket with a `taskId` has a
+card. Whenever you change the ticket, move its card in the same step with `MESA task move <taskId> <station>`:
+claim or work started → `doing`; waiting on Andrés → `waiting`; closed (Done) → `done`; reopened → `doing`. This
+applies until t10 improvement 8 makes the server do it. After any batch of closes, check `MESA task list`
+against `MESA ticket list --open`.
+
+Relay: when the Agent tool spawns without a named team, names do not resolve, so teammates send to `main` with
+`TO <name>:` as the first line (preamble rule 17). Keep a name → agentId map in
+`<scratchpad>/lead/agents.json`, filled at every spawn, and forward the message as is to that agentId. Spawn
+prompts still say "report to <owner name>".
+
 Teammate messages (`docs/TEAM.md` § Messages): `NEED` → spawn (TEAM.md § 2), `DONE` → retire (§ 2), `BLOCKED` →
 a ticket question for Andrés if only he can unblock it, `HANDOFF` → write it to Mesa for the agent once Mesa is back.
 A `needs_ok` action approved in a plan (move a card, merge, apply) is yours to run: TEAM.md § 8.
 
 ## 6. Report
 
-One line to Andrés in Spanish: open tickets, salidas por firmar, agents spawned, anything that failed. Then idle.
+No report ticket: the board already shows open tickets, salidas por firmar and live agents. Anything that failed
+and needs Andrés becomes a `MESA ticket ask`. Then idle.
 Every 2 hours of a long session, or when the context passes ~150k, write the session summary (`mesa-end` § 3)
 without ending, so a compaction loses nothing.

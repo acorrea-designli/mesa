@@ -70,7 +70,7 @@ gh api repos/<repo>/pulls/<n>/reviews --paginate -q '[.[] | select(.user.login==
 ```
 
 A PR enters when ANY holds: GitHub lists Andrés as requested reviewer (the search, which expands team requests);
-its Mesa review ticket has an `open` finding and the head moved or someone other than Andrés acted
+its Mesa review ticket (open, or closed as Done after a post) has an `open` finding and the head moved or someone other than Andrés acted
 (pr-monitor box B/C); a push dismissed his approval (`approvedHead` ≠ head). Discard: drafts, PRs authored by
 `acorrea-designli`, release-train PRs (title `^\s*create\s+(staging|prod|production)\s+pr\s*$` AND both branches
 long-lived: develop, staging, main, master, production, prod) unless Andrés names one. Already APPROVED by him at

@@ -20,8 +20,9 @@ apply as written. Never edit or disable pr-monitor or pr-review.
   the title (a renamed PR would not match): `MESA review list` (no `--ticket`), take the row with that `repo` and
   `pr`, and its `ticketId` is the PR's ticket, closed or not (`MESA ticket show <ticketId>` gives the `ref`). A closed
   one comes back with `MESA ticket reopen <ticketId> --reason "new push"` (Mesa also reopens it by itself on a new
-  head). Never `ticket ask` for a PR that has a review row: `MESA review open` would move the review to the duplicate
-  and the original would reopen with no owner. Only when no review row exists, look for a ticket with that title
+  head). Never `ticket ask` for a PR that has a review row with a `ticketId`: `MESA review open` would move the review
+  to the duplicate and the original would reopen with no owner. Only when no review row exists, or its `ticketId` is
+  null (a pr-monitor import), look for a ticket with that title
   (`MESA ticket list`, closed included) and, finding none, `MESA ticket ask --title "Review <owner/repo>#<n>:
   <title>" --body "FYI: revisión en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked
   advance / post-approve push).
@@ -93,7 +94,9 @@ github salidas that are already approved and in the 20 s undo window. You never 
 - **Re-review** (a ticket reply): incremental from `head`; if `head` is the current head, a full review (never a no-op).
 
 Then the final handoff and `DONE <ref> reviewer-<ref> <N fixed · M open · K new | approved | posted N>` to
-`team-lead`, and stop. The ticket stays open while findings are `open`; the next push brings a new reviewer
+`team-lead`, and stop. Once Andrés's choice is executed (approved, or posted and waiting on the
+author), nothing depends on us: the lead closes the ticket (Done), even with `open` findings. The next push reopens the
+same ticket and brings a new reviewer
 (`mesa-sweep` gate) that boots from the stored findings and your state.
 
 ## State

@@ -9,7 +9,7 @@ nothing written there leaves the machine.
 | Board | `http://127.0.0.1:8790`, `data/mesa.db` | `http://127.0.0.1:8796`, `data/sandbox.db` |
 | Claude folder | `G:/WorkSpace/designli` | `G:/WorkSpace/designli-sandbox` (plain folder, not a repo) |
 | Env | `MESA_ENV` unset (`live`) | `MESA_ENV=sandbox`, `MESA_URL=http://127.0.0.1:8796`, `MESA_SESSION=lead` |
-| Engram project | the ticket's project | `mesa-sandbox` on every call |
+| Engram project | the ticket's project | `designli-sandbox` on every call |
 
 ## Start it
 
@@ -103,7 +103,7 @@ board's raw API.
 
 Each change is gated on `echo $MESA_ENV` printing `sandbox`:
 
-- `mesa-start`: its first line names the sandbox. It uses the sandbox cwd, port and hooks, the `mesa-sandbox`
+- `mesa-start`: its first line names the sandbox. It uses the sandbox cwd, port and hooks, the `designli-sandbox`
   engram project, and no sweeper.
 - `mesa-salida`, `mesa-review`: `--simulated` instead of the MCP or pr-gh.mjs call.
 - `mesa-sweep`: a no-op.

@@ -64,4 +64,8 @@ no `&&`, no pipes), so it matches the allow rule.
     Your cwd is `G:/WorkSpace/designli-sandbox`, not `G:/WorkSpace/designli` (rule 2 applies to it). No Slack,
     Basecamp or GitHub write, no `git push`, no `gh pr create` (hook G11: "sandbox: nada sale de aquí"). Code work
     stays in a local worktree and branch; your "PR" is that branch, named in the ticket and the handoff
-    (`--branch`). Pass `project: "mesa-sandbox"` on every engram call, so nothing lands in the real `mesa/<ref>`.
+    (`--branch`). Pass `project: "designli-sandbox"` on every engram call, so nothing lands in the real `mesa/<ref>`.
+17. **Addressing.** Try the bare name first (`team-lead`, `tl-t10`). If SendMessage cannot resolve it (the lead
+    spawned you without a named team), send the message to `main` with its first line starting `TO <name>:`, e.g.
+    `TO tl-t10: READY t10 ...`. The lead relays it as is and sends the reply back the same way. Never stall waiting
+    on a name that does not resolve.

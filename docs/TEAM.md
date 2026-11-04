@@ -65,7 +65,7 @@ stopped agent would resume it from its transcript, so the PreToolUse hook (G2) r
 After a session restart every agent from the old session is retired and only owners are respawned (next suffix);
 owners re-`NEED` their teammates.
 
-Limits: at most 5 reviewers live at once (pr-monitor's per-tick cap); everything else is bounded by open tickets.
+Limits: at most 5 reviewers **working** at once (pr-monitor's per-tick cap). A reviewer that reported READY and only waits for Andrés's click does not count, so a queued review starts as soon as fewer than 5 are working. Everything else is bounded by open tickets.
 
 ## 3. Messages
 
