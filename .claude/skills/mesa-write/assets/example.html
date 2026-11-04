@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<!-- Example rendered from template.html with SAMPLE data (not a real client). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Private storage for document uploads in staging - Sample Client</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #16181d; --ink2: #3a3f4a; --ink3: #626875; --ink4: #8b919c;
+  --bg: #ffffff; --bg2: #f6f7f9; --line: #dfe2e7; --accent: #1f4fd1; --accent-bg: #eef2fd;
+  --warn: #9a5b00; --warn-bg: #fff6e5; --ok: #11734b; --ok-bg: #e9f7f0;
+}
+@page { margin: 18mm 16mm 20mm 16mm; }
+html, body { background: var(--bg); }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 10.5pt; line-height: 1.55; color: var(--ink);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.page { max-width: 180mm; margin: 0 auto; }
+
+/* Cover header: a two-cell table, never flex */
+.cover { width: 100%; border-collapse: collapse; border-bottom: 2px solid var(--ink); margin-bottom: 8mm; }
+.cover td { vertical-align: bottom; padding-bottom: 4mm; }
+.cover .meta { text-align: right; font-size: 9pt; color: var(--ink3); white-space: nowrap; }
+.cover .meta strong { display: block; color: var(--ink); font-size: 10pt; }
+.kicker { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 20pt; line-height: 1.2; letter-spacing: -.01em; margin-top: 1.5mm; }
+.client { font-size: 11pt; color: var(--ink2); margin-top: 1mm; }
+
+h2 {
+  font-size: 13pt; margin: 8mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 1px solid var(--line);
+  break-after: avoid; page-break-after: avoid;
+}
+h3 { font-size: 11pt; margin: 5mm 0 2mm; break-after: avoid; page-break-after: avoid; }
+p { margin: 0 0 2.5mm; orphans: 3; widows: 3; }
+ul, ol { margin: 0 0 3mm 5mm; }
+li { margin-bottom: 1mm; }
+a { color: var(--accent); text-decoration: none; }
+code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: var(--bg2); padding: 0 1mm; border-radius: 2px; }
+
+/* Summary facts: display:table cells, never grid */
+.facts { display: table; width: 100%; border-spacing: 3mm 0; margin: 3mm -3mm 4mm; table-layout: fixed; }
+.fact { display: table-cell; vertical-align: top; border: 1px solid var(--line); border-radius: 4px; background: var(--bg2); padding: 3mm 3.5mm; }
+.fact.key { border-color: var(--accent); background: var(--accent-bg); }
+.fact .label { font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+.fact .value { font-size: 14pt; font-weight: 700; margin-top: 1mm; }
+.fact .note { font-size: 8.5pt; color: var(--ink3); margin-top: .5mm; }
+
+/* Tables */
+table.data { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.5pt; break-inside: avoid; page-break-inside: avoid; }
+table.data th { text-align: left; font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); border-bottom: 1.5px solid var(--line); padding: 1.5mm 2mm; }
+table.data td { border-bottom: 1px solid var(--line); padding: 1.8mm 2mm; vertical-align: top; }
+table.data tr { break-inside: avoid; page-break-inside: avoid; }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Callouts: block, single column */
+.callout { border-left: 3px solid var(--accent); background: var(--accent-bg); padding: 2.5mm 3.5mm; margin: 2mm 0 4mm; break-inside: avoid; page-break-inside: avoid; }
+.callout.warn { border-color: var(--warn); background: var(--warn-bg); }
+.callout.ok { border-color: var(--ok); background: var(--ok-bg); }
+.callout strong:first-child { display: block; margin-bottom: .5mm; }
+
+.appendix { margin-top: 6mm; }
+.appendix h2 { color: var(--ink2); }
+
+/* Footer: two block paragraphs, no flex */
+.doc-footer { margin-top: 5mm; padding-top: 2mm; break-before: avoid; page-break-before: avoid; border-top: 1px solid var(--line); break-inside: avoid; page-break-inside: avoid; }
+.doc-footer p { font-size: 8pt; color: var(--ink4); margin: 0 0 1mm; }
+</style>
+</head>
+<body><div class="page">
+
+  <table class="cover"><tr>
+    <td>
+      <div class="kicker">Infrastructure proposal · sample</div>
+      <h1>Private storage for document uploads in staging</h1>
+      <div class="client">Prepared for Sample Client (sample data)</div>
+    </td>
+    <td class="meta">November 3, 2026<strong>Version 1.0</strong>Ready for review</td>
+  </tr></table>
+
+  <h2>Summary</h2>
+  <p>Staging needs a private place to store the documents users upload, so the team can test the upload flow end to end before it reaches production. We propose one private S3 bucket with encryption, versioning and a 30-day cleanup rule, created through the existing Terraform setup and reviewed like any other change.</p>
+  <div class="facts">
+    <div class="fact key"><div class="label">Estimated monthly cost</div><div class="value">$4–$9</div><div class="note">Depends on stored volume</div></div>
+    <div class="fact"><div class="label">Effort</div><div class="value">1 day</div><div class="note">Including review</div></div>
+    <div class="fact"><div class="label">Production impact</div><div class="value">None</div><div class="note">Staging only</div></div>
+  </div>
+  <div class="callout"><strong>Decision needed</strong>Confirm the 30-day retention for staging uploads, or tell us the period you prefer.</div>
+
+  <h2>1. Context</h2>
+  <p>Uploads in staging currently go to a shared development bucket that other projects also use. That makes test data hard to clean up and means access is broader than it needs to be.</p>
+
+  <h2>2. Proposal</h2>
+  <p>A dedicated bucket for this project, private by default, readable and writable only by the staging application.</p>
+  <table class="data">
+    <thead><tr><th>Setting</th><th>Value</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Access</td><td>Private, application role only</td><td>No public links; uploads are personal documents</td></tr>
+      <tr><td>Encryption</td><td>Server-side (S3 managed keys)</td><td>Encrypted at rest with no key management overhead</td></tr>
+      <tr><td>Versioning</td><td>On</td><td>Recovers files overwritten or deleted by mistake</td></tr>
+      <tr><td>Cleanup</td><td>Delete objects after 30 days</td><td>Keeps staging small and test data short-lived</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. Cost</h2>
+  <table class="data">
+    <thead><tr><th>Item</th><th>Assumption</th><th class="num">Monthly</th></tr></thead>
+    <tbody>
+      <tr><td>Storage</td><td>50–150 GB at rest</td><td class="num">$1.15–$3.45</td></tr>
+      <tr><td>Requests</td><td>Up to 1 million uploads and reads</td><td class="num">$2.50–$5.00</td></tr>
+      <tr><td>Data transfer</td><td>Inside AWS</td><td class="num">$0.00</td></tr>
+    </tbody>
+  </table>
+  <div class="callout warn"><strong>Estimate</strong>Figures use on-demand pricing for us-east-1 and will follow real usage.</div>
+
+  <h2>4. Risks</h2>
+  <ul>
+    <li>If staging ever stores real customer documents, 30 days may be too long; we would shorten it.</li>
+    <li>The application role needs one new permission. It is limited to this bucket.</li>
+  </ul>
+
+  <h2>Next steps</h2>
+  <table class="data">
+    <thead><tr><th style="width:8mm">#</th><th>Step</th><th style="width:34mm">Owner</th><th style="width:30mm">By</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Confirm the retention period</td><td>Sample Client</td><td>Nov 5</td></tr>
+      <tr><td>2</td><td>Create the bucket and permissions through Terraform; open the change for review</td><td>Designli</td><td>Nov 6</td></tr>
+      <tr><td>3</td><td>Point staging uploads at the new bucket and verify an upload end to end</td><td>Designli</td><td>Nov 7</td></tr>
+    </tbody>
+  </table>
+
+  <div class="appendix">
+    <h2>Appendix</h2>
+    <h3>A. Resources created</h3>
+    <table class="data">
+      <thead><tr><th>Resource</th><th>Name</th></tr></thead>
+      <tbody>
+        <tr><td>S3 bucket</td><td><code>sample-client-staging-uploads</code></td></tr>
+        <tr><td>IAM policy</td><td><code>sample-client-staging-uploads-rw</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="doc-footer">
+    <p>Sample document generated from the mesa-write template. Costs are estimates based on public AWS on-demand pricing.</p>
+    <p>Designli · November 3, 2026</p>
+  </div>
+
+</div></body>
+</html>
