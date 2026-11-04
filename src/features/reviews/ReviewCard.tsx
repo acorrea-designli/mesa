@@ -51,6 +51,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
   };
 
   const previewList = preview ? r.findings.filter((f) => preview.includes(f.n)) : [];
+  // Same rule as the server: a blocker among the posted findings makes the GitHub review request changes.
+  const requestsChanges = previewList.some((f) => f.label === "blocker");
 
   return (
     <div className="rv-card" ref={ref} aria-label={`Revisión de ${r.repo}#${r.pr}`}>
@@ -62,6 +64,9 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
         {r.headSha ? <code>{r.headSha.slice(0, 7)}</code> : null}
         <span className="rv-st">{r.state === "approved" ? "Aprobado" : r.state === "approving" ? "Aprobando · en Salidas" : `${open.length} abiertos`}</span>
       </div>
+      {r.findings.length === 0 ? (
+        <p className="rv-empty">{r.state === "open" ? "Sin hallazgos · listo para aprobar" : "Sin hallazgos"}</p>
+      ) : null}
       <ul className="rv-list">
         {r.findings.map((f) => (
           <li key={f.id} className={f.state === "open" ? "rv-f" : "rv-f off"}>
@@ -106,7 +111,9 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
       {preview ? (
         <div className="rv-preview" role="dialog" aria-label="Lo que se publicará">
           <div className="k">
-            Se publica como una revisión en {r.repo}#{r.pr} · como acorrea-designli
+            {requestsChanges
+              ? `Se publica como una revisión que pide cambios en ${r.repo}#${r.pr} · como acorrea-designli`
+              : `Se publica como una revisión en ${r.repo}#${r.pr} · como acorrea-designli`}
           </div>
           {previewList.map((f) => (
             <div key={f.n} className="msg src-github rv-msg">
@@ -116,7 +123,7 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
           ))}
           <div className="rv-acts">
             <button className="btn sm p" type="button" disabled={busy} onClick={() => act("post", preview)}>
-              Publicar {previewList.length === 1 ? "el comentario" : `${previewList.length} comentarios`} · 20 s para deshacer
+              {requestsChanges ? "Pedir cambios" : "Publicar"} {previewList.length === 1 ? "el comentario" : `${previewList.length} comentarios`} · 20 s para deshacer
             </button>
             <button className="btn sm" type="button" onClick={() => setPreview(null)}>
               Cancelar

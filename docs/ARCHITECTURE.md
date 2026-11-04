@@ -148,13 +148,13 @@ Events: `andres_reply` → waiting_claude (wake `ticket.answered`); `claude_repl
 
 ## 6. Reviews
 
-The reviewer agent upserts findings with `mesa finding upsert <ref> --json -`, keyed by `repo`, `pr` and `n`. Andrés's buttons call `POST /api/reviews/:id/actions`:
+The reviewer agent first opens the review with `mesa review open <ref> --repo owner/name --pr N --sha <head>` (`POST /api/tickets/:id/reviews`; the sha is required, the call is idempotent, a new head reopens an approved review), so a clean pass with zero findings still gets its card with Approve. It then upserts findings with `mesa finding upsert <ref> --json -`, keyed by `repo`, `pr` and `n`. Andrés's buttons call `POST /api/reviews/:id/actions`:
 
 | Action | Effect | GitHub write |
 | --- | --- | --- |
 | `approve` | refused while open blockers exist | github_review APPROVE salida |
 | `approve_anyway` | waives every open finding | github_review APPROVE salida |
-| `post {findingNs}` | the chosen findings become inline comments; each text is the summary plus the explanation, as shown on the card | ONE github_review COMMENT salida per decision, with `destination.comments[]` |
+| `post {findingNs}` | the chosen findings become inline comments; each text is the summary plus the explanation, as shown on the card | ONE github_review salida per decision (REQUEST_CHANGES when any posted finding is a blocker, else COMMENT), with `destination.comments[]` |
 | `dismiss {findingNs}` | finding → dismissed | none |
 | `explain {findingNs}` | asks the reviewer for more | none |
 
@@ -265,7 +265,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 **CLI (`bin/mesa`, `bin/mesa.cmd`):** zero-dependency Node over the REST API.
 - Env: `MESA_URL`, `MESA_SESSION`, `MESA_AGENT`, `MESA_TOKEN`.
 - Output: JSON on stdout, errors on stderr (exit 1, usage exit 2). `--body -` reads stdin.
-- Commands (`node bin/mesa help` lists them all): `session`, `wait [--once|--loop]`, `ticket ask|reply|plan|claim|close|action|show|list|context|brief|handoff`, `handoff`, `handoffs`, `team add|join|retire|spent|list`, `finding upsert|list`, `review list|show`, `approval show`, `salida propose|version|sent|failed|hold|bounce|deleted|restored|show|list`, `source get|set`, `sweep`, `task create [--note-only]|dispatch|list|move`, `item upsert`, `engram link`.
+- Commands (`node bin/mesa help` lists them all): `session`, `wait [--once|--loop]`, `ticket ask|reply|plan|claim|close|action|show|list|context|brief|handoff`, `handoff`, `handoffs`, `team add|join|retire|spent|list`, `finding upsert|list`, `review open|list|show`, `approval show`, `salida propose|version|sent|failed|hold|bounce|deleted|restored|show|list`, `source get|set`, `sweep`, `task create [--note-only]|dispatch|list|move`, `item upsert`, `engram link`.
 - Missing on purpose: there is no approve, schedule, deny or undo for salidas, and no decision for approvals. Those are Andrés's buttons.
 
 ## 10. Design system in code

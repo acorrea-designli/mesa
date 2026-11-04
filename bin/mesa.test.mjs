@@ -71,6 +71,7 @@ describe("mesa CLI", () => {
       "mesa handoff",
       "mesa team add",
       "mesa finding upsert",
+      "mesa review open",
       "mesa review list",
       "mesa approval show",
       "mesa source get",
@@ -257,6 +258,27 @@ describe("mesa CLI", () => {
     await mesa(["github", "status"]);
     await mesa(["github", "import-reviews"]);
     expect(requests.map((q) => `${q.method} ${q.path}`)).toEqual(["POST /api/github/sync", "GET /api/github/status", "POST /api/github/import-reviews"]);
+  });
+
+  it("review open posts repo, pr and sha to the ticket's reviews endpoint, and rejects missing or bad arguments", async () => {
+    handler = () => ({ body: { review: { id: "rv_1", state: "open", findings: [] } } });
+    const r = await mesa(["review", "open", "t4", "--repo", "acme/scout", "--pr", "59", "--sha", "abc1234"]);
+    expect(r.code).toBe(0);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t4/reviews", body: { repo: "acme/scout", pr: 59, sha: "abc1234" } });
+    expect(r.json().review.state).toBe("open");
+
+    requests = [];
+    for (const args of [
+      ["review", "open", "t4", "--repo", "acme/scout", "--pr", "59"],
+      ["review", "open", "t4", "--repo", "acme/scout", "--sha", "abc"],
+      ["review", "open", "t4", "--pr", "59", "--sha", "abc"],
+      ["review", "open", "--repo", "acme/scout", "--pr", "59", "--sha", "abc"],
+      ["review", "open", "t4", "--repo", "acme/scout", "--pr", "x", "--sha", "abc"],
+    ]) {
+      expect((await mesa(args)).code).toBe(2);
+    }
+    expect(requests).toEqual([]);
   });
 
   it("team retire passes the reason; handoff collects artifacts", async () => {

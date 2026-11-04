@@ -45,8 +45,11 @@ apply as written. Never edit or disable pr-monitor or pr-review.
    `dismissed` and `waived` findings are never reported again, even if found again in the same place.
 6. **New findings** come from the range, or from something in it that breaks code outside it. Verify each before
    writing it: a false blocker costs more than a missed nit.
-7. **Record** every finding with `MESA finding upsert <ref> --json -` (new ones without `n`, Mesa numbers them;
-   changed states with their `n`), then a handoff with the `review-state` block, before anything else.
+7. **Record**, always starting with `MESA review open <ref> --repo owner/name --pr N --sha <head>` (the full head
+   sha you reviewed). It creates the review card on the ticket, with Approve, even when the pass has zero findings;
+   it is idempotent, and a new head reopens a card that was already approved. Without it a clean pass has no card.
+   Then every finding with `MESA finding upsert <ref> --json -` (new ones without `n`, Mesa numbers them; changed
+   states with their `n`), then a handoff with the `review-state` block, before anything else.
 
 ## Ask (reviewer → Andrés)
 

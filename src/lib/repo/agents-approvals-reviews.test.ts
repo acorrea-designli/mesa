@@ -100,12 +100,13 @@ describe("reviews", () => {
     const s = r.salidas.detail(out.salidaIds[0]!);
     expect(s.destination).toMatchObject({
       kind: "github_review",
-      event: "COMMENT",
+      event: "REQUEST_CHANGES", // mixed: a blocker among the posted findings
       comments: [
         { path: "src/a.ts", line: 42, body: "Null deref", findingN: 1 },
         { body: "Naming", findingN: 2 },
       ],
     });
+    expect(s.title).toMatch(/^Pedir cambios acme\/scout#59/);
     expect(s.versions[0]?.body).toBe("");
     expect(() => r.reviews.action(rev.id, { action: "post", findingNs: [1] }, T0)).toThrow(/already posted/);
 
@@ -113,6 +114,116 @@ describe("reviews", () => {
     const ap = r.reviews.action(rev.id, { action: "approve" }, T0);
     r.salidas.transition(ap.salidaIds[0]!, { type: "undo" }, at(1000));
     expect(r.reviews.get(rev.id).state).toBe("open");
+  });
+
+  it("post asks for changes only when a posted finding is a blocker", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    const post = (ns: number[]) => {
+      const out = r.reviews.action(rev.id, { action: "post", findingNs: ns }, T0);
+      return r.salidas.detail(out.salidaIds[0]!);
+    };
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, label: "comment", summary: "Consider a helper", sha: "abc" }, T0); // n = 3
+    // nits and comments only -> COMMENT
+    const soft = post([2, 3]);
+    expect(soft.destination).toMatchObject({ event: "COMMENT" });
+    expect(soft.title).toMatch(/^Revisión acme\/scout#59/);
+    // a blocker alone -> REQUEST_CHANGES
+    const hard = post([1]);
+    expect(hard.destination).toMatchObject({ event: "REQUEST_CHANGES" });
+    expect(hard.title).toMatch(/^Pedir cambios acme\/scout#59 · 1 comentario/);
+  });
+
+  it("approve paths keep their APPROVE event", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    const out = r.reviews.action(rev.id, { action: "approve_anyway" }, T0);
+    expect(r.salidas.detail(out.salidaIds[0]!).destination).toMatchObject({ event: "APPROVE" });
+  });
+});
+
+describe("reviews without findings (review open)", () => {
+  const PR = { repo: "acme/scout", pr: 60 };
+
+  it("opens the review card with no findings, requires the head sha, and is idempotent", () => {
+    expect(() => r.reviews.open(ref, { ...PR, sha: "" }, T0)).toThrow(/head sha/);
+    expect(r.reviews.list({ ticket: ref })).toEqual([]);
+
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    expect(rev).toMatchObject({ repo: "acme/scout", pr: 60, headSha: "abc1234", state: "open", findings: [] });
+    expect(r.reviews.list({ ticket: ref })).toHaveLength(1);
+
+    const again = r.reviews.open(ref, { ...PR, sha: "abc1234" }, at(1000));
+    expect(again.id).toBe(rev.id);
+    expect(again).toMatchObject({ state: "open", headSha: "abc1234", findings: [] });
+    expect(r.reviews.list({ ticket: ref })).toHaveLength(1);
+  });
+
+  it("approve on a zero-finding review creates the APPROVE salida pinned to the head sha", () => {
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    expect(out.state).toBe("approving");
+    expect(r.salidas.get(out.salidaIds[0]!)).toMatchObject({
+      status: "sending",
+      source: "github",
+      destination: { kind: "github_review", repo: "acme/scout", pr: 60, event: "APPROVE", commitId: "abc1234" },
+    });
+  });
+
+  it("an approved review reopens at a new head, keeps its findings, and stays approved at the same head", () => {
+    r.reviews.upsertFinding(ref, { ...PR, label: "nit", summary: "Naming", sha: "abc1234", state: "waived" }, T0);
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    r.salidas.sweep(at(UNDO_WINDOW_MS));
+    r.salidas.transition(out.salidaIds[0]!, { type: "sent", permalink: "https://github.com/acme/scout/pull/60#pullrequestreview-1" }, at(UNDO_WINDOW_MS + 1));
+    expect(r.reviews.get(rev.id).state).toBe("approved");
+
+    expect(r.reviews.open(ref, { ...PR, sha: "abc1234" }, at(UNDO_WINDOW_MS + 2)).state).toBe("approved");
+
+    const reopened = r.reviews.open(ref, { ...PR, sha: "def5678" }, at(UNDO_WINDOW_MS + 3));
+    expect(reopened).toMatchObject({ id: rev.id, state: "open", headSha: "def5678", salidaId: null });
+    expect(reopened.findings).toMatchObject([{ n: 1, state: "waived" }]);
+
+    const second = r.reviews.action(rev.id, { action: "approve" }, at(UNDO_WINDOW_MS + 4));
+    expect(r.salidas.get(second.salidaIds[0]!)).toMatchObject({ destination: { commitId: "def5678" } });
+  });
+
+  const approveAt = (sha: string) => {
+    const rev = r.reviews.open(ref, { ...PR, sha }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    r.salidas.sweep(at(UNDO_WINDOW_MS));
+    r.salidas.transition(out.salidaIds[0]!, { type: "sent", permalink: "https://github.com/acme/scout/pull/60#pullrequestreview-1" }, at(UNDO_WINDOW_MS + 1));
+    return rev.id;
+  };
+
+  it("a finding upsert never moves the head nor reopens an approved review", () => {
+    const id = approveAt("abc1234");
+    r.reviews.upsertFinding(ref, { ...PR, label: "nit", summary: "Older commit", sha: "0ld0000" }, at(UNDO_WINDOW_MS + 2));
+    expect(r.reviews.get(id)).toMatchObject({ state: "approved", headSha: "abc1234" });
+    // it still seeds the head of a row created without one
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 61, label: "nit", summary: "First", sha: "fff9999" }, T0);
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 61, label: "nit", summary: "Second", sha: "eee8888" }, T0);
+    expect(r.reviews.byPr("acme/scout", 61).headSha).toBe("fff9999");
+  });
+
+  it("open attaches the review to the ticket it names; a finding upsert without a ticket keeps it", () => {
+    const next = r.tickets.create({ direction: "andres_asks", title: "Revisa el push del PR 60", ownerSession: "lead", project: "scout" }, T0).ref;
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    expect(rev.ticketId).toBe(r.tickets.get(ref).id);
+    const moved = r.reviews.open(next, { ...PR, sha: "def5678" }, at(1000));
+    expect(moved).toMatchObject({ id: rev.id, ticketId: r.tickets.get(next).id });
+    expect(r.reviews.list({ ticket: ref })).toEqual([]);
+    expect(r.reviews.list({ ticket: next })).toHaveLength(1);
+    r.reviews.upsertFinding(null, { ...PR, label: "nit", summary: "Naming" }, at(2000));
+    expect(r.reviews.get(rev.id).ticketId).toBe(r.tickets.get(next).id);
+  });
+
+  it("a new head while approving: once the salida is sent the review is open again, not approved", () => {
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    const during = r.reviews.open(ref, { ...PR, sha: "def5678" }, at(1000));
+    expect(during).toMatchObject({ state: "approving", headSha: "def5678" });
+    r.salidas.sweep(at(UNDO_WINDOW_MS));
+    r.salidas.transition(out.salidaIds[0]!, { type: "sent", permalink: "https://github.com/acme/scout/pull/60#pullrequestreview-1" }, at(UNDO_WINDOW_MS + 1));
+    expect(r.reviews.get(rev.id)).toMatchObject({ state: "open", headSha: "def5678", salidaId: null });
   });
 });
 
