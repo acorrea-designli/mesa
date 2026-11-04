@@ -89,6 +89,7 @@ describe("mesa CLI", () => {
       "--note-only",
       "mesa task dispatch",
       "mesa task move",
+      "mesa lead focus",
     ]) {
       expect(r.stdout).toContain(c);
     }
@@ -278,6 +279,18 @@ describe("mesa CLI", () => {
     ]) {
       expect((await mesa(args)).code).toBe(2);
     }
+    expect(requests).toEqual([]);
+  });
+
+  it("lead focus sets, reads and clears the ticket the lead acts on, and refuses unknown subcommands", async () => {
+    handler = () => ({ body: { ticketRef: "t10" } });
+    expect((await mesa(["lead", "focus", "t10"])).json()).toEqual({ ticketRef: "t10" });
+    await mesa(["lead", "focus"]);
+    await mesa(["lead", "focus", "--clear"]);
+    expect(requests.map((q) => `${q.method} ${q.path}`)).toEqual(["PUT /api/lead/focus", "GET /api/lead/focus", "DELETE /api/lead/focus"]);
+    expect(requests[0].body).toEqual({ ticket: "t10" });
+    requests = [];
+    expect((await mesa(["lead", "nope"])).code).toBe(2);
     expect(requests).toEqual([]);
   });
 

@@ -122,6 +122,10 @@ export interface TicketMessage {
   recommended: string | null;
   recommendation: string | null;
   chosen: string | null;
+  /** "permission_request" for the "Pídeme permiso" message; null for every ordinary message. */
+  kind: "permission_request" | null;
+  /** For a permission request: the latest Claude message when he pressed the button. */
+  aboutMessageId: string | null;
   createdAt: string;
 }
 
@@ -360,6 +364,7 @@ export type WakeKind =
   | "ticket.plan_approved"
   | "ticket.closed"
   | "ticket.reopened"
+  | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
   | "salida.turn" // Andrés asked for a change
   | "salida.released" // undo window over: send now
   | "salida.undone"

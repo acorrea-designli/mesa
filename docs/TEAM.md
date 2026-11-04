@@ -168,10 +168,29 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    - **Denegar**: denied, with his optional note.
 4. **Timeout (9 min), an error, an expired card or an unreachable Mesa: deny**, with the instruction to stop trying
    that call and post a ticket question or send `BLOCKED`.
+5. **"Pídeme permiso"** (his own flow). A classifier denial never reaches the hook unless a `permissions.ask` rule
+   matches the call, so no card appears. Every open ticket conversation has a **Pídeme permiso** button next to the
+   composer: it posts his message "Pídeme permiso" (marked `kind: permission_request`, referring to the latest Claude
+   message) and wakes the ticket's live owner with `ticket.permission_requested { ticketRef, messageId }`. The lead
+   relays `ANSWER <ref> permission_requested <message id>` to the live owner, who relays it to the teammate that is
+   blocked. Mesa does nothing else: it never edits a settings file, files no card and creates no rule. The agent that
+   is blocked:
+   1. adds the **narrowest** `permissions.ask` rule for the exact blocked call to the project's
+      `.claude/settings.local.json` (your cwd's project root): the tool and the exact command or path, no wildcard,
+      never an `allow` rule, never a broader pattern, never a user or `settings.json` file, and only on this wake;
+   2. retries that exact call once, so the hook files the ApprovalCard on the ticket, and waits for him;
+   3. after his decision (any of the three buttons, a timeout included) removes the ask rule, unless his reply says to
+      keep it. A kept rule is named in the handoff.
+6. **Only Andrés decides.** His decisions come only from the UI routes `approve`, `read-config` and `deny`.
+   `POST /api/approvals/:id/decision` (the hook's own actor) answers 403 to any actor that names him. No agent decides
+   its own approval.
 
-The lead's own prompts stay in his terminal (the hook passes the main thread through; `MESA_APPROVAL_LEAD=1` routes
-them to Mesa too). When a card pattern repeats, the lead proposes the allow rule to Andrés as a ticket question; the
-team never adds rules itself.
+**The lead's prompts.** They stay in his terminal (the hook passes the main thread through); `MESA_APPROVAL_LEAD=1`
+routes them to Mesa too. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the
+lead acts for one ticket it names it with `mesa lead focus <ref>` (stored by Mesa, `--clear` removes it, a closed
+ticket counts as none) and the hook files the lead's prompts to that ticket. The lead clears the focus when it moves
+to other work. When a card pattern repeats, the lead proposes the allow rule to Andrés as a ticket question; no one
+adds an `allow` rule on their own.
 
 ## 7. Hooks
 

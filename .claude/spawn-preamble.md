@@ -40,7 +40,11 @@ no `&&`, no pipes), so it matches the allow rule.
    allowed shape: the bare command, one per call, the right tool (Bash vs PowerShell rules are separate), no `cd`,
    `&&`, pipes or redirections. Only then does the call reach Andrés as a card in your ticket. If he answers
    "Lee tus configuraciones", the hook's message names the closest rule: use it. A deny, a timeout or an unreachable
-   Mesa means stop trying that call: post a ticket question or send `BLOCKED`.
+   Mesa means stop trying that call: post a ticket question or send `BLOCKED`. If Andrés presses "Pídeme permiso"
+   on your ticket (`ticket.permission_requested`, relayed as `ANSWER <ref> permission_requested <id>`): add the
+   narrowest `permissions.ask` rule for the exact blocked call to `.claude/settings.local.json` (never an allow rule,
+   never a broader pattern), retry that exact call once so the card appears, and remove the rule after his decision
+   unless he says to keep it (`mesa-ticket` skill, `docs/TEAM.md` § 6).
 10. **Git.** Work only in your own worktree under `G:/WorkSpace/designli-wt/<your-name>`, created from `origin/<base>`;
     never edit or switch branches in a repo's main checkout. Stage explicit paths. Commits are one line,
     `type(scope): subject`, lowercase, imperative, no trailing period, at most 72 characters, a single `-m`, no body,

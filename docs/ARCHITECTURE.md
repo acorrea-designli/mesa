@@ -61,7 +61,7 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
 
 ### Tickets and agents
 - **tickets** (`0001`): `ref`, `direction` (claude_asks|andres_asks), `title`, `status` (§4), `project` (engram scope), `owner_session` (normally `lead`), `item_id`, `task_id` (`0500`, the board card it works; `tasks.ticket_id` points back), `woke_at`, `closed_at`. Engram topic key: `mesa/<ref>` (`ticketTopicKey`).
-  - **ticket_messages**: `author` andres|claude, `body` (Markdown), `options` (`[{key,label,detail}]`), `recommended`, `recommendation`, `chosen`.
+  - **ticket_messages**: `author` andres|claude, `body` (Markdown), `options` (`[{key,label,detail}]`), `recommended`, `recommendation`, `chosen`, `kind` (`0700`: `permission_request` for the "Pídeme permiso" message, else NULL), `about_message_id` (the latest Claude message at that moment).
   - **attachments**: files under `data/uploads/<ticket id>/`.
   - **ticket_refs**: `@` references (`ticket`|`item`|`url`).
   - **planned_actions**: the "Claude va a hacer" plan: `seq`, `kind`, `source` (line colour), `label`, `mode` direct|needs_ok, `state`, `target`. Anything that writes outside Mesa (Slack, Basecamp, GitHub) is a salida, never a direct action.
@@ -171,7 +171,7 @@ The button press is the approval of the exact text and destination shown on the 
 ```
 
 1. It reads the hook JSON and builds the card: tool, summary, diff or exact command, and cwd. It also collects the closest allow rules from `.claude/settings.json`, `.claude/settings.local.json` and `~/.claude/settings.json`.
-2. It files `POST /api/approvals {ticketRef: $MESA_TICKET, agent: $MESA_AGENT, tool, summary, detail, cwd, hints, expiresAt}`. The card shows in the ticket thread, or on Hoy when there is no ticket.
+2. For the lead (`MESA_APPROVAL_LEAD=1`) it first reads `GET /api/lead/focus`; the ticket named there replaces the missing ticket. It files `POST /api/approvals {ticketRef: $MESA_TICKET, agent: $MESA_AGENT, tool, summary, detail, cwd, hints, expiresAt}`. The card shows in the ticket thread, or on Hoy when there is no ticket.
 3. Tests: `scripts/hooks/test/mesa-approval.test.mjs`, run by `pnpm test:team` (part of `pnpm test`). Agent identity comes from the spawn name (in-process teammates share the lead's environment); `MESA_AGENT`/`MESA_TICKET` apply to separately launched sessions.
 4. It long-polls `GET /api/approvals/:id?wait=25` until the approval is decided or expired, then prints the decision:
    - **Dar permiso** (`allow`) → `{behavior: "allow"}` for this one call.
@@ -209,6 +209,7 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/tickets/:id/messages` | `{ author, body?, options?, recommended?, recommendation?, chosen?, refs?, session? }` | `TicketDetail` |
 | POST `/api/tickets/:id/plan` | `{ actions, session? }` | `TicketDetail` |
 | POST `/api/tickets/:id/plan/approve` | `{ reject? }` | `TicketDetail` |
+| POST `/api/tickets/:id/permission-request` | | `TicketDetail`; "Pídeme permiso": posts the marked andres message, wakes the owner with `ticket.permission_requested { ref, ticketRef, messageId }`, hands a waiting_andres ticket to Claude; 409 on a closed ticket |
 | POST `/api/tickets/:id/transition` | `{ event: claim\|close\|reopen, by?, session? }` | `TicketDetail` |
 | POST `/api/tickets/:id/attachments` | multipart `file`, `messageId?` | `Attachment` 201 |
 | PATCH `/api/actions/:id` | `{ state }` | `PlannedAction` |
@@ -217,7 +218,8 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/team/:name/retire` | | `{ agent }` |
 | GET/POST `/api/approvals` | `?status=&ticket=&hoy=1` / `ApprovalInput` | `{ approvals }` / `{ approval }` 201 |
 | GET `/api/approvals/:id` | `?wait=SECONDS` (≤ 55) | `{ approval }` |
-| POST `/api/approvals/:id/decision` | `{ decision: allow\|read_config\|deny, actor, note? }` | `{ approval }`; 409 after expiry or once decided |
+| POST `/api/approvals/:id/decision` | `{ decision: allow\|read_config\|deny, actor, note? }` | `{ approval }`; 403 for any actor that names andres (his decisions come only from the three UI routes below); 409 after expiry or once decided |
+| GET/PUT/DELETE `/api/lead/focus` | `{ ticket }` (PUT) | `{ ticketRef }`; the ticket the lead acts on (`mesa lead focus`): the hook files the lead's prompts there; 404 unknown, 409 closed; a closed ticket reads as null |
 | POST `/api/approvals/:id/approve` · `/read-config` · `/deny` | `{ note? }` (the UI's three buttons; actor andres) | `{ approval }`; same rules |
 | GET `/api/reviews` | `?ticket=` | `{ reviews }` (with findings) |
 | GET `/api/reviews/:id` | | `{ review }` |
@@ -284,7 +286,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 - **No secrets in the repo, and no Slack or Basecamp credentials at all.** Those connectors live in Claude's MCP, and GitHub uses the `gh` login. `.env.local` (gitignored) holds only Mesa settings, which `.env.example` lists. `data/` and `*.db` are gitignored.
 - **Every outgoing write needs Andrés's explicit approval of the exact text and destination.** Slack and Basecamp messages and GitHub reviews/comments are salidas, and the review buttons approve the exact text shown on the card. Mesa refuses `sent` before the 20 s undo window ends.
 - **Permission approvals allow one call at a time.** Allow comes only from an explicit "Dar permiso" before expiry. Everything else is deny, and the hook never emits `updatedPermissions`.
-- **Approval rules are not enforced by the API.** The local API does not authenticate callers, so "sessions and agents never approve, schedule, deny, undo or decide" rests on CLAUDE.md and on the CLI having no such commands.
+- **Approval rules are only partly enforced by the API.** The local API does not authenticate callers, so "sessions and agents never approve, schedule, deny, undo or decide" rests on CLAUDE.md, guardrail G10 and on the CLI having no such commands. The one hard rule: `/api/approvals/:id/decision` refuses any actor that names Andrés (403); his decisions come only from the UI routes approve / read-config / deny.
 - **Uploads** are stored under `data/uploads/<ticket>/` with sanitized names and a 25 MB cap.
 - **Sample data is labelled** (`is_sample`) and shown with "Datos de muestra.".
 

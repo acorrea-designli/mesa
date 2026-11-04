@@ -33,6 +33,9 @@ import { ensureSession } from "./sessions";
 import { tasksRepo } from "./tasks";
 import { touchInteraction } from "./interaction";
 
+/** Body of the "Pídeme permiso" message (the thread and the agent's context show it as written). */
+export const PERMISSION_REQUEST_BODY = "Pídeme permiso";
+
 const T_SPEC = { bool: ["is_sample"] };
 const M_SPEC = { json: ["options"] };
 const A_SPEC = { json: ["target"] };
@@ -50,6 +53,9 @@ export interface MessageInput {
   recommended?: string;
   recommendation?: string;
   chosen?: string;
+  /** Set only by requestPermission ("Pídeme permiso"). */
+  kind?: "permission_request";
+  aboutMessageId?: string;
   refs?: RefInput[];
   /** The session posting (Claude messages). Becomes the owner if the ticket has none. */
   session?: string;
@@ -139,6 +145,8 @@ export function ticketsRepo(db: Db) {
         recommended: m.recommended ?? null,
         recommendation: m.recommendation ?? null,
         chosen: m.chosen ?? null,
+        kind: m.kind ?? null,
+        aboutMessageId: m.aboutMessageId ?? null,
         createdAt: ts,
       },
       M_SPEC,
@@ -280,6 +288,27 @@ export function ticketsRepo(db: Db) {
           messageId: msgId,
           chosen: m.chosen ?? null,
         });
+        return this.detail(t.id);
+      });
+    },
+
+    /**
+     * "Pídeme permiso": Andrés asks the agent to file an approval card for the call it is blocked on. Posts a
+     * marked message that refers to the latest Claude message and wakes the owner with
+     * ticket.permission_requested { ref, ticketRef, messageId }. Mesa does nothing else: no settings file,
+     * no rule. Refused on a closed ticket.
+     */
+    requestPermission(id: string, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        const about = db
+          .prepare("SELECT id FROM ticket_messages WHERE ticket_id = ? AND author = 'claude' ORDER BY created_at DESC, rowid DESC LIMIT 1")
+          .get(t.id) as { id: string } | undefined;
+        const r = transitionTicket(t.status, { type: "permission_request" });
+        if (!r.ok) throw new TransitionError(r.error);
+        const msgId = insertMessage(t.id, { author: "andres", body: PERMISSION_REQUEST_BODY, kind: "permission_request", aboutMessageId: about?.id }, nowIso(now));
+        touchInteraction(db, now);
+        apply(t, { type: "permission_request" }, now, { ticketRef: t.ref, messageId: msgId });
         return this.detail(t.id);
       });
     },

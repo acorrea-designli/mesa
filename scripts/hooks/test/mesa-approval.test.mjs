@@ -132,6 +132,56 @@ test("the lead passes through untouched unless MESA_APPROVAL_LEAD=1", async () =
   assertShape(r, "allow");
 });
 
+const leadInput = { tool_name: "Bash", tool_input: { command: "ls" }, transcript_path: "x.jsonl", session_id: "s" };
+const withFocus = (ticketRef) =>
+  fakeMesa({
+    "GET /api/lead/focus": { ticketRef },
+    "POST /api/approvals": { approval: { id: "ap1" } },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow" } },
+  });
+
+test("the lead's prompt is filed to the ticket named with `mesa lead focus`", async () => {
+  const mesa = withFocus("t10");
+  assertShape(await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: mesa.fetchImpl }), "allow");
+  const filed = mesa.calls.find((c) => c.key === "POST /api/approvals").body;
+  assert.equal(filed.ticketRef, "t10");
+  assert.equal(filed.agent, "lead");
+  assert.equal(filed.role, "lead");
+});
+
+test("with no focus (or an unreachable focus) the lead's prompt has no ticket and shows in Hoy, Permisos", async () => {
+  const none = withFocus(null);
+  await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: none.fetchImpl });
+  assert.equal(none.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, null);
+  const down = fakeMesa({
+    "POST /api/approvals": { approval: { id: "ap1" } },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow" } },
+  });
+  await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: down.fetchImpl });
+  assert.equal(down.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, null);
+});
+
+test("an agent keeps its own ticket whatever the lead's focus is, and the lead pass-through never reads it", async () => {
+  const { input } = fakeAgent({ name: "dev-t12" });
+  const mesa = withFocus("t10");
+  await approve(bash(input, "ls"), { ...fast, fetchImpl: mesa.fetchImpl });
+  assert.equal(mesa.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, "t12");
+  assert.equal(mesa.calls.some((c) => c.key.includes("/lead/focus")), false);
+  const pass = withFocus("t10");
+  assert.equal(await approve(leadInput, { ...fast, fetchImpl: pass.fetchImpl }), null);
+  assert.deepEqual(pass.calls, []);
+});
+
+test("the hook decides nothing itself: it only files the card and reads it back", async () => {
+  const { input } = fakeAgent({ name: "dev-t12" });
+  const mesa = decided("allow");
+  await approve(bash(input, "ls"), { ...fast, fetchImpl: mesa.fetchImpl });
+  assert.deepEqual(
+    mesa.calls.filter((c) => !c.key.startsWith("GET ")).map((c) => c.key),
+    ["POST /api/approvals"],
+  );
+});
+
 test("describe shows Edit and MCP calls", () => {
   assert.match(describe({ tool_name: "Edit", tool_input: { file_path: "a.ts", old_string: "x", new_string: "y" } }).detail, /--- old\nx\n\+\+\+ new\ny/);
   assert.equal(describe({ tool_name: "mcp__basecamp__get_todo", tool_input: { id: 1 } }).summary, "mcp__basecamp__get_todo");

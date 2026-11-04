@@ -8,7 +8,8 @@
 //
 // A timeout, an unreachable Mesa, an expired card, bad input or any crash is a deny that tells the agent to post a
 // ticket question instead of retrying. The lead session (no agent id) is passed through untouched (no output), so
-// Andrés keeps his normal terminal prompt there; MESA_APPROVAL_LEAD=1 routes the lead to Mesa too.
+// Andrés keeps his normal terminal prompt there; MESA_APPROVAL_LEAD=1 routes the lead to Mesa too: to the ticket it
+// named with `mesa lead focus <ref>` (GET /api/lead/focus), else to Hoy, Permisos (no ticket).
 //
 //   stdin  : hook JSON { tool_name, tool_input, cwd, agent_id?, transcript_path, session_id, ... }
 //   stdout : { hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior, message? } } }
@@ -69,6 +70,15 @@ export function readConfigMessage(hints, ticketRef) {
   return lines.join("\n");
 }
 
+async function leadFocus(opts) {
+  try {
+    const data = await mesaCall("/api/lead/focus", { ...opts, timeoutMs: 3000 });
+    return typeof data.ticketRef === "string" && data.ticketRef ? data.ticketRef : null;
+  } catch {
+    return null;
+  }
+}
+
 // Files the card, waits for the decision, returns the hook output (or null to pass the lead through).
 // Never throws and never allows by default.
 export async function approve(
@@ -93,9 +103,11 @@ export async function approve(
     return deny(`Denied: the Mesa approval hook could not read this request (${err.message}). ${NO_RETRY}`);
   }
   const who = agent?.name ?? "lead";
-  const ticketRef = agent?.ticketRef ?? null;
   const deadline = Date.now() + timeoutMs;
   const opts = { fetchImpl, base };
+  // The lead has no ticket of its own: while it names one ("mesa lead focus <ref>"), its prompts are filed there.
+  // No focus, a closed ticket or an unreachable Mesa all read as null, and the card stays in Hoy, Permisos.
+  const ticketRef = agent ? (agent.ticketRef ?? null) : await leadFocus(opts);
 
   let id;
   try {

@@ -13,6 +13,7 @@ export type TicketEvent =
   | { type: "claude_reply"; asks?: boolean } // Claude answers back; asks = it has options or is flagged as a question
   | { type: "claude_plan"; needsOk: boolean } // Claude posts "Claude va a hacer"
   | { type: "approve_plan" } // Andrés OKs the plan (wakes the owner)
+  | { type: "permission_request" } // "Pídeme permiso": the agent must file an approval card (wakes the owner)
   | { type: "claim" } // a session takes the ticket and starts work
   | { type: "close"; by: "andres" | "claude" }
   | { type: "reopen"; by?: "andres" | "claude" }; // by defaults to Andrés (the UI); Claude's reopen is not his interaction
@@ -48,6 +49,10 @@ export function transitionTicket(status: TicketStatus, ev: TicketEvent): TicketT
     case "approve_plan":
       if (status !== "waiting_andres") return fail("there is no plan waiting for approval");
       return { ok: true, status: "working", wake: "ticket.plan_approved" };
+
+    case "permission_request":
+      // Andrés asked for a card, not for an answer: it hands the turn to Claude and never changes anything else.
+      return { ok: true, status: status === "waiting_andres" ? "waiting_claude" : status, wake: "ticket.permission_requested" };
 
     case "claim":
       if (status !== "waiting_claude") return fail(`cannot claim a ticket that is ${status}`);
