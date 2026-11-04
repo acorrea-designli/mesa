@@ -43,9 +43,12 @@ no `&&`, no pipes), so it matches the allow rule.
    Mesa means stop trying that call: post a ticket question or send `BLOCKED`.
 10. **Git.** Work only in your own worktree under `G:/WorkSpace/designli-wt/<your-name>`, created from `origin/<base>`;
     never edit or switch branches in a repo's main checkout. Stage explicit paths. Commits are one line,
-    `type(scope): subject`, lowercase, imperative, no body, no trailer, no Co-Authored-By (hook G9), committed with
-    `git -C <wt> -c user.name="acorrea-designli" -c user.email="andres.correa@designli.co" commit -m "..."`. Never
-    `--no-verify` or a bare force push. PRs open as drafts with `gh pr create --draft` (hook G7) and no AI attribution.
+    `type(scope): subject`, lowercase, imperative, no trailing period, at most 72 characters, a single `-m`, no body,
+    no trailer, no Co-Authored-By, committed with
+    `git -C <wt> -c user.name="acorrea-designli" -c user.email="andres.correa@designli.co" commit -m "..."`. The global
+    commit guard (`C:/Users/z4yross/.claude/hooks/commit-guard.mjs`, outside this repo) blocks any other commit shape
+    and any AI attribution in commits and in `gh pr`/`gh issue` bodies. Never `--no-verify` or a bare force push.
+    PRs open as drafts with `gh pr create --draft` (hook G7).
 11. **Language.** English for everything on disk and on GitHub, and for client text unless the client's thread is in
     Spanish. Spanish for what Andrés reads in Mesa (questions, replies, plans).
 12. **Token diet.** Read by range and grep first; trim command output (`| tail -n 40` belongs in a read, not in an

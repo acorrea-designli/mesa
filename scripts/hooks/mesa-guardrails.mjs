@@ -15,7 +15,8 @@
 //                card through the raw API: those are Andrés's clicks.
 //   G6 (rule 8)  run_in_background for git, gh, tests or builds. Only `mesa wait` may run in the background.
 //   G7 (rule 10) `gh pr create` without --draft, bare force push, --no-verify, `gh auth` changes.
-//   G9 (rule 10) git commit with a body, a second -m, or a Co-Authored-By trailer.
+//   (G9 retired: commit message shape and attribution belong to the global commit-guard hook,
+//    C:/Users/z4yross/.claude/hooks/commit-guard.mjs.)
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -209,18 +210,8 @@ export async function check(input, { fetchImpl = fetch, base } = {}) {
     if (/\bgh\s+auth\s+(switch|login|logout|refresh)\b/.test(c)) {
       return block("G7", "rule 10: `gh auth` changes are Andrés's. If the account is wrong, BLOCKED to team-lead.");
     }
-
-    if (/\bgit\b[^\n|;&]*\bcommit\b/.test(c)) {
-      if (/co-authored-by/i.test(cmd)) return block("G9", "rule 10: no Co-Authored-By or any trailer. One line: `type(scope): subject`.");
-      const ms = cmd.match(/(?:^|\s)(?:-m|--message)(?:\s|=)/g) ?? [];
-      if (ms.length > 1) return block("G9", "rule 10: one -m only. A commit is a single line with no body.");
-      const m = /(?:-m|--message)[\s=]+("((?:[^"\\]|\\.)*)"|'([^']*)')/.exec(cmd);
-      const subject = m ? (m[2] ?? m[3] ?? "") : null;
-      if (subject !== null && /\r?\n/.test(subject)) return block("G9", "rule 10: the commit message has more than one line. One line only.");
-      if (/(^|\s)(-F|--file)(\s|=)|<<\s*['"]?EOF/.test(c) && /\bcommit\b/.test(c)) {
-        return block("G9", "rule 10: commit with `-m \"type(scope): subject\"`, not a message file or heredoc.");
-      }
-    }
+    // Commit message shape and attribution are enforced by the global commit-guard hook
+    // (C:/Users/z4yross/.claude/hooks/commit-guard.mjs), not here.
   }
   return null;
 }

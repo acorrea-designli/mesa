@@ -88,13 +88,10 @@ test("G7: drafts only, no force push, no skipped hooks, no gh auth", async () =>
   assert.equal(await rule(sh(lead, "gh auth switch -u z4yross")), "G7");
 });
 
-test("G9: one-line commits without trailers", async () => {
+test("commit message shape is left to the global commit-guard", async () => {
   const ok = 'git -C G:/wt -c user.name="acorrea-designli" -c user.email="andres.correa@designli.co" commit -m "feat(infra): add bucket"';
   assert.equal(await rule(sh(mate(), ok)), null);
-  assert.equal(await rule(sh(mate(), 'git commit -m "feat: x" -m "body"')), "G9");
-  assert.equal(await rule(sh(mate(), 'git commit -m "feat: x\n\nCo-Authored-By: Claude <x>"')), "G9");
-  assert.equal(await rule(sh(mate(), 'git commit -m "feat: x\nmore"')), "G9");
-  assert.equal(await rule(sh(mate(), "git commit -F msg.txt")), "G9");
+  assert.equal(await rule(sh(mate(), 'git commit -m "feat: x" -m "body"')), null);
 });
 
 test("G5: the lead's pr-gh.mjs writes need a released github salida for that PR", async () => {
