@@ -8,10 +8,10 @@ import "@/features/tickets/tickets.css";
 
 export const metadata: Metadata = { title: "Tickets" };
 
-export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ t?: string; tab?: string; new?: string }> }) {
+export default async function TicketsPage({ searchParams }: { searchParams: Promise<{ t?: string; p?: string; tab?: string; new?: string }> }) {
   const q = await searchParams;
   const r = repos();
   r.sweep();
-  const data = loadTickets(r, { tab: q.tab, selected: q.t, creating: q.new === "1" });
-  return <TicketsScreen data={data} explicit={Boolean(q.t)} />;
+  const data = loadTickets(r, { tab: q.tab, selected: q.t, pinned: q.p, creating: q.new === "1" });
+  return <TicketsScreen data={data} explicit={Boolean(q.t)} pin={q.p} />;
 }

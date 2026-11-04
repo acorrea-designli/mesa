@@ -22,12 +22,22 @@ interface Props {
   pick: PickTicket[];
   verbs: string[];
   onChanged: () => void;
+  /** True while the composer has focus or text: the screen shrinks the ticket list to a rail. */
+  onComposing?: (composing: boolean, refocus?: boolean) => void;
 }
 
-export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
+export function Thread({ data, listening, pick, verbs, onChanged, onComposing }: Props) {
   const { ticket: t } = data;
   const toast = useToast();
   const c = useComposer();
+  const [focused, setFocused] = useState(false);
+  // A closed ticket has no composer (an unmounted textarea never reports its blur).
+  const composing = t.status !== "closed" && (focused || c.state.text !== "");
+  useEffect(() => {
+    onComposing?.(composing);
+  }, [composing, onComposing]);
+  // The thread goes away (another ticket opens): it is no longer being written.
+  useEffect(() => () => onComposing?.(false), [onComposing]);
   const [busy, setBusy] = useState(false);
   const ref = usePress<HTMLElement>(".btn, .tk-opt, .tk-verb");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -208,6 +218,10 @@ export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
               label="Respuesta"
               placeholder={first?.options?.length && !chosen ? `Responde, elige ${first.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
               onSubmit={() => void send()}
+              onFocusChange={(on) => {
+                setFocused(on);
+                if (on) onComposing?.(true, true);
+              }}
               menuAbove
             >
               <button className="btn sm perm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.requestPermission(t.id), listening ? "Pedido enviado · Claude despierta para pedirte permiso" : "Pedido guardado · lo lee la próxima sesión")} title="Claude pide el permiso de la llamada bloqueada y verás la tarjeta aquí">

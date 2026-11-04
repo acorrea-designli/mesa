@@ -25,6 +25,9 @@ export function Dir({ direction }: { direction: Ticket["direction"] }) {
   );
 }
 
+export const statusLabel = (s: Ticket["status"]) =>
+  ({ waiting_andres: "Te espera", waiting_claude: "Espera a Claude", working: "Claude trabaja", closed: "Cerrado" })[s];
+
 export function TicketStatus({ t }: { t: Pick<Ticket, "status"> }) {
   switch (t.status) {
     case "waiting_andres":

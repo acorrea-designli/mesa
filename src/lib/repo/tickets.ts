@@ -208,6 +208,34 @@ export function ticketsRepo(db: Db) {
       };
     },
 
+    /**
+     * Ids of the tickets with a message Andrés has not seen: one not written by him, newer than
+     * the last time he opened the ticket (never opened = every such message). His own messages
+     * never count.
+     */
+    unreadIds(): Set<string> {
+      const rows = db
+        .prepare(
+          `SELECT DISTINCT m.ticket_id AS id FROM ticket_messages m
+             LEFT JOIN ticket_reads r ON r.ticket_id = m.ticket_id
+            WHERE m.author <> 'andres' AND m.created_at > COALESCE(r.seen_at, '')`,
+        )
+        .all() as { id: string }[];
+      return new Set(rows.map((x) => x.id));
+    },
+
+    /** Andrés opened the ticket (or a message arrived on the one he has open): clear its flag. */
+    markSeen(id: string, now = new Date()): { ticketId: string; seenAt: string } {
+      const t = get(id);
+      return db
+        .prepare(
+          `INSERT INTO ticket_reads (ticket_id, seen_at) VALUES (?, ?)
+           ON CONFLICT(ticket_id) DO UPDATE SET seen_at = MAX(seen_at, excluded.seen_at)
+           RETURNING ticket_id AS ticketId, seen_at AS seenAt`,
+        )
+        .get(t.id, nowIso(now)) as { ticketId: string; seenAt: string };
+    },
+
     list(f: { status?: TicketStatus; open?: boolean } = {}): Ticket[] {
       const where: string[] = [];
       const args: string[] = [];
