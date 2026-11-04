@@ -101,6 +101,11 @@ dispatch. On the wake the lead, idempotently (delivery is at least once):
 
 Dispatching never sends anything outward: every Slack, Basecamp or GitHub write is still a salida.
 
+**The card follows the ticket; nobody moves it by hand.** Mesa moves the Tablero card of a ticket with a `taskId` in the
+same transaction as every ticket status change (through `tasks.move`, so the Project sync fires): `working` and
+`waiting_claude` → En curso, `waiting_andres` → Esperando, `closed` → Hecho. Owners and the lead never run
+`mesa task move` for that; a card Andrés drags himself stays where he put it until the ticket's next status change.
+
 **A reply asks only when it says so.** `mesa ticket reply` puts the ticket in "Te espera" only with `--option` or
 `--ask`; a plain reply is informational and leaves the status as it is (an unclaimed request becomes "Claude trabaja").
 
@@ -193,7 +198,7 @@ Only the lead acts outward, and only after Andrés's approval:
 
 - **Messages** (Slack, Basecamp): on `salida.released`, `mesa-salida` § Send.
 - **GitHub** (approve, review comments, thread replies): github salidas, on `salida.released`, `mesa-review` § Lead writes.
-- **Other `needs_ok` actions** (move a card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
+- **Other `needs_ok` actions** (move a GitHub Project or Basecamp card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
   the approved action, marks it with `mesa ticket action <id> --state done|failed`, and tells the owner.
 
 ## 9. Install

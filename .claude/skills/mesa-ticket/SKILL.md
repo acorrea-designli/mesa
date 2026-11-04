@@ -67,8 +67,10 @@ is `needs_ok`. Anything that writes to a client goes through Salidas. Mark progr
 A ticket created from a Tablero card ("+ Tarea", "Dárselo a Claude", Nuevo pedido, `mesa task create`) carries
 `taskId`; its card shows the owner chip ("Claude · por asignar" until the lead claims it and adds the owner with
 `mesa team add … --owner`, then "<owner> · <estado>"). The lead handles `ticket.created` by kind (`mesa-start` § 5,
-`docs/TEAM.md` § 4). The owner may move the card with `MESA task move <taskId> <station>` when the work changes
-station (that is a Mesa write, `direct`); moving a GitHub Project or Basecamp card stays `needs_ok`.
+`docs/TEAM.md` § 4). The card follows the ticket: Mesa moves it in the same transaction as every status change
+(`working` and `waiting_claude` → En curso, `waiting_andres` → Esperando, `closed` → Hecho, so a reopen lands in
+En curso). Never move it by hand for a status change (no `MESA task move`); a card Andrés drags stays put until the
+next status change. Moving a GitHub Project or Basecamp card stays `needs_ok`.
 
 ## Closing and reopening
 

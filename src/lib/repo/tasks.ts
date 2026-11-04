@@ -147,12 +147,13 @@ export function tasksRepo(db: Db) {
     /**
      * Move a card to a station. Linked items follow. The card shows
      * "Sin sincronizar" (sync_state = pending) until the GitHub Project write is acked.
+     * `system`: Mesa moved it (the ticket's status drives its card), so it is not an Andrés interaction.
      */
-    move(id: string, station: Station, position?: number, now = new Date()): Task {
+    move(id: string, station: Station, position?: number, now = new Date(), o: { system?: boolean } = {}): Task {
       tx(db, () => {
         get(id);
         moveOne(id, station, position, nowIso(now));
-        touchInteraction(db, now);
+        if (!o.system) touchInteraction(db, now);
       });
       return get(id);
     },

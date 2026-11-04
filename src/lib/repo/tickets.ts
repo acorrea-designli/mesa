@@ -19,6 +19,7 @@ import type {
   PlannedAction,
   RefType,
   Source,
+  Station,
   Ticket,
   TicketDetail,
   TicketDirection,
@@ -29,6 +30,7 @@ import type {
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { ensureSession } from "./sessions";
+import { tasksRepo } from "./tasks";
 import { touchInteraction } from "./interaction";
 
 const T_SPEC = { bool: ["is_sample"] };
@@ -82,7 +84,16 @@ export interface ActionInput {
   target?: Record<string, unknown>;
 }
 
+/** The Tablero station a ticket's card sits in for each ticket status: the card follows the ticket. */
+export const TASK_STATION_OF: Record<TicketStatus, Station> = {
+  working: "doing",
+  waiting_claude: "doing",
+  waiting_andres: "waiting",
+  closed: "done",
+};
+
 export function ticketsRepo(db: Db) {
+  const tasks = tasksRepo(db);
   const get = (id: string): Ticket => {
     const row = db.prepare("SELECT * FROM tickets WHERE id = ? OR ref = ?").get(id, id);
     if (!row) throw new NotFoundError("ticket", id);
@@ -148,6 +159,13 @@ export function ticketsRepo(db: Db) {
          woke_at = CASE WHEN ? THEN ? ELSE woke_at END
        WHERE id = ?`,
     ).run(r.status, ts, r.status, ts, r.wake ? 1 : 0, ts, t.id);
+    // The card follows the ticket, in the same transaction and through tasks.move (so the Project sync fires).
+    // Only a status change moves it, and only when the card is elsewhere: a manual move stands until the next change.
+    if (t.taskId && r.status !== t.status) {
+      const card = db.prepare("SELECT station FROM tasks WHERE id = ?").get(t.taskId) as { station: Station } | undefined;
+      const target = TASK_STATION_OF[r.status];
+      if (card && card.station !== target) tasks.move(t.taskId, target, undefined, now, { system: true });
+    }
     if (r.wake) {
       emitWake(db, { sessionId: t.ownerSession, kind: r.wake, entityType: "ticket", entityId: t.id, payload: { ref: t.ref, ...payload } }, now);
     }
