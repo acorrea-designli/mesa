@@ -3,21 +3,47 @@
 // columns. Drag a card between columns, or use "Mover" (bottom sheet on the phone).
 // A move writes the station to SQLite; the card shows "Sin sincronizar" until lane C
 // acks the GitHub Project write.
+// Batch: a checkbox per card (Shift+click ranges, Ctrl/Cmd+click toggles, long-press on the
+// phone), "Seleccionar carril" / "Seleccionar estación", Esc clears; the batch bar moves,
+// hands to Claude or ignores the whole selection with one toast and one Deshacer.
+// "Dárselo a Claude" (one card or the selection) opens a linked ticket for the lead; the card
+// then shows its owner agent ("tl-t21 · En curso", "Claude · por asignar"), live over SSE.
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BrokenLine, SourceDot } from "@/components/line/Line";
 import { Alert, Btn, LinkChip, StatusTag } from "@/components/ui/primitives";
 import { Sheet, Tabs, useToast } from "@/components/ui/interactive";
 import { SOURCE_LABEL, STATION_LABEL, STATIONS, type Source, type Station } from "@/lib/domain/types";
-import { confirmPick, useArrive, usePress } from "@/lib/motion";
+import { confirmPick, useArrive, useLift, usePress } from "@/lib/motion";
 import { useLive } from "../hoy/useLive";
 import type { TableroData } from "./data";
-import { applyMove, capCell, groupBoard, isQuiet, LANE_NOTE, LANES, laneCounts, stationCounts, type Card } from "./model";
+import {
+  applyMove,
+  canDispatch,
+  capCell,
+  groupBoard,
+  ignoreTargets,
+  isQuiet,
+  LANE_NOTE,
+  LANES,
+  laneCounts,
+  rangeIds,
+  selectGroup,
+  stationCounts,
+  stationIds,
+  toggleId,
+  type Card,
+} from "./model";
+import { cardsLabel, dispatchToast, tableroApi, type StationMove } from "./api";
+import { BatchBar } from "./BatchBar";
+import { NewTaskSheet } from "./NewTask";
 import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu";
 import { ignoreLabel } from "../ignore/model";
 import { useIgnore } from "../ignore/useIgnore";
 import "../ignore/ignore.css";
 import "./tablero.css";
+import "./batch.css";
 
 const LANE_VAR: Record<Source, string> = { github: "var(--gh)", slack: "var(--sl)", claude: "var(--cl)", basecamp: "var(--bc)" };
 const DONE_CAP = 4;
@@ -40,13 +66,57 @@ interface CardMenu {
   onContext: React.MouseEventHandler<HTMLElement>;
 }
 
-function CardView({ c, onMove, draggable, menu }: { c: Card; onMove: (c: Card) => void; draggable: boolean; menu?: CardMenu }) {
+/** Click modifiers the selection reads (a checkbox click, a card click, a keyboard toggle). */
+type Mods = { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean };
+
+const INTERACTIVE = "button, a, input, label, select, textarea";
+
+function OwnerLink({ c }: { c: Card }) {
+  if (!c.owner) return null;
+  return (
+    <Link className={c.owner.unassigned ? "lk src-claude tb-owner is-open" : "lk src-claude tb-owner"} href={c.owner.href} aria-label={`Ticket ${c.owner.ticketRef}: ${c.owner.label}`}>
+      {/* The agent name carries the ref (tl-t21); "Claude · por asignar" needs it spelled out. */}
+      {c.owner.label.includes(c.owner.ticketRef) ? null : <span className="tb-owner-ref">{c.owner.ticketRef}</span>}
+      {c.owner.label}
+    </Link>
+  );
+}
+
+function CardView({
+  c,
+  onMove,
+  draggable,
+  menu,
+  selected,
+  selecting,
+  onPick,
+}: {
+  c: Card;
+  onMove: (c: Card) => void;
+  draggable: boolean;
+  menu?: CardMenu;
+  selected: boolean;
+  selecting: boolean;
+  onPick: (e: Mods, c: Card) => void;
+}) {
   const done = c.station === "done";
+  const ref = useLift<HTMLElement>(selected);
+  const showWait = c.wait && !(c.owner && c.wait.tone === "cl");
   return (
     <article
-      className={done ? "tb-card done" : "tb-card"}
+      ref={ref}
+      data-card={c.id}
+      className={["tb-card", done && "done", selected && "is-sel"].filter(Boolean).join(" ")}
       onContextMenu={menu?.onContext}
       draggable={draggable}
+      onMouseDown={(e) => {
+        // Shift+click selects a range: do not start a text selection.
+        if (e.shiftKey) e.preventDefault();
+      }}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
+        if (e.shiftKey || e.ctrlKey || e.metaKey || selecting) onPick(e, c);
+      }}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/mesa-task", c.id);
         e.dataTransfer.effectAllowed = "move";
@@ -55,7 +125,15 @@ function CardView({ c, onMove, draggable, menu }: { c: Card; onMove: (c: Card) =
       onDragEnd={(e) => e.currentTarget.classList.remove("is-drag")}
     >
       <div className="tb-top">
-        <Mark c={c} />
+        <span className="tb-slot">
+          <span className="tb-pick">
+            <input type="checkbox" checked={selected} aria-label={`Seleccionar «${c.title}»`} onChange={() => undefined} onClick={(e) => onPick(e, c)} />
+            <span className="tb-box" aria-hidden="true" />
+          </span>
+          <span className="tb-stub">
+            <Mark c={c} />
+          </span>
+        </span>
         <span className="tb-proj">{c.project}</span>
         <time>{c.time}</time>
         <button type="button" className="tb-mv" aria-label={`Mover «${c.title}»`} onClick={() => onMove(c)}>
@@ -73,7 +151,8 @@ function CardView({ c, onMove, draggable, menu }: { c: Card; onMove: (c: Card) =
               {x.label}
             </LinkChip>
           ))}
-          {c.wait ? <StatusTag tone={c.wait.tone}>{c.wait.label}</StatusTag> : null}
+          <OwnerLink c={c} />
+          {showWait && c.wait ? <StatusTag tone={c.wait.tone}>{c.wait.label}</StatusTag> : null}
           {c.syncState !== "synced" ? <StatusTag tone="off">{c.syncState === "error" ? "Sin sincronizar · error" : "Sin sincronizar"}</StatusTag> : null}
         </div>
       )}
@@ -117,6 +196,9 @@ function SyncStatus({ s }: { s: TableroData["sync"] }) {
   );
 }
 
+const LONG_PRESS_MS = 450;
+const OPEN_STATIONS = STATIONS.filter((st) => st !== "done");
+
 export function TableroView({ data }: { data: TableroData }) {
   useLive();
   const router = useRouter();
@@ -128,6 +210,10 @@ export function TableroView({ data }: { data: TableroData }) {
   const [over, setOver] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [phoneStation, setPhoneStation] = useState<Station>("inbox");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const anchor = useRef<string | null>(null);
 
   // Local moves win until the server shows the same station.
   const cards = useMemo(() => {
@@ -139,6 +225,15 @@ export function TableroView({ data }: { data: TableroData }) {
     return cs;
   }, [data.cards, local]);
 
+  // Forget local moves the server already shows, so a later move made elsewhere is not hidden
+  // (adjusted while rendering when new server data arrives, not in an effect).
+  const [seen, setSeen] = useState(data.cards);
+  if (seen !== data.cards) {
+    setSeen(data.cards);
+    const keep = Object.entries(local).filter(([id, st]) => data.cards.find((c) => c.id === id)?.station !== st);
+    if (keep.length !== Object.keys(local).length) setLocal(Object.fromEntries(keep));
+  }
+
   const grid = useMemo(() => groupBoard(cards, filter, query), [cards, filter, query]);
   const all = useMemo(() => groupBoard(cards, "all", query), [cards, query]);
   const counts = useMemo(() => stationCounts(cards), [cards]);
@@ -146,9 +241,137 @@ export function TableroView({ data }: { data: TableroData }) {
   const boardRef = useArrive<HTMLDivElement>(".tb-card", `${filter}:${query}`);
   const pressRef = usePress<HTMLDivElement>(".tb-card", true);
   const menu = useActionMenu();
-  const { ignore } = useIgnore();
+  const { ignore, ignoreMany } = useIgnore();
+
+  // ---------- selection ----------
+  const selCards = useMemo(() => cards.filter((c) => sel.has(c.id)), [cards, sel]);
+  const selecting = selCards.length > 0;
+  const clear = useCallback(() => {
+    setSel(new Set());
+    anchor.current = null;
+  }, []);
+
+  /** Shift: range from the anchor in the board's reading order; otherwise toggle one card. */
+  const pick = useCallback((e: Mods, c: Card, scope: ParentNode | null) => {
+    if (e.shiftKey && anchor.current) {
+      const order = [...(scope ?? document).querySelectorAll<HTMLElement>("[data-card]")].map((el) => ({ id: el.dataset.card ?? "" }));
+      const ids = rangeIds(order, anchor.current, c.id);
+      setSel((s) => new Set([...s, ...ids]));
+      return;
+    }
+    setSel((s) => toggleId(s, c.id));
+    anchor.current = c.id;
+  }, []);
+  const pickDesk = useCallback((e: Mods, c: Card) => pick(e, c, document.querySelector(".tb-grid")), [pick]);
+  const pickPhone = useCallback((e: Mods, c: Card) => pick(e, c, document.querySelector(".tb-ph-lanes")), [pick]);
+  const group = (ids: string[]) => setSel((s) => selectGroup(s, ids));
+
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || moving || newOpen || menu.open) return;
+      clear();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selecting, moving, newOpen, menu.open, clear]);
+
+  // ---------- actions ----------
+  const forget = (ids: string[]) =>
+    setLocal((m) => {
+      const n = { ...m };
+      for (const id of ids) delete n[id];
+      return n;
+    });
+
+  const move = async (c: Card, station: Station) => {
+    if (c.station === station) return;
+    setLocal((m) => ({ ...m, [c.id]: station }));
+    try {
+      await tableroApi.move(c.id, station);
+      toast({ text: `«${c.title}» a ${STATION_LABEL[station]} · Sin sincronizar hasta que GitHub confirme` });
+      router.refresh();
+    } catch {
+      forget([c.id]);
+      toast({ text: "No se pudo mover la tarjeta" });
+    }
+  };
+
+  const undoMoves = async (previous: StationMove[]) => {
+    setLocal((m) => ({ ...m, ...Object.fromEntries(previous.map((p) => [p.id, p.station])) }));
+    try {
+      await tableroApi.restore(previous);
+      toast({ text: `Deshecho · ${cardsLabel(previous.length)} de vuelta` });
+      router.refresh();
+    } catch {
+      forget(previous.map((p) => p.id));
+      toast({ text: "No se pudo deshacer" });
+      router.refresh();
+    }
+  };
+
+  const moveMany = async (ids: string[], station: Station) => {
+    if (!ids.length) return;
+    setBusy(true);
+    setLocal((m) => ({ ...m, ...Object.fromEntries(ids.map((id) => [id, station])) }));
+    clear();
+    try {
+      const r = await tableroApi.moveMany(ids, station);
+      toast({
+        text: `${cardsLabel(ids.length)} a ${STATION_LABEL[station]} · Sin sincronizar hasta que GitHub confirme`,
+        duration: 8000,
+        action: { label: "Deshacer", onClick: () => void undoMoves(r.previous) },
+      });
+      router.refresh();
+    } catch {
+      forget(ids);
+      toast({ text: "No se pudieron mover las tarjetas" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dispatchOne = async (c: Card) => {
+    try {
+      const r = await tableroApi.dispatch(c.id);
+      toast({ text: r.created ? `«${c.title}» para Claude · ${r.ticket.ref}` : `Ya está con Claude · ${r.ticket.ref}` });
+      router.refresh();
+    } catch (e) {
+      toast({ text: e instanceof Error && e.message.includes("sample") ? "Los datos de muestra no se envían a Claude" : "No se pudo dar a Claude" });
+    }
+  };
+
+  const dispatchSel = async () => {
+    const ids = selCards.map((c) => c.id);
+    setBusy(true);
+    try {
+      const r = await tableroApi.dispatchMany(ids);
+      clear();
+      toast({ text: dispatchToast(r.results, r.skipped.length), duration: 6000 });
+      router.refresh();
+    } catch {
+      toast({ text: "No se pudieron dar a Claude" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const targets = useMemo(() => ignoreTargets(selCards), [selCards]);
+  const ignoreSel = async () => {
+    if (!targets.length) return;
+    clear();
+    await ignoreMany(targets);
+  };
+
   const cardActions = (c: Card): MenuAction[] => [
     { label: "Mover…", onSelect: () => setMoving(c) },
+    ...(canDispatch(c) ? [{ label: "Dárselo a Claude", detail: "Abre un ticket; el lead le asigna un agente", onSelect: () => void dispatchOne(c) }] : []),
+    ...(c.owner ? [{ label: `Abrir ticket ${c.owner.ticketRef}`, detail: c.owner.label, onSelect: () => router.push(c.owner!.href) }] : []),
+    {
+      label: sel.has(c.id) ? "Quitar de la selección" : "Seleccionar",
+      detail: "Shift+clic elige un rango · Ctrl/Cmd+clic suma",
+      onSelect: () => pickDesk({ shiftKey: false, ctrlKey: true, metaKey: false }, c),
+    },
     ...(c.ignore ? [{ label: ignoreLabel(c.ignore), detail: "Sale del tablero y de Hoy; no se sincroniza", onSelect: () => void ignore(c.ignore!) }] : []),
   ];
   const cardMenu = (c: Card): CardMenu => ({
@@ -156,34 +379,15 @@ export function TableroView({ data }: { data: TableroData }) {
     onContext: menu.onContext(`Acciones de ${c.title}`, cardActions(c)),
   });
 
-  const move = async (c: Card, station: Station) => {
-    if (c.station === station) return;
-    setLocal((m) => ({ ...m, [c.id]: station }));
-    try {
-      const res = await fetch(`/api/tasks/${c.id}/move`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ station }),
-      });
-      if (!res.ok) throw new Error();
-      toast({ text: `«${c.title}» a ${STATION_LABEL[station]} · Sin sincronizar hasta que GitHub confirme` });
-      router.refresh();
-    } catch {
-      setLocal((m) => {
-        const { [c.id]: _drop, ...rest } = m;
-        void _drop;
-        return rest;
-      });
-      toast({ text: "No se pudo mover la tarjeta" });
-    }
-  };
-
   const onDrop = (station: Station) => (e: DragEvent) => {
     e.preventDefault();
     setOver(null);
     const id = e.dataTransfer.getData("text/mesa-task");
     const c = cards.find((x) => x.id === id);
-    if (c) void move(c, station);
+    if (!c) return;
+    // Dragging a selected card carries the whole selection.
+    if (sel.has(c.id) && selCards.length > 1) void moveMany(selCards.map((x) => x.id), station);
+    else void move(c, station);
   };
 
   const dropProps = (lane: Source, station: Station) => ({
@@ -211,21 +415,90 @@ export function TableroView({ data }: { data: TableroData }) {
     router.refresh();
   };
 
+  // ---------- phone: long-press enters selection mode ----------
+  const press = useRef<{ id: string; timer: ReturnType<typeof setTimeout> | null; fired: boolean; x: number; y: number } | null>(null);
+  const touchLast = useRef(false);
+  const phoneHandlers = (c: Card) => ({
+    onPointerDown: (e: ReactPointerEvent) => {
+      touchLast.current = e.pointerType !== "mouse";
+      if (e.pointerType === "mouse") return;
+      if (press.current?.timer) clearTimeout(press.current.timer);
+      const p = { id: c.id, fired: false, x: e.clientX, y: e.clientY, timer: null as ReturnType<typeof setTimeout> | null };
+      p.timer = setTimeout(() => {
+        p.fired = true;
+        p.timer = null;
+        if (typeof navigator !== "undefined") navigator.vibrate?.(12);
+        setSel((s) => new Set(s).add(c.id));
+        anchor.current = c.id;
+      }, LONG_PRESS_MS);
+      press.current = p;
+    },
+    onPointerMove: (e: ReactPointerEvent) => {
+      const p = press.current;
+      if (p?.timer && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) {
+        clearTimeout(p.timer);
+        p.timer = null;
+      }
+    },
+    onPointerUp: () => {
+      if (press.current?.timer) clearTimeout(press.current.timer);
+      if (press.current) press.current.timer = null;
+    },
+    onPointerCancel: () => {
+      if (press.current?.timer) clearTimeout(press.current.timer);
+      press.current = null;
+    },
+    onClick: (e: ReactMouseEvent) => {
+      const p = press.current;
+      if (p?.fired && p.id === c.id) {
+        press.current = null;
+        return;
+      }
+      if (selecting || e.shiftKey || e.ctrlKey || e.metaKey) pickPhone(e, c);
+      else setMoving(c);
+    },
+    onContextMenu: (e: ReactMouseEvent<HTMLElement>) => {
+      // A long press is selection on the phone; the menu stays for a right click.
+      if (touchLast.current || selecting) {
+        e.preventDefault();
+        return;
+      }
+      menu.onContext(`Acciones de ${c.title}`, cardActions(c))(e);
+    },
+  });
+
   const broken = data.sync.state === "error";
   const tabs = [{ key: "all" as const, label: "Todas", count: lanes.all }, ...LANES.map((s) => ({ key: s, label: SOURCE_LABEL[s], count: lanes[s], source: s }))];
+  const visibleLanes = filter === "all" ? LANES : LANES.filter((l) => l === filter);
+  const here = useMemo(() => {
+    const out = Object.fromEntries(STATIONS.map((st) => [st, 0])) as Record<Station, number>;
+    for (const c of selCards) out[c.station] += 1;
+    return out;
+  }, [selCards]);
+  const ignoreText = targets.length === 1 ? ignoreLabel(targets[0]!) : targets.length > 1 ? `Ignorar ${targets.length} proyectos` : null;
+  const anyDispatch = selCards.some(canDispatch);
+
+  const renderCard = (c: Card) => (
+    <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} selected={sel.has(c.id)} selecting={selecting} onPick={pickDesk} />
+  );
 
   return (
-    <div className="tb">
+    <div className={selecting ? "tb is-selecting" : "tb"}>
       <div className="tb-head">
         <h1>
           Tablero<span>GitHub Project privado · {data.projectLabel}</span>
         </h1>
-        <a className="btn sm" href={data.projectUrl} target="_blank" rel="noreferrer">
-          Abrir en GitHub
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5" />
-          </svg>
-        </a>
+        <div className="tb-head-acts">
+          <button type="button" className="btn sm" onClick={() => setNewOpen(true)}>
+            + Tarea
+          </button>
+          <a className="btn sm" href={data.projectUrl} target="_blank" rel="noreferrer">
+            Abrir en GitHub
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5" />
+            </svg>
+          </a>
+        </div>
       </div>
 
       <div className="tb-tools">
@@ -264,22 +537,34 @@ export function TableroView({ data }: { data: TableroData }) {
       ) : null}
 
       {/* desktop: lanes by source */}
-      <div className={broken ? "tb-grid is-broken" : "tb-grid"} ref={(el) => {
-        boardRef.current = el;
-        pressRef.current = el;
-      }}>
+      <div
+        className={broken ? "tb-grid is-broken" : "tb-grid"}
+        ref={(el) => {
+          boardRef.current = el;
+          pressRef.current = el;
+        }}
+      >
         <div className="tb-st" />
-        {STATIONS.map((st) => (
-          <div key={st} className="tb-st">
-            <span className="tb-cap">
-              {STATION_LABEL[st]}
-              <b>{counts[st]}</b>
-            </span>
-          </div>
-        ))}
+        {STATIONS.map((st) => {
+          const ids = stationIds(grid, st, visibleLanes);
+          return (
+            <div key={st} className="tb-st">
+              <span className="tb-cap">
+                {STATION_LABEL[st]}
+                <b>{counts[st]}</b>
+              </span>
+              {ids.length ? (
+                <button type="button" className="tb-selall" aria-label={`Seleccionar estación ${STATION_LABEL[st]}`} title="Seleccionar estación" onClick={() => group(ids)}>
+                  Seleccionar
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
         {LANES.map((lane) => {
           const quiet = isQuiet(all, lane);
           const dim = filter !== "all" && filter !== lane;
+          const laneOpen = OPEN_STATIONS.flatMap((st) => grid[lane][st].map((c) => c.id));
           return (
             <div key={lane} className={["tb-lane", quiet && "quiet", dim && "dim"].filter(Boolean).join(" ")} style={{ "--lane": LANE_VAR[lane] } as React.CSSProperties}>
               <div className="tb-lab">
@@ -288,16 +573,21 @@ export function TableroView({ data }: { data: TableroData }) {
                   {SOURCE_LABEL[lane]} {lanes[lane]}
                 </span>
                 <small>{LANE_NOTE[lane]}</small>
+                {laneOpen.length && !dim ? (
+                  <button type="button" className="tb-selall lane" aria-label={`Seleccionar carril ${SOURCE_LABEL[lane]}`} onClick={() => group(laneOpen)}>
+                    Seleccionar carril
+                  </button>
+                ) : null}
               </div>
               {STATIONS.map((st, si) => {
                 const key = `${lane}:${st}`;
                 const list = grid[lane][st];
                 const isOpen = open.has(key);
-                const cls = ["tb-cell", over === key && "is-over"].filter(Boolean).join(" ");
+                const cellCls = ["tb-cell", over === key && "is-over"].filter(Boolean).join(" ");
                 if (st === "done") {
                   const { shown, more } = capCell(list, DONE_CAP);
                   return (
-                    <div key={st} className={cls} {...dropProps(lane, st)}>
+                    <div key={st} className={cellCls} {...dropProps(lane, st)}>
                       {list.length ? (
                         <button type="button" className="tb-done" aria-expanded={isOpen} onClick={() => toggle(key)}>
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -310,9 +600,7 @@ export function TableroView({ data }: { data: TableroData }) {
                       )}
                       {isOpen ? (
                         <>
-                          {shown.map((c) => (
-                            <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} />
-                          ))}
+                          {shown.map(renderCard)}
                           {more ? <span className="tb-more static">{more} más hechas hoy</span> : null}
                         </>
                       ) : null}
@@ -321,10 +609,8 @@ export function TableroView({ data }: { data: TableroData }) {
                 }
                 const { shown, more } = isOpen ? { shown: list, more: 0 } : capCell(list);
                 return (
-                  <div key={st} className={cls} {...dropProps(lane, st)}>
-                    {shown.map((c) => (
-                      <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} />
-                    ))}
+                  <div key={st} className={cellCls} {...dropProps(lane, st)}>
+                    {shown.map(renderCard)}
                     {more ? (
                       <button type="button" className="tb-more" onClick={() => toggle(key)}>
                         {more} más en {STATION_LABEL[st]}
@@ -349,6 +635,15 @@ export function TableroView({ data }: { data: TableroData }) {
               {STATION_LABEL[phoneStation]} {counts[phoneStation]}
             </span>
           </h1>
+          {selecting ? (
+            <button type="button" className="tb-selall on" onClick={() => group(stationIds(all, phoneStation))}>
+              Seleccionar estación
+            </button>
+          ) : (
+            <button type="button" className="btn sm tb-ph-new" onClick={() => setNewOpen(true)}>
+              + Tarea
+            </button>
+          )}
         </div>
         <div className="tb-ph-sts">
           <Tabs items={STATIONS.map((s) => ({ key: s, label: STATION_LABEL[s], count: counts[s] }))} value={phoneStation} onChange={setPhoneStation} label="Estaciones" />
@@ -358,6 +653,7 @@ export function TableroView({ data }: { data: TableroData }) {
             <BrokenLine source="github" width={26} title="Sin sincronizar" /> Sin sincronizar con GitHub Project. Tus movimientos se guardan aquí.
           </p>
         ) : null}
+        {!selecting && cards.length ? <p className="tb-ph-hint">Mantén pulsada una tarjeta para elegir varias.</p> : null}
         <div className="tb-ph-lanes">
           {LANES.map((lane) => {
             const list = all[lane][phoneStation];
@@ -366,20 +662,38 @@ export function TableroView({ data }: { data: TableroData }) {
                 <div className="lh">
                   {SOURCE_LABEL[lane]}
                   <small>{list.length}</small>
+                  {selecting && list.length ? (
+                    <button type="button" className="tb-selall on" aria-label={`Seleccionar carril ${SOURCE_LABEL[lane]}`} onClick={() => group(list.map((c) => c.id))}>
+                      Seleccionar carril
+                    </button>
+                  ) : null}
                 </div>
                 {list.length ? (
-                  list.map((c) => (
-                    <button key={c.id} type="button" className="tb-ph-card" onClick={() => setMoving(c)} onContextMenu={menu.onContext(`Acciones de ${c.title}`, cardActions(c))} aria-label={`${c.title}. Mover`}>
-                      <b>{c.title}</b>
-                      <small>{[...c.chips.map((x) => x.label), c.time].join(" · ")}</small>
-                      {c.wait || c.syncState !== "synced" ? (
-                        <span className="tb-ph-tags">
-                          {c.wait ? <StatusTag tone={c.wait.tone}>{c.wait.label}</StatusTag> : null}
-                          {c.syncState !== "synced" ? <StatusTag tone="off">Sin sincronizar</StatusTag> : null}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))
+                  list.map((c) => {
+                    const on = sel.has(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        data-card={c.id}
+                        className={on ? "tb-ph-card is-sel" : "tb-ph-card"}
+                        aria-pressed={selecting ? on : undefined}
+                        aria-label={selecting ? `${c.title}. ${on ? "Seleccionada" : "Sin seleccionar"}` : `${c.title}. Mover`}
+                        {...phoneHandlers(c)}
+                      >
+                        {selecting ? <span className={on ? "tb-ph-box on" : "tb-ph-box"} aria-hidden="true" /> : null}
+                        <b>{c.title}</b>
+                        <small>{[...c.chips.map((x) => x.label), c.time].join(" · ")}</small>
+                        {c.wait || c.owner || c.syncState !== "synced" ? (
+                          <span className="tb-ph-tags">
+                            {c.owner ? <span className="lk src-claude tb-owner">{c.owner.label}</span> : null}
+                            {c.wait && !(c.owner && c.wait.tone === "cl") ? <StatusTag tone={c.wait.tone}>{c.wait.label}</StatusTag> : null}
+                            {c.syncState !== "synced" ? <StatusTag tone="off">{c.syncState === "error" ? "Sin sincronizar · error" : "Sin sincronizar"}</StatusTag> : null}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })
                 ) : (
                   <div className="tb-ph-quiet">Nada en {STATION_LABEL[phoneStation].toLowerCase()}</div>
                 )}
@@ -392,18 +706,34 @@ export function TableroView({ data }: { data: TableroData }) {
 
       {data.hasSample ? <p className="tb-sample desk">Datos de muestra.</p> : null}
 
+      {selecting ? (
+        <BatchBar
+          count={selCards.length}
+          busy={busy}
+          here={here}
+          openMenu={menu.openFrom}
+          onMove={(st) => void moveMany(selCards.map((c) => c.id), st)}
+          onDispatch={anyDispatch ? () => void dispatchSel() : null}
+          ignoreLabel={ignoreText}
+          onIgnore={() => void ignoreSel()}
+          onCancel={clear}
+        />
+      ) : null}
+
+      <NewTaskSheet open={newOpen} onClose={() => setNewOpen(false)} onCreated={() => router.refresh()} />
+
       <Sheet open={Boolean(moving)} onClose={() => setMoving(null)} title={moving ? `Mover «${moving.title}»` : "Mover"}>
         {moving ? (
           <>
             <div className="tb-move" role="group" aria-label="Estaciones">
               {STATIONS.map((st) => {
-                const here = moving.station === st;
+                const isHere = moving.station === st;
                 return (
                   <button
                     key={st}
                     type="button"
-                    className={here ? "btn on" : "btn"}
-                    aria-current={here ? "true" : undefined}
+                    className={isHere ? "btn on" : "btn"}
+                    aria-current={isHere ? "true" : undefined}
                     onClick={(e) => {
                       confirmPick(e.currentTarget);
                       const c = moving;
@@ -412,12 +742,34 @@ export function TableroView({ data }: { data: TableroData }) {
                     }}
                   >
                     {st === "waiting" ? "Espera" : STATION_LABEL[st]}
-                    <small>{here ? "aquí" : counts[st]}</small>
+                    <small>{isHere ? "aquí" : counts[st]}</small>
                   </button>
                 );
               })}
             </div>
             <p className="tb-sheet-note">Se sincroniza con el GitHub Project · Sin sincronizar hasta confirmar</p>
+            {canDispatch(moving) || moving.owner ? (
+              <div className="tb-sheet-acts">
+                {canDispatch(moving) ? (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      const c = moving;
+                      setMoving(null);
+                      void dispatchOne(c);
+                    }}
+                  >
+                    Dárselo a Claude
+                  </button>
+                ) : null}
+                {moving.owner ? (
+                  <Link className="btn" href={moving.owner.href} onClick={() => setMoving(null)}>
+                    Abrir ticket {moving.owner.ticketRef} · {moving.owner.label}
+                  </Link>
+                ) : null}
+              </div>
+            ) : null}
             {moving.ignore ? (
               <button
                 type="button"

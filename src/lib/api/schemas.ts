@@ -38,6 +38,9 @@ export const taskInput = z.object({
   position: z.number().optional(),
   isSample: z.boolean().optional(),
   itemIds: z.array(z.string()).optional(),
+  /** "Solo anotar (sin agente)": create the card only. Cards from ingested items never auto-dispatch. */
+  noteOnly: z.boolean().optional(),
+  kind: z.enum(["review", "request", "investigation", "reply"]).optional(),
 });
 export const taskPatch = z.object({
   title: z.string().min(1).optional(),
@@ -54,6 +57,14 @@ export const taskSync = z.object({
   ghContentUrl: z.string().nullable().optional(),
   syncError: z.string().nullable().optional(),
 });
+export const taskDispatch = z.object({ kind: z.enum(["review", "request", "investigation", "reply"]).optional() });
+const taskIds = z.array(z.string().min(1)).min(1).max(200);
+export const taskBatch = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("move"), ids: taskIds, station }),
+  z.object({ action: z.literal("dispatch"), ids: taskIds, kind: z.enum(["review", "request", "investigation", "reply"]).optional() }),
+  /** Deshacer of a batch move: each card back to its own previous station. */
+  z.object({ action: z.literal("restore"), moves: z.array(z.object({ id: z.string().min(1), station })).min(1).max(200) }),
+]);
 export const taskLink = z.object({ itemIds: z.array(z.string()).min(1) });
 
 const ticketOption = z.object({ key: z.string().min(1).max(3), label: z.string().min(1), detail: z.string().optional() });

@@ -85,6 +85,22 @@ acknowledgements (hook G3). Detail lives in the ticket; a message points at it.
 
 The lead classifies each new ticket (or item worth a ticket) and spawns its owner.
 
+**Tasks go straight to an agent.** Every card Andrés creates in Mesa (Tablero "+ Tarea", Nuevo pedido, `mesa task create`)
+and every "Dárselo a Claude" (one card or a batch, ingested PR/Basecamp/Slack cards included) becomes an `andres_asks`
+ticket linked to its card, owned by `lead`, and one `ticket.created` wake `{ ref, ticketRef, taskId, kind? }`. Only
+"Solo anotar (sin agente)" / `--note-only` skips it; ingested items never dispatch on their own and sample cards never
+dispatch. On the wake the lead, idempotently (delivery is at least once):
+
+1. `mesa ticket show <ticketRef>`: skip when it is closed, or already has a live owner in `mesa team list --ticket <ref>`.
+2. Triage by `kind`, else by the ticket and its card's links: `review` (a PR) → **Review**, owner `reviewer-<ref>`;
+   `request` (a client's technical ask) → **Client technical request**, owner `tl-<ref>` (+ its team by NEED);
+   `investigation` → **Investigation**, owner `researcher-<ref>`; `reply` (only words) → **Simple reply**, owner
+   `writer-<ref>`. No kind and unclear: ask Andrés in the ticket (A/B with a recommendation).
+3. `mesa ticket claim <ref>`, write the brief, `mesa team add <ref> --agent <name> --role <role> --owner`, spawn it (§ 2).
+   The card's owner chip switches from "Claude · por asignar" to "<name> · En curso" live.
+
+Dispatching never sends anything outward: every Slack, Basecamp or GitHub write is still a salida.
+
 | Template | When | Owner | Team | Ends when |
 |---|---|---|---|---|
 | **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed; the ticket stays open while findings are open, and the next push brings `reviewer-<ref>-2` |

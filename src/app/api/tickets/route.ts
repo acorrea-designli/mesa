@@ -10,5 +10,8 @@ export const GET = route((req, r) => {
   return json(r.tickets.list({ status: (q.get("status") as TicketStatus) || undefined, open: q.get("open") === "1" }));
 });
 
-/** POST /api/tickets TicketInput -> TicketDetail (201). andres_asks wakes sessions with ticket.created */
-export const POST = route(async (req, r) => json(r.tickets.create(await body(req, ticketInput)), { status: 201 }));
+/**
+ * POST /api/tickets TicketInput -> TicketDetail (201). An andres_asks ticket (Nuevo pedido) also
+ * gets its card on the Claude lane (linked both ways) and wakes the lead with ticket.created.
+ */
+export const POST = route(async (req, r) => json(r.dispatch.createRequest(await body(req, ticketInput)), { status: 201 }));

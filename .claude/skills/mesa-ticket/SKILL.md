@@ -46,7 +46,7 @@ Before work that does anything beyond reading, the owner posts the plan, one act
 | `investigate` | any | direct | read threads, logs, code |
 | `review_pr` | github | direct (verdict needs OK) | review owner/repo#n |
 | `branch_pr` | github | direct | worktree, commits, a draft PR |
-| `create_task` | claude | direct | a task on the Mesa board |
+| `create_task` | claude | direct | a task on the Mesa board: `MESA task create --title T --note-only` (without `--note-only` it would open a new ticket for the lead) |
 | `move_card` | github / basecamp | needs_ok | move a GitHub Project or Basecamp card |
 | `send_message` | slack / basecamp | needs_ok | always a salida (`mesa-salida`) |
 | `cancel_message` | slack / basecamp | needs_ok | undo or delete a sent salida |
@@ -58,6 +58,14 @@ Rule of thumb: reading and preparing are `direct`; anything another person can s
 is `needs_ok`. Anything that writes to a client goes through Salidas. Mark progress with
 `MESA ticket action <actionId> --state running|done|failed`. A `needs_ok` action waits for
 `ticket.plan_approved`.
+
+## Cards handed to Claude
+
+A ticket created from a Tablero card ("+ Tarea", "Dárselo a Claude", Nuevo pedido, `mesa task create`) carries
+`taskId`; its card shows the owner chip ("Claude · por asignar" until the lead claims it and adds the owner with
+`mesa team add … --owner`, then "<owner> · <estado>"). The lead handles `ticket.created` by kind (`mesa-start` § 5,
+`docs/TEAM.md` § 4). The owner may move the card with `MESA task move <taskId> <station>` when the work changes
+station (that is a Mesa write, `direct`); moving a GitHub Project or Basecamp card stays `needs_ok`.
 
 ## @ refs and files
 

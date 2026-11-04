@@ -45,6 +45,31 @@ export function useIgnore() {
     [router, toast],
   );
 
+  /** Tablero batch bar: ignore every distinct project of the selection, one toast, one Deshacer. */
+  const ignoreMany = useCallback(
+    async (ts: IgnoreTarget[]) => {
+      if (!ts.length) return;
+      try {
+        const rows = await Promise.all(ts.map((t) => add(t)));
+        router.refresh();
+        toast({
+          text: rows.length === 1 ? "Proyecto ignorado" : `${rows.length} proyectos ignorados`,
+          duration: 8000,
+          action: {
+            label: "Deshacer",
+            onClick: () =>
+              void Promise.all(rows.map((r) => remove(r.ignored.id)))
+                .then(() => router.refresh())
+                .catch(() => toast({ text: "No se pudo deshacer" })),
+          },
+        });
+      } catch {
+        toast({ text: "No se pudo ignorar el proyecto" });
+      }
+    },
+    [router, toast],
+  );
+
   const unignore = useCallback(
     async (r: IgnoredRow) => {
       try {
@@ -67,5 +92,5 @@ export function useIgnore() {
     [router, toast],
   );
 
-  return { ignore, unignore };
+  return { ignore, ignoreMany, unignore };
 }

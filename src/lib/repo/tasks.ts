@@ -1,7 +1,7 @@
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, insertSql, newId, NotFoundError, nowIso, toAssignments } from "../db/util";
-import type { Item, Source, Station, SyncState, Task } from "../domain/types";
+import type { Item, Source, Station, SyncState, Task, TaskOwner, TicketStatus } from "../domain/types";
 import { TASK_IGNORED, TASK_KEY } from "./ignored";
 import { touchInteraction } from "./interaction";
 
@@ -36,7 +36,23 @@ export interface SyncPatch {
   syncError?: string | null;
 }
 
+/** One card's station before a batch move, so Deshacer can put it back. */
+export interface StationMove {
+  id: string;
+  station: Station;
+}
+
 export function tasksRepo(db: Db) {
+  const ownerOf = (ticketId: string | null): TaskOwner | null => {
+    if (!ticketId) return null;
+    const t = db.prepare("SELECT id, ref, status FROM tickets WHERE id = ?").get(ticketId) as { id: string; ref: string; status: TicketStatus } | undefined;
+    if (!t) return null;
+    const a = db
+      .prepare("SELECT name, role FROM ticket_team WHERE ticket_id = ? AND owner = 1 AND status = 'live' ORDER BY spawned_at DESC LIMIT 1")
+      .get(t.id) as { name: string; role: string } | undefined;
+    return { ticketId: t.id, ticketRef: t.ref, ticketStatus: t.status, agent: a?.name ?? null, role: a?.role ?? null };
+  };
+
   const linked = (taskId: string) =>
     fromRows<Pick<Item, "id" | "source" | "title" | "url" | "project">>(
       db.prepare("SELECT id, source, title, url, project FROM items WHERE task_id = ? ORDER BY received_at").all(taskId),
@@ -45,7 +61,8 @@ export function tasksRepo(db: Db) {
   const get = (id: string): Task => {
     const row = db.prepare(`SELECT *, ${TASK_KEY("tasks")} AS project_key FROM tasks WHERE id = ?`).get(id);
     if (!row) throw new NotFoundError("task", id);
-    return { ...fromRow<Task>(row, SPEC), items: linked(id) };
+    const t = fromRow<Task>(row, SPEC);
+    return { ...t, items: linked(id), owner: ownerOf(t.ticketId) };
   };
 
   const link = (taskId: string, itemIds: string[], station: Station, ts: string) => {
@@ -55,6 +72,29 @@ export function tasksRepo(db: Db) {
         .run(taskId, station, ts, itemId);
       if (!r.changes) throw new NotFoundError("item", itemId);
     }
+  };
+
+  const moveOne = (id: string, station: Station, position: number | undefined, ts: string) => {
+    db.prepare(
+      "UPDATE tasks SET station = ?, position = COALESCE(?, position), sync_state = 'pending', sync_error = NULL, updated_at = ? WHERE id = ?",
+    ).run(station, position ?? null, ts, id);
+    db.prepare("UPDATE items SET station = ?, updated_at = ? WHERE task_id = ?").run(station, ts, id);
+  };
+
+  const restoreOrMove = (moves: StationMove[], now: Date) => {
+    const ts = nowIso(now);
+    const unique = [...new Map(moves.map((m) => [m.id, m])).values()];
+    const previous = tx(db, () => {
+      const prev: StationMove[] = [];
+      for (const m of unique) {
+        const cur = get(m.id); // throws NotFoundError: the whole batch rolls back
+        prev.push({ id: m.id, station: cur.station });
+        if (cur.station !== m.station) moveOne(m.id, m.station, undefined, ts);
+      }
+      touchInteraction(db, now);
+      return prev;
+    });
+    return { tasks: unique.map((m) => get(m.id)), previous };
   };
 
   return {
@@ -77,7 +117,7 @@ export function tasksRepo(db: Db) {
       const rows = db
         .prepare(`SELECT *, ${TASK_KEY("tasks")} AS project_key FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY station, position, created_at`)
         .all(...args);
-      return fromRows<Task>(rows, SPEC).map((t) => ({ ...t, items: linked(t.id) }));
+      return fromRows<Task>(rows, SPEC).map((t) => ({ ...t, items: linked(t.id), owner: ownerOf(t.ticketId) }));
     },
 
     create(input: TaskInput, now = new Date()): Task {
@@ -109,16 +149,26 @@ export function tasksRepo(db: Db) {
      * "Sin sincronizar" (sync_state = pending) until the GitHub Project write is acked.
      */
     move(id: string, station: Station, position?: number, now = new Date()): Task {
-      const ts = nowIso(now);
       tx(db, () => {
         get(id);
-        db.prepare(
-          "UPDATE tasks SET station = ?, position = COALESCE(?, position), sync_state = 'pending', sync_error = NULL, updated_at = ? WHERE id = ?",
-        ).run(station, position ?? null, ts, id);
-        db.prepare("UPDATE items SET station = ?, updated_at = ? WHERE task_id = ?").run(station, ts, id);
+        moveOne(id, station, position, nowIso(now));
         touchInteraction(db, now);
       });
       return get(id);
+    },
+
+    /**
+     * Move several cards in one transaction (Tablero batch "Mover a"). Every card goes back to
+     * "Sin sincronizar" and through the GitHub Project push on its own, so one failed write
+     * flags only that card. Returns each card's previous station for Deshacer.
+     */
+    moveMany(ids: string[], station: Station, now = new Date()): { tasks: Task[]; previous: StationMove[] } {
+      return restoreOrMove(ids.map((id) => ({ id, station })), now);
+    },
+
+    /** Deshacer of a batch move: put each card back on its own station, in one transaction. */
+    restore(moves: StationMove[], now = new Date()): { tasks: Task[]; previous: StationMove[] } {
+      return restoreOrMove(moves, now);
     },
 
     linkItems(id: string, itemIds: string[], now = new Date()): Task {

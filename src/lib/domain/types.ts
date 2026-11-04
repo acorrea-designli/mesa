@@ -79,9 +79,27 @@ export interface Task {
   isSample: boolean;
   createdAt: string;
   updatedAt: string;
+  /** The ticket Claude works this card in ("Dárselo a Claude"); null for a note-only card. */
+  ticketId: string | null;
   /** Items linked to this task (chips on the card). Filled by the repository. */
   items?: Pick<Item, "id" | "source" | "title" | "url" | "project">[];
+  /** Who works the linked ticket (the owner chip). Filled by the repository; null without a ticket. */
+  owner?: TaskOwner | null;
 }
+
+/** The linked ticket of a card and its owner agent (ticket_team, owner = 1, live). */
+export interface TaskOwner {
+  ticketId: string;
+  ticketRef: string;
+  ticketStatus: TicketStatus;
+  /** Live owner agent ("tl-t21"); null until the lead claims the ticket and spawns one. */
+  agent: string | null;
+  role: string | null;
+}
+
+/** What a ticket.created wake hints to the lead for triage (docs/TEAM.md § 4). */
+export type DispatchKind = "review" | "request" | "investigation" | "reply";
+export const DISPATCH_KINDS: readonly DispatchKind[] = ["review", "request", "investigation", "reply"];
 
 // ---------- tickets ----------
 
@@ -154,6 +172,8 @@ export interface Ticket {
   project: string;
   ownerSession: string | null;
   itemId: string | null;
+  /** The board card this ticket works (tasks.ticket_id points back). */
+  taskId: string | null;
   isSample: boolean;
   wokeAt: string | null;
   closedAt: string | null;
@@ -333,7 +353,7 @@ export interface Session {
 }
 
 export type WakeKind =
-  | "ticket.created" // Andrés opened a request (broadcast)
+  | "ticket.created" // Andrés opened a request or handed a card to Claude: { ref, ticketRef, taskId, kind? }
   | "ticket.answered" // Andrés replied or chose an option
   | "ticket.plan_approved"
   | "ticket.closed"

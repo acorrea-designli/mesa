@@ -17,6 +17,7 @@ const task = (p: Partial<Task> = {}): Task => ({
   syncError: null,
   syncedAt: "2026-11-03T15:00:00.000Z",
   isSample: true,
+  ticketId: null,
   createdAt: "2026-11-03T14:00:00.000Z",
   updatedAt: "2026-11-03T14:00:00.000Z",
   ...p,

@@ -2,7 +2,7 @@
 // card chips and wait tags, caps with "+N más", and the GitHub Project sync summary.
 import type { StatusTone } from "@/components/ui/primitives";
 import { ignoreTarget, type IgnoreTarget } from "../ignore/model";
-import { SOURCES, STATIONS, type Item, type Source, type Station, type SyncState, type Task, type WaitOn } from "@/lib/domain/types";
+import { SOURCES, STATIONS, type Item, type Source, type Station, type SyncState, type Task, type TaskOwner, type TicketStatus, type WaitOn } from "@/lib/domain/types";
 
 /** Lane order from the approved mock. */
 export const LANES: readonly Source[] = ["github", "basecamp", "slack", "claude"];
@@ -38,7 +38,37 @@ export interface Card {
   isSample: boolean;
   /** The project "Ignorar proyecto «X»" would ignore. */
   ignore?: IgnoreTarget | null;
+  /** Who works the card's ticket ("tl-t21 · En curso", "Claude · por asignar"); null when only noted. */
+  owner?: OwnerChip | null;
 }
+
+export interface OwnerChip {
+  ticketRef: string;
+  label: string;
+  href: string;
+  /** True while the ticket waits for the lead to claim it and spawn the owner. */
+  unassigned: boolean;
+  /** The ticket is closed: the card can be handed to Claude again. */
+  closed: boolean;
+}
+
+const TICKET_STATE: Record<TicketStatus, string> = {
+  waiting_claude: "Espera a Claude",
+  working: "En curso",
+  waiting_andres: "Te espera",
+  closed: "Cerrado",
+};
+
+/** The owner chip: the live owner agent and the ticket's state, or "Claude · por asignar". */
+export function ownerChip(o: TaskOwner | null | undefined): OwnerChip | null {
+  if (!o) return null;
+  const unassigned = !o.agent && o.ticketStatus !== "closed";
+  const label = unassigned ? "Claude · por asignar" : `${o.agent ?? "Claude"} · ${TICKET_STATE[o.ticketStatus]}`;
+  return { ticketRef: o.ticketRef, label, href: `/tickets?t=${encodeURIComponent(o.ticketRef)}`, unassigned, closed: o.ticketStatus === "closed" };
+}
+
+/** "Dárselo a Claude" applies to any card without an open ticket, except sample data. */
+export const canDispatch = (c: Pick<Card, "owner" | "isSample">) => !c.isSample && (!c.owner || c.owner.closed);
 
 type LinkedItem = Pick<Item, "id" | "source" | "title" | "url" | "project"> & { externalId?: string; meta?: Record<string, unknown> };
 
@@ -95,6 +125,7 @@ export function toCard(t: Task, time: string, linked: LinkedItem[] = t.items ?? 
     syncState: t.syncState,
     isSample: t.isSample,
     ignore: ignoreTarget({ source: t.source, project: t.project || own?.project || "", projectKey: t.projectKey, meta: own?.meta }),
+    owner: ownerChip(t.owner),
   };
 }
 
@@ -165,4 +196,47 @@ export function syncSummary(tasks: Pick<Task, "syncState" | "syncError" | "synce
 /** Apply a local move before the server answers (optimistic). */
 export function applyMove(cards: Card[], id: string, station: Station): Card[] {
   return cards.map((c) => (c.id === id ? { ...c, station, syncState: "pending" as const, wait: station === "done" ? null : c.wait } : c));
+}
+
+// ---------- batch selection ----------
+
+/** Cards in reading order (lane by lane, station by station), the order Shift+click ranges over. */
+export function readingOrder(g: Grid, lanes: readonly Source[] = LANES): Card[] {
+  return lanes.flatMap((lane) => STATIONS.flatMap((st) => g[lane][st]));
+}
+
+/** Shift+click: every card between the anchor and the target in reading order, both included. */
+export function rangeIds(order: Pick<Card, "id">[], anchor: string | null, target: string): string[] {
+  const to = order.findIndex((c) => c.id === target);
+  if (to < 0) return [];
+  const from = anchor ? order.findIndex((c) => c.id === anchor) : -1;
+  if (from < 0) return [target];
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  return order.slice(a, b + 1).map((c) => c.id);
+}
+
+/** Toggle one id (Ctrl/Cmd+click, the checkbox, a tap in selection mode). */
+export function toggleId(sel: ReadonlySet<string>, id: string): Set<string> {
+  const n = new Set(sel);
+  if (n.has(id)) n.delete(id);
+  else n.add(id);
+  return n;
+}
+
+/** "Seleccionar carril" / "Seleccionar estación": add them all, or clear them when all are already in. */
+export function selectGroup(sel: ReadonlySet<string>, ids: string[]): Set<string> {
+  const n = new Set(sel);
+  if (ids.length && ids.every((id) => n.has(id))) ids.forEach((id) => n.delete(id));
+  else ids.forEach((id) => n.add(id));
+  return n;
+}
+
+export const laneIds = (g: Grid, lane: Source) => STATIONS.flatMap((st) => g[lane][st].map((c) => c.id));
+export const stationIds = (g: Grid, station: Station, lanes: readonly Source[] = LANES) => lanes.flatMap((l) => g[l][station].map((c) => c.id));
+
+/** The distinct projects "Ignorar proyecto" would ignore for a selection. */
+export function ignoreTargets(cards: Card[]): IgnoreTarget[] {
+  const seen = new Map<string, IgnoreTarget>();
+  for (const c of cards) if (c.ignore) seen.set(`${c.ignore.source}:${c.ignore.project}`, c.ignore);
+  return [...seen.values()];
 }

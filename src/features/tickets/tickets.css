@@ -313,6 +313,35 @@
   color: var(--mute);
   line-height: 1.45;
 }
+/* "Solo anotar (sin agente)": a native checkbox tinted ink (no line colour: it is not a source). */
+.tk-form .tk-note-only {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tk-note-only input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--ink);
+  flex: none;
+}
+.tk-note-only input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tk-note-only small {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mute);
+  margin-top: 2px;
+}
 
 /* composer */
 .tk-reply {

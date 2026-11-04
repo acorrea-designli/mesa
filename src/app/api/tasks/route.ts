@@ -14,5 +14,12 @@ export const GET = route((req, r) => {
   );
 });
 
-/** POST /api/tasks TaskInput -> Task (201) */
-export const POST = route(async (req, r) => json(r.tasks.create(await body(req, taskInput)), { status: 201 }));
+/**
+ * POST /api/tasks TaskInput & { noteOnly?, kind? } -> Task & { ticket: { id, ref } | null } (201)
+ * Without noteOnly the card is handed to Claude (linked ticket + ticket.created to the lead),
+ * except cards made from ingested items (itemIds) and samples, which are only noted.
+ */
+export const POST = route(async (req, r) => {
+  const { task, ticket } = r.dispatch.createTask(await body(req, taskInput));
+  return json({ ...task, ticket }, { status: 201 });
+});
