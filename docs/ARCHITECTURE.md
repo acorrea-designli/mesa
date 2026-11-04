@@ -174,6 +174,7 @@ The button press is the approval of the exact text and destination shown on the 
 2. For the lead (`MESA_APPROVAL_LEAD=1`) it first reads `GET /api/lead/focus`; the ticket named there replaces the missing ticket. It files `POST /api/approvals {ticketRef: $MESA_TICKET, agent: $MESA_AGENT, tool, summary, detail, cwd, hints, expiresAt}`. The card shows in the ticket thread, or on Hoy when there is no ticket.
 3. Tests: `scripts/hooks/test/mesa-approval.test.mjs`, run by `pnpm test:team` (part of `pnpm test`). Agent identity comes from the spawn name (in-process teammates share the lead's environment); `MESA_AGENT`/`MESA_TICKET` apply to separately launched sessions.
 4. It long-polls `GET /api/approvals/:id?wait=25` until the approval is decided or expired, then prints the decision:
+   - A decision counts only when `decidedBy` is `andres` (the UI routes stamp it); any other value is a deny with that reason.
    - **Dar permiso** (`allow`) → `{behavior: "allow"}` for this one call.
    - **Lee tus configuraciones** (`read_config`) → deny with a fixed message: read your own allow rules and retry with an allowed command shape instead of asking. The message includes the closest rule.
    - **Denegar** (`deny`) → deny with Andrés's optional note.
@@ -218,9 +219,8 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/team/:name/retire` | | `{ agent }` |
 | GET/POST `/api/approvals` | `?status=&ticket=&hoy=1` / `ApprovalInput` | `{ approvals }` / `{ approval }` 201 |
 | GET `/api/approvals/:id` | `?wait=SECONDS` (≤ 55) | `{ approval }` |
-| POST `/api/approvals/:id/decision` | `{ decision: allow\|read_config\|deny, actor, note? }` | `{ approval }`; 403 for any actor that names andres (his decisions come only from the three UI routes below); 409 after expiry or once decided |
-| GET/PUT/DELETE `/api/lead/focus` | `{ ticket }` (PUT) | `{ ticketRef }`; the ticket the lead acts on (`mesa lead focus`): the hook files the lead's prompts there; 404 unknown, 409 closed; a closed ticket reads as null |
-| POST `/api/approvals/:id/approve` · `/read-config` · `/deny` | `{ note? }` (the UI's three buttons; actor andres) | `{ approval }`; same rules |
+| GET/PUT/DELETE `/api/lead/focus` | `{ ticket }` (PUT) | `{ ticketRef, expiresAt }`; the ticket the lead acts on (`mesa lead focus`): the hook files the lead's prompts there; PUT sets or renews a 2 h window; 404 unknown, 409 closed; an expired window or a closed ticket reads as null; Hoy, Permisos shows it with "Quitar foco" |
+| POST `/api/approvals/:id/approve` · `/read-config` · `/deny` | `{ note? }` (the UI's three buttons; they stamp `decidedBy: "andres"`, the only decisions that exist) | `{ approval }`; 409 after expiry or once decided |
 | GET `/api/reviews` | `?ticket=` | `{ reviews }` (with findings) |
 | GET `/api/reviews/:id` | | `{ review }` |
 | POST `/api/reviews/:id/actions` | `{ action, findingNs?, note? }` | `{ review, salidaIds }` |
@@ -286,7 +286,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 - **No secrets in the repo, and no Slack or Basecamp credentials at all.** Those connectors live in Claude's MCP, and GitHub uses the `gh` login. `.env.local` (gitignored) holds only Mesa settings, which `.env.example` lists. `data/` and `*.db` are gitignored.
 - **Every outgoing write needs Andrés's explicit approval of the exact text and destination.** Slack and Basecamp messages and GitHub reviews/comments are salidas, and the review buttons approve the exact text shown on the card. Mesa refuses `sent` before the 20 s undo window ends.
 - **Permission approvals allow one call at a time.** Allow comes only from an explicit "Dar permiso" before expiry. Everything else is deny, and the hook never emits `updatedPermissions`.
-- **Approval rules are only partly enforced by the API.** The local API does not authenticate callers, so "sessions and agents never approve, schedule, deny, undo or decide" rests on CLAUDE.md, guardrail G10 and on the CLI having no such commands. The one hard rule: `/api/approvals/:id/decision` refuses any actor that names Andrés (403); his decisions come only from the UI routes approve / read-config / deny.
+- **Approval rules are only partly enforced by the API.** The local API does not authenticate callers, so "sessions and agents never approve, schedule, deny, undo or decide" rests on CLAUDE.md, guardrail G10 and on the CLI having no such commands. The hard rules: the only routes that decide an approval are the UI's approve / read-config / deny (decidedBy `andres`), and the hook honours a decision only with `decidedBy` `andres` (anything else is a deny). G10 blocks curl-shaped calls to those routes and to `permission-request`.
 - **Uploads** are stored under `data/uploads/<ticket>/` with sanitized names and a 25 MB cap.
 - **Sample data is labelled** (`is_sample`) and shown with "Datos de muestra.".
 

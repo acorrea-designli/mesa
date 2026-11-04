@@ -282,11 +282,6 @@ export const approvalInput = z.object({
   hints: z.array(z.string()).max(10).optional(),
   expiresAt: isoDate.optional(),
 });
-export const approvalDecision = z.object({
-  decision: z.enum(["allow", "read_config", "deny"]),
-  actor: z.string().min(1),
-  note: z.string().max(2000).optional(),
-});
 
 // ---------- reviews ----------
 export const findingInput = z.object({

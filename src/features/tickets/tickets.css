@@ -1023,3 +1023,17 @@
     height: 40px;
   }
 }
+/* With the 440 px pane the three buttons no longer fit beside the clip: drop the hint and let the buttons wrap. */
+@media (min-width: 721px) and (max-width: 1200px) {
+  .tk-bar {
+    flex-wrap: wrap;
+  }
+  .tk-bar .hint {
+    display: none;
+  }
+  .tk-bar .acts {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+}

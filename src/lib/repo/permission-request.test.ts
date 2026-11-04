@@ -3,9 +3,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
 import { NotFoundError, TransitionError } from "../db/util";
-import { claimsAndres } from "../domain/approval-actor";
 import { transitionTicket } from "../domain/ticket-machine";
 import { eventsAfter } from "../wake/wake";
+import { LEAD_FOCUS_TTL_MS } from "./focus";
 import { createRepos, type Repos } from "./index";
 
 let r: Repos;
@@ -89,15 +89,18 @@ describe("lead focus", () => {
     expect(r.focus.get()).toBeNull();
   });
 
+  it("expires 2 h after the last set, and setting it again refreshes the window", () => {
+    r.focus.set(ref, at(0));
+    const f = r.focus.current(at(LEAD_FOCUS_TTL_MS - 1))!;
+    expect(f).toMatchObject({ ticketRef: ref, title: "Sube el reporte", since: at(0).toISOString(), expiresAt: at(LEAD_FOCUS_TTL_MS).toISOString() });
+    expect(r.focus.get(at(LEAD_FOCUS_TTL_MS))).toBeNull();
+    r.focus.set(ref, at(LEAD_FOCUS_TTL_MS - 1000));
+    expect(r.focus.get(at(LEAD_FOCUS_TTL_MS + 60_000))).toBe(ref);
+    expect(r.focus.get(at(2 * LEAD_FOCUS_TTL_MS))).toBeNull();
+  });
+
   it("accepts a ticket by id and stores its ref", () => {
     const id = r.tickets.get(ref).id;
     expect(r.focus.set(id)).toBe(ref);
-  });
-});
-
-describe("claimsAndres", () => {
-  it("catches every spelling that names him and lets the hook's own actor through", () => {
-    for (const a of ["andres", "Andres", "ANDRÉS", " andrés ", "Andrés Correa", "acorrea-designli", "andres.correa@designli.co", "tm_andres"]) expect(claimsAndres(a), a).toBe(true);
-    for (const a of ["mesa-approval-hook", "hook", "dev-t10-5", "lead"]) expect(claimsAndres(a), a).toBe(false);
   });
 });

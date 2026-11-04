@@ -14,8 +14,7 @@ const fast = { timeoutMs: 200, pollMs: 5, waitSec: 1, rules, env: {} };
 const decided = (decision, extra = {}) =>
   fakeMesa({
     "POST /api/approvals": { approval: { id: "ap1" } },
-    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision, ...extra } },
-    "POST /api/approvals/ap1/decision": { ok: true },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision, decidedBy: "andres", ...extra } },
   });
 
 const assertShape = (r, behavior) => {
@@ -71,7 +70,6 @@ test("timeout denies, leaves expiry to Mesa and points at a ticket question", as
   const mesa = fakeMesa({
     "POST /api/approvals": { approval: { id: "ap9" } },
     "GET /api/approvals/ap9": { approval: { id: "ap9", status: "pending", decision: null } },
-    "POST /api/approvals/ap9/decision": { ok: true },
   });
   const r = await approve(bash(input, "terraform plan"), { ...fast, timeoutMs: 60, fetchImpl: mesa.fetchImpl });
   assertShape(r, "deny");
@@ -137,7 +135,7 @@ const withFocus = (ticketRef) =>
   fakeMesa({
     "GET /api/lead/focus": { ticketRef },
     "POST /api/approvals": { approval: { id: "ap1" } },
-    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow" } },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow", decidedBy: "andres" } },
   });
 
 test("the lead's prompt is filed to the ticket named with `mesa lead focus`", async () => {
@@ -155,7 +153,7 @@ test("with no focus (or an unreachable focus) the lead's prompt has no ticket an
   assert.equal(none.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, null);
   const down = fakeMesa({
     "POST /api/approvals": { approval: { id: "ap1" } },
-    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow" } },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow", decidedBy: "andres" } },
   });
   await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: down.fetchImpl });
   assert.equal(down.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, null);
@@ -170,6 +168,20 @@ test("an agent keeps its own ticket whatever the lead's focus is, and the lead p
   const pass = withFocus("t10");
   assert.equal(await approve(leadInput, { ...fast, fetchImpl: pass.fetchImpl }), null);
   assert.deepEqual(pass.calls, []);
+});
+
+test("a decision made by anyone but Andrés is never honoured, whatever it says", async () => {
+  const { input } = fakeAgent({ name: "dev-t12" });
+  for (const decidedBy of ["dev-t12", "mesa-approval-hook", "agent", "Andres ", null, undefined]) {
+    const mesa = decided("allow", { decidedBy });
+    const r = await approve(bash(input, "rm -rf build"), { ...fast, fetchImpl: mesa.fetchImpl });
+    assertShape(r, "deny");
+    assert.match(r.hookSpecificOutput.decision.message, /not by Andrés/);
+  }
+  for (const d of ["read_config", "deny"]) {
+    const r = await approve(bash(input, "x"), { ...fast, fetchImpl: decided(d, { decidedBy: "dev-t12" }).fetchImpl });
+    assert.match(r.hookSpecificOutput.decision.message, /not by Andrés/);
+  }
 });
 
 test("the hook decides nothing itself: it only files the card and reads it back", async () => {

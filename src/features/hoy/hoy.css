@@ -223,6 +223,24 @@
   height: 22px;
   margin-bottom: 6px;
 }
+.hy-focus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--raise);
+  font-size: 13px;
+}
+.hy-focus a {
+  font-weight: 700;
+}
+.hy-focus small {
+  color: var(--mute);
+}
 /* Permission cards are <ApprovalCard> (src/features/approvals, own CSS). */
 
 /* ---------- detail pane ---------- */

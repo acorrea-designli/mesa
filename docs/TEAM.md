@@ -181,13 +181,15 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    2. retries that exact call once, so the hook files the ApprovalCard on the ticket, and waits for him;
    3. after his decision (any of the three buttons, a timeout included) removes the ask rule, unless his reply says to
       keep it. A kept rule is named in the handoff.
-6. **Only Andrés decides.** His decisions come only from the UI routes `approve`, `read-config` and `deny`.
-   `POST /api/approvals/:id/decision` (the hook's own actor) answers 403 to any actor that names him. No agent decides
-   its own approval.
+6. **Only Andrés decides.** His decisions come only from the UI routes `approve`, `read-config` and `deny`, which
+   stamp `decidedBy: "andres"`; there is no other decision route. The hook honours a decision only when
+   `decidedBy` is `andres` and treats any other as a deny, and guardrail G10 blocks every raw-API shape of those
+   routes and of `permission-request`. No agent decides its own approval.
 
 **The lead's prompts.** They stay in his terminal (the hook passes the main thread through); `MESA_APPROVAL_LEAD=1`
 routes them to Mesa too. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the
-lead acts for one ticket it names it with `mesa lead focus <ref>` (stored by Mesa, `--clear` removes it, a closed
+lead acts for one ticket it names it with `mesa lead focus <ref>` (stored by Mesa; it lapses 2 h after the last
+`mesa lead focus <ref>`, so re-run it to renew; `--clear` or the "Quitar foco" button on Hoy removes it; a closed
 ticket counts as none) and the hook files the lead's prompts to that ticket. The lead clears the focus when it moves
 to other work. When a card pattern repeats, the lead proposes the allow rule to Andrés as a ticket question; no one
 adds an `allow` rule on their own.

@@ -15,6 +15,7 @@ import { isCalm, sourceCounts, visibleRows, type HoyData, type HoyRow } from "./
 import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { SalidaApproval } from "@/features/salidas/SalidaApproval";
 import { clock } from "./format";
+import { LeadFocus } from "./LeadFocus";
 import { useLive } from "./useLive";
 import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu";
 import { IgnoredLink } from "../ignore/IgnoredSheet";
@@ -224,9 +225,10 @@ export function HoyView({ data }: { data: HoyData }) {
 
         <div className="hy-main" ref={pressRef}>
           {offlineNote ? <div className="hy-desk-off">{offlineNote}</div> : null}
-          {data.approvals.length ? (
+          {data.approvals.length || data.leadFocus ? (
             <section id="permisos" className="hy-perm" aria-label="Permisos">
-              <div className="grp">Permisos · esperan tu decisión</div>
+              <div className="grp">{data.approvals.length ? "Permisos · esperan tu decisión" : "Permisos"}</div>
+              {data.leadFocus ? <LeadFocus focus={data.leadFocus} /> : null}
               <fieldset className="hy-fs" disabled={live.offline}>
                 {data.approvals.map((a) => (
                   <ApprovalCard key={a.id} approval={a} />

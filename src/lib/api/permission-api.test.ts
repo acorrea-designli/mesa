@@ -1,8 +1,12 @@
-// API tests for "Pídeme permiso", /api/lead/focus and the actor rule of /api/approvals/:id/decision, with the
+// API tests for "Pídeme permiso", /api/lead/focus and who may decide an approval, with the
 // route handlers over an in-memory database; plus Hoy, Permisos for an approval with no ticket.
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
 import { POST as APPROVE } from "@/app/api/approvals/[id]/approve/route";
-import { POST as DECISION } from "@/app/api/approvals/[id]/decision/route";
+import { GET as GET_APPROVAL } from "@/app/api/approvals/[id]/route";
+import { POST as POST_APPROVALS } from "@/app/api/approvals/route";
 import { POST as DENY } from "@/app/api/approvals/[id]/deny/route";
 import { POST as READ_CONFIG } from "@/app/api/approvals/[id]/read-config/route";
 import { DELETE as FOCUS_CLEAR, GET as FOCUS_GET, PUT as FOCUS_SET } from "@/app/api/lead/focus/route";
@@ -53,49 +57,64 @@ describe("POST /api/tickets/:id/permission-request", () => {
   });
 });
 
-describe("POST /api/approvals/:id/decision", () => {
-  it("refuses any actor that names andres and leaves the approval pending", async () => {
-    for (const actor of ["andres", "Andrés", " ANDRES ", "andres.correa@designli.co"]) {
-      const a = pending();
-      const res = await DECISION(req("POST", "/x", { decision: "allow", actor }), ctx({ id: a.id }));
-      expect(res.status, actor).toBe(403);
-      expect(r.approvals.get(a.id).status).toBe("pending");
-    }
+describe("only Andrés decides", () => {
+  it("has no raw decision route: nothing outside the three UI routes can decide an approval", () => {
+    expect(fs.existsSync(path.join(process.cwd(), "src/app/api/approvals/[id]/decision"))).toBe(false);
   });
 
-  it("keeps working for the hook's own actor, and decisions stay final", async () => {
-    const a = pending();
-    const res = await DECISION(req("POST", "/x", { decision: "deny", actor: "mesa-approval-hook", note: "x" }), ctx({ id: a.id }));
-    expect(res.status).toBe(200);
-    expect(r.approvals.get(a.id)).toMatchObject({ status: "decided", decision: "deny", decidedBy: "mesa-approval-hook" });
-    expect((await DECISION(req("POST", "/x", { decision: "allow", actor: "mesa-approval-hook" }), ctx({ id: a.id }))).status).toBe(409);
-  });
-
-  it("the UI routes still decide as andres", async () => {
-    const [a, b, c] = [pending(), pending(), pending()];
+  it("the UI routes decide as andres, whatever the body says", async () => {
+    const [a, b, c, d] = [pending(), pending(), pending(), pending()];
     expect((await APPROVE(req("POST", "/x", {}), ctx({ id: a!.id }))).status).toBe(200);
     expect((await READ_CONFIG(req("POST", "/x", {}), ctx({ id: b!.id }))).status).toBe(200);
     expect((await DENY(req("POST", "/x", { note: "no" }), ctx({ id: c!.id }))).status).toBe(200);
-    expect([a!, b!, c!].map((x) => r.approvals.get(x.id)).map((x) => [x.decision, x.decidedBy])).toEqual([
+    await APPROVE(req("POST", "/x", { actor: "someone-else", decision: "deny" }), ctx({ id: d!.id }));
+    expect([a!, b!, c!, d!].map((x) => r.approvals.get(x.id)).map((x) => [x.decision, x.decidedBy])).toEqual([
       ["allow", "andres"],
       ["read_config", "andres"],
       ["deny", "andres"],
+      ["allow", "andres"],
     ]);
   });
+});
 
-  it("a body that sets the actor on a UI route cannot change who decided", async () => {
-    const a = pending();
-    await APPROVE(req("POST", "/x", { actor: "someone-else", decision: "deny" }), ctx({ id: a.id }));
-    expect(r.approvals.get(a.id)).toMatchObject({ decision: "allow", decidedBy: "andres" });
+// The hook against the real routes and repositories: it files the card and honours only Andrés's decision.
+describe("the approval hook end to end", () => {
+  const HOOK = path.join(process.cwd(), "scripts/hooks/mesa-approval.mjs");
+  const dispatch = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+    const u = new URL(String(url));
+    const rq = new Request(u, init);
+    const m = /^\/api\/approvals\/([^/]+)$/.exec(u.pathname);
+    if (u.pathname === "/api/approvals") return POST_APPROVALS(rq, ctx());
+    if (m) return GET_APPROVAL(rq, ctx({ id: m[1]! }));
+    throw new TypeError("fetch failed");
+  };
+  const agent = { tool_name: "Bash", tool_input: { command: "aws s3 cp a b" }, cwd: "x", agent_id: "a1", transcript_path: "t.jsonl", session_id: "s" };
+  const run = async (decide: (id: string) => Promise<unknown> | unknown) => {
+    const { approve } = (await import(/* @vite-ignore */ pathToFileURL(HOOK).href)) as { approve: (i: unknown, o: unknown) => Promise<{ hookSpecificOutput: { decision: { behavior: string; message?: string } } }> };
+    const filed = approve(agent, { fetchImpl: dispatch, timeoutMs: 3000, pollMs: 20, waitSec: 1, rules: [], env: { MESA_AGENT: `dev-${ref}` } });
+    for (let i = 0; i < 100 && !r.approvals.list({ status: "pending" }).length; i++) await new Promise((ok) => setTimeout(ok, 20));
+    await decide(r.approvals.list({ status: "pending" })[0]!.id);
+    return (await filed).hookSpecificOutput.decision;
+  };
+
+  it("allows after Andrés presses Dar permiso", async () => {
+    const d = await run((id) => APPROVE(req("POST", "/x", {}), ctx({ id })));
+    expect(d.behavior).toBe("allow");
+  });
+
+  it("ignores a decision made by anyone else, even an allow", async () => {
+    const d = await run((id) => r.approvals.decide(id, { decision: "allow", actor: "dev-t12" }));
+    expect(d.behavior).toBe("deny");
+    expect(d.message).toMatch(/not by Andrés/);
   });
 });
 
 describe("/api/lead/focus", () => {
   it("sets, reads and clears; refuses unknown (404) and closed (409) tickets", async () => {
-    expect(await (await FOCUS_GET(req("GET", "/x"), ctx())).json()).toEqual({ ticketRef: null });
+    expect(await (await FOCUS_GET(req("GET", "/x"), ctx())).json()).toEqual({ ticketRef: null, expiresAt: null });
     expect((await FOCUS_SET(req("PUT", "/x", { ticket: ref }), ctx())).status).toBe(200);
-    expect(await (await FOCUS_GET(req("GET", "/x"), ctx())).json()).toEqual({ ticketRef: ref });
-    expect(await (await FOCUS_CLEAR(req("DELETE", "/x"), ctx())).json()).toEqual({ ticketRef: null });
+    expect(await (await FOCUS_GET(req("GET", "/x"), ctx())).json()).toEqual({ ticketRef: ref, expiresAt: expect.any(String) });
+    expect(await (await FOCUS_CLEAR(req("DELETE", "/x"), ctx())).json()).toEqual({ ticketRef: null, expiresAt: null });
     expect(r.focus.get()).toBeNull();
     expect((await FOCUS_SET(req("PUT", "/x", { ticket: "t404" }), ctx())).status).toBe(404);
     r.tickets.transition(ref, { type: "close", by: "andres" });
@@ -118,5 +137,15 @@ describe("Hoy, Permisos", () => {
     const lead = r.approvals.create({ agent: "lead", tool: "Bash", summary: "x" });
     expect((await APPROVE(req("POST", "/x", {}), ctx({ id: lead.id }))).status).toBe(200);
     expect(loadHoy().approvals).toEqual([]);
+  });
+});
+
+describe("Hoy, Permisos shows the lead focus", () => {
+  it("names the ticket and when it lapses, and drops it once cleared", () => {
+    expect(loadHoy().leadFocus).toBeNull();
+    r.focus.set(ref);
+    expect(loadHoy().leadFocus).toMatchObject({ ticketRef: ref, title: "Sube el reporte", until: expect.stringMatching(/^\d\d:\d\d$/) });
+    r.focus.clear();
+    expect(loadHoy().leadFocus).toBeNull();
   });
 });

@@ -143,6 +143,11 @@ export async function approve(
       await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
       continue; // a Mesa restart while we wait still gets its real decision; the deadline ends it
     }
+    // Only Andrés decides: his UI routes stamp decidedBy "andres". A decision from anyone else (an agent that
+    // reached the API itself) is never honoured, whatever it says.
+    if (a.decision && a.decidedBy !== "andres") {
+      return deny(`Denied: approval ${id} was decided by "${a.decidedBy ?? "unknown"}", not by Andrés in Mesa, so it does not count. ${NO_RETRY}`);
+    }
     if (a.decision === "allow") return output("allow");
     if (a.decision === "read_config") return deny(readConfigMessage(hints, ticketRef));
     if (a.decision === "deny") {
