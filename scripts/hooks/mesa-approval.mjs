@@ -143,8 +143,10 @@ export async function approve(
       await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
       continue; // a Mesa restart while we wait still gets its real decision; the deadline ends it
     }
-    // Only Andrés decides: his UI routes stamp decidedBy "andres". A decision from anyone else (an agent that
-    // reached the API itself) is never honoured, whatever it says.
+    // His UI routes stamp decidedBy "andres", and only a decision stamped that way counts. This guards only
+    // against a decision written outside those three routes. The routes themselves have no credential: any local
+    // process that POSTs to /approve, /read-config or /deny is stamped "andres" and honoured here (docs/TEAM.md
+    // section 6; improvement 13 is the fix).
     if (a.decision && a.decidedBy !== "andres") {
       return deny(`Denied: approval ${id} was decided by "${a.decidedBy ?? "unknown"}", not by Andrés in Mesa, so it does not count. ${NO_RETRY}`);
     }

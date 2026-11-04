@@ -181,10 +181,16 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    2. retries that exact call once, so the hook files the ApprovalCard on the ticket, and waits for him;
    3. after his decision (any of the three buttons, a timeout included) removes the ask rule, unless his reply says to
       keep it. A kept rule is named in the handoff.
-6. **Only Andrés decides.** His decisions come only from the UI routes `approve`, `read-config` and `deny`, which
-   stamp `decidedBy: "andres"`; there is no other decision route. The hook honours a decision only when
-   `decidedBy` is `andres` and treats any other as a deny, and guardrail G10 blocks every raw-API shape of those
-   routes and of `permission-request`. No agent decides its own approval.
+6. **Only Andrés decides, but nothing proves it yet.** His decisions come from the UI routes `approve`,
+   `read-config` and `deny`, which stamp `decidedBy: "andres"`; there is no other decision route, and the hook honours
+   a decision only when `decidedBy` is `andres` (anything else is a deny). **Those three routes have no credential:**
+   any local process (a node or python script, browser automation, a shell call G10 misses) that POSTs to one is
+   stamped `andres` and honoured. Guardrail G10 is partial: it blocks only curl-style shapes with a literal
+   `127.0.0.1`, `localhost` or `[::1]` host and port 8790 or 8796, and it is known to miss `"$MESA_URL"` and
+   `$env:MESA_URL`, other host spellings (`LOCALHOST`, `127.1`, `2130706433`, `127.0.0.2`, `0.0.0.0`,
+   `[0:0:0:0:0:0:0:1]`), `//approve` and `//api` (with `curl -L`), quoted segments, variable splicing (`A=approve`),
+   and tool-name disguises (`cu''rl`, `c\url`). G10 and the rule that agents never decide are the only barrier until
+   improvement 13 (a credential for Andrés's UI). Security hardening is on hold until he asks.
 
 **The lead's prompts.** They stay in his terminal (the hook passes the main thread through); `MESA_APPROVAL_LEAD=1`
 routes them to Mesa too. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the

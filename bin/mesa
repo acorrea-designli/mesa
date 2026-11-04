@@ -73,7 +73,8 @@ Reviews and approvals
 Lead (the lead session only)
   mesa lead focus [<ref>|--clear]                 name the ticket the lead is acting on, so its permission prompts
                                                    (MESA_APPROVAL_LEAD=1) are filed to that ticket instead of Hoy, Permisos;
-                                                   no argument prints the current focus; --clear removes it
+                                                   no argument prints the current focus; --clear removes it; it lapses
+                                                   2 h after the last set (run it again to renew)
 
 Sources and sweep (github|github_project|slack|basecamp|engram)
   mesa source get [<source>]                    sweep state + health (all sources without <source>)

@@ -48,7 +48,8 @@ blocked. Mesa never edits settings or files the card for you. The blocked agent:
 3. After his decision, removes the ask rule, unless he says to keep it (then say so in the handoff).
 
 The lead's own prompts with no ticket show in Hoy, Permisos. While it acts for a ticket it runs
-`mesa lead focus <ref>` (`--clear` when done) so the hook files them to that ticket.
+`mesa lead focus <ref>` (`--clear` when done; it lapses 2 h after the last set, so run it again to renew) so the
+hook files them to that ticket.
 
 ## Replying to his request
 

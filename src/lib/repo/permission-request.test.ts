@@ -1,5 +1,4 @@
-// "Pídeme permiso" (t10 improvement 10): the permission-request message and its wake, the lead's focus,
-// and the actor rule for the raw /decision route.
+// "Pídeme permiso" (t10 improvement 10): the permission-request message and its wake, and the lead's focus.
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
 import { NotFoundError, TransitionError } from "../db/util";
