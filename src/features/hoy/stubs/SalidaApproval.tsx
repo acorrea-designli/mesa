@@ -142,7 +142,7 @@ export function SalidaApproval({ salidaId, compact }: { salidaId: string; compac
       </div>
       {down ? (
         <p className="hy-hint">
-          {name} no responde{down.lastCheckedAt ? ` desde las ${clock(down.lastCheckedAt)}` : ""}. Si la firmas, sale cuando vuelva.
+          {name} no responde{down.lastChecked ? ` desde las ${clock(down.lastChecked)}` : ""}. Si la firmas, sale cuando vuelva.
         </p>
       ) : null}
       <div className="hy-meta">

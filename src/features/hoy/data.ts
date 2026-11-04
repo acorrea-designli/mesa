@@ -55,15 +55,15 @@ export function loadHoy(now: Date = new Date()): HoyData {
     .map((i) => ({ id: i.id, source: i.source, title: i.source === "claude" ? i.title : `${i.project ? `${i.project} · ` : ""}${i.title}`, time: clock(i.updatedAt) }));
 
   const states = r.sources.list();
-  const checked = states.map((s) => s.lastCheckedAt).filter((x): x is string => Boolean(x)).sort().at(-1);
+  const checked = states.map((s) => s.lastChecked).filter((x): x is string => Boolean(x)).sort().at(-1);
   const next = states
-    .filter((s) => s.lastCheckedAt && s.source !== "engram")
-    .map((s) => Date.parse(s.lastCheckedAt!) + s.cadenceS * 1000)
+    .filter((s) => s.lastChecked && s.source !== "engram")
+    .map((s) => Date.parse(s.lastChecked!) + s.cadenceS * 1000)
     .sort((a, b) => a - b)[0];
 
   const seen = (s: "github" | "slack" | "basecamp") => {
     const st = states.find((x) => x.source === s);
-    return Boolean(st?.lastCheckedAt) || all.some((i) => i.source === s);
+    return Boolean(st?.lastChecked) || all.some((i) => i.source === s);
   };
   const setup: SetupRow[] = [
     { key: "github", line: "github" as Source, name: "GitHub", detail: "acorrea-designli · PRs donde te piden review", connected: seen("github") },
