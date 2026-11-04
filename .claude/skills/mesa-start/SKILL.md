@@ -1,6 +1,6 @@
 ---
 name: mesa-start
-description: Start or rebuild the Mesa lead in this session - preflight (Mesa on :8790, gh account acorrea-designli, engram, tunnel), the mesa wait watcher, the inbox, and respawning the owners of live tickets from their briefs and handoffs. Use at the start of every work session, after every compaction or resume, and when Andrés says "arranca mesa", "mesa start", "empecemos", "levanta el equipo" or "retoma". Lead only; never run it from a teammate.
+description: Start or rebuild the Mesa lead in this session - preflight (Mesa on :8790, gh account acorrea-designli, an engram write round trip), the mesa wait watcher, the inbox, and respawning the owners of live tickets from their briefs and handoffs. Use at the start of every work session, after every compaction or resume, and when Andrés says "arranca mesa", "mesa start", "empecemos", "levanta el equipo" or "retoma". Lead only; never run it from a teammate.
 ---
 
 # Mesa start (lead)
@@ -27,7 +27,22 @@ Never list or read other files in this folder; it holds secrets.
 | gh account | `gh api user -q .login` | `acorrea-designli`. Else stop: Andrés fixes `gh auth` (you never run `gh auth`) |
 | Hooks wired | `grep -c "mesa-approval.mjs\|mesa-handoff-guard.mjs\|mesa-guardrails.mjs" G:/WorkSpace/designli/.claude/settings.json` | 3 or more. Else: ask Andrés to run `node G:/WorkSpace/designli/ops/scripts/install-team.mjs` |
 | engram | `mem_current_project`, then `mem_context` | project resolves from this cwd; read the last `session/mesa-lead` summary and its open items |
-| Tunnel | the `tunnel` field of the health JSON | reachable URL. Down is a warning, not a stop: the phone cannot sign until it is back (tell Andrés) |
+| engram write | `mem_save` with topic_key `mesa/smoke`, content `preflight <ISO time>`, then `mem_search mesa/smoke` | the save succeeds and the search returns this time. The MCP has no delete tool, so the smoke record is one upserted observation that each preflight overwrites. "host session registration could not be confirmed" or an unresolved project: pass `project: "designli"` on **every** engram call this session (yours and, through the spawn prompt, every teammate's) and retry once; failing again is a stop |
+
+The phone tunnel is out of scope for now (phone access comes later); there is no tunnel check.
+
+## 1b. First run with this team (once, then mark it done in engram `mesa/setup`)
+
+Confirm the hooks see teammates the way they were built for (`docs/TEAM.md` § 10, point 7):
+
+- [ ] Spawn one throwaway `researcher-<ref>` on a test ticket and have it run a command outside the allow rules
+      (e.g. `whoami`). A card must appear **inside that ticket** with the agent's name (PermissionRequest fires for
+      in-process teammates and the hook resolved its name). Press Denegar.
+- [ ] Let it try to stop without a handoff: the Stop hook must refuse once with rule 6 (H1). Then it writes the
+      handoff and stops.
+- [ ] Have it SendMessage a retired name (retire a dummy first): G2 must block it.
+- [ ] Close the test ticket, retire the researcher, and `mem_save` topic `mesa/setup` with what passed. If a check
+      fails, write the observed hook input shape into that observation and tell Andrés in one line.
 
 ## 2. Register and watch
 

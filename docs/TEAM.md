@@ -55,6 +55,7 @@ has no ticket and is named `sweeper-<n>`.
    Read `.claude/mesa/spawn-preamble.md` first, then boot (rule 1) with
    `node G:/WorkSpace/designli/ops/bin/mesa ticket context <ref>`.
    Task: <one paragraph: the NEED's reason, or the brief's ask>.
+   Engram: pass project "designli" on every engram call.   <- only when mesa-start § 1 needed it
    ```
 
 4. Tell the owner the new name in one line (`SPAWNED <ref> <name>`).
@@ -198,32 +199,25 @@ registered with the node that ran the installer. Re-run after every pull. Restar
    `src` and `bin`; `pnpm test` runs vitest and then `pnpm test:team`.
 6. **Who applies infra** (asked to Andrés). devops never applies. Proposed: `apply_infra` is a `needs_ok` plan action the lead runs
    from the devops worktree with the saved plan file after approval, or the repo's CI applies on merge. Andrés decides.
-7. **Hook payloads to verify live.** Whether `PermissionRequest` fires for background in-process teammates, and
-   whether their `Stop` carries `agent_id` or their own `transcript_path`, could not be tested without a live team.
-   Both shapes are handled; confirm with one researcher spawn on the first `/mesa-start`.
-8. **Addresses.** The lead is addressed as `team-lead` and every Mesa call uses `MESA_SESSION=lead` (one stable
-   session owns every ticket and relays wakes). If Mesa should show per-agent sessions instead, the CLI calls need
-   `--session <name>` and `mesa wait` per agent.
-9. **Engram project.** `G:/WorkSpace/designli` is not a git repo; check that `mem_current_project` resolves a
-   stable project there before the first save.
-10. **Who writes `mesa/<ref>`.** The architecture says sessions save ticket threads to engram and link them with
-    `mesa engram link`. The team upserts one record per ticket at `mesa/<ref>`; if Mesa or the lead also saves
-    threads, use the same key so it upserts instead of duplicating.
-11. **Tunnel.** `/api/health` has no tunnel field yet and nothing in the repo starts a tunnel; `/mesa-start` treats it
-    as a warning until it exists.
-12. **pr-monitor coexistence.** Until Andrés switches, pr-monitor and Mesa reviewers can both review the same PR.
-    The reviewer seeds its state from `~/.claude-work/pr-monitor-state.json` (read-only) when Mesa has none, so it
-    does not re-review what pr-monitor already reviewed; findings still go to both places.
-13. **Allow rules.** `--allow` adds read-only rules for the command sheets (Mesa CLI, gh GETs, git reads, engram,
-    Basecamp and Slack reads). Review the list in `scripts/install-team.mjs` before using it. `gh api repos/*`
-    also matches writes with `-f`; hook G4 blocks those for everyone.
-14. **Lead question guard.** medix's Stop hook that refuses a lead turn ending in a question with no ticket is not
-    included; the lead talks to Andrés in his own terminal. Add it if questions keep getting lost in chat.
-15. **Sweep state** (resolved): `source_state` and `lastInteractionAt` shipped on main (migration 0003); the
-    sweeper's state lives in Mesa.
-16. **Slack probe query.** The probe uses one search, `(to:me OR <@U06E2UBDC73>)`. If Slack search does not honour
+7. **Hook payloads to verify live** (decided): checked once with the checklist in `mesa-start` § 1b, result in
+   engram `mesa/setup`.
+8. **Addresses** (agreed): the lead is `team-lead`; every Mesa call uses `MESA_SESSION=lead`.
+9. **Engram project** (decided): `mesa-start` preflight does a save round trip. If engram cannot resolve
+   `G:/WorkSpace/designli`, every engram call passes `project: "designli"` explicitly for the session, and the spawn
+   prompts say so.
+10. **One engram key per ticket** (agreed): `mesa/<ref>`, shared by Mesa and the agents (upserts).
+11. **Tunnel**: out of scope for now (phone access later). No code and no preflight check.
+12. **pr-monitor coexistence** (decided): reviewers seed their state from `~/.claude-work/pr-monitor-state.json`,
+    read-only, when Mesa has none.
+13. **Allow rules** (decided): the `--allow` list stays read-only; the lead reviews it before Andrés runs the
+    installer. `gh api repos/*` also matches writes with `-f`; hook G4 blocks those for everyone.
+14. **Lead question guard** (decided: skipped): Andrés talks to the lead in chat; teammates ask him only through
+    ticket questions.
+15. **Sweep state** (resolved): `source_state` and `lastInteractionAt` are on main (PR #3); the local-file fallback
+    is gone.
+16. **Slack probe query** (agreed). The probe uses one search, `(to:me OR <@U06E2UBDC73>)`. If Slack search does not honour
     `OR` with `to:`, the probe becomes two calls (`to:me`, then the mention) and stays under the same limit.
-17. **Sweeper approvals.** The sweeper has no ticket, so a permission card it raises has `ticketRef: null` and
+17. **Sweeper approvals** (agreed). The sweeper has no ticket, so a permission card it raises has `ticketRef: null` and
     must show on Hoy. With `--allow`, its command sheet is fully allowed and it should never raise one.
 
 ## 11. Ingest: the sweep
@@ -245,7 +239,7 @@ procedure and the lead's on-demand pass.
   source, even outside work hours. `sweep-tick.mjs force [--source s]` does the same by hand.
 - **State in Mesa.** `GET /api/sources` and `PATCH /api/sources/:name` (`source_state`: watermark, lastChecked,
   lastNewAt, backoffUntil, cadenceS, errorCount, lastError, health) plus `lastInteractionAt`, stamped by any UI
-  action of Andrés. An older Mesa without them (404) falls back to `%TEMP%/mesa-team/sources.json`.
+  action of Andrés. There is no local fallback: Mesa down means `wait` reports `mesa_down` and the tick waits.
 - **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its health to
   `degraded`, or `down` after `downAfterErrors` consecutive failures that are not rate limits; the rail shows it
   (Estados B). The next good probe sets it back to `ok`, and leaving `down` resumes the salidas held for it.
