@@ -39,7 +39,12 @@
   display: none;
 }
 @media (max-width: 720px) {
+  html[data-env="sandbox"] {
+    --sbx-h: 25px;
+  }
   .sbx-tab {
+    box-sizing: border-box;
+    height: var(--sbx-h);
     top: auto;
     bottom: var(--phone-tabs-h);
     border-top: 2px dashed var(--ink);

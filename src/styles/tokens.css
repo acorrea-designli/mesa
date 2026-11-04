@@ -66,6 +66,7 @@
   --detail-w: 392px;
   --thread-w: 520px;
   --phone-tabs-h: 82px;
+  --sbx-h: 0px; /* height of the SANDBOX tab sitting on the phone tab bar (sandbox.css); 0 on the live board */
 
   /* Shadows: only for floating layers */
   --float-low: 0 2px 8px var(--shade);

@@ -47,6 +47,8 @@ export const ticketApi = {
     const excerpt = [lines.slice(1).join(" "), input.link?.trim()].filter(Boolean).join(" · ");
     return call<{ id: string }>("/api/tasks", { body: { title, source: "claude", excerpt: excerpt || undefined, project: input.project || undefined, noteOnly: true } });
   },
+  /** Andrés has the ticket open: clears its "new" flag server side. */
+  seen: (id: string) => call<{ ticketId: string; seenAt: string }>(`${T(id)}/seen`, { body: {} }),
   close: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "close", by: "andres" } }),
   reopen: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "reopen", by: "andres" } }),
   /** "Pídeme permiso": posts the marked message and wakes the owner (ticket.permission_requested). */

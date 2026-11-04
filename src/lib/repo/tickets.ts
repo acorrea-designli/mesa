@@ -10,6 +10,7 @@ import {
   TransitionError,
 } from "../db/util";
 import { initialTicketStatus, transitionTicket, type TicketEvent } from "../domain/ticket-machine";
+import { matchOptionKey, openOptions } from "../domain/ticket-options";
 import type {
   ActionMode,
   ActionState,
@@ -208,6 +209,34 @@ export function ticketsRepo(db: Db) {
       };
     },
 
+    /**
+     * Ids of the tickets with a message Andrés has not seen: one not written by him, newer than
+     * the last time he opened the ticket (never opened = every such message). His own messages
+     * never count.
+     */
+    unreadIds(): Set<string> {
+      const rows = db
+        .prepare(
+          `SELECT DISTINCT m.ticket_id AS id FROM ticket_messages m
+             LEFT JOIN ticket_reads r ON r.ticket_id = m.ticket_id
+            WHERE m.author <> 'andres' AND m.created_at > COALESCE(r.seen_at, '')`,
+        )
+        .all() as { id: string }[];
+      return new Set(rows.map((x) => x.id));
+    },
+
+    /** Andrés opened the ticket (or a message arrived on the one he has open): clear its flag. */
+    markSeen(id: string, now = new Date()): { ticketId: string; seenAt: string } {
+      const t = get(id);
+      return db
+        .prepare(
+          `INSERT INTO ticket_reads (ticket_id, seen_at) VALUES (?, ?)
+           ON CONFLICT(ticket_id) DO UPDATE SET seen_at = MAX(seen_at, excluded.seen_at)
+           RETURNING ticket_id AS ticketId, seen_at AS seenAt`,
+        )
+        .get(t.id, nowIso(now)) as { ticketId: string; seenAt: string };
+    },
+
     list(f: { status?: TicketStatus; open?: boolean } = {}): Ticket[] {
       const where: string[] = [];
       const args: string[] = [];
@@ -280,6 +309,16 @@ export function ticketsRepo(db: Db) {
           ensureSession(db, m.session, now);
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(m.session, t.id);
           t = get(t.id);
+        }
+        // His habit of typing the letter counts as picking it: a reply that is just an option key
+        // of the latest options message he has not answered records chosen = that key.
+        if (m.author === "andres" && !m.chosen && m.body) {
+          const prior = fromRows<TicketMessage>(
+            db.prepare("SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at, rowid").all(t.id),
+            M_SPEC,
+          );
+          const key = matchOptionKey(m.body, openOptions(prior));
+          if (key) m = { ...m, chosen: key };
         }
         const msgId = insertMessage(t.id, m, nowIso(now));
         if (m.author === "andres") touchInteraction(db, now);

@@ -55,6 +55,7 @@ export function ComposerBox({
   rows = 3,
   autoFocus,
   menuAbove,
+  onFocusChange,
 }: {
   c: Composer;
   pick: PickTicket[];
@@ -66,6 +67,8 @@ export function ComposerBox({
   rows?: number;
   autoFocus?: boolean;
   menuAbove?: boolean;
+  /** The textarea gained or lost focus (the thread uses it to give the conversation the space). */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
@@ -240,7 +243,11 @@ export function ComposerBox({
         }}
         onKeyDown={onKey}
         onClick={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart)}
-        onBlur={() => setTimeout(() => setMenu(null), 120)}
+        onFocus={() => onFocusChange?.(true)}
+        onBlur={() => {
+          onFocusChange?.(false);
+          setTimeout(() => setMenu(null), 120);
+        }}
         onPaste={(e) => {
           const files = [...e.clipboardData.files];
           if (files.length) {

@@ -3,7 +3,7 @@
 // client's words, sources, Claude's plan, permission approvals, reviews, the
 // messages, the agents on the ticket and the reply composer.
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Attachment, PlannedAction, TicketMessage, TicketRef } from "@/lib/domain/types";
 import { Alert, Chip, srcClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/interactive";
@@ -14,6 +14,8 @@ import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/feature
 import { ticketApi } from "./api";
 import { DirLine, dirLabel, hm } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
+import { isNearBottom, onNewMessage, type ScrollBox } from "./follow";
+import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
 import type { PickTicket, ThreadData } from "./read";
 
 interface Props {
@@ -22,12 +24,22 @@ interface Props {
   pick: PickTicket[];
   verbs: string[];
   onChanged: () => void;
+  /** True while the composer has focus or text: the screen shrinks the ticket list to a rail. */
+  onComposing?: (composing: boolean, refocus?: boolean) => void;
 }
 
-export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
+export function Thread({ data, listening, pick, verbs, onChanged, onComposing }: Props) {
   const { ticket: t } = data;
   const toast = useToast();
   const c = useComposer();
+  const [focused, setFocused] = useState(false);
+  // A closed ticket has no composer (an unmounted textarea never reports its blur).
+  const composing = t.status !== "closed" && (focused || c.state.text !== "");
+  useEffect(() => {
+    onComposing?.(composing);
+  }, [composing, onComposing]);
+  // The thread goes away (another ticket opens): it is no longer being written.
+  useEffect(() => () => onComposing?.(false), [onComposing]);
   const [busy, setBusy] = useState(false);
   const ref = usePress<HTMLElement>(".btn, .tk-opt, .tk-verb");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -35,19 +47,101 @@ export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
     if (bodyRef.current) arrive(bodyRef.current.querySelectorAll(".tk-msg, .tk-act, .ap-card"));
   }, [t.id]);
 
+  // Autoscroll (follow.ts): opening a ticket and sending land on the last message; a message from
+  // Claude scrolls only when he is already near the bottom, otherwise the "nuevo mensaje" pill shows.
+  // On desktop the thread scrolls itself; on the phone the page does, and the same rule applies to
+  // it. Only scroll positions move: never the list, the focus or the composer.
+  const [pill, setPill] = useState(false);
+  const nearBottom = useRef(true);
+  const lastMsg = t.messages[t.messages.length - 1];
+  const seenMsg = useRef(lastMsg?.id);
+  /** What scrolls the thread right now, or null while it is not on screen (phone list view). */
+  const scroller = (): { el: HTMLElement | null; box: ScrollBox } | null => {
+    const el = bodyRef.current;
+    if (!el || el.getClientRects().length === 0) return null;
+    if (getComputedStyle(el).overflowY === "auto") return { el, box: el };
+    const d = document.documentElement;
+    return { el: null, box: { scrollTop: window.scrollY, clientHeight: window.innerHeight, scrollHeight: d.scrollHeight } };
+  };
+  // Scroll events caused by our own instant jump arrive a frame later, when a resize may already have
+  // pushed the end away: they are not him scrolling up, so they are not measured.
+  const quiet = useRef(0);
+  const toBottom = (smooth: boolean) => {
+    const s = scroller();
+    if (!s) return;
+    const behavior = smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto";
+    if (behavior === "auto") quiet.current = performance.now() + 150;
+    if (s.el) s.el.scrollTo({ top: s.el.scrollHeight, behavior });
+    else window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+  };
+  const measured = (near: boolean) => {
+    nearBottom.current = near;
+    // Pinned to the bottom we re-pin ourselves on every resize; the browser's scroll anchoring would read its own
+    // correction as him scrolling up. Reading history keeps the anchoring.
+    if (bodyRef.current) bodyRef.current.style.overflowAnchor = near ? "none" : "";
+    if (near) setPill(false);
+  };
+  useLayoutEffect(() => {
+    toBottom(false); // opening: already at the end on first paint, no jump from the top
+    nearBottom.current = true;
+    if (bodyRef.current) bodyRef.current.style.overflowAnchor = "none";
+    // On a hard load the server HTML is hidden (tickets.css) until here, so it is never painted at the top.
+    bodyRef.current?.removeAttribute("data-pin");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useLayoutEffect(() => {
+    if (!lastMsg || seenMsg.current === lastMsg.id) return;
+    seenMsg.current = lastMsg.id;
+    if (!scroller()) return;
+    if (onNewMessage({ own: lastMsg.author === "andres", wasNearBottom: nearBottom.current }) === "scroll") {
+      toBottom(true);
+    } else {
+      setPill(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMsg?.id]);
+  // The page scrolls on the phone: measure it too.
+  useEffect(() => {
+    const on = () => {
+      const s = scroller();
+      if (s && !s.el && performance.now() >= quiet.current) measured(isNearBottom(s.box));
+    };
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  // Staying at the bottom when sizes change under him (the list rail opening or closing re-wraps
+  // the text and resizes the composer; the thread appearing on the phone): re-pin if he was there.
+  const resizes = useRef<ResizeObserver | null>(null);
+  useEffect(() => {
+    resizes.current = new ResizeObserver(() => {
+      if (nearBottom.current) toBottom(false);
+    });
+    return () => resizes.current?.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const el = bodyRef.current;
+    const ro = resizes.current;
+    if (!el || !ro) return;
+    ro.observe(el);
+    for (const child of el.children) ro.observe(child);
+  });
+
   const first = t.messages[0];
   const rest = t.messages.slice(1);
-  const chosen = [...t.messages].reverse().find((m) => m.chosen)?.chosen ?? null;
+  // Every message with options gets buttons; only the latest one Andrés has not answered is live.
+  const optStates = optionStates(t.messages);
+  const openMsg = t.messages.find((m) => optStates.get(m.id)?.actionable);
   const closed = t.status === "closed";
   const pending = data.approvals.filter((a) => a.status === "pending");
   const pastApprovals = data.approvals.filter((a) => a.status !== "pending").slice(-3);
 
-  const send = async (chosenKey?: string) => {
+  const send = async (chosenKey?: string, from?: TicketMessage) => {
     if (busy) return;
     if (!chosenKey && !c.state.text.trim() && !c.state.files.length && !c.state.refs.length) return;
     setBusy(true);
     try {
-      const state = chosenKey && !c.state.text.trim() ? { ...c.state, text: optionText(first, chosenKey) } : c.state;
+      const state = chosenKey && !c.state.text.trim() ? { ...c.state, text: optionText(from ?? openMsg, chosenKey) } : c.state;
       await ticketApi.reply(t.id, state, chosenKey);
       c.reset();
       toast({ text: listening ? "Respuesta enviada · Claude despierta" : "Respuesta guardada · la lee la próxima sesión" });
@@ -79,104 +173,99 @@ export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
   ];
 
   return (
-    <aside className="tk-pane" ref={ref} aria-label={`Ticket ${t.ref}`}>
+    <aside className="tk-pane tk-thread" ref={ref} aria-label={`Ticket ${t.ref}`}>
       <Link className="tk-back" href="/tickets">
         <IcBack />
         Tickets
       </Link>
-      <div className="tk-scroll" ref={bodyRef}>
-        <div className="kind">
-          <DirLine direction={t.direction} />
-          {t.ref} · {dirLabel(t.direction)} · {hm(t.createdAt)}
-        </div>
-        <h2>{t.title}</h2>
-        {first?.body && first.body !== t.title ? <div className="ctx">{first.body}</div> : null}
+      <div className="tk-scrollwrap">
+        <div
+          className="tk-scroll"
+          ref={bodyRef}
+          data-pin="1"
+          onScroll={(e) => {
+            if (performance.now() >= quiet.current) measured(isNearBottom(e.currentTarget));
+          }}
+        >
+          <div className="kind">
+            <DirLine direction={t.direction} />
+            {t.ref} · {dirLabel(t.direction)} · {hm(t.createdAt)}
+          </div>
+          <h2>{t.title}</h2>
+          {first?.body && first.body !== t.title ? <div className="ctx">{first.body}</div> : null}
 
-        {first?.options?.length ? (
-          <>
-            <div className="k">Elige</div>
-            <div className="tk-opts">
-              {first.options.map((o) => (
-                <button
-                  key={o.key}
-                  type="button"
-                  className={["tk-opt", first.recommended === o.key && "rec", chosen === o.key && "pick"].filter(Boolean).join(" ")}
-                  disabled={busy || closed}
-                  aria-pressed={chosen === o.key}
-                  onClick={(e) => {
-                    confirmPick(e.currentTarget);
-                    void send(o.key);
-                  }}
-                >
-                  <b>{o.key}</b>
-                  <span>
-                    {o.label}
-                    {o.detail ? <small>{o.detail}</small> : null}
-                  </span>
-                </button>
+          {first?.options?.length ? (
+            <>
+              <div className="k">{optStates.get(first.id)?.actionable ? "Elige" : "Opciones"}</div>
+              <Options m={first} state={optStates.get(first.id)} disabled={busy || closed} onPick={(key) => send(key, first)} />
+            </>
+          ) : null}
+
+          {data.item ? (
+            <>
+              <div className="k">Lo que pidió el cliente</div>
+              <div className="ctx">{data.item.excerpt || data.item.title}</div>
+            </>
+          ) : null}
+
+          <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} />
+
+          {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
+
+          {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
+            <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
+          ) : null}
+
+          {pending.map((a) => (
+            <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
+          ))}
+          {pastApprovals.map((a) => (
+            <ApprovalCard key={a.id} approval={a} />
+          ))}
+
+          {data.reviews.map((r) => (
+            <ReviewCard key={r.id} review={r} onChange={onChanged} />
+          ))}
+
+          {rest.length ? (
+            <div className="tk-msgs">
+              {rest.map((m) => (
+                <Message key={m.id} m={m} options={optStates.get(m.id)} disabled={busy || closed} onPick={(key) => send(key, m)} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
               ))}
             </div>
-            {first.recommended ? (
-              <div className="tk-rec">
-                <span className="ln src-claude" style={{ background: "var(--c)" }} />
-                <span>
-                  <b>Claude recomienda {first.recommended}:</b> {first.recommendation}
-                </span>
-              </div>
-            ) : null}
-          </>
-        ) : null}
+          ) : null}
 
-        {data.item ? (
-          <>
-            <div className="k">Lo que pidió el cliente</div>
-            <div className="ctx">{data.item.excerpt || data.item.title}</div>
-          </>
-        ) : null}
+          {data.salidas.length ? (
+            <div className="tk-sal">
+              {data.salidas.map((s) => (
+                <Link key={s.id} className={`lk ${srcClass(s.source)}`} href={`/salidas?s=${s.id}`}>
+                  <span className="ln" style={{ background: "var(--c)", width: 12, height: 4 }} />
+                  Salida · {s.title} · {s.simulated && s.status === "sent" ? "simulado · no salió" : (SAL_STATUS[s.status] ?? s.status)}
+                </Link>
+              ))}
+            </div>
+          ) : null}
 
-        <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} />
-
-        {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
-
-        {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
-          <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
-        ) : null}
-
-        {pending.map((a) => (
-          <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
-        ))}
-        {pastApprovals.map((a) => (
-          <ApprovalCard key={a.id} approval={a} />
-        ))}
-
-        {data.reviews.map((r) => (
-          <ReviewCard key={r.id} review={r} onChange={onChanged} />
-        ))}
-
-        {rest.length ? (
-          <div className="tk-msgs">
-            {rest.map((m) => (
-              <Message key={m.id} m={m} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
-            ))}
-          </div>
-        ) : null}
-
-        {data.salidas.length ? (
-          <div className="tk-sal">
-            {data.salidas.map((s) => (
-              <Link key={s.id} className={`lk ${srcClass(s.source)}`} href={`/salidas?s=${s.id}`}>
-                <span className="ln" style={{ background: "var(--c)", width: 12, height: 4 }} />
-                Salida · {s.title} · {s.simulated && s.status === "sent" ? "simulado · no salió" : (SAL_STATUS[s.status] ?? s.status)}
-              </Link>
-            ))}
-          </div>
-        ) : null}
-
-        <StatusLine t={t} listening={listening} />
-        <Agents data={data} />
+          <StatusLine t={t} listening={listening} />
+          <Agents data={data} />
+        </div>
       </div>
 
       <div className="tk-foot">
+        {pill ? (
+          <button
+            className="tk-newmsg"
+            type="button"
+            // The composer keeps its focus and caret: the pill only moves the thread.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              toBottom(true);
+              setPill(false);
+            }}
+          >
+            nuevo mensaje <span aria-hidden="true">↓</span>
+          </button>
+        ) : null}
         {closed ? (
           <div className="acts">
             <button className="btn sm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.reopen(t.id), "Ticket reabierto · Claude despierta")}>
@@ -206,8 +295,12 @@ export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
               pick={pick.filter((p) => p.ref !== t.ref)}
               actions={actions}
               label="Respuesta"
-              placeholder={first?.options?.length && !chosen ? `Responde, elige ${first.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
+              placeholder={openMsg?.options?.length ? `Responde, elige ${openMsg.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
               onSubmit={() => void send()}
+              onFocusChange={(on) => {
+                setFocused(on);
+                if (on) onComposing?.(true, true);
+              }}
               menuAbove
             >
               <button className="btn sm perm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.requestPermission(t.id), listening ? "Pedido enviado · Claude despierta para pedirte permiso" : "Pedido guardado · lo lee la próxima sesión")} title="Claude pide el permiso de la llamada bloqueada y verás la tarjeta aquí">
@@ -249,9 +342,42 @@ const SAL_STATUS: Record<string, string> = {
   draft: "borrador",
 };
 
-function optionText(first: TicketMessage | undefined, key: string): string {
-  const o = first?.options?.find((x) => x.key === key);
-  return o ? `${key}. ${o.label}` : key;
+/** A/B choices of one message as real buttons: the recommended one marked, the picked one pressed. */
+function Options({ m, state, disabled, onPick }: { m: TicketMessage; state?: OptionState; disabled: boolean; onPick: (key: string) => void }) {
+  const live = Boolean(state?.actionable);
+  return (
+    <>
+      <div className={live ? "tk-opts" : "tk-opts ro"} role="group" aria-label="Opciones">
+        {m.options?.map((o) => (
+          <button
+            key={o.key}
+            type="button"
+            className={["tk-opt", m.recommended === o.key && "rec", state?.chosen === o.key && "pick"].filter(Boolean).join(" ")}
+            disabled={!live || disabled}
+            aria-pressed={state?.chosen === o.key}
+            onClick={(e) => {
+              confirmPick(e.currentTarget);
+              onPick(o.key);
+            }}
+          >
+            <b>{o.key}</b>
+            <span>
+              {o.label}
+              {o.detail ? <small>{o.detail}</small> : null}
+            </span>
+          </button>
+        ))}
+      </div>
+      {m.recommended ? (
+        <div className="tk-rec">
+          <span className="ln src-claude" style={{ background: "var(--c)" }} />
+          <span>
+            <b>Claude recomienda {m.recommended}:</b> {m.recommendation}
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function Sources({ refs, titles, owner, item }: { refs: TicketRef[]; titles: Record<string, string>; owner: string | null; item: ThreadData["item"] }) {
@@ -302,7 +428,7 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   );
 }
 
-function Message({ m, atts, refs, ticketId, titles }: { m: TicketMessage; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+function Message({ m, options, disabled, onPick, atts, refs, ticketId, titles }: { m: TicketMessage; options?: OptionState; disabled: boolean; onPick: (key: string) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
   return (
     <div className="tk-msg">
       <div className="tk-who">
@@ -313,15 +439,7 @@ function Message({ m, atts, refs, ticketId, titles }: { m: TicketMessage; atts: 
         {m.kind === "permission_request" ? <span className="tk-chose">pedido de permiso</span> : null}
       </div>
       {m.body ? <p>{m.body}</p> : null}
-      {m.options?.length ? (
-        <ul className="tk-mopts">
-          {m.options.map((o) => (
-            <li key={o.key}>
-              <b>{o.key}</b> {o.label}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {m.options?.length ? <Options m={m} state={options} disabled={disabled} onPick={onPick} /> : null}
       {refs.length ? (
         <div className="tk-files">
           {refs.map((r) => (

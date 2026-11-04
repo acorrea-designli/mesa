@@ -1,9 +1,15 @@
 /* Tickets A (tickets.html variant A) + phone (telefono.html paridad 4-5). */
 .tk-app {
+  --tk-rail-w: 76px;
+  --rail-ms: 160ms;
+}
+.tk-app {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--thread-w);
+  /* Both tracks are lengths so the rail transition can interpolate them (minmax(0, 1fr) cannot). */
+  grid-template-columns: calc(100% - var(--thread-w)) var(--thread-w);
   height: 100dvh;
   overflow: hidden;
+  transition: grid-template-columns var(--rail-ms) var(--ease-out);
 }
 .tk-main {
   padding: 0 28px 24px;
@@ -137,6 +143,25 @@
 .tk-row.closed .tk-dir {
   color: var(--mute);
 }
+/* "new": a message Andrés has not seen (read state is server side). */
+.tk-flag {
+  display: inline-block;
+  vertical-align: 1px;
+  margin-right: 7px;
+  padding: 0 6px;
+  border: 1px solid var(--cl);
+  border-radius: var(--r-tag);
+  background: var(--cl-tint);
+  color: var(--cl-ink);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+.tk-rail {
+  display: none;
+}
 .grp {
   font-size: 11px;
   font-weight: 700;
@@ -192,13 +217,57 @@
 .tk-back {
   display: none;
 }
+/* The thread scrolls inside the wrap; the "nuevo mensaje" pill floats over its bottom edge. */
+.tk-scrollwrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.tk-newmsg {
+  position: absolute; /* over the top edge of the composer area (.tk-foot), on desktop and phone alike */
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-pill);
+  background: var(--raise);
+  color: var(--ink);
+  box-shadow: var(--float-low);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: tk-newmsg-in 140ms var(--ease-out);
+}
+.tk-newmsg:hover {
+  background: var(--ink);
+  color: var(--gnd);
+}
+.tk-newmsg:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+@keyframes tk-newmsg-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
 .tk-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 22px 24px 12px;
 }
+/* A hard load paints the server HTML before it can scroll: hidden until the thread has landed at the bottom. */
+.tk-scroll[data-pin] {
+  visibility: hidden;
+}
 .tk-foot {
+  position: relative;
   flex: none;
   padding: 8px 24px 16px;
   border-top: 1px solid var(--rule);
@@ -547,11 +616,12 @@
   margin-top: 3px;
   white-space: pre-wrap;
 }
-.tk-mopts {
-  list-style: none;
-  margin-top: 4px;
-  font-size: 13.5px;
-  color: var(--ink2);
+/* options in a later message: same buttons; answered or superseded ones are read-only */
+.tk-msg .tk-opts {
+  margin-top: 8px;
+}
+.tk-opts.ro .tk-opt:not(.pick) {
+  opacity: 0.6;
 }
 .tk-status {
   display: flex;
@@ -833,14 +903,133 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lb-travel {
+  .lb-travel,
+  .tk-newmsg {
     animation: none;
+  }
+  .tk-app {
+    --rail-ms: 0ms;
+  }
+}
+
+/* ---------- rail: while he writes, the list shrinks and the thread widens ---------- */
+@media (min-width: 721px) {
+  .tk-scroll,
+  .tk-foot {
+    transition: padding var(--rail-ms) var(--ease-out);
+  }
+  /* The thread stays a readable column however wide the space gets. */
+  .tk-app[data-rail] {
+    grid-template-columns: var(--tk-rail-w) calc(100% - var(--tk-rail-w));
+  }
+  .tk-app[data-rail] .tk-scroll,
+  .tk-app[data-rail] .tk-foot {
+    padding-inline: max(24px, calc((100% - 780px) / 2));
+  }
+  .tk-app[data-rail] .tk-main {
+    padding: 0;
+    overflow-x: hidden;
+  }
+  .tk-app[data-rail] .tk-full {
+    display: none;
+  }
+  .tk-app[data-rail] .tk-rail {
+    display: flex;
+  }
+  .tk-row.sel .tk-flag {
+    display: none; /* the ticket he has open is seen by definition */
+  }
+  .tk-rail {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 0 16px;
+  }
+  .tk-rail-open {
+    height: 40px;
+    margin: 0 8px 8px;
+    border: 1px solid var(--edge);
+    border-radius: var(--r-control);
+    background: var(--raise);
+    color: var(--ink2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tk-rail-open:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+  .tk-rail-item {
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+    padding: 9px 4px;
+    border-bottom: 1px solid var(--rule2);
+    color: var(--ink);
+    position: relative;
+  }
+  .tk-rail-item:hover {
+    background: color-mix(in srgb, var(--raise) 50%, transparent);
+  }
+  .tk-rail-item .id {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink2);
+  }
+  .tk-rail-item.sel {
+    background: var(--raise);
+    box-shadow: inset 3px 0 0 var(--cl);
+  }
+  .tk-rail-item.sel .id {
+    color: var(--ink);
+  }
+  .tk-rail-item.closed .id {
+    color: var(--mute);
+  }
+  .tk-rail-item:focus-visible,
+  .tk-rail-open:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+  .tk-rail-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 16px;
+  }
+  .tk-rail-meta .tk-flag {
+    margin: 0;
+    padding: 0 4px;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+  }
+  .tk-dot {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 2px solid var(--edge);
+  }
+  .tk-dot.waiting_andres {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+  .tk-dot.waiting_claude,
+  .tk-dot.working {
+    border-color: var(--cl);
+  }
+  .tk-dot.working {
+    background: var(--cl);
+  }
+  .tk-dot.closed {
+    border-color: var(--bc);
   }
 }
 
 @media (max-width: 1200px) {
   .tk-app {
-    grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-columns: calc(100% - 440px) 440px;
   }
   .tk-cols,
   .tk-row {
@@ -938,6 +1127,9 @@
     padding: 0 16px;
     flex: none;
   }
+  .tk-scrollwrap {
+    display: contents; /* the page scrolls on the phone, not the thread */
+  }
   .tk-scroll {
     padding: 0 16px 12px;
     overflow: visible;
@@ -957,10 +1149,28 @@
     width: 28px;
     height: 28px;
   }
+  /* Keyboard focus scrolls a field into view: keep it clear of the fixed tab bar (and the sandbox tab). */
+  html:has(.tk-app) {
+    scroll-padding-bottom: calc(var(--phone-tabs-h) + var(--sbx-h) + 12px);
+  }
   .tk-foot {
-    position: sticky;
-    bottom: var(--phone-tabs-h);
     padding: 10px 16px 14px;
+  }
+  /* Only the thread's composer sticks (the new-request form keeps its foot in the flow, so its fields are never covered). */
+  .tk-app[data-open] .tk-thread {
+    /* clip, not hidden: hidden makes the pane a scroll container and position: sticky on .tk-foot never sticks */
+    overflow: clip;
+    padding-bottom: var(--sbx-h); /* room for the SANDBOX tab the composer sits above (0 live) */
+  }
+  .tk-thread .tk-foot {
+    position: sticky;
+    bottom: calc(var(--phone-tabs-h) + var(--sbx-h) - 1px); /* 1 px under the tab bar: no seam at fractional device pixel ratios */
+    z-index: 2; /* above the messages that scroll under it, below the tab bar (30) */
+    box-shadow: 0 var(--sbx-h) 0 0 var(--deep); /* fills the gap above the tab bar left by the SANDBOX tab (0 live) */
+  }
+  /* The pill rides on the sticky composer (it is inside .tk-foot): just above it, with the same 14 px gap as the toasts. */
+  .tk-newmsg {
+    bottom: calc(100% + 14px);
   }
   .tk-bar .hint {
     flex: 1;
