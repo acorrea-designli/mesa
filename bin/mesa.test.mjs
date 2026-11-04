@@ -84,6 +84,10 @@ describe("mesa CLI", () => {
       "mesa ignore add",
       "mesa ignore remove",
       "mesa engram link",
+      "mesa task create",
+      "--note-only",
+      "mesa task dispatch",
+      "mesa task move",
     ]) {
       expect(r.stdout).toContain(c);
     }
@@ -280,5 +284,20 @@ describe("mesa CLI", () => {
     const r = await mesa(["salida", "sent", "sa_1"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("409 cannot send before release");
+  });
+
+  it("task create hands the card to Claude unless --note-only; dispatch and move hit their routes", async () => {
+    handler = () => ({ status: 201, body: { id: "ta_1", title: "x", ticket: { id: "tk_1", ref: "t9" } } });
+    await mesa(["task", "create", "--title", "Revisar backups", "--project", "freightmate"]);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tasks", body: { title: "Revisar backups", source: "claude", project: "freightmate", noteOnly: false } });
+    await mesa(["task", "create", "--title", "Solo nota", "--note-only"]);
+    expect(requests[1].body).toMatchObject({ title: "Solo nota", noteOnly: true });
+    await mesa(["task", "dispatch", "ta_1", "--kind", "review"]);
+    expect(requests[2]).toMatchObject({ method: "POST", path: "/api/tasks/ta_1/dispatch", body: { kind: "review" } });
+    await mesa(["task", "move", "ta_1", "doing"]);
+    expect(requests[3]).toMatchObject({ method: "POST", path: "/api/tasks/ta_1/move", body: { station: "doing" } });
+    await mesa(["task", "list", "--station", "todo"]);
+    expect(requests[4]).toMatchObject({ method: "GET", path: "/api/tasks", query: { station: "todo" } });
+    expect((await mesa(["task", "explode"])).code).toBe(2);
   });
 });

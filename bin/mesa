@@ -73,6 +73,15 @@ GitHub (server side, with the gh login; Mesa never writes reviews or comments)
   mesa github status                               Project ids (settings) and github / github_project health
   mesa github import-reviews                       read pr-monitor's state file (read only) into Mesa reviews
 
+Tasks (Tablero)
+  mesa task create --title T [--body B] [--project P] [--station S] [--source claude] [--kind K] [--note-only]
+                                                   a card; without --note-only it is handed to Claude: a linked ticket and
+                                                   ticket.created to the lead. Agents adding a card (create_task) pass --note-only
+  mesa task dispatch <id> [--kind review|request|investigation|reply]
+                                                   "Dárselo a Claude" on an existing card (idempotent; samples refused)
+  mesa task list [--station S] [--source S]
+  mesa task move <id> <station>                    inbox|todo|doing|waiting|done (Sin sincronizar until the Project acks)
+
 Items and memory
   mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...); an ignored project's
                                                    item is not stored and returns { ignored: true }
@@ -482,6 +491,32 @@ async function main() {
       if (cmd === "status") return out(await call("GET", "/api/github/status"));
       if (cmd === "import-reviews") return out(await call("POST", "/api/github/import-reviews", {}));
       return usage(`unknown github command "${cmd ?? ""}"`);
+
+    case "task": {
+      if (cmd === "create") {
+        const noteOnly = opt["note-only"] !== undefined && opt["note-only"] !== "false";
+        return out(
+          await call("POST", "/api/tasks", {
+            title: text(opt.title, "--title"),
+            source: opt.source ?? "claude",
+            excerpt: opt.body === undefined ? undefined : text(opt.body, "--body"),
+            project: opt.project,
+            station: opt.station,
+            kind: opt.kind,
+            noteOnly,
+          }),
+        );
+      }
+      if (cmd === "dispatch") return out(await call("POST", `/api/tasks/${enc(need(id, "<id>"))}/dispatch`, { kind: opt.kind }));
+      if (cmd === "list") {
+        const q = new URLSearchParams();
+        if (opt.station) q.set("station", opt.station);
+        if (opt.source) q.set("source", opt.source);
+        return out(await call("GET", `/api/tasks${q.size ? `?${q}` : ""}`));
+      }
+      if (cmd === "move") return out(await call("POST", `/api/tasks/${enc(need(id, "<id>"))}/move`, { station: need(pos[3], "<station>") }));
+      return usage(`unknown task command "${cmd ?? ""}"`);
+    }
 
     case "item":
       if (cmd !== "upsert") return usage(`unknown item command "${cmd ?? ""}"`);

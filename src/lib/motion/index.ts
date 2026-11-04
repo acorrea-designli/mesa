@@ -84,6 +84,21 @@ export function riseSheet(sheet: Element, scrim?: Element | null): void {
   animate(sheet, reduce ? { opacity: [0, 1] } : { transform: ["translateY(100%)", "translateY(0%)"] }, reduce ? { duration: 0.2 } : SOFT);
 }
 
+/** A docked bar (Tablero batch bar) rises from the bottom edge with a soft spring. */
+export function riseBar(el: Element): void {
+  const reduce = prefersReducedMotion();
+  animate(el, reduce ? { opacity: [0, 1] } : { opacity: [0, 1], transform: ["translateY(120%)", "translateY(0%)"] }, reduce ? { duration: 0.2 } : SOFT);
+}
+
+/**
+ * A selected board card lifts 2 px (and settles back when deselected). Under reduced motion it
+ * does not move; the selection outline alone carries the state.
+ */
+export function lift(el: Element, on: boolean): void {
+  if (prefersReducedMotion()) return;
+  animate(el, { y: on ? -2 : 0 }, SPRING);
+}
+
 /** A chosen option, version pill, station tab or Mover target confirms with a short spring. */
 export function confirmPick(el: Element): void {
   if (prefersReducedMotion()) return;
@@ -162,6 +177,23 @@ export function usePress<T extends HTMLElement>(selector = ".btn, .tab, .chip", 
     const stops = [...el.querySelectorAll(selector)].map((n) => pressable(n, big));
     return () => stops.forEach((s) => s());
   }, [selector, big]);
+  return ref;
+}
+
+/** Lift the element while `on` (selected board cards). */
+export function useLift<T extends HTMLElement>(on: boolean): RefObject<T | null> {
+  const ref = useRef<T>(null);
+  const first = useRef(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (first.current && !on) {
+      first.current = false;
+      return;
+    }
+    first.current = false;
+    lift(el, on);
+  }, [on]);
   return ref;
 }
 

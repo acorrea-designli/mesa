@@ -4,6 +4,7 @@ import { emitWake } from "../wake/wake";
 import { agentsRepo } from "./agents";
 import { approvalsRepo } from "./approvals";
 import { chipsRepo } from "./chips";
+import { dispatchRepo } from "./dispatch";
 import { engramRepo } from "./engram";
 import { ignoredRepo, ITEM_IGNORED, TASK_IGNORED } from "./ignored";
 import { lastInteractionAt, touchInteraction } from "./interaction";
@@ -21,6 +22,7 @@ export function createRepos(db: Db) {
     items: itemsRepo(db),
     tasks: tasksRepo(db),
     tickets: ticketsRepo(db),
+    dispatch: dispatchRepo(db),
     salidas: salidasRepo(db),
     chips: chipsRepo(db),
     sessions: sessionsRepo(db),

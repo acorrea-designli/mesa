@@ -59,6 +59,10 @@ export interface TicketInput {
   project?: string;
   ownerSession?: string;
   itemId?: string;
+  /** The board card this ticket works (set by the dispatch service, src/lib/repo/dispatch.ts). */
+  taskId?: string;
+  /** Triage hint carried on the ticket.created wake (docs/TEAM.md § 4). */
+  kind?: string;
   isSample?: boolean;
   /** First message. Its author follows the direction. */
   body?: string;
@@ -210,6 +214,7 @@ export function ticketsRepo(db: Db) {
             project: input.project ?? "",
             ownerSession: input.ownerSession ?? null,
             itemId: input.itemId ?? null,
+            taskId: input.taskId ?? null,
             isSample: input.isSample ?? false,
             createdAt: ts,
             updatedAt: ts,
@@ -231,7 +236,10 @@ export function ticketsRepo(db: Db) {
         );
         if (input.direction === "andres_asks") {
           // A new request goes to its owner if one was named, otherwise to any session.
-          emitWake(db, { sessionId: input.ownerSession ?? null, kind: "ticket.created", entityType: "ticket", entityId: id, payload: { ref } }, now);
+          // Payload: { ref, ticketRef, taskId, kind? } (ref is kept for older handlers).
+          const payload: Record<string, unknown> = { ref, ticketRef: ref, taskId: input.taskId ?? null };
+          if (input.kind) payload.kind = input.kind;
+          emitWake(db, { sessionId: input.ownerSession ?? null, kind: "ticket.created", entityType: "ticket", entityId: id, payload }, now);
         }
         return this.detail(id);
       });
