@@ -100,12 +100,13 @@ describe("reviews", () => {
     const s = r.salidas.detail(out.salidaIds[0]!);
     expect(s.destination).toMatchObject({
       kind: "github_review",
-      event: "COMMENT",
+      event: "REQUEST_CHANGES", // mixed: a blocker among the posted findings
       comments: [
         { path: "src/a.ts", line: 42, body: "Null deref", findingN: 1 },
         { body: "Naming", findingN: 2 },
       ],
     });
+    expect(s.title).toMatch(/^Pedir cambios acme\/scout#59/);
     expect(s.versions[0]?.body).toBe("");
     expect(() => r.reviews.action(rev.id, { action: "post", findingNs: [1] }, T0)).toThrow(/already posted/);
 
@@ -113,6 +114,29 @@ describe("reviews", () => {
     const ap = r.reviews.action(rev.id, { action: "approve" }, T0);
     r.salidas.transition(ap.salidaIds[0]!, { type: "undo" }, at(1000));
     expect(r.reviews.get(rev.id).state).toBe("open");
+  });
+
+  it("post asks for changes only when a posted finding is a blocker", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    const post = (ns: number[]) => {
+      const out = r.reviews.action(rev.id, { action: "post", findingNs: ns }, T0);
+      return r.salidas.detail(out.salidaIds[0]!);
+    };
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, label: "comment", summary: "Consider a helper", sha: "abc" }, T0); // n = 3
+    // nits and comments only -> COMMENT
+    const soft = post([2, 3]);
+    expect(soft.destination).toMatchObject({ event: "COMMENT" });
+    expect(soft.title).toMatch(/^Revisión acme\/scout#59/);
+    // a blocker alone -> REQUEST_CHANGES
+    const hard = post([1]);
+    expect(hard.destination).toMatchObject({ event: "REQUEST_CHANGES" });
+    expect(hard.title).toMatch(/^Pedir cambios acme\/scout#59 · 1 comentario/);
+  });
+
+  it("approve paths keep their APPROVE event", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    const out = r.reviews.action(rev.id, { action: "approve_anyway" }, T0);
+    expect(r.salidas.detail(out.salidaIds[0]!).destination).toMatchObject({ event: "APPROVE" });
   });
 });
 

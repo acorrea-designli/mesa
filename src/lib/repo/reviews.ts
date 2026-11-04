@@ -218,14 +218,16 @@ export function reviewsRepo(db: Db) {
             const list = pick(a.findingNs);
             if (!list.length) throw new TransitionError("post needs findingNs");
             for (const f of list) if (f.ghCommentId || f.salidaId) throw new TransitionError(`finding ${f.n} was already posted`);
+            // A blocker among the posted findings asks GitHub for changes; nits and comments only comment.
+            const event = list.some((f) => f.label === "blocker") ? "REQUEST_CHANGES" : "COMMENT";
             const id = write({
               source: "github",
-              title: `Revisión ${r.repo}#${r.pr} · ${list.length} ${list.length === 1 ? "comentario" : "comentarios"}`,
+              title: `${event === "REQUEST_CHANGES" ? "Pedir cambios" : "Revisión"} ${r.repo}#${r.pr} · ${list.length} ${list.length === 1 ? "comentario" : "comentarios"}`,
               destination: {
                 kind: "github_review",
                 repo: r.repo,
                 pr: r.pr,
-                event: "COMMENT",
+                event,
                 commitId: r.headSha || undefined,
                 comments: list.map((f) => ({ ...parseAt(f.at), body: findingCommentBody(f), findingN: f.n })),
                 postAs: GITHUB_LOGIN,
