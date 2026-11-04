@@ -9,7 +9,7 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 - Node **22.23.2** (`mise.toml`; `.npmrc` sets `use-node-version` so pnpm scripts use it even if the `node` on PATH is older). `node:sqlite` needs ≥ 22.13.
 - `pnpm install`
 - `pnpm dev` serves on `0.0.0.0:8790` (never 8770 or 8771: other boards use them). Open http://localhost:8790.
-- `pnpm check` runs typecheck, lint and tests. `pnpm build` must pass before a PR.
+- `pnpm check` runs typecheck, lint and tests (vitest, plus `node --test` for the approval hook). `pnpm build` must pass before a PR.
 - Data lives in `data/mesa.db` (gitignored; `MESA_DB` overrides). Migrations in `db/migrations` apply on startup; `pnpm db:migrate` applies them by hand.
 - `/kit` shows every shared component in both themes.
 - CLI for sessions: `node bin/mesa help` (`bin/mesa.cmd` on Windows). Set `MESA_SESSION` to the session id.
@@ -35,7 +35,7 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 ## Safety rules for Claude sessions using Mesa
 
 - Nothing is sent on Andrés's behalf without his approval of the exact text and destination. Slack, Basecamp and GitHub writes (review approvals, PR comments) are all salidas. A session or agent **never** calls approve, schedule, deny, undo or unqueue on a salida, and never decides a permission approval. It proposes, adds versions, and reports `sent`, `failed`, `hold` or `bounce`.
-- Send a salida only after `mesa wait` delivers `salida.released` for it, and send exactly `versions[approvedVersion - 1].body` to exactly `destination`. If the event says `recheckThread`, re-read the thread first and `bounce` when it changed. If the source is down at send time, `hold` it ("Aprobar al volver") and report the outage with `mesa health set`.
+- Send a salida only after `mesa wait` delivers `salida.released` for it, and send exactly `versions[approvedVersion - 1].body` to exactly `destination`. If the event says `recheckThread`, re-read the thread first and `bounce` when it changed. If the source is down at send time, `hold` it ("Aprobar al volver") and report the outage with `mesa source set <source> --health down`.
 - One lead session (`MESA_SESSION=lead`) owns every ticket and relays wakes to agents. Agents are ephemeral: start from `mesa ticket context <ref>`, rewrite the brief on every milestone (`mesa ticket brief`), write a handoff before stopping (`mesa handoff`), and keep nothing important only in the context window. Agent names are `<role>-<ticketRef>[-k]` and are never reused.
 - Save ticket conversations and decisions to engram under topic key `mesa/<ref>` (scoped by the ticket's project) and link them with `mesa engram link`.
 - Slack and Basecamp are read only through MCP by the `mesa-sweep` skill. Mesa holds no Slack or Basecamp tokens, apps, webhooks or OAuth.

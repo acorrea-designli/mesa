@@ -179,20 +179,25 @@ export function reviewsRepo(db: Db) {
             break;
           }
           case "post": {
+            // ONE batched review per PR per decision: every chosen finding is an inline comment.
             const list = pick(a.findingNs);
             if (!list.length) throw new TransitionError("post needs findingNs");
-            for (const f of list) {
-              if (f.ghCommentId || f.salidaId) throw new TransitionError(`finding ${f.n} was already posted`);
-              const { path, line } = parseAt(f.at);
-              const id = write({
-                source: "github",
-                title: `Comentario ${r.repo}#${r.pr} · ${f.n}`,
-                destination: { kind: "github_comment", repo: r.repo, pr: r.pr, path, line, commitId: f.sha || r.headSha || undefined, findingN: f.n, postAs: GITHUB_LOGIN },
-                body: findingCommentBody(f),
-                context: f.anchor,
-              });
-              db.prepare("UPDATE review_findings SET salida_id = ?, updated_at = ? WHERE id = ?").run(id, ts, f.id);
-            }
+            for (const f of list) if (f.ghCommentId || f.salidaId) throw new TransitionError(`finding ${f.n} was already posted`);
+            const id = write({
+              source: "github",
+              title: `Revisión ${r.repo}#${r.pr} · ${list.length} ${list.length === 1 ? "comentario" : "comentarios"}`,
+              destination: {
+                kind: "github_review",
+                repo: r.repo,
+                pr: r.pr,
+                event: "COMMENT",
+                commitId: r.headSha || undefined,
+                comments: list.map((f) => ({ ...parseAt(f.at), body: findingCommentBody(f), findingN: f.n })),
+                postAs: GITHUB_LOGIN,
+              },
+              body: a.note ?? "",
+            });
+            for (const f of list) db.prepare("UPDATE review_findings SET salida_id = ?, updated_at = ? WHERE id = ?").run(id, ts, f.id);
             affected = list.map((f) => f.n);
             break;
           }

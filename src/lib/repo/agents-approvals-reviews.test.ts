@@ -93,12 +93,20 @@ describe("reviews", () => {
     expect(wake?.payload).toMatchObject({ action: "approve_anyway", repo: "acme/scout", pr: 59, findingNs: [1, 2] });
   });
 
-  it("post creates one comment salida per finding with its exact text; undo returns the review to open", () => {
+  it("post batches the chosen findings into ONE review salida; undo returns the review to open", () => {
     const rev = r.reviews.byPr("acme/scout", 59);
-    const out = r.reviews.action(rev.id, { action: "post", findingNs: [1] }, T0);
+    const out = r.reviews.action(rev.id, { action: "post", findingNs: [1, 2] }, T0);
+    expect(out.salidaIds).toHaveLength(1);
     const s = r.salidas.detail(out.salidaIds[0]!);
-    expect(s.destination).toMatchObject({ kind: "github_comment", path: "src/a.ts", line: 42, findingN: 1 });
-    expect(s.versions[0]?.body).toBe("Null deref");
+    expect(s.destination).toMatchObject({
+      kind: "github_review",
+      event: "COMMENT",
+      comments: [
+        { path: "src/a.ts", line: 42, body: "Null deref", findingN: 1 },
+        { body: "Naming", findingN: 2 },
+      ],
+    });
+    expect(s.versions[0]?.body).toBe("");
     expect(() => r.reviews.action(rev.id, { action: "post", findingNs: [1] }, T0)).toThrow(/already posted/);
 
     r.reviews.action(rev.id, { action: "dismiss", findingNs: [1] }, T0);
@@ -110,7 +118,7 @@ describe("reviews", () => {
 
 describe("source outages", () => {
   it("approving during a Slack outage queues; recovery releases it with a re-check", () => {
-    r.health.set("slack", "down", "MCP unreachable", T0);
+    r.sources.set("slack", { health: "down", note: "MCP unreachable" }, T0);
     const s = r.salidas.create(
       { source: "slack", destination: { kind: "slack_thread", workspace: "Designli", channel: "#scout-dev", postAs: "Andrés" }, body: "ok", ownerSession: "lead" },
       T0,
@@ -118,11 +126,18 @@ describe("source outages", () => {
     expect(r.salidas.transition(s.id, { type: "approve", version: 1 }, at(1)).status).toBe("queued_until_back");
     r.salidas.sweep(at(UNDO_WINDOW_MS * 2));
     expect(r.salidas.get(s.id).status).toBe("queued_until_back");
-    const { resumed } = r.health.set("slack", "ok", "", at(UNDO_WINDOW_MS * 3));
+    const { resumed } = r.sources.set("slack", { health: "ok" }, at(UNDO_WINDOW_MS * 3));
     expect(resumed).toEqual([s.id]);
     expect(r.salidas.get(s.id)).toMatchObject({ status: "sending" });
     const rel = eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "salida.released");
     expect(rel.at(-1)?.payload).toMatchObject({ recheckThread: true, version: 1 });
+  });
+
+  it("keeps sweep watermarks per source", () => {
+    expect(r.sources.get("basecamp")).toMatchObject({ health: "ok", watermark: null, cadenceS: 60 });
+    r.sources.set("basecamp", { watermark: "2026-11-03T09:59:00Z", lastCheckedAt: T0.toISOString(), cadenceS: 120, backoffUntil: at(120_000).toISOString() }, T0);
+    r.sources.set("basecamp", { health: "degraded", note: "429" }, at(1));
+    expect(r.sources.get("basecamp")).toMatchObject({ health: "degraded", watermark: "2026-11-03T09:59:00Z", cadenceS: 120 });
   });
 
   it("Barrer ahora wakes the lead", () => {

@@ -19,7 +19,7 @@ export const isActive = (path: string, href: string) => (href === "/" ? path ===
 /** Source health for the rail notice (Estados B). Empty until lane C reports it. */
 export interface SourceHealth {
   source: Source | "github_project";
-  state: "ok" | "down" | "limited";
+  state: "ok" | "degraded" | "down";
   note: string; // "sin conexión", "límite de API · 14:05"
 }
 

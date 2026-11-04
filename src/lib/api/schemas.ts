@@ -132,6 +132,18 @@ const githubDest = z.object({
   line: z.number().int().positive().optional(),
   commitId: z.string().optional(),
   findingN: z.number().int().optional(),
+  inReplyTo: z.string().optional(),
+  comments: z
+    .array(
+      z.object({
+        path: z.string().optional(),
+        line: z.number().int().positive().optional(),
+        body: z.string().min(1),
+        findingN: z.number().int().optional(),
+        inReplyTo: z.string().optional(),
+      }),
+    )
+    .optional(),
   postAs: z.string().min(1),
 });
 export const destination = z.union([slackDest, basecampDest, githubDest]);
@@ -140,7 +152,7 @@ export const salidaInput = z
   .object({
     source: z.enum(["slack", "basecamp", "github"]),
     destination,
-    body: z.string().min(1),
+    body: z.string(),
     title: z.string().optional(),
     context: z.string().optional(),
     ticketId: z.string().optional(),
@@ -150,7 +162,13 @@ export const salidaInput = z
     isSample: z.boolean().optional(),
     draft: z.boolean().optional(),
   })
-  .refine((s) => s.destination.kind.startsWith(s.source), "destination kind must match source");
+  .refine((s) => s.destination.kind.startsWith(s.source), "destination kind must match source")
+  .refine(
+    (s) =>
+      s.body.trim().length > 0 ||
+      (s.destination.kind === "github_review" && (s.destination.event === "APPROVE" || Boolean(s.destination.comments?.length))),
+    "body is required (only a GitHub APPROVE or a batched review with comments may be empty)",
+  );
 
 export const salidaVersion = z.object({
   body: z.string().min(1),
@@ -277,10 +295,16 @@ export const reviewActionInput = z.object({
   note: z.string().optional(),
 });
 
-// ---------- health and sweep ----------
-export const healthInput = z.object({
-  source: z.enum(["github", "github_project", "slack", "basecamp", "engram"]),
-  state: z.enum(["ok", "down", "limited"]),
-  note: z.string().optional(),
+// ---------- sources and sweep ----------
+export const healthSource = z.enum(["github", "github_project", "slack", "basecamp", "engram"]);
+const isoOrNull = isoDate.nullable();
+export const sourcePatch = z.object({
+  health: z.enum(["ok", "degraded", "down"]).optional(),
+  note: z.string().max(500).optional(),
+  watermark: z.string().max(500).nullable().optional(),
+  lastCheckedAt: isoOrNull.optional(),
+  lastNewAt: isoOrNull.optional(),
+  backoffUntil: isoOrNull.optional(),
+  cadenceS: z.number().int().min(5).max(86_400).optional(),
 });
 export const sweepInput = z.object({ sources: z.array(z.enum(["slack", "basecamp", "github"])).optional() });

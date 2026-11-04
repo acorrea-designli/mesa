@@ -5,7 +5,7 @@ import { agentsRepo } from "./agents";
 import { approvalsRepo } from "./approvals";
 import { chipsRepo } from "./chips";
 import { engramRepo } from "./engram";
-import { healthRepo } from "./health";
+import { sourcesRepo } from "./sources";
 import { itemsRepo } from "./items";
 import { reviewsRepo } from "./reviews";
 import { salidasRepo } from "./salidas";
@@ -26,7 +26,7 @@ export function createRepos(db: Db) {
     agents: agentsRepo(db),
     approvals: approvalsRepo(db),
     reviews: reviewsRepo(db),
-    health: healthRepo(db),
+    sources: sourcesRepo(db),
     counts: () => counts(db),
     /** Time-driven transitions: salida undo windows, schedules, expiry; approval expiry. */
     sweep: (now = new Date()) => {

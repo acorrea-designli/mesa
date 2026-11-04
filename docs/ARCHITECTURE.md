@@ -64,8 +64,8 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
   - **ticket_refs**: `@` references (`ticket`|`item`|`url`).
   - **planned_actions**: the "Claude va a hacer" plan: `seq`, `kind`, `source` (line colour), `label`, `mode` direct|needs_ok, `state`, `target`. Anything that writes outside Mesa (Slack, Basecamp, GitHub) is a salida, never a direct action.
 - **ticket_briefs** (`0002`): the living summary, one per ticket, rewritten by the owner on every milestone: `body` (Markdown), `goal`, `decisions[]`, `plan_step`, `open_questions[]`, `next_action`, `revision`, `updated_by`.
-- **handoffs** (`0002`): append-only checkpoints: `agent`, `role`, `status` done|paused|blocked, `body`, `done`, `remaining`, `artifacts` (`{branch, pr, files[], …}`).
-- **team_agents** (`0002`): agents attached to a ticket: `name` (PK, `<role>-<ticketRef>[-k]`, never reused), `role`, `owner`, `status` live|retired (alive|spent), `spawned_at`, `retired_at`.
+- **ticket_handoffs** (`0002`): append-only checkpoints: `agent`, `role`, `status` done|paused|blocked, `body`, `done`, `remaining`, `artifacts` (`{branch, pr, files[], …}`).
+- **ticket_team** (`0002`): agents attached to a ticket: `name` (PK, `<role>-<ticketRef>[-k]`, never reused), `role`, `owner`, `status` live|retired (the API values for "alive" and "spent"), `spawned_at`, `retired_at`.
 
 ### Approvals and reviews
 - **approvals** (`0002`): permission requests from the hook: `ticket_id` (NULL → shown on Hoy), `agent`, `tool`, `summary` (file or command description), `detail` (diff or exact command), `cwd`, `hints[]` (closest allow rules), `status` pending|decided|expired, `decision` allow|read_config|deny, `note`, `decided_by`, `decided_at`, `expires_at`.
@@ -81,7 +81,7 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
 ### Plumbing
 - **sessions**: `id`, `label`, `cwd`, `project`, `cursor`, `waiting_since`, `last_seen_at`. Unknown owner ids are registered on first use.
 - **wake_events**: `id` (cursor), `session_id` (NULL = any), `kind`, `entity_type`, `entity_id`, `payload`.
-- **source_health** (`0002`): `source` github|github_project|slack|basecamp|engram, `state` ok|down|limited, `note`. Sessions report Slack and Basecamp, since they are the ones that see MCP failures. The server reports GitHub (lane C).
+- **source_state** (`0002`): one row per source (github|github_project|slack|basecamp|engram) holding sweep state and health: `watermark` (opaque per source: Slack ts, Basecamp updated_at, GitHub Last-Modified), `last_checked_at` (last probe), `last_new_at` (last probe that found something new), `backoff_until`, `cadence_s` (current probe interval, default 60), `health` ok|degraded|down, `note`. The sweeper reports Slack and Basecamp, and the server reports GitHub (lane C). Health feeds the Estados B rail notice and drives "Aprobar al volver".
 - **engram_links**: `entity_type`, `entity_id`, `project`, `topic_key`, `observation_id`. **settings**: key/value.
 
 ## 4. State machines
@@ -121,7 +121,7 @@ Events: `andres_reply` → waiting_claude (wake `ticket.answered`); `claude_repl
 
 ### Approval
 
-`pending` → `decided` (allow | read_config | deny) by `POST /decision` before `expires_at`, or → `expired` at `expires_at` (lazily and by the sweeper). Decisions are final: a second decision, or any decision after expiry, is refused (409). Only `allow` lets the call run.
+`pending` → `decided` (allow | read_config | deny) by a decision before `expires_at`, or → `expired` at `expires_at` (lazily and by the sweeper). Decisions are final: a second decision, or any decision after expiry, is refused (409). Only `allow` lets the call run.
 
 ### Review
 
@@ -147,9 +147,11 @@ The reviewer agent upserts findings with `mesa finding upsert <ref> --json -`, k
 | --- | --- | --- |
 | `approve` | refused while open blockers exist | github_review APPROVE salida |
 | `approve_anyway` | waives every open finding | github_review APPROVE salida |
-| `post {findingNs}` | one comment per finding; the text is the summary plus the explanation, as shown on the card | one github_comment salida each |
+| `post {findingNs}` | the chosen findings become inline comments; each text is the summary plus the explanation, as shown on the card | ONE github_review COMMENT salida per decision, with `destination.comments[]` |
 | `dismiss {findingNs}` | finding → dismissed | none |
 | `explain {findingNs}` | asks the reviewer for more | none |
+
+GitHub salidas may have an empty body only for an APPROVE review (pr-review approves with no comment) or a batched review whose text lives in `destination.comments[]`. `inReplyTo` (a comment id) on the destination or on a comment makes the reply land in the existing review thread.
 
 The button press is the approval of the exact text and destination shown on the card. The salida is therefore created already approved and enters the 20 s undo window. Every action wakes the ticket owner with `review.action {action, repo, pr, findingNs, salidaIds, note, ticketRef}`. After sending, the lead records the comment id with `mesa finding upsert` (`ghCommentId`).
 
@@ -163,12 +165,13 @@ The button press is the approval of the exact text and destination shown on the 
 
 1. It reads the hook JSON and builds the card: tool, summary, diff or exact command, and cwd. It also collects the closest allow rules from `.claude/settings.json`, `.claude/settings.local.json` and `~/.claude/settings.json`.
 2. It files `POST /api/approvals {ticketRef: $MESA_TICKET, agent: $MESA_AGENT, tool, summary, detail, cwd, hints, expiresAt}`. The card shows in the ticket thread, or on Hoy when there is no ticket.
-3. It long-polls `GET /api/approvals/:id?wait=25` until the approval is decided or expired, then prints the decision:
+3. Tests: `node --test scripts/hooks/mesa-approval.test.mjs` (part of `pnpm test`).
+4. It long-polls `GET /api/approvals/:id?wait=25` until the approval is decided or expired, then prints the decision:
    - **Dar permiso** (`allow`) → `{behavior: "allow"}` for this one call.
    - **Lee tus configuraciones** (`read_config`) → deny with a fixed message: read your own allow rules and retry with an allowed command shape instead of asking. The message includes the closest rule.
    - **Denegar** (`deny`) → deny with Andrés's optional note.
    - Timeout → deny, telling the agent not to retry and to post a ticket question instead.
-4. An unreachable Mesa, bad input or any crash is a deny. The output never contains `updatedInput` or `updatedPermissions`, so no standing rule is ever created.
+5. An unreachable Mesa, bad input or any crash is a deny. The output never contains `updatedInput` or `updatedPermissions`, so no standing rule is ever created.
 
 ## 8. REST API
 
@@ -204,6 +207,7 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | GET/POST `/api/approvals` | `?status=&ticket=&hoy=1` / `ApprovalInput` | `{ approvals }` / `{ approval }` 201 |
 | GET `/api/approvals/:id` | `?wait=SECONDS` (≤ 55) | `{ approval }` |
 | POST `/api/approvals/:id/decision` | `{ decision: allow\|read_config\|deny, actor, note? }` | `{ approval }`; 409 after expiry or once decided |
+| POST `/api/approvals/:id/approve` · `/read-config` · `/deny` | `{ note? }` (the UI's three buttons; actor andres) | `{ approval }`; same rules |
 | GET `/api/reviews` | `?ticket=` | `{ reviews }` (with findings) |
 | GET `/api/reviews/:id` | | `{ review }` |
 | POST `/api/reviews/:id/actions` | `{ action, findingNs?, note? }` | `{ review, salidaIds }` |
@@ -217,7 +221,8 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/salidas/:id/turns/:turnId/cancel` | | `SalidaDetail` |
 | POST `/api/salidas/:id/transition` | `SalidaEvent` | `SalidaDetail` |
 | GET `/api/chips` | | `LearnedChip[]` |
-| GET/POST `/api/sources/health` | POST `{ source, state, note? }` | `{ health }` / `{ health, resumed }` |
+| GET `/api/sources` | | `{ sources: SourceState[] }` |
+| GET/PATCH `/api/sources/:source` | PATCH `{ health?, note?, watermark?, lastCheckedAt?, lastNewAt?, backoffUntil?, cadenceS? }` | `{ source }` / `{ source, resumed }` |
 | POST `/api/sweep` | `{ sources? }` | `{ event }` 202 ("Barrer ahora") |
 | GET/POST `/api/sessions` | `{ id, label?, cwd?, project? }` | sessions / `Session` |
 | GET `/api/wait` | `?session=&after=&timeout=` | `{ events, cursor }` |
@@ -237,12 +242,14 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
   2. If `recheckThread` is set, re-read the thread and `bounce` if it changed.
   3. Send `versions[approvedVersion-1].body` to exactly `destination`.
   4. Report with `mesa salida sent|failed|hold`.
-- **On `sweep.requested`:** run `mesa-sweep` for the listed sources.
+- **On `sweep.requested`:** run `mesa-sweep` for the listed sources now, ignoring `backoff_until`.
+
+**Sweep tick (lane C):** the haiku sweeper runs about every 60 s per source in two stages. A cheap probe compares the source against `watermark`. When the probe finds something new, a full triage upserts items (`mesa item upsert`, deduped on `(source, external_id)`). The sweeper then writes back `watermark`, `lastCheckedAt`, `lastNewAt`, `health`, and an adaptive `cadenceS`/`backoffUntil` with `mesa source set`: it backs off while a source is quiet or failing and goes back to 60 s when something new arrives.
 
 **CLI (`bin/mesa`, `bin/mesa.cmd`):** zero-dependency Node over the REST API.
 - Env: `MESA_URL`, `MESA_SESSION`, `MESA_AGENT`, `MESA_TOKEN`.
 - Output: JSON on stdout, errors on stderr (exit 1, usage exit 2). `--body -` reads stdin.
-- Commands (`node bin/mesa help` lists them all): `session`, `wait [--once|--loop]`, `ticket ask|reply|plan|claim|close|action|show|list|context|brief`, `handoff`, `handoffs`, `team add|retire|list`, `finding upsert|list`, `review list`, `approval show`, `salida propose|version|sent|failed|hold|bounce|deleted|restored|show|list`, `health set|list`, `sweep`, `item upsert`, `engram link`.
+- Commands (`node bin/mesa help` lists them all): `session`, `wait [--once|--loop]`, `ticket ask|reply|plan|claim|close|action|show|list|context|brief|handoff`, `handoff`, `handoffs`, `team add|join|retire|spent|list`, `finding upsert|list`, `review list|show`, `approval show`, `salida propose|version|sent|failed|hold|bounce|deleted|restored|show|list`, `source get|set`, `sweep`, `item upsert`, `engram link`.
 - Missing on purpose: there is no approve, schedule, deny or undo for salidas, and no decision for approvals. Those are Andrés's buttons.
 
 ## 10. Design system in code

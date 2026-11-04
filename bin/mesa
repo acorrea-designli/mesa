@@ -41,21 +41,23 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida list [--status pending,scheduled]
 
 Agents (ephemeral: everything they need lives on the ticket)
+  mesa ticket handoff <ref> ...                 same as mesa handoff
   mesa handoff <ref> --agent A --status done|paused|blocked --body - [--role R] [--done D] [--left L] [--branch B] [--pr P] [--file F]...
   mesa handoffs [--agent A] [--ticket ref]
-  mesa team add <ref> --agent <role>-<ref>[-k] --role R [--owner]
-  mesa team retire <name>
+  mesa team add|join <ref> --agent <role>-<ref>[-k] --role R [--owner]
+  mesa team retire|spent <name>
   mesa team list [--status live|retired] [--ticket ref]
 
 Reviews and approvals
   mesa finding upsert <ref> --json -           {repo, pr, n?, label, at, anchor, summary, explanation, state, sha, ghCommentId}
   mesa finding list <ref>
-  mesa review list [--ticket ref]
+  mesa review list [--ticket ref] | show <reviewId>
   mesa approval show <id>
 
-Health and sweep
-  mesa health set <source> ok|down|limited [--note N]   github|github_project|slack|basecamp|engram
-  mesa health list
+Sources and sweep (github|github_project|slack|basecamp|engram)
+  mesa source get [<source>]                    sweep state + health (all sources without <source>)
+  mesa source set <source> [--health ok|degraded|down] [--note N] [--watermark W] [--checked ISO|now]
+                  [--new ISO|now] [--backoff-until ISO|none] [--cadence SECONDS]
   mesa sweep [--source slack|basecamp|github]...        same as "Barrer ahora"
 
 Items and memory
@@ -128,7 +130,9 @@ const enc = encodeURIComponent;
 
 // ---------- commands ----------
 async function main() {
-  const { pos, opt } = parse(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === "ticket" && argv[1] === "handoff") argv.splice(0, 2, "handoff");
+  const { pos, opt } = parse(argv);
   const [group, cmd, id] = pos;
   const session = opt.session ?? process.env.MESA_SESSION;
   const needSession = () => need(session, "MESA_SESSION (or --session)");
@@ -302,10 +306,12 @@ async function main() {
     case "team":
       switch (cmd) {
         case "add":
+        case "join":
           return out(
             await call("POST", "/api/team", { ticketRef: need(id, "<ref>"), agent: need(opt.agent, "--agent"), role: need(opt.role, "--role"), owner: Boolean(opt.owner) }),
           );
         case "retire":
+        case "spent":
           return out(await call("POST", `/api/team/${enc(need(id, "<name>"))}/retire`, {}));
         case "list": {
           const q = new URLSearchParams();
@@ -333,6 +339,7 @@ async function main() {
       return usage(`unknown finding command "${cmd ?? ""}"`);
 
     case "review":
+      if (cmd === "show") return out(await call("GET", `/api/reviews/${enc(need(id, "<reviewId>"))}`));
       if (cmd !== "list") return usage(`unknown review command "${cmd ?? ""}"`);
       return out(await call("GET", `/api/reviews${opt.ticket ? `?ticket=${enc(opt.ticket)}` : ""}`));
 
@@ -340,10 +347,21 @@ async function main() {
       if (cmd !== "show") return usage(`unknown approval command "${cmd ?? ""}"`);
       return out(await call("GET", `/api/approvals/${enc(need(id, "<id>"))}`));
 
-    case "health":
-      if (cmd === "list") return out(await call("GET", "/api/sources/health"));
-      if (cmd !== "set") return usage(`unknown health command "${cmd ?? ""}"`);
-      return out(await call("POST", "/api/sources/health", { source: need(id, "<source>"), state: need(pos[3], "<state>"), note: opt.note }));
+    case "source": {
+      if (cmd === "get") return out(await call("GET", id ? `/api/sources/${enc(id)}` : "/api/sources"));
+      if (cmd !== "set") return usage(`unknown source command "${cmd ?? ""}"`);
+      const when = (v) => (v === undefined ? undefined : v === "now" ? new Date().toISOString() : v === "none" ? null : String(v));
+      const patch = {
+        health: opt.health,
+        note: opt.note,
+        watermark: opt.watermark === undefined ? undefined : String(opt.watermark),
+        lastCheckedAt: when(opt.checked),
+        lastNewAt: when(opt.new),
+        backoffUntil: when(opt["backoff-until"]),
+        cadenceS: opt.cadence === undefined ? undefined : Number(opt.cadence),
+      };
+      return out(await call("PATCH", `/api/sources/${enc(need(id, "<source>"))}`, patch));
+    }
 
     case "sweep":
       return out(await call("POST", "/api/sweep", opt.source ? { sources: list(opt.source) } : {}));

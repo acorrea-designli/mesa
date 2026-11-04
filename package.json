@@ -16,7 +16,7 @@
     "start": "next start --hostname 0.0.0.0 --port 8790",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && node --test scripts/hooks/mesa-approval.test.mjs",
     "test:watch": "vitest",
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm test"

@@ -83,7 +83,7 @@ export function salidasRepo(db: Db) {
     );
 
   const sourceDown = (source: string) =>
-    Boolean(db.prepare("SELECT 1 FROM source_health WHERE source = ? AND state = 'down'").get(source));
+    Boolean(db.prepare("SELECT 1 FROM source_state WHERE source = ? AND health = 'down'").get(source));
 
   const insertVersion = (salidaId: string, v: VersionInput, ts: string): number => {
     const n = versionCount(salidaId) + 1;

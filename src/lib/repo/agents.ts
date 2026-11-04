@@ -54,8 +54,8 @@ export function agentsRepo(db: Db) {
     return row ? fromRow<Brief>(row, BRIEF_SPEC) : null;
   };
 
-  const handoffSelect = `SELECT h.*, t.ref AS ticket_ref FROM handoffs h JOIN tickets t ON t.id = h.ticket_id`;
-  const teamSelect = `SELECT a.*, t.ref AS ticket_ref FROM team_agents a JOIN tickets t ON t.id = a.ticket_id`;
+  const handoffSelect = `SELECT h.*, t.ref AS ticket_ref FROM ticket_handoffs h JOIN tickets t ON t.id = h.ticket_id`;
+  const teamSelect = `SELECT a.*, t.ref AS ticket_ref FROM ticket_team a JOIN tickets t ON t.id = a.ticket_id`;
 
   const getAgent = (name: string): TeamAgent => {
     const row = db.prepare(`${teamSelect} WHERE a.name = ?`).get(name);
@@ -105,13 +105,13 @@ export function agentsRepo(db: Db) {
       const t = tickets.get(ticketIdOrRef);
       const id = newId("ho");
       db.prepare(
-        `INSERT INTO handoffs (id, ticket_id, agent, role, status, body, done, remaining, artifacts, created_at)
+        `INSERT INTO ticket_handoffs (id, ticket_id, agent, role, status, body, done, remaining, artifacts, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         t.id,
         h.agent,
-        h.role ?? db.prepare("SELECT role FROM team_agents WHERE name = ?").get(h.agent)?.role?.toString() ?? "",
+        h.role ?? db.prepare("SELECT role FROM ticket_team WHERE name = ?").get(h.agent)?.role?.toString() ?? "",
         h.status,
         h.body ?? "",
         h.done ?? "",
@@ -146,13 +146,13 @@ export function agentsRepo(db: Db) {
     /** Attach an agent to a ticket. Names are never reused, even after retirement. */
     addAgent(i: { ticket: string; name: string; role: string; owner?: boolean }, now = new Date()): TeamAgent {
       const t = tickets.get(i.ticket);
-      if (db.prepare("SELECT 1 FROM team_agents WHERE name = ?").get(i.name)) {
+      if (db.prepare("SELECT 1 FROM ticket_team WHERE name = ?").get(i.name)) {
         throw new TransitionError(`agent name ${i.name} was already used; names are never reused`);
       }
       return tx(db, () => {
-        if (i.owner) db.prepare("UPDATE team_agents SET owner = 0 WHERE ticket_id = ?").run(t.id);
+        if (i.owner) db.prepare("UPDATE ticket_team SET owner = 0 WHERE ticket_id = ?").run(t.id);
         db.prepare(
-          "INSERT INTO team_agents (name, ticket_id, role, owner, status, spawned_at) VALUES (?, ?, ?, ?, 'live', ?)",
+          "INSERT INTO ticket_team (name, ticket_id, role, owner, status, spawned_at) VALUES (?, ?, ?, ?, 'live', ?)",
         ).run(i.name, t.id, i.role, i.owner ? 1 : 0, nowIso(now));
         return getAgent(i.name);
       });
@@ -161,7 +161,7 @@ export function agentsRepo(db: Db) {
     retireAgent(name: string, now = new Date()): TeamAgent {
       const a = getAgent(name);
       if (a.status === "retired") return a;
-      db.prepare("UPDATE team_agents SET status = 'retired', retired_at = ? WHERE name = ?").run(nowIso(now), name);
+      db.prepare("UPDATE ticket_team SET status = 'retired', retired_at = ? WHERE name = ?").run(nowIso(now), name);
       return getAgent(name);
     },
 

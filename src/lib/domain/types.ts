@@ -209,8 +209,20 @@ export type Destination =
       line?: number;
       commitId?: string;
       findingN?: number;
+      /** Reply inside an existing review thread (the comment id to answer). */
+      inReplyTo?: string;
+      /** github_review: inline comments posted as ONE batched review. Their bodies are the exact text. */
+      comments?: GithubReviewComment[];
       postAs: string;
     };
+
+export interface GithubReviewComment {
+  path?: string;
+  line?: number;
+  body: string;
+  findingN?: number;
+  inReplyTo?: string;
+}
 
 export type DestinationKind = Destination["kind"];
 
@@ -463,13 +475,19 @@ export interface Review {
 
 export type ReviewAction = "approve" | "approve_anyway" | "post" | "dismiss" | "explain";
 
-// ---------- source health ----------
+// ---------- sources: sweep state and health ----------
 
 export type HealthSource = "github" | "github_project" | "slack" | "basecamp" | "engram";
-export interface SourceHealthRow {
+/** Per-source sweep state and health (one row per source). */
+export interface SourceState {
   source: HealthSource;
-  state: "ok" | "down" | "limited";
+  health: "ok" | "degraded" | "down";
   note: string;
+  watermark: string | null;
+  lastCheckedAt: string | null;
+  lastNewAt: string | null;
+  backoffUntil: string | null;
+  cadenceS: number;
   updatedAt: string;
 }
 
