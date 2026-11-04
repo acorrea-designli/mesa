@@ -165,7 +165,7 @@ export function RefineChat({ s, chips, marks, onClearMarks, locked, openTurnId, 
       <div className="k" style={{ marginTop: 0 }}>
         Afinar con Claude
       </div>
-      {!turns.length ? <p className="sa-q0">Aún no le has pedido cambios a esta salida.</p> : null}
+      {!turns.length && composer ? <p className="sa-q0">Aún no le has pedido cambios a esta salida.</p> : null}
       <div className="sa-turns">
         {folded ? (
           <button type="button" className="sa-fold" onClick={() => setUnfold(true)}>
@@ -245,7 +245,9 @@ export function RefineChat({ s, chips, marks, onClearMarks, locked, openTurnId, 
           placeholder={openTurnId ? `Espera a v${pendingN} o cancela el cambio` : s.currentVersion < last ? `Pídele un cambio sobre v${s.currentVersion}…` : "Pídele un cambio a Claude…"}
           onSend={onSend}
         />
-      ) : null}
+      ) : (
+        <p className="sa-q0">{s.status === "scheduled" ? "Programada: cancela la programación para pedir cambios." : "Esta salida ya no admite cambios."}</p>
+      )}
       {s.versions.length >= 8 && !locked ? (
         <div className="sa-hint">
           Van {s.versions.length} versiones. ¿Lo escribes tú?{" "}

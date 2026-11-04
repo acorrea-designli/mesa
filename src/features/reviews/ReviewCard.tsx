@@ -68,6 +68,7 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
             <label className="rv-pick">
               <input
                 type="checkbox"
+                hidden={!postable(f)}
                 disabled={!postable(f)}
                 checked={picked.includes(f.n)}
                 onChange={() => setPicked((p) => (p.includes(f.n) ? p.filter((x) => x !== f.n) : [...p, f.n]))}

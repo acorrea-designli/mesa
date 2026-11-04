@@ -189,6 +189,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
       onCancelTurn={c.cancelTurn}
       onEdit={() => c.setMode("edit")}
       onPickVersion={(n) => c.select(n)}
+      composer={s.status === "pending"}
     />
   );
   const memory = <MemoryPanel s={s} text={text} now={now} onHighlight={setHl} />;

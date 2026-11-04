@@ -259,11 +259,16 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
 
 function QueueItem({ s, now, current, denied, onOpen, onSwipe }: { s: SalidaView; now: number; current: boolean; denied: boolean; onOpen: () => void; onSwipe: () => void }) {
   const startX = useRef<number | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (current) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [current]);
   const body = s.versions.find((v) => v.n === s.currentVersion)?.body || (s.destination.kind === "github_review" ? (s.destination.comments?.[0]?.body ?? "Aprobación sin comentario") : "");
   const decided = denied || isDecided(s);
   const color = s.source === "slack" ? "var(--sl)" : s.source === "basecamp" ? "var(--bc)" : "var(--gh)";
   return (
     <button
+      ref={ref}
       type="button"
       role="listitem"
       className={cx("sa-qi", decided && "done", s.status === "scheduled" && "sched", s.status === "sending" && "going", s.status === "queued_until_back" && "queued")}

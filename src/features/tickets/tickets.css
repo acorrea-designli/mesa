@@ -472,7 +472,7 @@
   cursor: pointer;
 }
 .tk-mi.act {
-  grid-template-columns: 110px minmax(0, 1fr);
+  grid-template-columns: 150px minmax(0, 1fr);
 }
 .tk-mi.on {
   background: var(--deep);
@@ -935,8 +935,20 @@
   }
   .tk-bar .hint {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .hint-files {
+    display: none;
+  }
+  .tk-reply textarea {
+    height: 64px;
+    font-size: 15px;
+  }
+  .tk-foot .alert {
+    font-size: 12.5px;
+    padding: 8px 10px;
   }
   .tk-bar .acts .btn:not(.p) {
     display: none;

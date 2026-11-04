@@ -1574,7 +1574,8 @@
     font-size: 18px;
     margin-top: 4px;
   }
-  .sa-card .kind {
+  .sa-card .kind,
+  .sm-k span {
     display: none;
   }
   .sa-orig {
@@ -1746,4 +1747,10 @@
   .sa-chev {
     transition: none;
   }
+}
+.sa-apv.compact .acts .btn {
+  padding: 0 12px;
+}
+.sa-apv.compact .acts .ap3 .ap3-main {
+  padding: 0 10px;
 }

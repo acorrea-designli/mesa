@@ -265,7 +265,8 @@ export function ComposerBox({
           }}
         />
         <span className="hint">
-          Archivos · <b>@</b> tickets · <b>/</b> acciones
+          <span className="hint-files">Archivos · </span>
+          <b>@</b> tickets · <b>/</b> acciones
         </span>
         {children ? <div className="acts">{children}</div> : null}
       </div>
