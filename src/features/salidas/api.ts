@@ -46,7 +46,7 @@ export const salidaApi = {
   cancelTurn: (id: string, turnId: string) => call<SalidaDetail>(`${S(id)}/turns/${encodeURIComponent(turnId)}/cancel`, { body: {} }),
 };
 
-/** Engram is read only and optional: any failure (501 until lane C, CLI missing) reads as offline. */
+/** Engram is read only and optional: any failure (server down, CLI missing) reads as offline. */
 export async function searchEngram(q: string, project: string, limit = 5): Promise<EngramSearch> {
   try {
     const p = new URLSearchParams({ q, limit: String(limit) });
