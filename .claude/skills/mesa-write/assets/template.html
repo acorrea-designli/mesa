@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<!--
+  Client document template (mesa-write). Copy this file, replace every {{PLACEHOLDER}}, repeat the marked blocks,
+  delete the blocks you do not use, then render with render.mjs. Print-safe rules, all deliberate:
+  - layout is tables and blocks only: no display:flex, no display:grid (they split or blank pages in print engines);
+  - print-color-adjust: exact so tints and rules print;
+  - headings never end a page (break-after: avoid) and tables, callouts and step rows never split (break-inside: avoid);
+  - the footer is plain block paragraphs; page numbers come from render.mjs (Chromium footerTemplate), not from CSS.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{DOC_TITLE}} - {{CLIENT}}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #16181d; --ink2: #3a3f4a; --ink3: #626875; --ink4: #8b919c;
+  --bg: #ffffff; --bg2: #f6f7f9; --line: #dfe2e7; --accent: #1f4fd1; --accent-bg: #eef2fd;
+  --warn: #9a5b00; --warn-bg: #fff6e5; --ok: #11734b; --ok-bg: #e9f7f0;
+}
+@page { margin: 18mm 16mm 20mm 16mm; }
+html, body { background: var(--bg); }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 10.5pt; line-height: 1.55; color: var(--ink);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.page { max-width: 180mm; margin: 0 auto; }
+
+/* Cover header: a two-cell table, never flex */
+.cover { width: 100%; border-collapse: collapse; border-bottom: 2px solid var(--ink); margin-bottom: 8mm; }
+.cover td { vertical-align: bottom; padding-bottom: 4mm; }
+.cover .meta { text-align: right; font-size: 9pt; color: var(--ink3); white-space: nowrap; }
+.cover .meta strong { display: block; color: var(--ink); font-size: 10pt; }
+.kicker { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 20pt; line-height: 1.2; letter-spacing: -.01em; margin-top: 1.5mm; }
+.client { font-size: 11pt; color: var(--ink2); margin-top: 1mm; }
+
+h2 {
+  font-size: 13pt; margin: 8mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 1px solid var(--line);
+  break-after: avoid; page-break-after: avoid;
+}
+h3 { font-size: 11pt; margin: 5mm 0 2mm; break-after: avoid; page-break-after: avoid; }
+p { margin: 0 0 2.5mm; orphans: 3; widows: 3; }
+ul, ol { margin: 0 0 3mm 5mm; }
+li { margin-bottom: 1mm; }
+a { color: var(--accent); text-decoration: none; }
+code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; background: var(--bg2); padding: 0 1mm; border-radius: 2px; }
+
+/* Summary facts: display:table cells, never grid */
+.facts { display: table; width: 100%; border-spacing: 3mm 0; margin: 3mm -3mm 4mm; table-layout: fixed; }
+.fact { display: table-cell; vertical-align: top; border: 1px solid var(--line); border-radius: 4px; background: var(--bg2); padding: 3mm 3.5mm; }
+.fact.key { border-color: var(--accent); background: var(--accent-bg); }
+.fact .label { font-size: 7.5pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+.fact .value { font-size: 14pt; font-weight: 700; margin-top: 1mm; }
+.fact .note { font-size: 8.5pt; color: var(--ink3); margin-top: .5mm; }
+
+/* Tables */
+table.data { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.5pt; break-inside: avoid; page-break-inside: avoid; }
+table.data th { text-align: left; font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); border-bottom: 1.5px solid var(--line); padding: 1.5mm 2mm; }
+table.data td { border-bottom: 1px solid var(--line); padding: 1.8mm 2mm; vertical-align: top; }
+table.data tr { break-inside: avoid; page-break-inside: avoid; }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Callouts: block, single column */
+.callout { border-left: 3px solid var(--accent); background: var(--accent-bg); padding: 2.5mm 3.5mm; margin: 2mm 0 4mm; break-inside: avoid; page-break-inside: avoid; }
+.callout.warn { border-color: var(--warn); background: var(--warn-bg); }
+.callout.ok { border-color: var(--ok); background: var(--ok-bg); }
+.callout strong:first-child { display: block; margin-bottom: .5mm; }
+
+.appendix { margin-top: 6mm; }
+.appendix h2 { color: var(--ink2); }
+
+/* Footer: two block paragraphs, no flex */
+.doc-footer { margin-top: 5mm; padding-top: 2mm; break-before: avoid; page-break-before: avoid; border-top: 1px solid var(--line); break-inside: avoid; page-break-inside: avoid; }
+.doc-footer p { font-size: 8pt; color: var(--ink4); margin: 0 0 1mm; }
+</style>
+</head>
+<body><div class="page">
+
+  <table class="cover"><tr>
+    <td>
+      <div class="kicker">{{DOC_TYPE}}</div>
+      <h1>{{DOC_TITLE}}</h1>
+      <div class="client">Prepared for {{CLIENT}}</div>
+    </td>
+    <td class="meta">{{DATE}}<strong>Version {{VERSION}}</strong>{{STATUS}}</td>
+  </tr></table>
+
+  <h2>Summary</h2>
+  <p>{{SUMMARY}}</p>
+  <!-- 2 to 4 facts; the one the reader acts on gets class "key". Delete the block if there are no numbers worth a card. -->
+  <div class="facts">
+    <div class="fact key"><div class="label">{{FACT_1_LABEL}}</div><div class="value">{{FACT_1_VALUE}}</div><div class="note">{{FACT_1_NOTE}}</div></div>
+    <div class="fact"><div class="label">{{FACT_2_LABEL}}</div><div class="value">{{FACT_2_VALUE}}</div><div class="note">{{FACT_2_NOTE}}</div></div>
+    <div class="fact"><div class="label">{{FACT_3_LABEL}}</div><div class="value">{{FACT_3_VALUE}}</div><div class="note">{{FACT_3_NOTE}}</div></div>
+  </div>
+  <!-- Optional: what you need from the reader, in one line. -->
+  <div class="callout"><strong>Decision needed</strong>{{DECISION}}</div>
+
+  <!-- SECTION: repeat per section, numbered, in the order the reader needs them (context, proposal, impact, risks). -->
+  <h2>{{N}}. {{SECTION_TITLE}}</h2>
+  <p>{{SECTION_BODY}}</p>
+  <!-- Optional table inside a section -->
+  <table class="data">
+    <thead><tr><th>{{COL_1}}</th><th>{{COL_2}}</th><th class="num">{{COL_3}}</th></tr></thead>
+    <tbody><tr><td>{{CELL}}</td><td>{{CELL}}</td><td class="num">{{CELL}}</td></tr></tbody>
+  </table>
+  <!-- /SECTION -->
+
+  <h2>Next steps</h2>
+  <table class="data">
+    <thead><tr><th style="width:8mm">#</th><th>Step</th><th style="width:34mm">Owner</th><th style="width:30mm">By</th></tr></thead>
+    <tbody>
+      <!-- STEP: repeat -->
+      <tr><td>{{STEP_N}}</td><td>{{STEP}}</td><td>{{OWNER}}</td><td>{{WHEN}}</td></tr>
+      <!-- /STEP -->
+    </tbody>
+  </table>
+
+  <div class="appendix">
+    <h2>Appendix</h2>
+    <!-- Details the summary does not need: full tables, configuration, references, glossary. Delete if empty. -->
+    <h3>{{APPENDIX_TITLE}}</h3>
+    <p>{{APPENDIX_BODY}}</p>
+  </div>
+
+  <div class="doc-footer">
+    <p>{{FOOTER_NOTE}}</p>
+    <p>Designli · {{DATE}}</p>
+  </div>
+
+</div></body>
+</html>

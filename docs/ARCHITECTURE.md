@@ -166,7 +166,7 @@ The button press is the approval of the exact text and destination shown on the 
 
 1. It reads the hook JSON and builds the card: tool, summary, diff or exact command, and cwd. It also collects the closest allow rules from `.claude/settings.json`, `.claude/settings.local.json` and `~/.claude/settings.json`.
 2. It files `POST /api/approvals {ticketRef: $MESA_TICKET, agent: $MESA_AGENT, tool, summary, detail, cwd, hints, expiresAt}`. The card shows in the ticket thread, or on Hoy when there is no ticket.
-3. Tests: `node --test scripts/hooks/mesa-approval.test.mjs` (part of `pnpm test`).
+3. Tests: `scripts/hooks/test/mesa-approval.test.mjs`, run by `pnpm test:team` (part of `pnpm test`). Agent identity comes from the spawn name (in-process teammates share the lead's environment); `MESA_AGENT`/`MESA_TICKET` apply to separately launched sessions.
 4. It long-polls `GET /api/approvals/:id?wait=25` until the approval is decided or expired, then prints the decision:
    - **Dar permiso** (`allow`) → `{behavior: "allow"}` for this one call.
    - **Lee tus configuraciones** (`read_config`) → deny with a fixed message: read your own allow rules and retry with an allowed command shape instead of asking. The message includes the closest rule.

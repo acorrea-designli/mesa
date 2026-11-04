@@ -1,0 +1,38 @@
+{
+  "$comment": "Cadence of the Slack/Basecamp sweep (scripts/sweep-tick.mjs, the sweeper role). Times are local to this PC.",
+  "workHours": {
+    "days": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "start": "08:00",
+    "end": "19:00"
+  },
+  "activeIntervalSec": 60,
+  "idleIntervalSec": 300,
+  "idleAfterMin": 30,
+  "backoff": {
+    "baseSec": 60,
+    "factor": 2,
+    "maxSec": 1800
+  },
+  "downAfterErrors": 3,
+  "waitMaxSec": 540,
+  "longPollSec": 25,
+  "probeLimit": 10,
+  "maxTicksPerInstance": 60,
+  "sweeperModel": "haiku",
+  "sources": {
+    "slack": {
+      "enabled": true,
+      "userId": "U06E2UBDC73",
+      "workspace": "designli.slack.com"
+    },
+    "basecamp": {
+      "enabled": true
+    }
+  }
+}
