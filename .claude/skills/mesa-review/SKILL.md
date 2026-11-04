@@ -16,9 +16,15 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Spawning (lead)
 
-- **Requested review**: one ticket per PR, titled exactly `Review <owner/repo>#<n>: <PR title>`. Find it with
-  `MESA ticket list --open`; none: `MESA ticket ask --title "Review <owner/repo>#<n>: <title>" --body "FYI: revisión
-  en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked advance / post-approve push).
+- **Requested review**: one ticket per PR, titled `Review <owner/repo>#<n>: <PR title>`. Find it by the PR, never by
+  the title (a renamed PR would not match): `MESA review list` (no `--ticket`), take the row with that `repo` and
+  `pr`, and its `ticketId` is the PR's ticket, closed or not (`MESA ticket show <ticketId>` gives the `ref`). A closed
+  one comes back with `MESA ticket reopen <ticketId> --reason "new push"` (Mesa also reopens it by itself on a new
+  head). Never `ticket ask` for a PR that has a review row: `MESA review open` would move the review to the duplicate
+  and the original would reopen with no owner. Only when no review row exists, look for a ticket with that title
+  (`MESA ticket list`, closed included) and, finding none, `MESA ticket ask --title "Review <owner/repo>#<n>:
+  <title>" --body "FYI: revisión en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked
+  advance / post-approve push).
   Spawn `reviewer-<ref>` (next suffix if that name was used) as the owner.
 - **Review pass** ("haz un review pass"): run `mesa-sweep` § 1, then one ticket and one reviewer per entering PR,
   at most 5 at a time in pr-monitor's order (tracked advance, moved, new, untracked advance; oldest first). The
@@ -28,7 +34,8 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Review (reviewer)
 
-1. **Boot.** `MESA ticket context <ref>` (its `findings` are the stored findings with their state; the latest
+1. **Boot.** `MESA ticket context <ref>` (its `findings` are the stored findings with their state; `reviews[]` has the
+   reviewed `headSha` and, when the ticket was reopened by a new push, `seenHead`: review `headSha..seenHead`; the latest
    reviewer handoff's `review-state` block has `head` and `approvedHead`, § State). None in Mesa: read (never write) the PR's entry in `C:/Users/z4yross/.claude-work/pr-monitor-state.json`,
    which has the same shape, so a PR pr-monitor already reviewed is not re-reviewed. Neither: the PR is new
    (pr-monitor box A).
@@ -58,6 +65,10 @@ A/B question. Post one ticket reply as the summary, first line in Spanish with t
 English, numbered, in pr-review's candidate format (`[blocker|nit] path:line`, the one-line problem, `fix:`).
 Incremental passes start with `re-review <sha7>..<sha7> · K fixed · M pending · P new`; verification passes with
 `verification · K fixed · M pending`. A clean pass says so and recommends Approve. Then wait, handoff written.
+
+`--ask` only on a review Andrés requested (his decision is pending on the card): that summary reply goes with `--ask`,
+so the ticket moves to "Te espera"; a reply without `--ask` or options leaves the status alone. A team review for a
+tl reports without `--ask`: the tl's ticket must not park in "Te espera" for a card Andrés does not own.
 
 Buttons by state, as in pr-monitor: open blockers → Post, Explain more, Dismiss, Approve anyway; open nits only →
 Post, Dismiss, Approve; nothing open → Approve (and Re-review, which is a ticket reply asking for it).

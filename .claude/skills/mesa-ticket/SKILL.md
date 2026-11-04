@@ -19,7 +19,10 @@ heredoc so text never passes through shell quoting).
 - Quote the client's own words when the question is about what the client wants.
 - Never ask what the code, the thread or engram already answers. Never ask in chat or by message: the lead's chat
   is not where his decisions live.
-- A message that asks nothing starts with `FYI:` so he can skip it.
+- A message that asks nothing starts with `FYI:` so he can skip it, and it does not put the ticket in "Te espera":
+  a reply only goes to him with `--option` (options imply a question) or `--ask` (a question without options, e.g.
+  `ticket reply <ref> --ask --body "¿Lo cierro?"`). A reply without either is informational: the status stays as it
+  is (a pending plan or question stays pending; an unclaimed request becomes "Claude trabaja"). Plans keep their rule.
 
 ```
 node G:/WorkSpace/designli/ops/bin/mesa ticket reply t14 --body - --option "A:Bucket nuevo" --option "B:Reusar dre-staging-docs" --recommend A --why "aísla datos de prueba y el costo es mínimo" <<'EOF'
@@ -64,8 +67,18 @@ is `needs_ok`. Anything that writes to a client goes through Salidas. Mark progr
 A ticket created from a Tablero card ("+ Tarea", "Dárselo a Claude", Nuevo pedido, `mesa task create`) carries
 `taskId`; its card shows the owner chip ("Claude · por asignar" until the lead claims it and adds the owner with
 `mesa team add … --owner`, then "<owner> · <estado>"). The lead handles `ticket.created` by kind (`mesa-start` § 5,
-`docs/TEAM.md` § 4). The owner may move the card with `MESA task move <taskId> <station>` when the work changes
-station (that is a Mesa write, `direct`); moving a GitHub Project or Basecamp card stays `needs_ok`.
+`docs/TEAM.md` § 4). The card follows the ticket: Mesa moves it in the same transaction as every status change
+(`working` and `waiting_claude` → En curso, `waiting_andres` → Esperando, `closed` → Hecho, so a reopen lands in
+En curso). Never move it by hand for a status change (no `MESA task move`); a card Andrés drags stays put until the
+next status change. Moving a GitHub Project or Basecamp card stays `needs_ok`.
+
+## Closing and reopening
+
+The owner closes a ticket with `MESA ticket close <ref>`; a closed ticket comes back with
+`MESA ticket reopen <ref> [--reason R]` (owner wakes with `ticket.reopened`). A review ticket whose PR gets a new head
+from its author reopens by itself (GitHub poll, or `MESA review open` at a new head): same ticket, `waiting_claude`,
+wake `ticket.reopened { ref, repo, pr, oldHead, newHead }`; pushes by Andrés or a bot do not reopen it. Boot from
+`MESA ticket context <ref>`: `reviews[].headSha` is the reviewed head, `seenHead` the new one.
 
 ## @ refs and files
 

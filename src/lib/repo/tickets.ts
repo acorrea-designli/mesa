@@ -19,6 +19,7 @@ import type {
   PlannedAction,
   RefType,
   Source,
+  Station,
   Ticket,
   TicketDetail,
   TicketDirection,
@@ -29,6 +30,7 @@ import type {
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { ensureSession } from "./sessions";
+import { tasksRepo } from "./tasks";
 import { touchInteraction } from "./interaction";
 
 const T_SPEC = { bool: ["is_sample"] };
@@ -51,6 +53,8 @@ export interface MessageInput {
   refs?: RefInput[];
   /** The session posting (Claude messages). Becomes the owner if the ticket has none. */
   session?: string;
+  /** A Claude message that is a question for Andrés (options imply it). Without it a reply is informational and does not put the ticket in "Te espera". */
+  ask?: boolean;
 }
 
 export interface TicketInput {
@@ -80,7 +84,16 @@ export interface ActionInput {
   target?: Record<string, unknown>;
 }
 
+/** The Tablero station a ticket's card sits in for each ticket status: the card follows the ticket. */
+export const TASK_STATION_OF: Record<TicketStatus, Station> = {
+  working: "doing",
+  waiting_claude: "doing",
+  waiting_andres: "waiting",
+  closed: "done",
+};
+
 export function ticketsRepo(db: Db) {
+  const tasks = tasksRepo(db);
   const get = (id: string): Ticket => {
     const row = db.prepare("SELECT * FROM tickets WHERE id = ? OR ref = ?").get(id, id);
     if (!row) throw new NotFoundError("ticket", id);
@@ -146,6 +159,13 @@ export function ticketsRepo(db: Db) {
          woke_at = CASE WHEN ? THEN ? ELSE woke_at END
        WHERE id = ?`,
     ).run(r.status, ts, r.status, ts, r.wake ? 1 : 0, ts, t.id);
+    // The card follows the ticket, in the same transaction and through tasks.move (so the Project sync fires).
+    // Only a status change moves it, and only when the card is elsewhere: a manual move stands until the next change.
+    if (t.taskId && r.status !== t.status) {
+      const card = db.prepare("SELECT station FROM tasks WHERE id = ?").get(t.taskId) as { station: Station } | undefined;
+      const target = TASK_STATION_OF[r.status];
+      if (card && card.station !== target) tasks.move(t.taskId, target, undefined, now, { system: true });
+    }
     if (r.wake) {
       emitWake(db, { sessionId: t.ownerSession, kind: r.wake, entityType: "ticket", entityId: t.id, payload: { ref: t.ref, ...payload } }, now);
     }
@@ -255,7 +275,8 @@ export function ticketsRepo(db: Db) {
         }
         const msgId = insertMessage(t.id, m, nowIso(now));
         if (m.author === "andres") touchInteraction(db, now);
-        apply(t, { type: m.author === "andres" ? "andres_reply" : "claude_reply" }, now, {
+        const ev: TicketEvent = m.author === "andres" ? { type: "andres_reply" } : { type: "claude_reply", asks: Boolean(m.ask || m.options?.length) };
+        apply(t, ev, now, {
           messageId: msgId,
           chosen: m.chosen ?? null,
         });
@@ -324,12 +345,13 @@ export function ticketsRepo(db: Db) {
       return fromRow<PlannedAction>(db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId), A_SPEC);
     },
 
-    /** claim / close / reopen. */
+    /** claim / close / reopen. `reason` rides on the ticket.reopened wake. */
     transition(
       id: string,
       ev: Extract<TicketEvent, { type: "claim" | "close" | "reopen" }>,
       session?: string,
       now = new Date(),
+      reason?: string,
     ): TicketDetail {
       return tx(db, () => {
         let t = get(id);
@@ -338,8 +360,20 @@ export function ticketsRepo(db: Db) {
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(session, t.id);
           t = get(t.id);
         }
-        apply(t, ev, now);
-        if ((ev.type === "close" && ev.by === "andres") || ev.type === "reopen") touchInteraction(db, now);
+        apply(t, ev, now, ev.type === "reopen" && reason ? { reason } : {});
+        if ((ev.type === "close" && ev.by === "andres") || (ev.type === "reopen" && ev.by !== "claude")) touchInteraction(db, now);
+        return this.detail(t.id);
+      });
+    },
+
+    /**
+     * Reopen a closed ticket on Mesa's own account (a new PR head, see reviews.noteHead). It is not an
+     * Andrés interaction, so it does not touch the interaction clock. `payload` rides on the ticket.reopened wake.
+     */
+    reopenBySystem(id: string, payload: Record<string, unknown>, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        apply(t, { type: "reopen" }, now, payload);
         return this.detail(t.id);
       });
     },

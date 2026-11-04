@@ -129,3 +129,75 @@ describe("GitHub ingest", () => {
     expect(prExcerpt({ additions: 1, deletions: 2, myReview: "APPROVED", myReviewHead: "a", head: "a" })).toBe("+1 −2 · aprobado antes");
   });
 });
+
+describe("a new push reopens a closed review ticket (the poll path)", () => {
+  let r: Repos;
+  let st: IngestState;
+  let ref: string;
+  let head: string;
+  let pusher: { login?: string; type?: string } | null;
+  let prState: string;
+  const pullsHandler: Handler = (a) => {
+    const p = path(a) ?? "";
+    if (p === "repos/acme/api/pulls/7") return http(200, {}, { state: prState, head: { sha: head }, user: { login: "dev1" } });
+    if (p.startsWith("repos/acme/api/commits/")) return http(200, {}, { author: pusher, committer: { login: "web-flow" } });
+    return undefined;
+  };
+  const notif: Handler = (a) => (path(a)?.startsWith("/notifications") ? http(200, { "Last-Modified": LM2 }, []) : undefined);
+  const noSearch: Handler = (a) => (path(a)?.startsWith("search/issues") ? http(200, {}, { total_count: 0, incomplete_results: false, items: [] }) : undefined);
+  const tick = (gh: ReturnType<typeof fakeGh>, ms: number) => ingestTick(r, gh.run, st, { now: at(ms), force: true, login: "acorrea-designli" });
+  const wakes = () => r.db.prepare("SELECT payload FROM wake_events WHERE kind = 'ticket.reopened'").all() as { payload: string }[];
+
+  beforeEach(() => {
+    r = createRepos(openDb(":memory:"));
+    st = initialIngestState(r.sources.get("github"));
+    ref = r.tickets.create({ direction: "andres_asks", title: "Revisa PR 7", ownerSession: "lead" }, T0).ref;
+    r.reviews.open(ref, { repo: "acme/api", pr: 7, sha: "old1" }, T0);
+    r.tickets.transition(ref, { type: "close", by: "claude" }, undefined, at(1000));
+    head = "new2";
+    pusher = { login: "dev1", type: "User" };
+    prState = "open";
+  });
+
+  it("reopens the closed ticket when the author pushes, once per head across polls", async () => {
+    const gh = fakeGh(notif, noSearch, pullsHandler);
+    const first = await tick(gh, 60_000);
+    expect(first.heads).toEqual({ checked: 1, reopened: 1, ignored: 0 });
+    expect(r.tickets.get(ref).status).toBe("waiting_claude");
+    expect(JSON.parse(wakes()[0]!.payload)).toMatchObject({ ref, repo: "acme/api", pr: 7, oldHead: "old1", newHead: "new2" });
+    // reopened ticket: not watched any more, nothing is fetched or reopened again
+    const calls = gh.calls.length;
+    expect((await tick(gh, 120_000)).heads).toEqual({ checked: 0, reopened: 0, ignored: 0 });
+    expect(gh.calls.length - calls).toBe(2);
+    // closed again at the same head: no second reopen, and the commit is not fetched again
+    r.tickets.transition(ref, { type: "close", by: "claude" }, undefined, at(130_000));
+    expect((await tick(gh, 180_000)).heads).toEqual({ checked: 1, reopened: 0, ignored: 0 });
+    expect(wakes()).toHaveLength(1);
+    expect(gh.calls.filter((c) => path(c.args)?.includes("/commits/"))).toHaveLength(1);
+  });
+
+  it("does not reopen for a push by Andrés himself or by a bot, nor for the reviewed head or a closed PR", async () => {
+    const gh = fakeGh(notif, noSearch, pullsHandler);
+    pusher = { login: "acorrea-designli", type: "User" };
+    expect((await tick(gh, 60_000)).heads).toEqual({ checked: 1, reopened: 0, ignored: 1 });
+    head = "new3";
+    pusher = { login: "dependabot[bot]", type: "Bot" };
+    expect((await tick(gh, 120_000)).heads).toEqual({ checked: 1, reopened: 0, ignored: 1 });
+    head = "old1";
+    expect((await tick(gh, 180_000)).heads?.reopened).toBe(0);
+    head = "new4";
+    prState = "closed";
+    expect((await tick(gh, 240_000)).heads?.reopened).toBe(0);
+    expect(r.tickets.get(ref).status).toBe("closed");
+    expect(wakes()).toHaveLength(0);
+  });
+
+  it("a PR that cannot be read is skipped; a rate limit stops the pass and backs off", async () => {
+    const gh = fakeGh(notif, noSearch, (a) => (path(a) === "repos/acme/api/pulls/7" ? http(404, {}, { message: "Not Found" }) : undefined));
+    expect((await tick(gh, 60_000)).heads).toEqual({ checked: 0, reopened: 0, ignored: 0 });
+    const limited = fakeGh(notif, noSearch, (a) => (path(a) === "repos/acme/api/pulls/7" ? http(403, { "X-RateLimit-Remaining": "0" }, { message: "API rate limit exceeded" }) : undefined));
+    const res = await tick(limited, 120_000);
+    expect(res.error).toMatch(/rate limit/);
+    expect(r.tickets.get(ref).status).toBe("closed");
+  });
+});

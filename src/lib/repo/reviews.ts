@@ -2,6 +2,7 @@
 // buttons Andrés presses (Approve, Approve anyway, Post, Dismiss, Explain more) are
 // review actions. Every GitHub write becomes a github salida that the button press
 // approves with the usual 20 s undo window, and the lead executes it with gh.
+import { randomBytes } from "node:crypto";
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError } from "../db/util";
@@ -82,9 +83,9 @@ export function reviewsRepo(db: Db) {
         // The approval covered the old commit: an approved review goes back to open when the head moved.
         const reopen = row.state === "approved" && !!sha && sha !== row.head_sha ? 1 : 0;
         db.prepare(
-          `UPDATE reviews SET head_sha = COALESCE(NULLIF(?, ''), head_sha), ticket_id = COALESCE(?, ticket_id),
+          `UPDATE reviews SET head_sha = COALESCE(NULLIF(?, ''), head_sha), seen_head = COALESCE(NULLIF(?, ''), seen_head), ticket_id = COALESCE(?, ticket_id),
              state = CASE WHEN ? THEN 'open' ELSE state END, salida_id = CASE WHEN ? THEN NULL ELSE salida_id END, updated_at = ? WHERE id = ?`,
-        ).run(sha ?? "", ticketId, reopen, reopen, ts, row.id);
+        ).run(sha ?? "", sha ?? "", ticketId, reopen, reopen, ts, row.id);
       } else {
         db.prepare(
           "UPDATE reviews SET head_sha = COALESCE(NULLIF(head_sha, ''), NULLIF(?, '')), ticket_id = COALESCE(ticket_id, ?), updated_at = ? WHERE id = ?",
@@ -128,8 +129,70 @@ export function reviewsRepo(db: Db) {
     open(ticketIdOrRef: string, i: { repo: string; pr: number; sha: string }, now = new Date()): Review {
       if (!i.sha?.trim()) throw new TransitionError("review open needs the head sha");
       const ts = nowIso(now);
-      const ticketId = tickets.get(ticketIdOrRef).id;
-      return tx(db, () => get(ensure(i.repo, i.pr, ticketId, i.sha.trim(), ts, true)));
+      const ticket = tickets.get(ticketIdOrRef);
+      const sha = i.sha.trim();
+      return tx(db, () => {
+        const before = db.prepare("SELECT head_sha FROM reviews WHERE repo = ? AND pr = ?").get(i.repo, i.pr) as { head_sha: string } | undefined;
+        const id = ensure(i.repo, i.pr, ticket.id, sha, ts, true);
+        // A closed ticket whose review moved to a new head is back on the table (the same rule as the poll).
+        if (before?.head_sha && before.head_sha !== sha && ticket.status === "closed") {
+          tickets.reopenBySystem(ticket.id, { repo: i.repo, pr: i.pr, oldHead: before.head_sha, newHead: sha }, now);
+        }
+        return get(id);
+      });
+    },
+
+    /**
+     * A head the GitHub poll (or the sandbox push) saw for a PR: the one server function behind
+     * "a new push reopens a closed review ticket". It reopens the review's ticket (closed -> waiting_claude,
+     * wake ticket.reopened { repo, pr, oldHead, newHead }) when the ticket is closed and the head is neither the
+     * reviewed head nor the last head already handled; it then remembers the head, so a head reopens once.
+     * `ignore` records the head without reopening (a push by Andrés himself or by a bot). An open ticket is
+     * untouched and the head is not recorded: the review itself moves it, and if it closes first the head still counts.
+     */
+    noteHead(repoName: string, pr: number, head: string, o: { ignore?: boolean } = {}, now = new Date()): { reopened: boolean; oldHead: string; newHead: string } {
+      const newHead = head.trim();
+      if (!newHead) throw new TransitionError("a head sha is required");
+      return tx(db, () => {
+        const row = db.prepare("SELECT id, ticket_id, head_sha, seen_head FROM reviews WHERE repo = ? AND pr = ?").get(repoName, pr) as
+          | { id: string; ticket_id: string | null; head_sha: string; seen_head: string }
+          | undefined;
+        const noop = { reopened: false, oldHead: row?.head_sha ?? "", newHead };
+        if (!row?.ticket_id || !row.head_sha || newHead === row.head_sha || newHead === row.seen_head) return noop;
+        const t = tickets.get(row.ticket_id);
+        if (t.status !== "closed") return noop;
+        db.prepare("UPDATE reviews SET seen_head = ?, updated_at = ? WHERE id = ?").run(newHead, nowIso(now), row.id);
+        if (o.ignore) return noop;
+        tickets.reopenBySystem(t.id, { repo: repoName, pr, oldHead: row.head_sha, newHead }, now);
+        return { reopened: true, oldHead: row.head_sha, newHead };
+      });
+    },
+
+    /** Reviews whose ticket was closed in the last `days` days: the ones a new push can bring back. */
+    watchedClosed(now = new Date(), days = 30): { repo: string; pr: number; headSha: string; seenHead: string }[] {
+      const since = nowIso(new Date(now.getTime() - days * 86_400_000));
+      return fromRows<{ repo: string; pr: number; headSha: string; seenHead: string }>(
+        db
+          .prepare(
+            `SELECT r.repo, r.pr, r.head_sha, r.seen_head FROM reviews r JOIN tickets t ON t.id = r.ticket_id
+             WHERE t.status = 'closed' AND r.head_sha <> '' AND t.closed_at >= ? ORDER BY r.repo, r.pr`,
+          )
+          .all(since),
+      );
+    },
+
+    /**
+     * Sandbox only (the route gates it): pretend the PR of the review on this ticket got a new head, through the
+     * same noteHead the poll uses. A random sha when none is given.
+     */
+    simulatePush(ticketIdOrRef: string, sha?: string, now = new Date()): { ticket: string; repo: string; pr: number; reopened: boolean; oldHead: string; newHead: string } {
+      const t = tickets.get(ticketIdOrRef);
+      const rows = db.prepare("SELECT repo, pr FROM reviews WHERE ticket_id = ? ORDER BY updated_at DESC, created_at DESC").all(t.id) as { repo: string; pr: number }[];
+      const first = rows[0];
+      if (!first) throw new NotFoundError("review of ticket", t.ref);
+      const { repo: repoName, pr } = first;
+      const res = repo.noteHead(repoName, pr, sha?.trim() || randomBytes(20).toString("hex"), {}, now);
+      return { ticket: t.ref, repo: repoName, pr, ...res };
     },
 
     /** Insert or update a finding by (repo, pr, n). Without n, a new number is assigned. */

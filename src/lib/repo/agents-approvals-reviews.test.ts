@@ -227,6 +227,135 @@ describe("reviews without findings (review open)", () => {
   });
 });
 
+describe("a closed review ticket reopens on a new PR head", () => {
+  const PR = { repo: "acme/scout", pr: 60 };
+  const wakes = () =>
+    (r.db.prepare("SELECT session_id, payload FROM wake_events WHERE kind = 'ticket.reopened' ORDER BY id").all() as { session_id: string; payload: string }[]).map((w) => ({
+      session: w.session_id,
+      ...(JSON.parse(w.payload) as Record<string, unknown>),
+    }));
+  const close = (ms: number) => r.tickets.transition(ref, { type: "close", by: "claude" }, undefined, at(ms));
+  let reviewId: string;
+  beforeEach(() => {
+    reviewId = r.reviews.open(ref, { ...PR, sha: "aaa111" }, T0).id;
+    r.reviews.upsertFinding(ref, { ...PR, label: "nit", summary: "Naming", sha: "aaa111" }, T0);
+  });
+
+  it("a renamed PR is still found by repo + pr: the review row names its ticket (id works as a ref), closed or not", () => {
+    close(1000);
+    // `mesa review list` without --ticket: the row for acme/scout#60 gives the ticket, whatever the PR title is now
+    const row = r.reviews.list().find((x) => x.repo === PR.repo && x.pr === PR.pr);
+    expect(row?.ticketId).toBe(r.tickets.get(ref).id);
+    expect(r.tickets.get(row!.ticketId!).ref).toBe(ref);
+    r.tickets.transition(row!.ticketId!, { type: "reopen", by: "claude" }, undefined, at(2000), "new push");
+    expect(r.tickets.get(ref).status).toBe("waiting_claude");
+    // the same ticket keeps the review: opening again does not move it
+    expect(r.reviews.open(row!.ticketId!, { ...PR, sha: "bbb222" }, at(3000)).ticketId).toBe(row!.ticketId);
+    expect(r.reviews.list()).toHaveLength(1);
+  });
+
+  it("noteHead reopens the same ticket with a ticket.reopened wake and leaves the findings and the reviewed head alone", () => {
+    close(1000);
+    const res = r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(2000));
+    expect(res).toEqual({ reopened: true, oldHead: "aaa111", newHead: "bbb222" });
+    expect(r.tickets.get(ref)).toMatchObject({ status: "waiting_claude", closedAt: null });
+    expect(wakes()).toEqual([{ session: "lead", ref, repo: "acme/scout", pr: 60, oldHead: "aaa111", newHead: "bbb222" }]);
+    const rev = r.reviews.get(reviewId);
+    expect(rev).toMatchObject({ headSha: "aaa111", seenHead: "bbb222" });
+    expect(rev.findings).toMatchObject([{ n: 1, state: "open" }]);
+    expect(r.agents.context(ref).reviews).toMatchObject([{ headSha: "aaa111", seenHead: "bbb222" }]);
+  });
+
+  it("reopens once per head: the same head again is a no-op, a newer head reopens again", () => {
+    close(1000);
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(2000)).reopened).toBe(true);
+    close(3000);
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(4000)).reopened).toBe(false);
+    expect(r.tickets.get(ref).status).toBe("closed");
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "ccc333", {}, at(5000)).reopened).toBe(true);
+    expect(wakes()).toHaveLength(2);
+  });
+
+  it("the reviewed head is not a new head", () => {
+    close(1000);
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "aaa111", {}, at(2000)).reopened).toBe(false);
+    expect(r.tickets.get(ref).status).toBe("closed");
+    expect(wakes()).toEqual([]);
+  });
+
+  it("an open ticket is untouched and the head is not recorded", () => {
+    for (const to of ["waiting_claude", "waiting_andres", "working"] as const) {
+      r.db.prepare("UPDATE tickets SET status = ? WHERE ref = ?").run(to, ref);
+      expect(r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(1000)).reopened).toBe(false);
+      expect(r.tickets.get(ref).status).toBe(to);
+    }
+    expect(r.reviews.get(reviewId).seenHead).toBe("");
+    // closing without having reviewed it: the head still counts
+    close(2000);
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(3000)).reopened).toBe(true);
+  });
+
+  it("a push by Andrés or a bot (ignore) is recorded and never reopens", () => {
+    close(1000);
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "bbb222", { ignore: true }, at(2000)).reopened).toBe(false);
+    expect(r.reviews.get(reviewId).seenHead).toBe("bbb222");
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(3000)).reopened).toBe(false);
+    expect(r.tickets.get(ref).status).toBe("closed");
+  });
+
+  it("does nothing without a review, a ticket or a reviewed head, and needs a sha", () => {
+    expect(r.reviews.noteHead("acme/other", 1, "x1", {}, T0).reopened).toBe(false);
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 61, label: "nit", summary: "No head yet" }, T0);
+    close(1000);
+    expect(r.reviews.noteHead("acme/scout", 61, "x2", {}, at(2000)).reopened).toBe(false);
+    expect(() => r.reviews.noteHead(PR.repo, PR.pr, " ", {}, T0)).toThrow(TransitionError);
+  });
+
+  it("a system reopen is not an Andrés interaction; his own reopen is", () => {
+    close(1000);
+    r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(2000));
+    expect(r.lastInteractionAt()).toBeNull();
+    close(3000);
+    r.tickets.transition(ref, { type: "reopen" }, undefined, at(4000), "mirar de nuevo");
+    expect(r.lastInteractionAt()).toBe(at(4000).toISOString());
+    expect(wakes().at(-1)).toMatchObject({ ref, reason: "mirar de nuevo" });
+  });
+
+  it("review open at a new head reopens the closed ticket (same rule); same head or an open ticket does not", () => {
+    close(1000);
+    r.reviews.open(ref, { ...PR, sha: "aaa111" }, at(2000));
+    expect(r.tickets.get(ref).status).toBe("closed");
+    const rev = r.reviews.open(ref, { ...PR, sha: "bbb222" }, at(3000));
+    expect(rev).toMatchObject({ headSha: "bbb222", seenHead: "bbb222" });
+    expect(r.tickets.get(ref).status).toBe("waiting_claude");
+    expect(wakes()).toEqual([{ session: "lead", ref, repo: "acme/scout", pr: 60, oldHead: "aaa111", newHead: "bbb222" }]);
+    r.reviews.open(ref, { ...PR, sha: "ccc333" }, at(4000));
+    expect(wakes()).toHaveLength(1);
+    // the poll then sees the head the reviewer already took: nothing
+    close(5000);
+    expect(r.reviews.noteHead(PR.repo, PR.pr, "ccc333", {}, at(6000)).reopened).toBe(false);
+  });
+
+  it("watchedClosed lists only recently closed tickets with a reviewed head", () => {
+    expect(r.reviews.watchedClosed(at(1000))).toEqual([]);
+    close(1000);
+    expect(r.reviews.watchedClosed(at(2000))).toEqual([{ repo: "acme/scout", pr: 60, headSha: "aaa111", seenHead: "" }]);
+    expect(r.reviews.watchedClosed(at(31 * 86_400_000))).toEqual([]);
+  });
+
+  it("simulatePush uses a random sha when none is given, takes an explicit one, and repeats as a no-op", () => {
+    close(1000);
+    const a = r.reviews.simulatePush(ref, undefined, at(2000));
+    expect(a).toMatchObject({ ticket: ref, repo: "acme/scout", pr: 60, reopened: true, oldHead: "aaa111" });
+    expect(a.newHead).toMatch(/^[0-9a-f]{40}$/);
+    close(3000);
+    expect(r.reviews.simulatePush(ref, a.newHead, at(4000)).reopened).toBe(false);
+    expect(r.reviews.simulatePush(ref, "ddd444", at(5000))).toMatchObject({ reopened: true, newHead: "ddd444", oldHead: "aaa111" });
+    const empty = r.tickets.create({ direction: "andres_asks", title: "sin review", ownerSession: "lead" }, T0).ref;
+    expect(() => r.reviews.simulatePush(empty, undefined, T0)).toThrow(/review of ticket/);
+  });
+});
+
 describe("source outages", () => {
   it("approving during a Slack outage queues; recovery releases it with a re-check", () => {
     r.sources.set("slack", { health: "down", note: "MCP unreachable" }, T0);

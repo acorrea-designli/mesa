@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as SYNC } from "@/app/api/github/sync/route";
 import { GET as HEALTH } from "@/app/api/health/route";
 import { POST as TRANSITION } from "@/app/api/salidas/[id]/transition/route";
+import { POST as PUSH } from "@/app/api/sandbox/push/route";
 import { POST as SWEEP } from "@/app/api/sweep/route";
+import { POST as TICKET_TRANSITION } from "@/app/api/tickets/[id]/transition/route";
 import { POST as BATCH } from "@/app/api/tasks/batch/route";
 import { openDb } from "../db/sqlite";
 import { createRepos, type Repos } from "../repo";
@@ -29,7 +31,46 @@ function released() {
 }
 const send = (id: string, ev: object) => TRANSITION(req("POST", `/api/salidas/${id}/transition`, { type: "sent", ...ev }), ctx({ id }));
 
+/** A closed review ticket on acme/api#7 reviewed at head "old1". */
+function closedReview() {
+  const t = r.tickets.create({ direction: "andres_asks", title: "Revisa PR 7", ownerSession: "lead" });
+  r.reviews.open(t.ref, { repo: "acme/api", pr: 7, sha: "old1" });
+  r.tickets.transition(t.ref, { type: "close", by: "claude" });
+  return t.ref;
+}
+const push = (body: object) => PUSH(req("POST", "/api/sandbox/push", body), ctx());
+
 describe("live (default)", () => {
+  it("refuses a simulated push and leaves the ticket closed", async () => {
+    const ref = closedReview();
+    const res = await push({ ref });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("not_sandbox");
+    expect(r.tickets.get(ref).status).toBe("closed");
+    expect(r.reviews.list({ ticket: ref })[0]!.seenHead).toBe("");
+  });
+
+  it("reopens a closed ticket by hand through the transition route, with a reason", async () => {
+    const ref = closedReview();
+    const res = await TICKET_TRANSITION(req("POST", `/api/tickets/${ref}/transition`, { event: "reopen", reason: "otra vuelta" }), ctx({ id: ref }));
+    expect(res.status).toBe(200);
+    expect(r.tickets.get(ref).status).toBe("waiting_claude");
+    expect(JSON.parse((r.db.prepare("SELECT payload FROM wake_events WHERE kind = 'ticket.reopened'").get() as { payload: string }).payload)).toMatchObject({ ref, reason: "otra vuelta" });
+  });
+
+  it("only Andrés's reopen is an interaction of his: the route passes `by` (a teammate's `by: claude` is not)", async () => {
+    const reopen = (ref: string, by?: string) =>
+      TICKET_TRANSITION(req("POST", `/api/tickets/${ref}/transition`, { event: "reopen", ...(by ? { by } : {}) }), ctx({ id: ref }));
+    const a = closedReview();
+    expect((await reopen(a, "claude")).status).toBe(200);
+    expect(r.tickets.get(a).status).toBe("waiting_claude");
+    expect(r.lastInteractionAt()).toBeNull();
+
+    const b = closedReview();
+    await reopen(b); // the UI's Reabrir sends by: andres; a missing `by` is Andrés too
+    expect(r.lastInteractionAt()).not.toBeNull();
+  });
+
   it("sends with the real permalink and refuses simulated", async () => {
     const a = released();
     const bad = await send(a, { simulated: true });
@@ -93,6 +134,30 @@ describe("sandbox", () => {
       { session_id: "lead", kind: "ticket.created" },
     ]);
     expect(r.tasks.get(a.id).ticketId).toBe(out.results[0]!.ticket.id);
+  });
+
+  it("a simulated push reopens the closed review ticket through the poll's function; the same sha again is a no-op", async () => {
+    const ref = closedReview();
+    const res = await push({ ref });
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as { reopened: boolean; oldHead: string; newHead: string; repo: string; pr: number };
+    expect(out).toMatchObject({ reopened: true, oldHead: "old1", repo: "acme/api", pr: 7 });
+    expect(out.newHead).toMatch(/^[0-9a-f]{40}$/);
+    expect(r.tickets.get(ref).status).toBe("waiting_claude");
+    expect(r.db.prepare("SELECT COUNT(*) AS n FROM wake_events WHERE kind = 'ticket.reopened'").get()).toEqual({ n: 1 });
+
+    r.tickets.transition(ref, { type: "close", by: "claude" });
+    const again = (await (await push({ ref, sha: out.newHead })).json()) as { reopened: boolean };
+    expect(again.reopened).toBe(false);
+    expect(r.tickets.get(ref).status).toBe("closed");
+    const explicit = (await (await push({ ref, sha: "feedbeef" })).json()) as { reopened: boolean; newHead: string };
+    expect(explicit).toMatchObject({ reopened: true, newHead: "feedbeef" });
+  });
+
+  it("answers 404 for a ticket without a review and 400 without a ref", async () => {
+    const t = r.tickets.create({ direction: "andres_asks", title: "sin review" });
+    expect((await push({ ref: t.ref })).status).toBe(404);
+    expect((await push({})).status).toBe(400);
   });
 
   it("says which board answered", async () => {

@@ -101,9 +101,25 @@ dispatch. On the wake the lead, idempotently (delivery is at least once):
 
 Dispatching never sends anything outward: every Slack, Basecamp or GitHub write is still a salida.
 
+**The card follows the ticket; nobody moves it by hand.** Mesa moves the Tablero card of a ticket with a `taskId` in the
+same transaction as every ticket status change (through `tasks.move`, so the Project sync fires): `working` and
+`waiting_claude` → En curso, `waiting_andres` → Esperando, `closed` → Hecho. Owners and the lead never run
+`mesa task move` for that; a card Andrés drags himself stays where he put it until the ticket's next status change.
+
+**A reply asks only when it says so.** `mesa ticket reply` puts the ticket in "Te espera" only with `--option` or
+`--ask`; a plain reply is informational and leaves the status as it is (an unclaimed request becomes "Claude trabaja").
+
+**A finished review ticket closes, and a new push reopens it.** After an approve or a post, with nothing depending on
+us, the lead closes the review ticket, open findings included. When the PR gets a new head from its author (not Andrés,
+not a bot) Mesa reopens that same ticket by itself, from the GitHub poll or from `mesa review open` at a new head: it
+goes to `waiting_claude` and the owner gets `ticket.reopened { ref, repo, pr, oldHead, newHead }`. The new reviewer boots
+from `mesa ticket context <ref>`: `reviews[]` has `headSha` (the reviewed head) and `seenHead` (the newest head seen),
+and `findings` keeps its state. `mesa ticket reopen <ref> [--reason R]` reopens by hand. In the sandbox,
+`mesa sandbox push <ref> [--sha S]` simulates the push (`docs/SANDBOX.md`).
+
 | Template | When | Owner | Team | Ends when |
 |---|---|---|---|---|
-| **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed; the ticket stays open while findings are open, and the next push brings `reviewer-<ref>-2` |
+| **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed (approve or post); then the lead closes the ticket, open findings included, and a new push from the PR author reopens that same ticket (`ticket.reopened`; `mesa ticket reopen` by hand) and brings `reviewer-<ref>-2` |
 | **Client technical request** | a client asks for a change (Basecamp, Slack, a forwarded email): "Matt asked for infra" | `tl-<ref>` | `devops-` or `dev-`, then `reviewer-`, then `writer-`; `researcher-` if the cause is unknown | the client reply is sent and Andrés closes it |
 | **Investigation** | "resume este hilo", "por qué falla el build", "qué pasó con X" | `researcher-<ref>` | `writer-` if a message comes out of it | Andrés closes it; escalates to a tl when it needs a change |
 | **Simple reply** | a message that only needs words: answer a question, confirm, follow up | `writer-<ref>` | none | the salida is sent or denied |
@@ -182,7 +198,7 @@ Only the lead acts outward, and only after Andrés's approval:
 
 - **Messages** (Slack, Basecamp): on `salida.released`, `mesa-salida` § Send.
 - **GitHub** (approve, review comments, thread replies): github salidas, on `salida.released`, `mesa-review` § Lead writes.
-- **Other `needs_ok` actions** (move a card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
+- **Other `needs_ok` actions** (move a GitHub Project or Basecamp card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
   the approved action, marks it with `mesa ticket action <id> --state done|failed`, and tells the owner.
 
 ## 9. Install
