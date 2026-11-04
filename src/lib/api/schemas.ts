@@ -1,0 +1,310 @@
+// Request schemas for the REST API. The response types live in domain/types.ts.
+import { z } from "zod";
+import { SOURCES, STATIONS } from "../domain/types";
+
+export const source = z.enum(SOURCES);
+export const station = z.enum(STATIONS);
+const waitOn = z.string().regex(/^(you|client|claude|none|person:.+)$/);
+/** owner/name */
+const REPO = /^[\w.-]+\/[\w.-]+$/;
+const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "expected an ISO date");
+
+export const itemInput = z.object({
+  source,
+  externalId: z.string().min(1),
+  kind: z.string().min(1),
+  title: z.string().min(1),
+  excerpt: z.string().optional(),
+  project: z.string().optional(),
+  url: z.string().url().nullable().optional(),
+  need: z.string().optional(),
+  station: station.optional(),
+  waitOn: waitOn.optional(),
+  tag: z.string().nullable().optional(),
+  taskId: z.string().nullable().optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
+  isSample: z.boolean().optional(),
+  receivedAt: isoDate.optional(),
+});
+export const itemPatch = itemInput.omit({ source: true, externalId: true }).partial();
+
+export const taskInput = z.object({
+  title: z.string().min(1),
+  source,
+  excerpt: z.string().optional(),
+  project: z.string().optional(),
+  station: station.optional(),
+  waitOn: waitOn.optional(),
+  position: z.number().optional(),
+  isSample: z.boolean().optional(),
+  itemIds: z.array(z.string()).optional(),
+});
+export const taskPatch = z.object({
+  title: z.string().min(1).optional(),
+  excerpt: z.string().optional(),
+  project: z.string().optional(),
+  source: source.optional(),
+  waitOn: waitOn.optional(),
+  position: z.number().optional(),
+});
+export const taskMove = z.object({ station, position: z.number().optional() });
+export const taskSync = z.object({
+  syncState: z.enum(["synced", "pending", "error", "local"]),
+  ghItemId: z.string().nullable().optional(),
+  ghContentUrl: z.string().nullable().optional(),
+  syncError: z.string().nullable().optional(),
+});
+export const taskLink = z.object({ itemIds: z.array(z.string()).min(1) });
+
+const ticketOption = z.object({ key: z.string().min(1).max(3), label: z.string().min(1), detail: z.string().optional() });
+const refInput = z.object({
+  refType: z.enum(["ticket", "item", "url"]),
+  target: z.string().min(1),
+  label: z.string().optional(),
+});
+
+export const ticketInput = z.object({
+  direction: z.enum(["claude_asks", "andres_asks"]),
+  title: z.string().min(1),
+  project: z.string().optional(),
+  ownerSession: z.string().optional(),
+  itemId: z.string().optional(),
+  isSample: z.boolean().optional(),
+  body: z.string().optional(),
+  options: z.array(ticketOption).optional(),
+  recommended: z.string().optional(),
+  recommendation: z.string().optional(),
+  refs: z.array(refInput).optional(),
+});
+
+export const ticketMessage = z.object({
+  author: z.enum(["andres", "claude"]),
+  body: z.string().optional(),
+  options: z.array(ticketOption).optional(),
+  recommended: z.string().optional(),
+  recommendation: z.string().optional(),
+  chosen: z.string().optional(),
+  refs: z.array(refInput).optional(),
+  session: z.string().optional(),
+});
+
+export const plannedAction = z.object({
+  kind: z.string().min(1),
+  source,
+  label: z.string().min(1),
+  mode: z.enum(["direct", "needs_ok"]),
+  target: z.record(z.string(), z.unknown()).optional(),
+});
+export const ticketPlan = z.object({ actions: z.array(plannedAction), session: z.string().optional() });
+export const ticketPlanApprove = z.object({ reject: z.array(z.string()).optional() });
+export const ticketTransition = z.object({
+  event: z.enum(["claim", "close", "reopen"]),
+  by: z.enum(["andres", "claude"]).optional(),
+  session: z.string().optional(),
+});
+export const actionState = z.object({
+  state: z.enum(["planned", "approved", "rejected", "running", "done", "failed"]),
+});
+
+const slackDest = z.object({
+  kind: z.enum(["slack_thread", "slack_channel"]),
+  workspace: z.string().min(1),
+  channel: z.string().min(1),
+  channelId: z.string().optional(),
+  threadTs: z.string().optional(),
+  threadLabel: z.string().optional(),
+  postAs: z.string().min(1),
+});
+const basecampDest = z.object({
+  kind: z.enum(["basecamp_comment", "basecamp_campfire", "basecamp_message"]),
+  project: z.string().min(1),
+  projectId: z.string().optional(),
+  recordingId: z.string().optional(),
+  recordingTitle: z.string().optional(),
+  postAs: z.string().min(1),
+});
+const githubDest = z.object({
+  kind: z.enum(["github_review", "github_comment"]),
+  repo: z.string().regex(REPO),
+  pr: z.number().int().positive(),
+  event: z.enum(["APPROVE", "COMMENT", "REQUEST_CHANGES"]).optional(),
+  path: z.string().optional(),
+  line: z.number().int().positive().optional(),
+  commitId: z.string().optional(),
+  findingN: z.number().int().optional(),
+  inReplyTo: z.string().optional(),
+  comments: z
+    .array(
+      z.object({
+        path: z.string().optional(),
+        line: z.number().int().positive().optional(),
+        body: z.string().min(1),
+        findingN: z.number().int().optional(),
+        inReplyTo: z.string().optional(),
+      }),
+    )
+    .optional(),
+  postAs: z.string().min(1),
+});
+export const destination = z.union([slackDest, basecampDest, githubDest]);
+
+export const salidaInput = z
+  .object({
+    source: z.enum(["slack", "basecamp", "github"]),
+    destination,
+    body: z.string(),
+    title: z.string().optional(),
+    context: z.string().optional(),
+    ticketId: z.string().optional(),
+    links: z.array(z.object({ source, label: z.string(), url: z.string().optional() })).optional(),
+    ownerSession: z.string().optional(),
+    expiresAt: isoDate.optional(),
+    isSample: z.boolean().optional(),
+    draft: z.boolean().optional(),
+  })
+  .refine((s) => s.destination.kind.startsWith(s.source), "destination kind must match source")
+  .refine(
+    (s) =>
+      s.body.trim().length > 0 ||
+      (s.destination.kind === "github_review" && (s.destination.event === "APPROVE" || Boolean(s.destination.comments?.length))),
+    "body is required (only a GitHub APPROVE or a batched review with comments may be empty)",
+  );
+
+export const salidaVersion = z.object({
+  body: z.string().min(1),
+  author: z.enum(["claude", "andres"]).default("claude"),
+  turnId: z.string().optional(),
+  chipLabel: z.string().max(40).optional(),
+});
+
+export const mark = z.object({
+  start: z.number().int().min(0),
+  end: z.number().int().min(0),
+  kind: z.enum(["keep", "redo", "drop"]),
+  text: z.string(),
+});
+export const salidaTurn = z.object({
+  body: z.string().optional(),
+  marks: z.array(mark).optional(),
+  chipLabel: z.string().max(40).optional(),
+});
+
+export const salidaTransition = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("propose") }),
+  z.object({ type: z.literal("approve"), version: z.number().int().min(1) }),
+  z.object({ type: z.literal("undo") }),
+  z.object({ type: z.literal("sent"), permalink: z.string().optional() }),
+  z.object({ type: z.literal("failed"), error: z.string().min(1) }),
+  z.object({ type: z.literal("retry") }),
+  z.object({ type: z.literal("deny") }),
+  z.object({ type: z.literal("schedule"), at: isoDate, version: z.number().int().min(1) }),
+  z.object({ type: z.literal("unschedule") }),
+  z.object({ type: z.literal("request_delete") }),
+  z.object({ type: z.literal("deleted") }),
+  z.object({ type: z.literal("request_restore") }),
+  z.object({ type: z.literal("restored") }),
+  z.object({ type: z.literal("hold"), reason: z.string().min(1) }),
+  z.object({ type: z.literal("unqueue") }),
+  z.object({ type: z.literal("bounce"), reason: z.string().min(1) }),
+]);
+
+export const salidaSelect = z.object({ n: z.number().int().min(1) });
+export const salidaStar = z.object({ starred: z.boolean() });
+export const salidaEdit = z.object({ body: z.string().min(1) });
+
+export const sessionInput = z.object({
+  id: z.string().min(1).max(120),
+  label: z.string().optional(),
+  cwd: z.string().optional(),
+  project: z.string().optional(),
+});
+export const waitAck = z.object({ session: z.string().min(1), cursor: z.number().int().min(0) });
+
+export const engramLink = z.object({
+  entityType: z.enum(["ticket", "salida", "task"]),
+  entityId: z.string().min(1),
+  project: z.string().min(1),
+  topicKey: z.string().optional(),
+  observationId: z.string().optional(),
+});
+
+// ---------- ephemeral agents ----------
+export const briefInput = z.object({
+  body: z.string().optional(),
+  goal: z.string().optional(),
+  decisions: z.array(z.string()).optional(),
+  planStep: z.string().optional(),
+  openQuestions: z.array(z.string()).optional(),
+  nextAction: z.string().optional(),
+  updatedBy: z.string().optional(),
+});
+
+export const handoffInput = z.object({
+  agent: z.string().min(1),
+  role: z.string().optional(),
+  status: z.enum(["done", "paused", "blocked"]),
+  body: z.string().optional(),
+  done: z.string().optional(),
+  remaining: z.string().optional(),
+  artifacts: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** <role>-<ticketRef>[-k], lowercase. */
+export const agentName = z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/, "agent names look like <role>-<ticketRef>[-k]");
+export const teamInput = z.object({
+  ticketRef: z.string().min(1),
+  agent: agentName,
+  role: z.string().min(1),
+  owner: z.boolean().optional(),
+});
+
+// ---------- approvals ----------
+export const approvalInput = z.object({
+  ticketRef: z.string().nullable().optional(),
+  agent: z.string().min(1),
+  tool: z.string().min(1),
+  summary: z.string().min(1).max(500),
+  detail: z.string().max(400_000).optional(),
+  cwd: z.string().optional(),
+  hints: z.array(z.string()).max(10).optional(),
+  expiresAt: isoDate.optional(),
+});
+export const approvalDecision = z.object({
+  decision: z.enum(["allow", "read_config", "deny"]),
+  actor: z.string().min(1),
+  note: z.string().max(2000).optional(),
+});
+
+// ---------- reviews ----------
+export const findingInput = z.object({
+  repo: z.string().regex(REPO),
+  pr: z.number().int().positive(),
+  n: z.number().int().positive().optional(),
+  label: z.enum(["blocker", "nit", "comment"]),
+  at: z.string().optional(),
+  anchor: z.string().optional(),
+  summary: z.string().min(1),
+  explanation: z.string().optional(),
+  state: z.enum(["open", "fixed", "waived", "dismissed"]).optional(),
+  sha: z.string().optional(),
+  ghCommentId: z.string().nullable().optional(),
+});
+export const reviewActionInput = z.object({
+  action: z.enum(["approve", "approve_anyway", "post", "dismiss", "explain"]),
+  findingNs: z.array(z.number().int().positive()).optional(),
+  note: z.string().optional(),
+});
+
+// ---------- sources and sweep ----------
+export const healthSource = z.enum(["github", "github_project", "slack", "basecamp", "engram"]);
+const isoOrNull = isoDate.nullable();
+export const sourcePatch = z.object({
+  health: z.enum(["ok", "degraded", "down"]).optional(),
+  note: z.string().max(500).optional(),
+  watermark: z.string().max(500).nullable().optional(),
+  lastCheckedAt: isoOrNull.optional(),
+  lastNewAt: isoOrNull.optional(),
+  backoffUntil: isoOrNull.optional(),
+  cadenceS: z.number().int().min(5).max(86_400).optional(),
+});
+export const sweepInput = z.object({ sources: z.array(z.enum(["slack", "basecamp", "github"])).optional() });

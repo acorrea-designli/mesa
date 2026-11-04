@@ -1,0 +1,204 @@
+/* App shell: rail + work area on desktop, bottom tab bar on the phone. */
+.app {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.work {
+  min-width: 0;
+  min-height: 100dvh;
+}
+
+/* ---------- rail ---------- */
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  background: var(--deep);
+  border-right: 1px solid var(--rule);
+  padding: 22px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  margin: 0 6px 4px;
+}
+.who {
+  color: var(--mute);
+  font-size: 12px;
+  margin: 0 6px 22px 44px;
+}
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: var(--r-control);
+  color: var(--ink2);
+  font-weight: 600;
+  border-left: 3px solid transparent;
+  text-align: left;
+  width: 100%;
+}
+.nav:hover {
+  background: color-mix(in srgb, var(--raise) 60%, transparent);
+}
+.nav b {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mute);
+}
+.nav[aria-current="page"] {
+  background: var(--raise);
+  color: var(--ink);
+  border-left-color: var(--ink);
+}
+.nav[aria-current="page"] b {
+  color: var(--ink);
+}
+.rail-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nav.foot {
+  color: var(--mute);
+}
+.nav.foot:hover {
+  background: none;
+}
+.nav.theme {
+  color: var(--mute);
+  font-size: 13px;
+  height: 32px;
+}
+
+/* Rail notice: source health (Estados B) */
+.rl-health {
+  padding: 12px 10px 10px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.rl-src {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.rl-src small {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.rl-src.bad {
+  color: var(--ink);
+}
+.rl-src.bad small {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ---------- phone tab bar ---------- */
+.ph-tabs {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rail {
+    display: none;
+  }
+  .work {
+    padding-bottom: var(--phone-tabs-h);
+  }
+  .ph-tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    height: var(--phone-tabs-h);
+    border-top: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding-bottom: max(22px, env(safe-area-inset-bottom));
+    background: var(--deep);
+  }
+  .ph-tabs a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink2);
+  }
+  .ph-tabs a[aria-current="page"] {
+    color: var(--ink);
+  }
+  .ph-tabs a b {
+    font-weight: 600;
+    color: var(--mute);
+    margin-left: 3px;
+  }
+}
+
+/* ---------- placeholder screen frame (replaced by lanes A and B) ---------- */
+.screen-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px var(--s-gutter) 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.screen-head h1 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.screen-head span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mute);
+}
+.screen-body {
+  padding: 20px var(--s-gutter);
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+}
+.screen-body p {
+  color: var(--ink2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .screen-head,
+  .screen-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

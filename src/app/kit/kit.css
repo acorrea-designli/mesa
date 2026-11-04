@@ -1,0 +1,31 @@
+.kit {
+  display: grid;
+  gap: 28px;
+}
+.kit section {
+  display: grid;
+  gap: 12px;
+}
+.kit-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.kit-list {
+  display: grid;
+}
+.kit-row {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--rule2);
+  font-weight: 600;
+}
+.kit-band {
+  max-width: 640px;
+}
+.kit-note {
+  font-size: 12px;
+  color: var(--mute);
+}
