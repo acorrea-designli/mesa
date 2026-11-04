@@ -241,6 +241,19 @@ describe("a closed review ticket reopens on a new PR head", () => {
     r.reviews.upsertFinding(ref, { ...PR, label: "nit", summary: "Naming", sha: "aaa111" }, T0);
   });
 
+  it("a renamed PR is still found by repo + pr: the review row names its ticket (id works as a ref), closed or not", () => {
+    close(1000);
+    // `mesa review list` without --ticket: the row for acme/scout#60 gives the ticket, whatever the PR title is now
+    const row = r.reviews.list().find((x) => x.repo === PR.repo && x.pr === PR.pr);
+    expect(row?.ticketId).toBe(r.tickets.get(ref).id);
+    expect(r.tickets.get(row!.ticketId!).ref).toBe(ref);
+    r.tickets.transition(row!.ticketId!, { type: "reopen", by: "claude" }, undefined, at(2000), "new push");
+    expect(r.tickets.get(ref).status).toBe("waiting_claude");
+    // the same ticket keeps the review: opening again does not move it
+    expect(r.reviews.open(row!.ticketId!, { ...PR, sha: "bbb222" }, at(3000)).ticketId).toBe(row!.ticketId);
+    expect(r.reviews.list()).toHaveLength(1);
+  });
+
   it("noteHead reopens the same ticket with a ticket.reopened wake and leaves the findings and the reviewed head alone", () => {
     close(1000);
     const res = r.reviews.noteHead(PR.repo, PR.pr, "bbb222", {}, at(2000));

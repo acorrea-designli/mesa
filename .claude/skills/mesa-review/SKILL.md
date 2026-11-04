@@ -16,11 +16,15 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Spawning (lead)
 
-- **Requested review**: one ticket per PR, titled exactly `Review <owner/repo>#<n>: <PR title>`. Find it with
-  `MESA ticket list` by that title, closed tickets included (never only `--open`): a closed one is that PR's
-  ticket and comes back with `MESA ticket reopen <ref> --reason "new push"` (Mesa also reopens it by itself on a new
-  head), never as a duplicate; none at all: `MESA ticket ask --title "Review <owner/repo>#<n>: <title>" --body "FYI:
-  revisión en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked advance / post-approve push).
+- **Requested review**: one ticket per PR, titled `Review <owner/repo>#<n>: <PR title>`. Find it by the PR, never by
+  the title (a renamed PR would not match): `MESA review list` (no `--ticket`), take the row with that `repo` and
+  `pr`, and its `ticketId` is the PR's ticket, closed or not (`MESA ticket show <ticketId>` gives the `ref`). A closed
+  one comes back with `MESA ticket reopen <ticketId> --reason "new push"` (Mesa also reopens it by itself on a new
+  head). Never `ticket ask` for a PR that has a review row: `MESA review open` would move the review to the duplicate
+  and the original would reopen with no owner. Only when no review row exists, look for a ticket with that title
+  (`MESA ticket list`, closed included) and, finding none, `MESA ticket ask --title "Review <owner/repo>#<n>:
+  <title>" --body "FYI: revisión en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked
+  advance / post-approve push).
   Spawn `reviewer-<ref>` (next suffix if that name was used) as the owner.
 - **Review pass** ("haz un review pass"): run `mesa-sweep` § 1, then one ticket and one reviewer per entering PR,
   at most 5 at a time in pr-monitor's order (tracked advance, moved, new, untracked advance; oldest first). The
