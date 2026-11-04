@@ -35,8 +35,13 @@ conversation.
 **Sandbox check first.** Run `echo $MESA_ENV`. If it prints `sandbox`, these replace the steps below (`docs/SANDBOX.md`):
 
 - § 0: `pwd` is `/g/WorkSpace/designli-sandbox`. § 1: Mesa is `curl -s -m 3 http://127.0.0.1:8796/api/health` and
-  must answer `"env":"sandbox"`; down: ask Andrés to run `pnpm -C G:/WorkSpace/designli/ops sandbox` (never start or
-  call the live board on :8790). Hooks: `G:/WorkSpace/designli-sandbox/.claude/settings.json`.
+  must answer `"env":"sandbox"`. If it is down, start it yourself; never ask Andrés:
+  `rm -rf G:/WorkSpace/designli/ops/.next-sandbox`, then run `"C:/Users/z4yross/AppData/Local/pnpm/nodejs/22.23.2/node.exe"
+  scripts/sandbox.mjs` from `G:/WorkSpace/designli/ops` with `run_in_background`. Node 22.0.0 lacks node:sqlite.
+  Poll health until it answers. Never start two copies: a second instance corrupts the Turbopack cache and makes
+  every page reload in a loop. After a merge, restart it the same way (TaskStop the background task, clear the
+  cache, start it), warn the live agents first, then re-register and re-arm the watcher. Never start or call the
+  live board on :8790. Hooks: `G:/WorkSpace/designli-sandbox/.claude/settings.json`.
 - engram: pass `project: "designli-sandbox"` on every call (yours and, through the spawn prompt, every teammate's); the
   session summary key is `session/designli-sandbox-lead`. Skip § 1b.
 - § 4: no sweeper (`mesa-sweep` is a no-op here). Sends follow the sandbox notes in `mesa-salida` and `mesa-review`.
