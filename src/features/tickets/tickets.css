@@ -1113,9 +1113,6 @@
   }
   .tk-app[data-open] .tk-pane {
     display: flex;
-    /* clip, not hidden: hidden makes the pane a scroll container and position: sticky on .tk-foot never sticks */
-    overflow: clip;
-    padding-bottom: var(--sbx-h); /* room for the SANDBOX tab the composer sits above (0 live) */
     border-left: 0;
     min-height: calc(100dvh - var(--phone-tabs-h));
     background: var(--gnd);
@@ -1152,12 +1149,24 @@
     width: 28px;
     height: 28px;
   }
+  /* Keyboard focus scrolls a field into view: keep it clear of the fixed tab bar (and the sandbox tab). */
+  html:has(.tk-app) {
+    scroll-padding-bottom: calc(var(--phone-tabs-h) + var(--sbx-h) + 12px);
+  }
   .tk-foot {
+    padding: 10px 16px 14px;
+  }
+  /* Only the thread's composer sticks (the new-request form keeps its foot in the flow, so its fields are never covered). */
+  .tk-app[data-open] .tk-thread {
+    /* clip, not hidden: hidden makes the pane a scroll container and position: sticky on .tk-foot never sticks */
+    overflow: clip;
+    padding-bottom: var(--sbx-h); /* room for the SANDBOX tab the composer sits above (0 live) */
+  }
+  .tk-thread .tk-foot {
     position: sticky;
-    bottom: calc(var(--phone-tabs-h) + var(--sbx-h));
+    bottom: calc(var(--phone-tabs-h) + var(--sbx-h) - 1px); /* 1 px under the tab bar: no seam at fractional device pixel ratios */
     z-index: 2; /* above the messages that scroll under it, below the tab bar (30) */
     box-shadow: 0 var(--sbx-h) 0 0 var(--deep); /* fills the gap above the tab bar left by the SANDBOX tab (0 live) */
-    padding: 10px 16px 14px;
   }
   /* The pill rides on the sticky composer (it is inside .tk-foot): just above it, with the same 14 px gap as the toasts. */
   .tk-newmsg {

@@ -173,7 +173,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
   ];
 
   return (
-    <aside className="tk-pane" ref={ref} aria-label={`Ticket ${t.ref}`}>
+    <aside className="tk-pane tk-thread" ref={ref} aria-label={`Ticket ${t.ref}`}>
       <Link className="tk-back" href="/tickets">
         <IcBack />
         Tickets
