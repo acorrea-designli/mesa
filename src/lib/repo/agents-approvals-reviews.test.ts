@@ -161,6 +161,46 @@ describe("reviews without findings (review open)", () => {
     const second = r.reviews.action(rev.id, { action: "approve" }, at(UNDO_WINDOW_MS + 4));
     expect(r.salidas.get(second.salidaIds[0]!)).toMatchObject({ destination: { commitId: "def5678" } });
   });
+
+  const approveAt = (sha: string) => {
+    const rev = r.reviews.open(ref, { ...PR, sha }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    r.salidas.sweep(at(UNDO_WINDOW_MS));
+    r.salidas.transition(out.salidaIds[0]!, { type: "sent", permalink: "https://github.com/acme/scout/pull/60#pullrequestreview-1" }, at(UNDO_WINDOW_MS + 1));
+    return rev.id;
+  };
+
+  it("a finding upsert never moves the head nor reopens an approved review", () => {
+    const id = approveAt("abc1234");
+    r.reviews.upsertFinding(ref, { ...PR, label: "nit", summary: "Older commit", sha: "0ld0000" }, at(UNDO_WINDOW_MS + 2));
+    expect(r.reviews.get(id)).toMatchObject({ state: "approved", headSha: "abc1234" });
+    // it still seeds the head of a row created without one
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 61, label: "nit", summary: "First", sha: "fff9999" }, T0);
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 61, label: "nit", summary: "Second", sha: "eee8888" }, T0);
+    expect(r.reviews.byPr("acme/scout", 61).headSha).toBe("fff9999");
+  });
+
+  it("open attaches the review to the ticket it names; a finding upsert without a ticket keeps it", () => {
+    const next = r.tickets.create({ direction: "andres_asks", title: "Revisa el push del PR 60", ownerSession: "lead", project: "scout" }, T0).ref;
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    expect(rev.ticketId).toBe(r.tickets.get(ref).id);
+    const moved = r.reviews.open(next, { ...PR, sha: "def5678" }, at(1000));
+    expect(moved).toMatchObject({ id: rev.id, ticketId: r.tickets.get(next).id });
+    expect(r.reviews.list({ ticket: ref })).toEqual([]);
+    expect(r.reviews.list({ ticket: next })).toHaveLength(1);
+    r.reviews.upsertFinding(null, { ...PR, label: "nit", summary: "Naming" }, at(2000));
+    expect(r.reviews.get(rev.id).ticketId).toBe(r.tickets.get(next).id);
+  });
+
+  it("a new head while approving: once the salida is sent the review is open again, not approved", () => {
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    const during = r.reviews.open(ref, { ...PR, sha: "def5678" }, at(1000));
+    expect(during).toMatchObject({ state: "approving", headSha: "def5678" });
+    r.salidas.sweep(at(UNDO_WINDOW_MS));
+    r.salidas.transition(out.salidaIds[0]!, { type: "sent", permalink: "https://github.com/acme/scout/pull/60#pullrequestreview-1" }, at(UNDO_WINDOW_MS + 1));
+    expect(r.reviews.get(rev.id)).toMatchObject({ state: "open", headSha: "def5678", salidaId: null });
+  });
 });
 
 describe("source outages", () => {

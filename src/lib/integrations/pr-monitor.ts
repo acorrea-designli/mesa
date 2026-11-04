@@ -66,6 +66,7 @@ export function importPrMonitorState(r: Repos, state: unknown, now = new Date())
           explanation: f.explanation,
           state: STATES.has(f.state as FindingState) ? (f.state as FindingState) : "open",
           sha: f.sha ?? raw.head,
+          head: raw.head,
           ghCommentId: f.ghCommentId == null ? null : String(f.ghCommentId),
         },
         now,

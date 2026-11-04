@@ -305,7 +305,7 @@ export const reviewOpenInput = z.object({
   pr: z.number().int().positive(),
   sha: z.string().trim().min(1),
 });
-export const reviewActionInput =z.object({
+export const reviewActionInput = z.object({
   action: z.enum(["approve", "approve_anyway", "post", "dismiss", "explain"]),
   findingNs: z.array(z.number().int().positive()).optional(),
   note: z.string().optional(),
