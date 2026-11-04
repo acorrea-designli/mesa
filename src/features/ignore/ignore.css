@@ -1,0 +1,110 @@
+/* Ignorar proyecto: the overflow trigger, the context menu, the quiet "N ignorados" link and
+   its sheet. Neutral ink only: the line colours mean source, and only the source dot uses one. */
+
+.ig-menu {
+  position: fixed;
+  z-index: 45;
+  min-width: 0;
+}
+.ig-menu button b {
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.ig-more {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-tag);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink2);
+  flex: none;
+}
+.ig-more:hover {
+  background: var(--gnd);
+  color: var(--ink);
+}
+.ig-more[aria-expanded="true"] {
+  background: var(--gnd);
+}
+
+.ig-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+  text-decoration: underline;
+  text-decoration-color: var(--edge);
+  text-underline-offset: 3px;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+.ig-link:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.ig-note {
+  font-size: 13px;
+  color: var(--mute);
+  line-height: 1.45;
+  max-width: 46ch;
+}
+.ig-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border-top: 1px solid var(--rule2);
+}
+.ig-list li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 56px;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--rule2);
+}
+.ig-name {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.ig-name b {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ig-name small {
+  font-size: 12.5px;
+  color: var(--mute);
+  overflow-wrap: anywhere;
+}
+/* "Todas las fuentes": an empty ink ring, not a line colour. */
+.ig-all {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.6px solid var(--ink);
+}
+.ig-empty {
+  font-size: 13.5px;
+  color: var(--mute);
+}
+
+@media (max-width: 720px) {
+  .ig-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .ig-list .btn {
+    min-height: 44px;
+  }
+  .ig-menu button {
+    min-height: 48px;
+  }
+}

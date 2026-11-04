@@ -1,6 +1,7 @@
 // Tablero B view model (pure, unit tested): lanes by source, five station columns,
 // card chips and wait tags, caps with "+N más", and the GitHub Project sync summary.
 import type { StatusTone } from "@/components/ui/primitives";
+import { ignoreTarget, type IgnoreTarget } from "../ignore/model";
 import { SOURCES, STATIONS, type Item, type Source, type Station, type SyncState, type Task, type WaitOn } from "@/lib/domain/types";
 
 /** Lane order from the approved mock. */
@@ -35,6 +36,8 @@ export interface Card {
   wait: { tone: StatusTone; label: string } | null;
   syncState: SyncState;
   isSample: boolean;
+  /** The project "Ignorar proyecto «X»" would ignore. */
+  ignore?: IgnoreTarget | null;
 }
 
 type LinkedItem = Pick<Item, "id" | "source" | "title" | "url" | "project"> & { externalId?: string; meta?: Record<string, unknown> };
@@ -76,6 +79,7 @@ export function toCard(t: Task, time: string, linked: LinkedItem[] = t.items ?? 
   }
   // The lane's own chip first, like the mock (PR #212 · Basecamp · Prospec).
   chips.sort((a, b) => Number(b.source === t.source) - Number(a.source === t.source));
+  const own = linked.find((i) => i.source === t.source);
   return {
     id: t.id,
     lane: t.source,
@@ -90,6 +94,7 @@ export function toCard(t: Task, time: string, linked: LinkedItem[] = t.items ?? 
     wait: cardWait(t.waitOn, t.station),
     syncState: t.syncState,
     isSample: t.isSample,
+    ignore: ignoreTarget({ source: t.source, project: t.project || own?.project || "", projectKey: t.projectKey, meta: own?.meta }),
   };
 }
 

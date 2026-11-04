@@ -50,6 +50,8 @@ export interface Item {
   tag: string | null; // e.g. "clean" for a PR the monitor found clean
   taskId: string | null;
   meta: Record<string, unknown>;
+  /** Most specific stable project id (generated column items.project_key; domain/ignore.ts projectKey). */
+  projectKey?: string;
   isSample: boolean;
   receivedAt: string;
   createdAt: string;
@@ -72,6 +74,8 @@ export interface Task {
   syncState: SyncState;
   syncError: string | null;
   syncedAt: string | null;
+  /** Its lane's linked item key, else project (filled by the repository; domain/ignore.ts). */
+  projectKey?: string;
   isSample: boolean;
   createdAt: string;
   updatedAt: string;

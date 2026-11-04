@@ -16,6 +16,11 @@ import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { SalidaApproval } from "@/features/salidas/SalidaApproval";
 import { clock } from "./format";
 import { useLive } from "./useLive";
+import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu";
+import { IgnoredLink } from "../ignore/IgnoredSheet";
+import { ignoreLabel } from "../ignore/model";
+import { useIgnore } from "../ignore/useIgnore";
+import "../ignore/ignore.css";
 import "../band/band.css";
 import "./hoy.css";
 
@@ -49,14 +54,21 @@ function SweepButton({ compact }: { compact?: boolean }) {
   );
 }
 
-function Row({ r, selected, onPick }: { r: HoyRow; selected: boolean; onPick: () => void }) {
-  return (
+interface RowMenu {
+  actions: MenuAction[];
+  onMore: (el: HTMLElement) => void;
+  onContext: React.MouseEventHandler<HTMLElement>;
+}
+
+function Row({ r, selected, onPick, menu }: { r: HoyRow; selected: boolean; onPick: () => void; menu?: RowMenu }) {
+  const row = (
     <button
       type="button"
       className={["hy-row", selected && "sel", r.stale && "stale", `src-${r.source}`].filter(Boolean).join(" ")}
       aria-current={selected ? "true" : undefined}
       data-row={r.key}
       onClick={onPick}
+      onContextMenu={menu?.onContext}
     >
       <span className="t">{r.time}</span>
       <span className="src">
@@ -71,6 +83,15 @@ function Row({ r, selected, onPick }: { r: HoyRow; selected: boolean; onPick: ()
       <span className={`st ${r.tag.tone === "plain" ? "" : r.tag.tone} desk-only`}>{r.tag.label}</span>
       <span className={`st ${r.phoneTag.tone === "plain" ? "" : r.phoneTag.tone} phone-only`}>{r.phoneTag.label}</span>
     </button>
+  );
+  if (!menu) return row;
+  // The overflow trigger sits over the time column (shown on hover / focus, like the
+  // Tablero card's Mover), outside the row button so buttons never nest.
+  return (
+    <div className="hy-rw">
+      {row}
+      <MoreButton className="hy-more" label={`Más acciones: ${r.subject}`} onOpen={menu.onMore} />
+    </div>
   );
 }
 
@@ -90,6 +111,14 @@ export function HoyView({ data }: { data: HoyData }) {
   const calm = station === "inbox" && isCalm(data);
   const listRef = useArrive<HTMLDivElement>(".hy-row", `${station}:${source}`);
   const pressRef = usePress<HTMLDivElement>(".hy-row", true);
+  const menu = useActionMenu();
+  const { ignore } = useIgnore();
+  const rowMenu = (r: HoyRow): RowMenu | undefined => {
+    const t = r.kind === "item" ? r.ignore : null;
+    if (!t) return undefined;
+    const actions: MenuAction[] = [{ label: ignoreLabel(t), detail: "Sale de Hoy y del tablero; Claude deja de barrerlo", onSelect: () => void ignore(t) }];
+    return { actions, onMore: (el) => menu.openFrom(el, `Acciones de ${r.subject}`, actions), onContext: menu.onContext(`Acciones de ${r.subject}`, actions) };
+  };
 
   // Close the phone detail if its row went away (sent, moved).
   useEffect(() => {
@@ -206,7 +235,12 @@ export function HoyView({ data }: { data: HoyData }) {
           ) : null}
 
           <div className="hy-tabs">
-            <Tabs items={tabs} value={source} onChange={setSource} label="Fuentes" trailing={<span className="sort">Estación: {STATION_LABEL[station]} · por hora</span>} />
+            <Tabs items={tabs} value={source} onChange={setSource} label="Fuentes" trailing={
+                <>
+                  <IgnoredLink rows={data.ignored} className="hy-ign" />
+                  <span className="sort">Estación: {STATION_LABEL[station]} · por hora</span>
+                </>
+              } />
           </div>
 
           {data.firstRun ? (
@@ -243,7 +277,7 @@ export function HoyView({ data }: { data: HoyData }) {
                 <span>Estado</span>
               </div>
               {items.map((r) => (
-                <Row key={r.key} r={r} selected={selected?.key === r.key} onPick={() => pick(r)} />
+                <Row key={r.key} r={r} selected={selected?.key === r.key} onPick={() => pick(r)} menu={rowMenu(r)} />
               ))}
               {!items.length && !salidas.length ? (
                 <p className="hy-empty">
@@ -258,6 +292,12 @@ export function HoyView({ data }: { data: HoyData }) {
               {live.offline ? <p className="hy-ro">Firmar y responder vuelven con la conexión: nada sale sin la PC.</p> : null}
             </div>
           )}
+          {/* Phone: the source tabs are hidden, so the link sits under the list. */}
+          {data.ignored.length ? (
+            <div className="hy-ign-ph">
+              <IgnoredLink rows={data.ignored} />
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -275,6 +315,7 @@ export function HoyView({ data }: { data: HoyData }) {
           {detail}
         </fieldset>
       </aside>
+      {menu.node}
     </div>
   );
 }

@@ -25,22 +25,26 @@ on Mesa's Hoy and Andrés decides.
    presses "Barrer ahora", and prints `{due, forced, sources, watermarks}`. `due: false` (timeout, outside work
    hours): go back to 1. `reason: "mesa_down"`: wait once more, then if still down send
    `BLOCKED sweeper Mesa down` to `team-lead` and stop.
-2. **Stage 1, the probe**: exactly one MCP call per due source, `probeLimit` results:
+2. **Ignored projects**: `MESA ignore list --json` (one call per tick). Keep the rows in mind for this tick only.
+   Rules: `mesa-sweep` § 0b (Slack rows hold the channel id, Basecamp rows the project name, `*` any source).
+3. **Stage 1, the probe**: exactly one MCP call per due source, `probeLimit` results:
    - Slack: `slack_search_public_and_private`, query `(to:me OR <@U06E2UBDC73>) after:<day before the watermark's day>`,
      `sort: "timestamp"`, `sort_dir: "desc"`, `response_format: "detailed"`, `include_context: false`, `limit: 10`.
      New = messages with `ts` greater than the watermark, not written by Andrés.
    - Basecamp: `get_my_notifications`. New = notifications created or updated after the watermark (ISO).
-   Nothing new: `TICK report <source> --new 0`, back to 1. No message, no summary.
-3. **Stage 2, the triage**, only for the new messages or notifications: classify them with `mesa-sweep` § 2 / § 3
+   Drop everything that belongs to an ignored project now, before any thread or recording is read.
+   Nothing new left: `TICK report <source> --new 0` (add `--watermark <newest seen>` when only ignored items were
+   dropped), back to 1. No message, no summary.
+4. **Stage 2, the triage**, only for the new messages or notifications that survived step 3: classify them with `mesa-sweep` § 2 / § 3
    (for Slack: read the thread when the ask is unclear and check whether Andrés already answered in that
    conversation), then one `MESA item upsert --json -` per item that waits on him. The dedupe key is the
    `externalId`: Slack `<channelId>:<ts>`, Basecamp `<recordingId>` or `<recordingId>#<commentId>`; upserts are
    idempotent, so a repeat is harmless. Then `TICK report <source> --new <items upserted> --watermark <newest ts or
    ISO seen, noise included>`, and back to 1.
-4. **Errors**: an MCP error or a 429 → `TICK report <source> --error "<short message>"` (add `--rate-limited` for a
+5. **Errors**: an MCP error or a 429 → `TICK report <source> --error "<short message>"` (add `--rate-limited` for a
    429). The tick script backs that source off exponentially and marks it degraded in Mesa (Estados B). Do not
    retry by hand.
-5. After `maxTicksPerInstance` passes through step 1: `DONE sweeper-<n> ticks <N> new <M>` to `team-lead`, stop.
+6. After `maxTicksPerInstance` passes through step 1: `DONE sweeper-<n> ticks <N> new <M>` to `team-lead`, stop.
    The lead spawns `sweeper-<n+1>`; the watermarks carry over.
 
 ## Never
@@ -55,5 +59,6 @@ node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs wait
 node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs report <slack|basecamp> --new <N> --watermark <W>
 node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs report <slack|basecamp> --error "<message>" --rate-limited
 node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs status
+node G:/WorkSpace/designli/ops/bin/mesa ignore list --json
 node G:/WorkSpace/designli/ops/bin/mesa item upsert --json - <<'EOF'
 ```

@@ -50,6 +50,7 @@ const ENTITY: Record<string, string> = {
   engram: "engram",
   sweep: "sweep",
   github: "github",
+  "ignored-projects": "ignored_project",
 };
 
 // Plumbing that changes nothing a screen shows.

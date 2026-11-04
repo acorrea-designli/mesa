@@ -22,7 +22,8 @@ function setting(key: string): string | null {
 export function loadTablero(now: Date = new Date()): TableroData {
   const r = repos();
   // Done cards stay on the board for the day they were finished.
-  const tasks = r.tasks.list().filter((t) => t.station !== "done" || isToday(t.updatedAt, now));
+  // Tasks of ignored projects stay in the DB (and out of the GitHub Project push) but leave the board.
+  const tasks = r.tasks.list({ ignored: "exclude" }).filter((t) => t.station !== "done" || isToday(t.updatedAt, now));
   const byTask = new Map<string, Item[]>();
   for (const i of r.items.list()) if (i.taskId) byTask.set(i.taskId, [...(byTask.get(i.taskId) ?? []), i]);
 

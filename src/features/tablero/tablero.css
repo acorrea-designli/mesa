@@ -545,3 +545,23 @@
 .tb-mark .ln {
   width: 14px;
 }
+
+/* ---------- Ignorar proyecto (src/features/ignore) ---------- */
+.tb-more-btn {
+  width: 22px;
+  height: 22px;
+  margin: -2px -4px -2px 0;
+  display: none;
+}
+.tb-card:hover .tb-more-btn,
+.tb-card:focus-within .tb-more-btn,
+.tb-more-btn:focus-visible {
+  display: inline-flex;
+}
+.tb-mv + .tb-more-btn {
+  margin-left: -2px;
+}
+.tb-sheet-ign {
+  justify-self: start;
+  margin-top: 4px;
+}

@@ -3,11 +3,19 @@ import { mapHealth } from "@/components/shell/health";
 import type { Source } from "@/lib/domain/types";
 import { repos } from "@/lib/repo";
 import { clock, isToday, longDay, shortDay, when } from "./format";
-import { itemRow, kindLabel, openLabel, salidaRow, type HoyData, type ItemDetail, type SetupRow } from "./model";
+import { ignoreTarget } from "../ignore/model";
+import { itemRow, kindLabel, openLabel, salidaRow, type HoyData, type HoyRow, type ItemDetail, type SetupRow } from "./model";
 
 function setting(key: string): string | null {
   const row = repos().db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
   return row?.value ?? null;
+}
+
+/** Ignored projects with what each hides right now (Hoy's "N ignorados" sheet). */
+export function loadIgnored(): HoyData["ignored"] {
+  const r = repos();
+  const hidden = r.ignored.hiddenCounts();
+  return r.ignored.list().map((p) => ({ id: p.id, source: p.source, project: p.project, label: p.label, hidden: (hidden[p.id]?.items ?? 0) + (hidden[p.id]?.tasks ?? 0) }));
 }
 
 export function loadHoy(now: Date = new Date()): HoyData {
@@ -17,9 +25,10 @@ export function loadHoy(now: Date = new Date()): HoyData {
   const health: HoyData["health"] = {};
   for (const s of ["github", "slack", "basecamp"] as const) health[s] = mapHealth(r.sources.get(s));
 
-  const all = r.items.list();
+  // Items of ignored projects stay in the DB but leave Hoy, the band and the counts.
+  const all = r.items.list({ ignored: "exclude" });
   const items = all.filter((i) => i.station !== "done" || isToday(i.updatedAt, now));
-  const rows = items.map((i) => itemRow(i, when(i.receivedAt, now), i.source === "claude" ? undefined : health[i.source]));
+  const rows: HoyRow[] = items.map((i) => ({ ...itemRow(i, when(i.receivedAt, now), i.source === "claude" ? undefined : health[i.source]), ignore: ignoreTarget(i) }));
 
   const details: Record<string, ItemDetail> = {};
   for (const i of items) {
@@ -37,6 +46,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
       ticketRef: typeof i.meta.ticketRef === "string" ? i.meta.ticketRef : null,
       received: `${when(i.receivedAt, now)}${isToday(i.receivedAt, now) ? "" : ` ${clock(i.receivedAt)}`}`,
       isSample: i.isSample,
+      ignore: ignoreTarget(i),
     };
   }
 
@@ -94,5 +104,6 @@ export function loadHoy(now: Date = new Date()): HoyData {
     firstRun: all.length === 0 && r.tasks.list().length === 0 && !setup.every((s) => s.connected),
     setup,
     hasSample: all.some((i) => i.isSample) || salidas.some((s) => s.isSample),
+    ignored: loadIgnored(),
   };
 }

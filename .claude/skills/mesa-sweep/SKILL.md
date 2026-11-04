@@ -36,6 +36,22 @@ shows (Estados B); the next good probe sets it back to `ok`, which also resumes 
 it; for a wider window ("qué hay desde el viernes") or with the sweeper down, run § 1-3 over the window yourself
 (default: since 18:00 yesterday, local time) and report one line per source with counts.
 
+## 0b. Ignored projects (read first, skip before triage)
+
+Andrés ignores projects from Hoy or Tablero ("Ignorar proyecto «X»"). Read the list once per tick, before any
+triage: `MESA ignore list --json` → `[{ id, source, project, label, hidden }]` (`source` is `github`, `slack`,
+`basecamp`, `claude` or `*` for every source). Drop a probed message or notification whose project matches a row
+**before** reading threads or recordings, so an ignored project costs no tokens:
+
+- Slack: the row's `project` is the **channel id** (`C…`, `D…`, `G…`, the part of the externalId before the `:`).
+- Basecamp: the row's `project` is the **project name** (the bucket name, as in `project` below).
+- GitHub: the row's `project` is `owner/repo` (a hand-added row may hold the bare repo name: match either).
+- A `*` row matches the same key or project name in any source.
+
+Dropped items count as noise: the watermark still advances past them, and they are never upserted. If one slips
+through, `mesa item upsert` answers `{ "ignored": true }` and stores nothing; that is not an error. To manage the
+list by hand: `MESA ignore add <source|'*'> <projectKey> --label L`, `MESA ignore remove <id>`.
+
 ## 1. GitHub: review requests (gate from pr-monitor step 2)
 
 Source of truth for the rules: `C:/Users/z4yross/.claude-work/commands/pr-monitor.md` § "Step 2" and § "The gate"
@@ -90,7 +106,8 @@ Source of truth: `C:/Users/z4yross/.claude-work/commands/slack-triage.md` (read 
 
 Group by conversation, keep the last incoming message, classify hard: **Te esperan** (an explicit ask AND he did not
 write in that conversation afterwards; in a group DM it must be addressed to him) → upsert
-`{"source":"slack","externalId":"<channel>:<ts>","kind":"message","title":"<person> · <one-line ask>","url":"<permalink>","waitOn":"you"}`.
+`{"source":"slack","externalId":"<channelId>:<ts>","kind":"message","title":"<person> · <one-line ask>","url":"<permalink>","project":"<#channel-name, or the person for a DM>","meta":{"channel":"<#channel-name or DM person>"},"waitOn":"you"}`
+(`project` and `meta.channel` are what "Ignorar proyecto «X»" shows; the ignore key is the channel id).
 **Ya respondiste** and **Ruido** are not upserted; give their counts in the summary line only. Names, never user ids.
 
 In the periodic triage the input is only the new messages from the probe (ts above the watermark): group them by

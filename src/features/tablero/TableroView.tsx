@@ -13,6 +13,10 @@ import { confirmPick, useArrive, usePress } from "@/lib/motion";
 import { useLive } from "../hoy/useLive";
 import type { TableroData } from "./data";
 import { applyMove, capCell, groupBoard, isQuiet, LANE_NOTE, LANES, laneCounts, stationCounts, type Card } from "./model";
+import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu";
+import { ignoreLabel } from "../ignore/model";
+import { useIgnore } from "../ignore/useIgnore";
+import "../ignore/ignore.css";
 import "./tablero.css";
 
 const LANE_VAR: Record<Source, string> = { github: "var(--gh)", slack: "var(--sl)", claude: "var(--cl)", basecamp: "var(--bc)" };
@@ -31,11 +35,17 @@ function Mark({ c }: { c: Card }) {
   );
 }
 
-function CardView({ c, onMove, draggable }: { c: Card; onMove: (c: Card) => void; draggable: boolean }) {
+interface CardMenu {
+  onMore: (el: HTMLElement) => void;
+  onContext: React.MouseEventHandler<HTMLElement>;
+}
+
+function CardView({ c, onMove, draggable, menu }: { c: Card; onMove: (c: Card) => void; draggable: boolean; menu?: CardMenu }) {
   const done = c.station === "done";
   return (
     <article
       className={done ? "tb-card done" : "tb-card"}
+      onContextMenu={menu?.onContext}
       draggable={draggable}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/mesa-task", c.id);
@@ -53,6 +63,7 @@ function CardView({ c, onMove, draggable }: { c: Card; onMove: (c: Card) => void
             <path d="M2 7h10M9 4l3 3-3 3" />
           </svg>
         </button>
+        {menu ? <MoreButton className="tb-more-btn" label={`Más acciones: ${c.title}`} onOpen={menu.onMore} /> : null}
       </div>
       <h2 className="tb-t">{c.title}</h2>
       {done ? null : (
@@ -134,6 +145,16 @@ export function TableroView({ data }: { data: TableroData }) {
   const lanes = useMemo(() => laneCounts(cards), [cards]);
   const boardRef = useArrive<HTMLDivElement>(".tb-card", `${filter}:${query}`);
   const pressRef = usePress<HTMLDivElement>(".tb-card", true);
+  const menu = useActionMenu();
+  const { ignore } = useIgnore();
+  const cardActions = (c: Card): MenuAction[] => [
+    { label: "Mover…", onSelect: () => setMoving(c) },
+    ...(c.ignore ? [{ label: ignoreLabel(c.ignore), detail: "Sale del tablero y de Hoy; no se sincroniza", onSelect: () => void ignore(c.ignore!) }] : []),
+  ];
+  const cardMenu = (c: Card): CardMenu => ({
+    onMore: (el) => menu.openFrom(el, `Acciones de ${c.title}`, cardActions(c), "end"),
+    onContext: menu.onContext(`Acciones de ${c.title}`, cardActions(c)),
+  });
 
   const move = async (c: Card, station: Station) => {
     if (c.station === station) return;
@@ -290,7 +311,7 @@ export function TableroView({ data }: { data: TableroData }) {
                       {isOpen ? (
                         <>
                           {shown.map((c) => (
-                            <CardView key={c.id} c={c} onMove={setMoving} draggable />
+                            <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} />
                           ))}
                           {more ? <span className="tb-more static">{more} más hechas hoy</span> : null}
                         </>
@@ -302,7 +323,7 @@ export function TableroView({ data }: { data: TableroData }) {
                 return (
                   <div key={st} className={cls} {...dropProps(lane, st)}>
                     {shown.map((c) => (
-                      <CardView key={c.id} c={c} onMove={setMoving} draggable />
+                      <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} />
                     ))}
                     {more ? (
                       <button type="button" className="tb-more" onClick={() => toggle(key)}>
@@ -348,7 +369,7 @@ export function TableroView({ data }: { data: TableroData }) {
                 </div>
                 {list.length ? (
                   list.map((c) => (
-                    <button key={c.id} type="button" className="tb-ph-card" onClick={() => setMoving(c)} aria-label={`${c.title}. Mover`}>
+                    <button key={c.id} type="button" className="tb-ph-card" onClick={() => setMoving(c)} onContextMenu={menu.onContext(`Acciones de ${c.title}`, cardActions(c))} aria-label={`${c.title}. Mover`}>
                       <b>{c.title}</b>
                       <small>{[...c.chips.map((x) => x.label), c.time].join(" · ")}</small>
                       {c.wait || c.syncState !== "synced" ? (
@@ -397,9 +418,23 @@ export function TableroView({ data }: { data: TableroData }) {
               })}
             </div>
             <p className="tb-sheet-note">Se sincroniza con el GitHub Project · Sin sincronizar hasta confirmar</p>
+            {moving.ignore ? (
+              <button
+                type="button"
+                className="ig-link tb-sheet-ign"
+                onClick={() => {
+                  const t = moving.ignore!;
+                  setMoving(null);
+                  void ignore(t);
+                }}
+              >
+                {ignoreLabel(moving.ignore)}
+              </button>
+            ) : null}
           </>
         ) : null}
       </Sheet>
+      {menu.node}
     </div>
   );
 }
