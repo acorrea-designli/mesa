@@ -1,0 +1,115 @@
+import { describe, expect, it } from "vitest";
+import type { Item, Salida } from "@/lib/domain/types";
+import { mapHealth, railHealth } from "@/components/shell/health";
+import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, sourceCounts, visibleRows, waitTag } from "./model";
+
+const base: Item = {
+  id: "it_1",
+  source: "github",
+  externalId: "pr:o/r#1",
+  kind: "pr_review",
+  title: "#212 · feat: bulk export",
+  excerpt: "Review solicitado",
+  project: "prospec-admin",
+  url: null,
+  need: "approve_pr",
+  station: "inbox",
+  waitOn: "you",
+  tag: null,
+  taskId: null,
+  meta: {},
+  isSample: true,
+  receivedAt: "2026-11-03T14:02:00.000Z",
+  createdAt: "2026-11-03T14:02:00.000Z",
+  updatedAt: "2026-11-03T14:02:00.000Z",
+};
+
+const state = (source: "github" | "slack", health: "ok" | "degraded" | "down", extra: object = {}) => ({
+  source,
+  health,
+  note: "",
+  watermark: null,
+  lastCheckedAt: "2026-11-03T15:20:00.000Z",
+  lastNewAt: null,
+  backoffUntil: null,
+  cadenceS: 60,
+  updatedAt: "2026-11-03T15:20:00.000Z",
+  ...extra,
+});
+
+describe("labels", () => {
+  it("maps needs and wait tags; only Te espera is solid", () => {
+    expect(needLabel("approve_pr")).toBe("Aprobar PR");
+    expect(needLabel("reply")).toBe("Respuesta");
+    expect(waitTag("you", "inbox")).toEqual({ tone: "you", label: "Te espera" });
+    expect(waitTag("you", "inbox", "clean")).toEqual({ tone: "ok", label: "Limpio" });
+    expect(waitTag("claude", "doing")).toEqual({ tone: "cl", label: "Espera a Claude" });
+    expect(waitTag("person:Matt", "waiting")).toEqual({ tone: "plain", label: "Espera a Matt" });
+    expect(waitTag("you", "done").tone).toBe("plain");
+  });
+
+  it("prefixes the project except for Claude questions", () => {
+    expect(itemSubject(base)).toBe("prospec-admin · #212 · feat: bulk export");
+    expect(itemSubject({ ...base, source: "claude", title: "¿Cierro el to-do?" })).toBe("¿Cierro el to-do?");
+    expect(itemSubject({ ...base, title: "prospec-admin #212" })).toBe("prospec-admin #212");
+  });
+
+  it("names destinations in one line", () => {
+    expect(destinationLabel({ kind: "slack_thread", workspace: "w", channel: "#scout-dev", threadLabel: "Matt", postAs: "A" })).toBe("#scout-dev · hilo de Matt");
+    expect(destinationLabel({ kind: "basecamp_comment", project: "Freightmate", recordingTitle: "tarifa", postAs: "A" })).toBe("Freightmate · tarifa");
+    expect(destinationLabel({ kind: "github_review", repo: "o/r", pr: 3, postAs: "A" })).toBe("o/r#3");
+  });
+});
+
+describe("rows", () => {
+  it("marks rows of a down source as Sin datos with the last data time", () => {
+    const h = mapHealth(state("slack", "down", { lastNewAt: "2026-11-03T15:20:00.000Z" }));
+    const r = itemRow({ ...base, source: "slack" }, "09:31", h);
+    expect(r.stale).toBe(true);
+    expect(r.tag).toEqual({ tone: "off", label: "Sin datos" });
+    expect(r.excerpt).toMatch(/^Último dato \d\d:\d\d · Slack no responde$/);
+  });
+
+  it("keeps the tag but notes the pause for a degraded source", () => {
+    const h = mapHealth(state("github", "degraded", { backoffUntil: "2026-11-03T16:05:00.000Z" }));
+    const r = itemRow(base, "09:02", h);
+    expect(r.tag.label).toBe("Te espera");
+    expect(r.excerpt).toMatch(/GitHub en pausa hasta \d\d:\d\d/);
+  });
+
+  it("puts salidas in their own group, only on Inbox", () => {
+    const s = { id: "sa_1", source: "slack", title: "t", destination: { kind: "slack_channel", workspace: "w", channel: "#x", postAs: "A" } } as Salida;
+    const rows = [itemRow(base, "09:02"), itemRow({ ...base, id: "it_2", station: "todo" }, "x"), salidaRow(s, "\nHola\nsegunda", "10:38")];
+    expect(rows[2]?.excerpt).toBe("“Hola”");
+    expect(rows[2]?.tag).toEqual({ tone: "you", label: "Por enviar" });
+    expect(rows[2]?.phoneTag.label).toBe("Firmar");
+    const inbox = visibleRows(rows, "inbox", "all");
+    expect(inbox.items).toHaveLength(1);
+    expect(inbox.salidas).toHaveLength(1);
+    expect(visibleRows(rows, "todo", "all").salidas).toHaveLength(0);
+    expect(visibleRows(rows, "inbox", "github").salidas).toHaveLength(0);
+    expect(sourceCounts(rows, "inbox")).toMatchObject({ all: 2, github: 1, slack: 1 });
+  });
+
+  it("is calm only when nothing waits", () => {
+    const stations = { inbox: 0, todo: 2, doing: 0, waiting: 0, done: 3 };
+    expect(isCalm({ stations, rows: [], approvals: [] })).toBe(true);
+    expect(isCalm({ stations: { ...stations, inbox: 1 }, rows: [], approvals: [] })).toBe(false);
+  });
+});
+
+describe("rail health", () => {
+  it("stays quiet while every source is ok", () => {
+    expect(railHealth([state("github", "ok"), state("slack", "ok")], true)).toEqual([]);
+  });
+
+  it("lists every source plus Claude when one is down", () => {
+    const rows = railHealth([state("github", "ok"), state("slack", "down")], true);
+    expect(rows.map((r) => [r.name, r.note])).toEqual([
+      ["GitHub", "al día"],
+      ["Slack", "sin conexión"],
+      ["Basecamp", "al día"],
+      ["Claude", "escucha"],
+    ]);
+  });
+});
