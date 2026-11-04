@@ -9,6 +9,7 @@ import type { Finding, FindingState, Review, ReviewAction } from "../domain/type
 import { emitWake } from "../wake/wake";
 import { salidasRepo } from "./salidas";
 import { ticketsRepo } from "./tickets";
+import { touchInteraction } from "./interaction";
 
 export const GITHUB_LOGIN = "acorrea-designli";
 
@@ -157,6 +158,7 @@ export function reviewsRepo(db: Db) {
           return s.id;
         };
         let affected: number[] = [];
+        touchInteraction(db, now);
 
         switch (a.action) {
           case "approve":

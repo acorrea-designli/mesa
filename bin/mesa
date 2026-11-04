@@ -58,6 +58,7 @@ Sources and sweep (github|github_project|slack|basecamp|engram)
   mesa source get [<source>]                    sweep state + health (all sources without <source>)
   mesa source set <source> [--health ok|degraded|down] [--note N] [--watermark W] [--checked ISO|now]
                   [--new ISO|now] [--backoff-until ISO|none] [--cadence SECONDS]
+                  [--error-count N] [--last-error MSG|none]
   mesa sweep [--source slack|basecamp|github]...        same as "Barrer ahora"
 
 Items and memory
@@ -355,10 +356,12 @@ async function main() {
         health: opt.health,
         note: opt.note,
         watermark: opt.watermark === undefined ? undefined : String(opt.watermark),
-        lastCheckedAt: when(opt.checked),
+        lastChecked: when(opt.checked),
         lastNewAt: when(opt.new),
         backoffUntil: when(opt["backoff-until"]),
         cadenceS: opt.cadence === undefined ? undefined : Number(opt.cadence),
+        errorCount: opt["error-count"] === undefined ? undefined : Number(opt["error-count"]),
+        lastError: opt["last-error"] === undefined ? undefined : opt["last-error"] === "none" ? null : String(opt["last-error"]),
       };
       return out(await call("PATCH", `/api/sources/${enc(need(id, "<source>"))}`, patch));
     }

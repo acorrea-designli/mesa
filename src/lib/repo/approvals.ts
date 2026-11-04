@@ -6,6 +6,7 @@ import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError } from
 import type { Approval, ApprovalDecision } from "../domain/types";
 import { signal, waitSignal } from "../wake/wake";
 import { ticketsRepo } from "./tickets";
+import { touchInteraction } from "./interaction";
 
 const SPEC = { json: ["hints"] };
 export const DEFAULT_APPROVAL_TTL_MS = 9 * 60_000;
@@ -81,6 +82,7 @@ export function approvalsRepo(db: Db) {
       db.prepare(
         "UPDATE approvals SET status = 'decided', decision = ?, note = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
       ).run(d.decision, d.note ?? "", d.actor, nowIso(now), id);
+      if (d.actor === "andres") touchInteraction(db, now);
       signal(`approval:${id}`);
       return raw(id);
     },

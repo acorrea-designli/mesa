@@ -29,6 +29,7 @@ import type {
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { ensureSession } from "./sessions";
+import { touchInteraction } from "./interaction";
 
 const T_SPEC = { bool: ["is_sample"] };
 const M_SPEC = { json: ["options"] };
@@ -245,6 +246,7 @@ export function ticketsRepo(db: Db) {
           t = get(t.id);
         }
         const msgId = insertMessage(t.id, m, nowIso(now));
+        if (m.author === "andres") touchInteraction(db, now);
         apply(t, { type: m.author === "andres" ? "andres_reply" : "claude_reply" }, now, {
           messageId: msgId,
           chosen: m.chosen ?? null,
@@ -301,6 +303,7 @@ export function ticketsRepo(db: Db) {
           db.prepare("UPDATE planned_actions SET state = ?, updated_at = ? WHERE id = ?").run(state, ts, a.id);
         }
         apply(t, { type: "approve_plan" }, now, { rejected: reject });
+        touchInteraction(db, now);
         return this.detail(t.id);
       });
     },
@@ -328,6 +331,7 @@ export function ticketsRepo(db: Db) {
           t = get(t.id);
         }
         apply(t, ev, now);
+        if ((ev.type === "close" && ev.by === "andres") || ev.type === "reopen") touchInteraction(db, now);
         return this.detail(t.id);
       });
     },

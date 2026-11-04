@@ -5,6 +5,7 @@ import { agentsRepo } from "./agents";
 import { approvalsRepo } from "./approvals";
 import { chipsRepo } from "./chips";
 import { engramRepo } from "./engram";
+import { lastInteractionAt, touchInteraction } from "./interaction";
 import { sourcesRepo } from "./sources";
 import { itemsRepo } from "./items";
 import { reviewsRepo } from "./reviews";
@@ -33,14 +34,20 @@ export function createRepos(db: Db) {
       salidasRepo(db).sweep(now);
       approvalsRepo(db).expire(now);
     },
-    /** "Barrer ahora": wake the lead session so it runs the mesa-sweep skill. */
-    requestSweep: (sources: string[] = ["slack", "basecamp"], now = new Date()) =>
-      emitWake(db, { sessionId: leadSession(), kind: "sweep.requested", entityType: "sweep", entityId: "sweep", payload: { sources } }, now),
+    /** "Barrer ahora": wake the sweeper session so it runs a full sweep now, ignoring backoff. */
+    requestSweep: (sources: string[] = ["slack", "basecamp"], now = new Date()) => {
+      touchInteraction(db, now);
+      return emitWake(db, { sessionId: sweeperSession(), kind: "sweep.requested", entityType: "sweep", entityId: "sweep", payload: { sources } }, now);
+    },
+    lastInteractionAt: () => lastInteractionAt(db),
   };
 }
 
 /** The stable session that owns every ticket and relays wakes to agents. */
 export const leadSession = () => process.env.MESA_LEAD_SESSION ?? "lead";
+
+/** The session that runs the Slack/Basecamp sweep tick (scripts/sweep-tick.mjs). */
+export const sweeperSession = () => process.env.MESA_SWEEPER_SESSION ?? "sweeper";
 
 export type Repos = ReturnType<typeof createRepos>;
 
