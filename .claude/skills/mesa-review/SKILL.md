@@ -1,6 +1,6 @@
 ---
 name: mesa-review
-description: Per-PR review in Mesa - one reviewer agent per pull request runs the pr-review skill unchanged in quality, reviews incrementally (only new commits, verify open findings, never re-review what was reviewed), keeps finding state (open/fixed/waived/dismissed, comment ids), and offers Andrés Approve, Approve anyway, Post, Dismiss and Explain more; GitHub writes go out as github salidas the lead sends after approval. Use for "haz un review pass", "revisa la PR", "review pass en GitHub", a review request found by mesa-sweep, or a team PR a tl needs reviewed.
+description: Per-PR review in Mesa - one reviewer agent per pull request runs the pr-review skill unchanged in quality, reviews incrementally (only new commits, verify open findings, never re-review what was reviewed), keeps finding state (open/fixed/waived/dismissed, comment ids), and offers Andrés Approve, Approve anyway, Post, Dismiss and Explain more on the review card; Post sends one batched GitHub review per decision, sent by the lead after the 20 s undo. Use for "haz un review pass", "revisa la PR", "review pass en GitHub", a review request found by mesa-sweep, or a team PR a tl needs reviewed.
 ---
 
 # Mesa review (one reviewer per PR)
@@ -8,7 +8,7 @@ description: Per-PR review in Mesa - one reviewer agent per pull request runs th
 `pr-review` (`C:/Users/z4yross/.claude-work/skills/pr-review/SKILL.md`) is the quality bar and is used unchanged:
 read the conversation before the code, only real issues, terse, English, no attribution, the Copilot report on the
 `designli/prospec-*` repos. This skill replaces only its delivery: where pr-review shows findings in chat and posts
-after the user decides, Mesa shows them in the ticket and posts through salidas. pr-monitor's rules for state and
+after the user decides, Mesa shows them on the ticket's review card and posts through github salidas. pr-monitor's rules for state and
 incremental review (`C:/Users/z4yross/.claude-work/commands/pr-monitor.md` steps 2, 3 and "When a click arrives")
 apply as written. Never edit or disable pr-monitor or pr-review.
 
@@ -28,8 +28,8 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Review (reviewer)
 
-1. **Boot.** `MESA ticket context <ref>`. The latest reviewer handoff's `review-state` block is the prior state
-   (§ State). None in Mesa: read (never write) the PR's entry in `C:/Users/z4yross/.claude-work/pr-monitor-state.json`,
+1. **Boot.** `MESA ticket context <ref>` (its `findings` are the stored findings with their state; the latest
+   reviewer handoff's `review-state` block has `head` and `approvedHead`, § State). None in Mesa: read (never write) the PR's entry in `C:/Users/z4yross/.claude-work/pr-monitor-state.json`,
    which has the same shape, so a PR pr-monitor already reviewed is not re-reviewed. Neither: the PR is new
    (pr-monitor box A).
 2. **Fast exit.** Andrés already APPROVED at the current head (the reviews GET): every `open` finding → `waived`,
@@ -45,72 +45,71 @@ apply as written. Never edit or disable pr-monitor or pr-review.
    `dismissed` and `waived` findings are never reported again, even if found again in the same place.
 6. **New findings** come from the range, or from something in it that breaks code outside it. Verify each before
    writing it: a false blocker costs more than a missed nit.
-7. **Record** the state (§ State) in a handoff right away, before asking anything.
+7. **Record** every finding with `MESA finding upsert <ref> --json -` (new ones without `n`, Mesa numbers them;
+   changed states with their `n`), then a handoff with the `review-state` block, before anything else.
 
 ## Ask (reviewer → Andrés)
 
-One ticket reply. First line in Spanish with the counts and the question; then the findings in English, numbered,
-in pr-review's candidate format (`[blocker|nit] path:line`, the one-line problem, `fix:`). Options by state, exactly
-pr-monitor's buttons:
-
-| State | Options (`--option key:label`) | Recommend |
-|---|---|---|
-| open blockers | `post:Post` · `explain:Explain more` · `dismiss:Dismiss` · `bypass:Approve anyway` | post |
-| open nits only | `post:Post` · `dismiss:Dismiss` · `approve:Approve` | approve, unless a nit is worth the author's time |
-| nothing open (clean, or all fixed now) | `approve:Approve` · `rereview:Re-review` | approve |
-
+The findings are the ask: Mesa renders them on the ticket's review card with pr-monitor's buttons, so there is no
+A/B question. Post one ticket reply as the summary, first line in Spanish with the counts, then the findings in
+English, numbered, in pr-review's candidate format (`[blocker|nit] path:line`, the one-line problem, `fix:`).
 Incremental passes start with `re-review <sha7>..<sha7> · K fixed · M pending · P new`; verification passes with
-`verification · K fixed · M pending`. He may answer with numbers (`post 1,3`, `dismiss 2`, `explain 1`); no numbers
-means every open finding.
+`verification · K fixed · M pending`. A clean pass says so and recommends Approve. Then wait, handoff written.
 
-## Act on his answer (reviewer)
+Buttons by state, as in pr-monitor: open blockers → Post, Explain more, Dismiss, Approve anyway; open nits only →
+Post, Dismiss, Approve; nothing open → Approve (and Re-review, which is a ticket reply asking for it).
 
-- **approve / bypass**: propose one github salida: `--source github --dest
-  '{"kind":"github_review","repo":"<repo>","pr":<n>,"event":"APPROVE","commitId":"<head>","postAs":"acorrea-designli"}'
-  --title "Approve <repo>#<n>" --context "<waived findings, one line each; bypass: the blockers overridden>"
-  --body "Approve at <sha7> with no comment."` Approving publishes nothing else, not even nits (pr-monitor,
-  2026-09-07). On `SENT`: open findings → `waived` with the sha, `approvedHead`/`approvedAt`, DONE.
-- **post**: one github salida per finding. New finding: `{"kind":"github_comment","repo":"<repo>","pr":<n>,
-  "event":"REQUEST_CHANGES" for a blocker or "COMMENT","path":"<path>","line":<line>,"commitId":"<head>",
-  "findingN":<n>,"postAs":"acorrea-designli"}` with the comment text as the body (English, terse, no praise). A
-  finding that already has a `ghCommentId` continues in its thread: same destination without path/line, the body
-  is the continuation, and the context says `reply to <ghCommentId>`. A finding whose file is not in the diff has no
-  path: its text goes as the review body. On `SENT <ref> <salida> <commentId>`: store `ghCommentId`, `posted: true`.
-- **dismiss**: those findings → `dismissed` (keep `at` and `anchor`); FYI reply listing them, blockers named. No
-  GitHub write.
-- **explain**: a reply in English with three parts, *Why it is a problem*, *What breaks, concretely*, *The fix*
-  (fenced code), after rereading the code with more context. Say so at the end if the finding is already closed.
-- **rereview**: incremental from `head`; if `head` is the current head, a full review (never a no-op).
+## Act on his click (reviewer)
+
+Each press calls `POST /api/reviews/:id/actions`. Mesa wakes the lead with `review.action {action, repo, pr,
+findingNs, salidaIds, note, ticketRef}`, and the lead relays `ANSWER <ref> review.action <action> <findingNs>
+<salidaIds>`. The press is Andrés's approval of the exact text on the card: approve, approve_anyway and post create
+github salidas that are already approved and in the 20 s undo window. You never propose GitHub salidas yourself.
+
+- **approve / approve_anyway**: nothing to send. On the lead's `SENT`: every open finding → `waived` at the head
+  sha (never `fixed`), `approvedHead`/`approvedAt` in the review-state, DONE. Approving publishes nothing else, not
+  even nits (pr-monitor, 2026-09-07); approve_anyway's trail is the waived blockers listed in your DONE.
+- **post**: on `SENT <ref> <salidaIds> <commentIds>`, the lead has already stored each `ghCommentId`; set
+  `posted: true` in the review-state.
+- **dismiss**: `MESA finding upsert` each listed finding with `state: "dismissed"` (keep `at` and `anchor`) unless
+  Mesa already did; an FYI reply naming any blocker among them. No GitHub write.
+- **explain**: reread the code with more context, write the English long form (*Why it is a problem*, *What breaks,
+  concretely*, *The fix* with a fenced code block) into the finding's `explanation` with `finding upsert`, and post it
+  as a ticket reply. Say so at the end if the finding is already closed.
+- **Re-review** (a ticket reply): incremental from `head`; if `head` is the current head, a full review (never a no-op).
 
 Then the final handoff and `DONE <ref> reviewer-<ref> <N fixed · M open · K new | approved | posted N>` to
 `team-lead`, and stop. The ticket stays open while findings are `open`; the next push brings a new reviewer
-(`mesa-sweep` gate) that boots from your state.
+(`mesa-sweep` gate) that boots from the stored findings and your state.
 
-## State (the handoff's `review-state` block)
+## State
 
-The same fields as pr-monitor's state, so the next instance continues instead of starting over:
+Findings live in Mesa (`mesa finding upsert|list`, keyed by repo, pr and `n`), with pr-monitor's fields: `label`,
+`at`, `anchor`, `summary`, `explanation`, `state` (`open`, `fixed` = the code changed, `dismissed` = not valid,
+`waived` = valid and approved anyway), `sha`, `ghCommentId`. What the findings table does not hold goes in the
+handoff's `review-state` block:
 
 ```review-state
 {"repo":"7-Arrow/dre-backend","pr":352,"head":"15e6fb79…","checkedAt":"2026-11-03T20:10:00Z","outcome":"reported",
- "posted":true,"approvedHead":null,"approvedAt":null,
- "findings":[{"n":1,"label":"blocker","at":"src/x/y.service.ts:72","anchor":"if (await this.isNoOpDocumentSave(evaluationId, dto, transaction)) {",
-   "summary":"no-op replay returns 200 after the status reset already committed","state":"open","sha":"2ca68448","ghCommentId":3951307385}]}
+ "posted":true,"approvedHead":null,"approvedAt":null}
 ```
 
-`state` is `open`, `fixed` (the code changed), `dismissed` (not a valid finding) or `waived` (valid, approved anyway).
-Timestamps in UTC with `Z`.
+Timestamps in UTC with `Z`. When Mesa has no state for a PR, seed it from pr-monitor-state.json (read-only, § Review 1).
 
-## Lead writes (on `salida.released` for a github salida)
+## Lead writes (on `salida.released` for github salidas)
 
-`MESA salida show <id>`, then exactly one write through pr-gh.mjs (PowerShell tool, bare, as pr-monitor's command
-sheet requires; the G5 hook checks the salida is released for that repo and PR):
+One click is one GitHub write, as in pr-monitor. The salidas of one `review.action` (its `salidaIds`) are released
+together; send them as a batch through pr-gh.mjs (PowerShell tool, bare; hook G5 checks each write has a released
+github salida for that repo and PR):
 
-```
-node C:/Users/z4yross/.claude-work/pr-gh.mjs approve <repo> <pr> <commitId>
-node C:/Users/z4yross/.claude-work/pr-gh.mjs review <repo> <pr> <REQUEST_CHANGES|COMMENT> <scratchpad>/lead/review-<salida>.json
-node C:/Users/z4yross/.claude-work/pr-gh.mjs reply <repo> <pr> <ghCommentId> <scratchpad>/lead/reply-<salida>.txt
-```
-
-The review payload is `{"body":"","commit_id":"<commitId>","comments":[{"path":"<path>","line":<line>,"body":"<approved text>"}]}`
-written with the Write tool. An APPROVE always goes with an empty body. Then `MESA salida sent <id> --permalink <url>`
-(or `failed --error`), and `SENT <ref> <salida> <commentIds>` to the reviewer.
+- **approve / approve_anyway** (`github_review`, event APPROVE): `node C:/Users/z4yross/.claude-work/pr-gh.mjs approve
+  <repo> <pr> <commitId>`, always with an empty body.
+- **post**: ONE review per decision. Every new finding (`github_comment` with `path`/`line`) goes into a single
+  payload, `{"body":"","commit_id":"<commitId>","comments":[{"path","line","body"}, …]}` written with the Write tool
+  to `<scratchpad>/lead/review-<ref>-<n>.json`, sent with
+  `node C:/Users/z4yross/.claude-work/pr-gh.mjs review <repo> <pr> <REQUEST_CHANGES if any is a blocker, else COMMENT> <payload>`.
+  A finding that already has a thread (`inReplyTo` on the destination, or its `ghCommentId`) continues there:
+  `node C:/Users/z4yross/.claude-work/pr-gh.mjs reply <repo> <pr> <inReplyTo> <scratchpad>/lead/reply-<salida>.txt`.
+  A finding whose file is not in the diff has no `path`: its text goes in the review body.
+- Then for each salida `MESA salida sent <id> --permalink <url>` (or `failed --error`), `MESA finding upsert` with the
+  returned `ghCommentId`, and one `SENT <ref> <salidaIds> <commentIds>` to the reviewer.

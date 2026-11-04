@@ -6,18 +6,20 @@
 //   node scripts/sweep-tick.mjs report <source> --new N [--watermark W]
 //   node scripts/sweep-tick.mjs report <source> --error "msg" [--rate-limited]
 //   node scripts/sweep-tick.mjs status
+//   node scripts/sweep-tick.mjs force [--source slack|basecamp]...   the lead, on sweep.requested ("Barrer ahora")
 //
 // Every number lives in config/sweep.json. State per source lives in Mesa (`GET /api/sources`,
 // `PATCH /api/sources/:name`: watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError; plus
 // `lastInteractionAt` for the whole board). While Mesa has no sources API (404) the state falls back to a local file
-// and every output says `"store": "local"`. "Barrer ahora" arrives as the wake event `sweep.requested` for the
-// Mesa session `sweeper`.
+// and every output says `"store": "local"`. Health goes to Mesa's `POST /api/sources/health` (ok | limited | down),
+// which the rail shows (Estados B). "Barrer ahora" wakes the LEAD with `sweep.requested`; the lead runs `force`,
+// which drops a flag that `wait` checks every forceCheckSec, so the blocked sweeper wakes without any relay.
 //
 // Cadence: during work hours every source is probed every activeIntervalSec; after idleAfterMin minutes with no new
 // item and no interaction from Andrés it backs off to idleIntervalSec, and it snaps back on the next new item or
 // interaction. A source that errors waits baseSec * factor^(errors-1), capped at maxSec, and is marked degraded.
 // Outside work hours nothing is due except a forced sweep. One JSON line on stdout per call.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -25,6 +27,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const loadConfig = (path = join(REPO, "config", "sweep.json")) => JSON.parse(readFileSync(path, "utf8"));
 const LOCAL_STORE = join(tmpdir(), "mesa-team", "sources.json");
+const FORCE_FLAG = join(tmpdir(), "mesa-team", "sweep-force.json");
 const ms = (iso) => (iso ? Date.parse(iso) : NaN);
 const max = (...xs) => Math.max(...xs.filter((x) => Number.isFinite(x)), -Infinity);
 
@@ -127,7 +130,23 @@ async function http(path, { method = "GET", body, fetchImpl, base, timeoutMs = 5
   return { status: res.status, data };
 }
 
-export function makeStore({ fetchImpl = fetch, base = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""), localPath = LOCAL_STORE } = {}) {
+export function writeForce(sources, path = FORCE_FLAG) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({ at: new Date().toISOString(), sources: sources?.length ? sources : null }));
+  return { ok: true, forced: sources?.length ? sources : "all" };
+}
+
+function takeForce(path) {
+  try {
+    const f = JSON.parse(readFileSync(path, "utf8"));
+    rmSync(path, { force: true });
+    return { sources: f.sources ?? null };
+  } catch {
+    return null;
+  }
+}
+
+export function makeStore({ fetchImpl = fetch, base = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""), localPath = LOCAL_STORE, forcePath = FORCE_FLAG } = {}) {
   let local = false;
   const readLocal = () => {
     try {
@@ -167,16 +186,22 @@ export function makeStore({ fetchImpl = fetch, base = (process.env.MESA_URL ?? "
       }
       if (r.status >= 400) throw new Error(`Mesa answered ${r.status}`);
     },
-    // One long-poll on the sweeper's own Mesa session. True when "Barrer ahora" was pressed.
-    async forcedWithin(sec) {
+    // Sleeps up to `sec` in small steps; returns the forced sources when the lead dropped the flag ("Barrer ahora").
+    async forcedWithin(sec, stepSec = 5) {
+      const end = Date.now() + sec * 1000;
+      for (;;) {
+        const f = takeForce(forcePath);
+        if (f) return f;
+        const left = end - Date.now();
+        if (left <= 0) return null;
+        await new Promise((r) => setTimeout(r, Math.min(stepSec * 1000, left)));
+      }
+    },
+    async health(name, state, note) {
       try {
-        const r = await http(`/api/wait?session=sweeper&timeout=${Math.max(1, Math.round(sec))}`, { fetchImpl, base, timeoutMs: (sec + 10) * 1000 });
-        const events = r.data?.events ?? [];
-        if (events.length) await http("/api/wait/ack", { method: "POST", body: { session: "sweeper", cursor: r.data.cursor }, fetchImpl, base }).catch(() => {});
-        return events.some((e) => e.kind === "sweep.requested");
+        await http("/api/sources/health", { method: "POST", body: { source: name, state, ...(note ? { note } : {}) }, fetchImpl, base });
       } catch {
-        await new Promise((r) => setTimeout(r, sec * 1000));
-        return false;
+        /* health is best effort; the next tick reports again */
       }
     },
   };
@@ -198,10 +223,11 @@ export async function wait(config, store, { now = Date.now, maxSec = config.wait
     const left = until - now();
     if (left <= 0) return { due: false, reason: "timeout", store: store.kind };
     const next = Math.min(...Object.values(dueTimes(config, state, now())), until);
-    const sec = Math.max(1, Math.min(config.longPollSec, (next - now()) / 1000, left / 1000));
-    if (await store.forcedWithin(sec)) {
+    const sec = Math.max(1, Math.min((next - now()) / 1000, left / 1000));
+    const f = await store.forcedWithin(sec, config.forceCheckSec);
+    if (f) {
       const st = await store.load();
-      const forced = dueSources(config, st, now(), { forced: true });
+      const forced = dueSources(config, st, now(), { forced: true }).filter((n) => !f.sources || f.sources.includes(n));
       return { due: forced.length > 0, forced: true, sources: forced, intervalSec: config.activeIntervalSec, store: store.kind, watermarks: marks(st, forced) };
     }
   }
@@ -214,6 +240,7 @@ export async function report(config, store, name, rep, { now = Date.now } = {}) 
   const state = await store.load();
   const next = applyReport(config, state.sources?.[name], rep, now());
   await store.save(name, next);
+  if (store.health) await store.health(name, rep.error ? (rep.rateLimited ? "limited" : "down") : "ok", rep.error ? next.lastError : undefined);
   state.sources = { ...(state.sources ?? {}), [name]: next };
   return { ok: true, source: name, state: next, intervalSec: intervalSec(config, state, now()), store: store.kind };
 }
@@ -225,7 +252,7 @@ function parseArgs(argv) {
     if (argv[i].startsWith("--")) {
       const k = argv[i].slice(2);
       const v = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : true;
-      opt[k] = v;
+      opt[k] = k in opt ? [].concat(opt[k], v) : v;
     } else pos.push(argv[i]);
   }
   return { pos, opt };
@@ -239,10 +266,12 @@ async function main() {
   if (pos[0] === "wait") out = await wait(config, store);
   else if (pos[0] === "report") {
     out = await report(config, store, pos[1], { new: opt.new, watermark: opt.watermark, error: opt.error === true ? "error" : opt.error, rateLimited: !!opt["rate-limited"] });
+  } else if (pos[0] === "force") {
+    out = writeForce([].concat(opt.source ?? []).filter((x) => x !== true));
   } else if (pos[0] === "status") {
     const state = await store.load();
     out = { state, intervalSec: intervalSec(config, state, Date.now()), due: dueTimes(config, state, Date.now()), inWorkHours: inWorkHours(config, Date.now()), store: store.kind };
-  } else throw new Error("usage: sweep-tick.mjs wait | report <source> --new N [--watermark W] | report <source> --error MSG [--rate-limited] | status");
+  } else throw new Error("usage: sweep-tick.mjs wait | report <source> --new N [--watermark W] | report <source> --error MSG [--rate-limited] | status | force [--source S]");
   process.stdout.write(`${JSON.stringify(out)}\n`);
 }
 

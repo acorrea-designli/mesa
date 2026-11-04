@@ -143,7 +143,7 @@ team never adds rules itself.
 ## 7. Hooks
 
 Installed by `scripts/install-team.mjs` into `G:/WorkSpace/designli/.claude/settings.json`. Self-test any hook by
-piping hook JSON into it; tests: `node --test "scripts/**/*.test.mjs"` (mise node 22).
+piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
 
 | Event | Script | Rules |
 |---|---|---|
@@ -182,23 +182,21 @@ registered with the node that ran the installer. Re-run after every pull. Restar
 
 ## 10. Open points
 
-1. **Mesa API the team assumes and the foundation does not have yet** (sent to mesa-lead on 2026-11-03):
-   `mesa ticket context <ref>` / `GET /api/tickets/:id/context`; `mesa ticket brief`; `mesa handoff` +
-   `GET /api/handoffs?agent=`; `mesa team add|retire|list` + `GET /api/team?status=`; `POST/GET /api/approvals` and
-   `POST /api/approvals/:id/decision` with the three-button card in the ticket. Until they ship: agents use
-   `ticket show` instead of `ticket context`; the Stop hook falls back to H3 (handoff to engram and the lead); and
-   **every permission card is denied** (Mesa answers 404), so agents end up asking through ticket questions.
-2. **APPROVE body.** Salidas require a non-empty body, but pr-review approves with an empty one. The reviewer
-   proposes `Approve at <sha7> with no comment.` and the lead always sends APPROVE with an empty body. Better: Mesa
-   renders `github_review` APPROVE as "Aprobar sin comentario" and allows an empty body.
-3. **Thread replies.** `github_comment` has no `inReplyTo`; the reviewer writes `reply to <ghCommentId>` in the
-   salida context and the lead reads it there. Adding `inReplyTo` to the destination schema would make it exact.
-4. **One click or two.** pr-monitor's Post/Approve click was the approval. Here Andrés picks the option in the
-   ticket, then signs the github salida (with the 20 s undo). Should the ticket option count as the approval (Mesa
-   approves the salida it creates)? Recommendation: yes for Approve, no for Post (he should see the comment text).
-5. **One review per finding.** Posting creates one GitHub review per finding instead of pr-monitor's single review
-   with every inline comment. A multi-comment `github_review` salida would restore the batch.
-6. **Who applies infra.** devops never applies. Proposed: `apply_infra` is a `needs_ok` plan action the lead runs
+1. **Mesa API: shipped.** Ticket context and brief, handoffs, team, approvals, findings, reviews, health and sweep
+   are on main (`docs/ARCHITECTURE.md`). The foundation's own approval hook was folded into
+   `scripts/hooks/mesa-approval.mjs` here (one hook): it keeps Mesa's `?wait=` long-poll and reads `MESA_AGENT` /
+   `MESA_TICKET` only for separately launched sessions, because in-process teammates share the lead's environment;
+   for them the identity comes from the spawn name.
+2. **Empty-body APPROVE and `inReplyTo`** on `github_comment` (decided, 2026-11-03): requirements relayed to
+   mesa-lead. Until `inReplyTo` ships, the lead continues a thread from the finding's `ghCommentId`.
+3. **One click or two** (asked to Andrés): Mesa currently treats the review card's button as the approval, as
+   pr-monitor did, and the salidas it creates only wait out the 20 s undo. If he wants to sign Post separately, Mesa
+   creates those salidas pending instead; the team's flow does not change.
+4. **One review per decision** (decided): Post sends ONE batched GitHub review with every new inline comment of that
+   click, and continues existing threads as replies (`mesa-review` § Lead writes).
+5. **Two test runners.** The team hooks and scripts use node:test so they run without an install; `vitest.config.ts`
+   excludes `scripts/hooks/test/**` and `scripts/test/**`, and `pnpm check` runs them as `pnpm test:team`.
+6. **Who applies infra** (asked to Andrés). devops never applies. Proposed: `apply_infra` is a `needs_ok` plan action the lead runs
    from the devops worktree with the saved plan file after approval, or the repo's CI applies on merge. Andrés decides.
 7. **Hook payloads to verify live.** Whether `PermissionRequest` fires for background in-process teammates, and
    whether their `Stop` carries `agent_id` or their own `transcript_path`, could not be tested without a live team.
@@ -221,12 +219,12 @@ registered with the node that ran the installer. Re-run after every pull. Restar
     also matches writes with `-f`; hook G4 blocks those for everyone.
 14. **Lead question guard.** medix's Stop hook that refuses a lead turn ending in a question with no ticket is not
     included; the lead talks to Andrés in his own terminal. Add it if questions keep getting lost in chat.
-15. **Sources API.** `sweep-tick.mjs` expects `GET /api/sources` (`{sources: {slack, basecamp}, lastInteractionAt}`),
-    `PATCH /api/sources/:name` (watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError), a
-    `lastInteractionAt` that Mesa updates on any UI action, the "Barrer ahora" button emitting `sweep.requested` to
-    the session `sweeper`, and the rail reading `health`. Until they exist the state lives in a local file
-    (`%TEMP%/mesa-team/sources.json`, every output says `"store": "local"`), so the cadence works but there is no
-    button, no interaction snap-back and no health in the UI.
+15. **Watermarks in Mesa.** Health (`/api/sources/health`) and "Barrer ahora" (`/api/sweep`) exist; per-source
+    watermarks and `lastInteractionAt` do not. `sweep-tick.mjs` asks `GET /api/sources` (`{sources: {slack,
+    basecamp}, lastInteractionAt}`) and `PATCH /api/sources/:name` (watermark, lastChecked, lastNewAt, errorCount,
+    backoffUntil, lastError) and, on 404, keeps them in `%TEMP%/mesa-team/sources.json` (outputs say
+    `"store": "local"`). Until Mesa stores them there is no snap-back to 60 s when Andrés interacts with Mesa (a new
+    item still snaps it back).
 16. **Slack probe query.** The probe uses one search, `(to:me OR <@U06E2UBDC73>)`. If Slack search does not honour
     `OR` with `to:`, the probe becomes two calls (`to:me`, then the mention) and stays under the same limit.
 17. **Sweeper approvals.** The sweeper has no ticket, so a permission card it raises has `ticketRef: null` and
@@ -246,10 +244,13 @@ procedure and the lead's on-demand pass.
   interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit and the
   ticks per instance. `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
   records a tick's outcome. Any new item or any interaction by Andrés snaps the cadence back to 60 s.
-- **Barrer ahora** in Mesa emits `sweep.requested` to the Mesa session `sweeper`; `sweep-tick.mjs wait` long-polls
-  that session and returns at once with every source not in backoff, even outside work hours.
-- **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and marks it `degraded` in
-  Mesa, which shows it in the rail (Estados B). The next good probe resets it.
+- **Barrer ahora** (or `mesa sweep`) wakes the lead with `sweep.requested`. The sweeper is blocked in a foreground
+  `wait` and cannot read a message, so the lead runs `sweep-tick.mjs force [--source s]`, which drops a flag that
+  `wait` checks every `forceCheckSec` (5 s); it returns with every listed source not in backoff, even outside work
+  hours.
+- **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its Mesa health
+  (`POST /api/sources/health`) to `limited` or `down`, which the rail shows (Estados B). The next good probe sets it
+  back to `ok`, and Mesa then resumes the salidas held for that source.
 - **Context.** The sweeper waits in the foreground, so its turn never ends between ticks: no idle notifications
   reach the lead and no tick costs the lead any context. After `maxTicksPerInstance` ticks it sends `DONE` and the
   lead spawns the next one; the watermarks carry over in Mesa.

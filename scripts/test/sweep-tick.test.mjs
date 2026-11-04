@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyReport, dueSources, inWorkHours, intervalSec, loadConfig, makeStore, report, wait } from "../sweep-tick.mjs";
+import { applyReport, dueSources, inWorkHours, intervalSec, loadConfig, makeStore, report, wait, writeForce } from "../sweep-tick.mjs";
 
 const config = loadConfig();
 const at = (s) => new Date(s).getTime(); // local time, like the config
@@ -128,4 +128,30 @@ test("the store falls back to a local file while Mesa has no sources API", async
   await report(config, store, "slack", { new: 0 }, { now: () => tue10 });
   assert.equal(store.kind, "local");
   assert.equal((await store.load()).sources.slack.health, "ok");
+});
+
+test("force drops a flag the waiting store picks up once, limited to the named sources", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sweep-force-"));
+  const forcePath = join(dir, "force.json");
+  const fetchImpl = async () => ({ status: 404, json: async () => ({}) });
+  const store = makeStore({ fetchImpl, base: "http://x", localPath: join(dir, "s.json"), forcePath });
+  assert.equal(await store.forcedWithin(0.05, 0.01), null);
+  writeForce(["slack"], forcePath);
+  assert.deepEqual(await store.forcedWithin(1, 0.01), { sources: ["slack"] });
+  assert.equal(await store.forcedWithin(0.05, 0.01), null); // consumed
+  writeForce([], forcePath);
+  const night = at("2026-11-03T23:00:00");
+  const r = await wait(config, store, { now: () => night, maxSec: 30 });
+  assert.equal(r.forced, true);
+  assert.deepEqual(r.sources, ["slack", "basecamp"]);
+});
+
+test("report sends health to Mesa: ok, limited on a 429, down on other errors", async () => {
+  const sent = [];
+  const store = memStore({ sources: {} });
+  store.health = async (name, state) => sent.push([name, state]);
+  await report(config, store, "slack", { new: 0 }, { now: () => tue10 });
+  await report(config, store, "slack", { error: "429", rateLimited: true }, { now: () => tue10 });
+  await report(config, store, "basecamp", { error: "boom" }, { now: () => tue10 });
+  assert.deepEqual(sent, [["slack", "ok"], ["slack", "limited"], ["basecamp", "down"]]);
 });

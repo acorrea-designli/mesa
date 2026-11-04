@@ -64,14 +64,18 @@ sees. A manual edit by him is his version: never overwrite it.
 
 Delivery is at least once: first `MESA salida show <id>`; if it is already `sent`, do nothing.
 
+0. If the event carries `recheckThread: true` (the salida waited for its source to come back), re-read the
+   destination thread first; if it has new messages since the draft, `MESA salida bounce <id> --reason "<what
+   changed>"` (it returns to Andrés for a fresh approval), tell the writer, and stop.
 1. Body = `versions[approvedVersion - 1].body`, unchanged. Destination = the salida's `destination`, exactly.
 2. Send with one MCP call: Slack `slack_send_message` (`channel_id`, `thread_ts` for a thread, `message`);
    Basecamp `create_comment` (comment on `recordingId`), `create_message`, or `create_campfire_line`, converting
    Markdown to the HTML the tool takes without changing words. GitHub: `mesa-review` § Lead writes.
 3. `MESA salida sent <id> --permalink <url>` with the URL the tool returned, or
    `MESA salida failed <id> --error "<message>"`. Tell the writer `SENT <ref> <salida>`.
-4. Slack outage: the approval waits as "Aprobar al volver"; before sending, re-read the thread, and if someone
-   already answered, `failed --error "thread moved: <what changed>"` and tell the writer.
+4. Source down at send time (the MCP call fails as unreachable or rate limited): `MESA salida hold <id> --reason
+   "<error>"` ("Aprobar al volver") and `MESA health set <slack|basecamp> down|limited --note "<error>"`. When the
+   source is set back to `ok` Mesa resumes every held salida with `recheckThread: true` (step 0).
 
 Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases the salida and the same
 `salida.released` arrives. Never use `slack_schedule_message` (hook G5).
