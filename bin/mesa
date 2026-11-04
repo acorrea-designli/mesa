@@ -74,7 +74,12 @@ GitHub (server side, with the gh login; Mesa never writes reviews or comments)
   mesa github import-reviews                       read pr-monitor's state file (read only) into Mesa reviews
 
 Items and memory
-  mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...)
+  mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...); an ignored project's
+                                                   item is not stored and returns { ignored: true }
+  mesa ignore list                                 ignored projects [{ id, source, project, label, hidden }] (sweeper: skip them)
+  mesa ignore add <github|slack|basecamp|claude|*> <projectKey> [--label L]
+                                                   projectKey: GitHub owner/repo, Slack channel id, Basecamp project name
+  mesa ignore remove <id> | remove <source> <projectKey>
   mesa engram link --entity ticket:<id> --project P [--topic KEY] [--obs ID]
 
 --body - reads the body from stdin. --session overrides MESA_SESSION. --json / --human pick the output.`;
@@ -486,6 +491,29 @@ async function main() {
         if (err instanceof SyntaxError) usage("--json must be JSON");
         throw err;
       }
+
+    case "ignore": {
+      if (cmd === "list") return out(await call("GET", "/api/ignored-projects"));
+      if (cmd === "add") {
+        const project = need(pos[3], "<projectKey>");
+        return out(await call("POST", "/api/ignored-projects", { source: need(id, "<source>"), project, label: typeof opt.label === "string" ? opt.label : undefined }));
+      }
+      if (cmd === "remove") {
+        let target = need(id, "<id> or <source> <projectKey>");
+        if (pos[3] !== undefined) {
+          const rows = await call("GET", "/api/ignored-projects");
+          const row = rows.find((r) => r.source === target && r.project === pos[3]);
+          if (!row) {
+            process.stderr.write(`mesa: ${target} ${pos[3]} is not ignored
+`);
+            process.exit(1);
+          }
+          target = row.id;
+        }
+        return out(await call("DELETE", `/api/ignored-projects/${enc(target)}`));
+      }
+      return usage(`unknown ignore command "${cmd ?? ""}"`);
+    }
 
     case "engram": {
       if (cmd !== "link") return usage(`unknown engram command "${cmd ?? ""}"`);

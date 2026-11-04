@@ -4,6 +4,7 @@ import type { StatusTone } from "@/components/ui/primitives";
 import type { Approval, Destination, Item, Salida, Source, Station, WaitOn } from "@/lib/domain/types";
 import { STATION_LABEL } from "@/lib/domain/types";
 import type { SourceHealth } from "@/components/shell/health";
+import type { IgnoredRow, IgnoreTarget } from "../ignore/model";
 
 export interface Tag {
   tone: StatusTone;
@@ -27,6 +28,8 @@ export interface HoyRow {
   stale: boolean;
   waitsOnYou: boolean;
   taskId: string | null;
+  /** The project "Ignorar proyecto «X»" would ignore (items only; never salidas). */
+  ignore?: IgnoreTarget | null;
 }
 
 export interface ItemDetail {
@@ -43,6 +46,7 @@ export interface ItemDetail {
   ticketRef: string | null;
   received: string;
   isSample: boolean;
+  ignore?: IgnoreTarget | null;
 }
 
 export interface HoyApproval extends Approval {
@@ -80,6 +84,8 @@ export interface HoyData {
   firstRun: boolean;
   setup: SetupRow[];
   hasSample: boolean;
+  /** Ignored projects ("N ignorados" on the source tabs). Their items are not in rows or band. */
+  ignored: IgnoredRow[];
 }
 
 // ---------- labels ----------

@@ -80,6 +80,9 @@ describe("mesa CLI", () => {
       "mesa github status",
       "mesa github import-reviews",
       "mesa item upsert",
+      "mesa ignore list",
+      "mesa ignore add",
+      "mesa ignore remove",
       "mesa engram link",
     ]) {
       expect(r.stdout).toContain(c);
@@ -215,6 +218,34 @@ describe("mesa CLI", () => {
     const r = await mesa(["item", "upsert", "--json", "-"], { stdin: JSON.stringify(item) });
     expect(r.code).toBe(0);
     expect(requests[0]).toMatchObject({ method: "POST", path: "/api/items/upsert", body: item });
+  });
+
+  it("ignore list --json prints the rows as JSON for the sweeper", async () => {
+    const rows = [{ id: "ig_1", source: "slack", project: "C0DEPLOY", label: "#deploys", hidden: { items: 2, tasks: 0 } }];
+    handler = () => ({ body: rows });
+    const r = await mesa(["ignore", "list", "--json"], { env: { MESA_SESSION: "sweeper" } });
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "GET", path: "/api/ignored-projects" });
+    expect(r.json()).toEqual(rows);
+  });
+
+  it("ignore add / remove by id or by source + project key", async () => {
+    handler = (q) =>
+      q.method === "GET" ? { body: [{ id: "ig_9", source: "github", project: "designli/scout", label: "scout" }] } : { body: { ignored: { id: "ig_9" }, created: true } };
+    expect((await mesa(["ignore", "add", "github", "designli/scout", "--label", "scout"])).code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/ignored-projects", body: { source: "github", project: "designli/scout", label: "scout" } });
+    expect((await mesa(["ignore", "add", "*", "freightmate"])).code).toBe(0);
+    expect(requests[1]).toMatchObject({ body: { source: "*", project: "freightmate" } });
+
+    expect((await mesa(["ignore", "remove", "ig_9"])).code).toBe(0);
+    expect(requests[2]).toMatchObject({ method: "DELETE", path: "/api/ignored-projects/ig_9" });
+    requests = [];
+    expect((await mesa(["ignore", "remove", "github", "designli/scout"])).code).toBe(0);
+    expect(requests.map((q) => `${q.method} ${q.path}`)).toEqual(["GET /api/ignored-projects", "DELETE /api/ignored-projects/ig_9"]);
+    const miss = await mesa(["ignore", "remove", "slack", "C404"]);
+    expect(miss.code).toBe(1);
+    expect(miss.stderr).toContain("is not ignored");
+    expect((await mesa(["ignore", "add", "github"])).code).toBe(2);
   });
 
   it("github sync / status / import-reviews hit the server-side endpoints", async () => {

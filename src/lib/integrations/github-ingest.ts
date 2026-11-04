@@ -141,6 +141,8 @@ export interface ReviewSyncResult {
   updated: number;
   done: number;
   skippedDrafts: number;
+  /** Requests of ignored projects: never upserted. */
+  skippedIgnored: number;
 }
 
 /**
@@ -150,10 +152,13 @@ export interface ReviewSyncResult {
  */
 export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, now = new Date()): Promise<ReviewSyncResult> {
   const { requests, complete } = await fetchReviewRequests(gh);
-  const open = r.items.list({ source: "github", includeSamples: false }).filter((i) => i.kind === "pr_review");
+  const ignored = r.ignored.list();
+  // Items of ignored projects stay as they are (un-ignoring brings them back): they are
+  // neither refreshed nor moved to Hecho here.
+  const open = r.items.list({ source: "github", includeSamples: false, ignored: "exclude" }).filter((i) => i.kind === "pr_review");
   const byExt = new Map<string, Item>(open.map((i) => [i.externalId, i]));
   const seen = new Set<string>();
-  const out: ReviewSyncResult = { requests: requests.length, created: 0, updated: 0, done: 0, skippedDrafts: 0 };
+  const out: ReviewSyncResult = { requests: requests.length, created: 0, updated: 0, done: 0, skippedDrafts: 0, skippedIgnored: 0 };
 
   for (const rr of requests) {
     if (rr.draft) {
@@ -161,6 +166,10 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
       continue;
     }
     const ext = prExternalId(rr.repo, rr.number);
+    if (r.ignored.isItemIgnored({ source: "github", externalId: ext, project: rr.repo.split("/")[1] ?? rr.repo }, ignored)) {
+      out.skippedIgnored++;
+      continue;
+    }
     seen.add(ext);
     const existing = byExt.get(ext);
     const fresh = existing && existing.meta?.updatedAt === rr.updatedAt && existing.station !== "done";

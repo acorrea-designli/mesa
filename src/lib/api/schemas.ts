@@ -310,3 +310,10 @@ export const sourcePatch = z.object({
   lastError: z.string().max(2000).nullable().optional(),
 });
 export const sweepInput = z.object({ sources: z.array(z.enum(["slack", "basecamp", "github"])).optional() });
+
+/** POST /api/ignored-projects. project is the project key (domain/ignore.ts projectKey). */
+export const ignoreInput = z.object({
+  source: z.enum(["github", "slack", "basecamp", "claude", "*"]),
+  project: z.string().trim().min(1),
+  label: z.string().trim().optional(),
+});

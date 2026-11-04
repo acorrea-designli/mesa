@@ -1,6 +1,7 @@
 import type { Db } from "../db/sqlite";
 import { fromRow, fromRows, insertSql, newId, NotFoundError, nowIso, toAssignments } from "../db/util";
 import type { Item, Source, Station } from "../domain/types";
+import { ITEM_IGNORED } from "./ignored";
 
 const SPEC = { json: ["meta"], bool: ["is_sample"] };
 
@@ -28,6 +29,8 @@ export interface ItemFilter {
   station?: Station;
   source?: Source;
   includeSamples?: boolean;
+  /** Items of ignored projects: "include" (default), "exclude" (Hoy, band, ingest) or "only". */
+  ignored?: "include" | "exclude" | "only";
 }
 
 export function itemsRepo(db: Db) {
@@ -52,6 +55,8 @@ export function itemsRepo(db: Db) {
         args.push(f.source);
       }
       if (f.includeSamples === false) where.push("is_sample = 0");
+      if (f.ignored === "exclude") where.push(`NOT ${ITEM_IGNORED("items")}`);
+      if (f.ignored === "only") where.push(ITEM_IGNORED("items"));
       const sql = `SELECT * FROM items ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY received_at`;
       return fromRows<Item>(db.prepare(sql).all(...args), SPEC);
     },

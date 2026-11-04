@@ -2,6 +2,7 @@ import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, insertSql, newId, NotFoundError, nowIso, toAssignments } from "../db/util";
 import type { Item, Source, Station, SyncState, Task } from "../domain/types";
+import { TASK_IGNORED, TASK_KEY } from "./ignored";
 import { touchInteraction } from "./interaction";
 
 const SPEC = { bool: ["is_sample"] };
@@ -42,7 +43,7 @@ export function tasksRepo(db: Db) {
     );
 
   const get = (id: string): Task => {
-    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+    const row = db.prepare(`SELECT *, ${TASK_KEY("tasks")} AS project_key FROM tasks WHERE id = ?`).get(id);
     if (!row) throw new NotFoundError("task", id);
     return { ...fromRow<Task>(row, SPEC), items: linked(id) };
   };
@@ -59,7 +60,8 @@ export function tasksRepo(db: Db) {
   return {
     get,
 
-    list(f: { station?: Station; source?: Source } = {}): Task[] {
+    /** ignored: tasks of ignored projects, "include" (default), "exclude" (Tablero) or "only". */
+    list(f: { station?: Station; source?: Source; ignored?: "include" | "exclude" | "only" } = {}): Task[] {
       const where: string[] = [];
       const args: string[] = [];
       if (f.station) {
@@ -70,8 +72,10 @@ export function tasksRepo(db: Db) {
         where.push("source = ?");
         args.push(f.source);
       }
+      if (f.ignored === "exclude") where.push(`NOT ${TASK_IGNORED("tasks")}`);
+      if (f.ignored === "only") where.push(TASK_IGNORED("tasks"));
       const rows = db
-        .prepare(`SELECT * FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY station, position, created_at`)
+        .prepare(`SELECT *, ${TASK_KEY("tasks")} AS project_key FROM tasks ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY station, position, created_at`)
         .all(...args);
       return fromRows<Task>(rows, SPEC).map((t) => ({ ...t, items: linked(t.id) }));
     },
@@ -136,8 +140,9 @@ export function tasksRepo(db: Db) {
       return get(id);
     },
 
+    /** Tasks waiting for a GitHub Project write. Tasks of ignored projects are never pushed. */
     pendingSync(): Task[] {
-      return fromRows<Task>(db.prepare("SELECT * FROM tasks WHERE sync_state = 'pending' ORDER BY updated_at").all(), SPEC);
+      return fromRows<Task>(db.prepare(`SELECT * FROM tasks WHERE sync_state = 'pending' AND NOT ${TASK_IGNORED("tasks")} ORDER BY updated_at`).all(), SPEC);
     },
 
     remove(id: string): void {
