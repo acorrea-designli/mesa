@@ -115,3 +115,20 @@ export function waitSignal(key: string, timeoutMs: number, abort?: AbortSignal):
     const timer = setTimeout(() => done(false), timeoutMs);
   });
 }
+
+/** Listen to every wake event as it is emitted (the live stream forwards them to the UI). */
+export function onWake(fn: (e: WakeEvent) => void): () => void {
+  bus().on("wake", fn);
+  return () => void bus().off("wake", fn);
+}
+
+export const WAKE_RETENTION_DAYS = 7;
+
+/**
+ * Delete wake events older than the retention window. Delivery is at least once while
+ * an event is retained; a session that has not acked in a week starts from what is left.
+ */
+export function pruneWakeEvents(db: Db, now: Date = new Date(), days = WAKE_RETENTION_DAYS): number {
+  const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString();
+  return Number(db.prepare("DELETE FROM wake_events WHERE created_at < ?").run(cutoff).changes);
+}

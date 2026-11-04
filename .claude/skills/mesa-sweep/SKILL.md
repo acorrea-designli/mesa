@@ -56,7 +56,10 @@ its Mesa review ticket has an `open` finding and the head moved or someone other
 long-lived: develop, staging, main, master, production, prod) unless Andrés names one. Already APPROVED by him at
 the current head: skip (fast exit).
 
-Upsert: `{"source":"github","externalId":"<repo>#<n>","kind":"pr_review","title":"<repo>#<n> <title>","url":"<url>","need":"review","waitOn":"you","meta":{"head":"<sha>","author":"<login>"}}`.
+The Mesa server already upserts every open review request on its own (notifications poll + review search, every
+`X-Poll-Interval`), so start with `MESA github sync` and only upsert by hand what the gate adds beyond plain review
+requests (open findings, a dismissed approval). Use the server's dedupe key so both paths hit the same item:
+`{"source":"github","externalId":"pr:<owner>/<repo>#<n>","kind":"pr_review","title":"<repo>#<n> <title>","url":"<url>","project":"<owner>/<repo>","need":"approve_pr","waitOn":"you","meta":{"head":"<sha>","author":"<login>"}}`.
 Then each entering PR gets (or keeps) its own review ticket and reviewer: `mesa-review` § Spawning.
 
 ## 2. Basecamp: assignments, mentions, client comments

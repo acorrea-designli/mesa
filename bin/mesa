@@ -6,7 +6,9 @@
 //   MESA_SESSION  this session's id (or --session); required for wait and ownership
 //   MESA_TOKEN    only needed when MESA_URL is not localhost
 //
-// Output is JSON on stdout. Errors go to stderr with exit code 1 (2 for usage).
+// Output is JSON on stdout for sessions (MESA_SESSION set, --json, or stdout not a terminal)
+// and a short human summary in a terminal (--human forces it). Errors go to stderr with exit
+// code 1 (2 for usage, 3 when a --wait ends without the hoped-for outcome).
 
 import { readFileSync } from "node:fs";
 import process from "node:process";
@@ -15,10 +17,14 @@ const HELP = `mesa <command> [options]
 
 Sessions
   mesa session [--label L] [--project P]          register / heartbeat this session
-  mesa wait [--timeout S] [--loop|--once]          long-poll for wake events (prints them, then acks); --once returns after one poll
+  mesa wait [--timeout S] [--loop|--once] [--manual-ack]
+                                                   long-poll for wake events, one JSON line each (id = cursor), then ack;
+                                                   --once returns after one poll; --manual-ack leaves the ack to "mesa ack"
+  mesa ack <cursor>                                acknowledge events up to <cursor> (after handling them)
 
 Tickets
   mesa ticket ask --title T [--body B] [--option "A:label[:detail]"]... [--recommend A --why W] [--project P] [--ref t12]...
+                  [--wait [--timeout S]]       --wait blocks until Andrés answers and prints { ticket, answer }
   mesa ticket reply <id|ref> --body B [--option ...] [--recommend A --why W]
   mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
   mesa ticket claim <id|ref>      take an Andrés request and start work
@@ -31,6 +37,7 @@ Tickets
 
 Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida propose --source slack|basecamp|github --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
+                  [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired (exit 3)
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
   mesa salida sent <id> [--permalink URL]          only after salida.released
   mesa salida failed <id> --error E
@@ -45,7 +52,7 @@ Agents (ephemeral: everything they need lives on the ticket)
   mesa handoff <ref> --agent A --status done|paused|blocked --body - [--role R] [--done D] [--left L] [--branch B] [--pr P] [--file F]...
   mesa handoffs [--agent A] [--ticket ref]
   mesa team add|join <ref> --agent <role>-<ref>[-k] --role R [--owner]
-  mesa team retire|spent <name>
+  mesa team retire|spent <name> [--reason R]
   mesa team list [--status live|retired] [--ticket ref]
 
 Reviews and approvals
@@ -61,11 +68,16 @@ Sources and sweep (github|github_project|slack|basecamp|engram)
                   [--error-count N] [--last-error MSG|none]
   mesa sweep [--source slack|basecamp|github]...        same as "Barrer ahora"
 
+GitHub (server side, with the gh login; Mesa never writes reviews or comments)
+  mesa github sync                                 poll notifications + review requests, push/pull the Project now
+  mesa github status                               Project ids (settings) and github / github_project health
+  mesa github import-reviews                       read pr-monitor's state file (read only) into Mesa reviews
+
 Items and memory
   mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...)
   mesa engram link --entity ticket:<id> --project P [--topic KEY] [--obs ID]
 
---body - reads the body from stdin. --session overrides MESA_SESSION.`;
+--body - reads the body from stdin. --session overrides MESA_SESSION. --json / --human pick the output.`;
 
 // ---------- args ----------
 function parse(argv) {
@@ -88,7 +100,7 @@ const usage = (msg) => {
   process.stderr.write(`mesa: ${msg}\n\n${HELP}\n`);
   process.exit(2);
 };
-const need = (v, name) => (v === undefined || v === true ? usage(`missing ${name}`) : v);
+const need = (v, name) => (v === undefined || v === true || v === "" ? usage(`missing ${name}`) : v);
 
 let stdinCache;
 function text(v, name) {
@@ -126,8 +138,92 @@ async function call(method, path, body) {
   }
   return data;
 }
-const out = (x) => process.stdout.write(JSON.stringify(x, null, 2) + "\n");
+let HUMAN = false;
+const out = (x) => process.stdout.write((HUMAN ? human(x) : JSON.stringify(x, null, 2)) + "\n");
+
+// ---------- human output ----------
+const pick = (o, keys) => keys.map((k) => o?.[k]).filter((v) => v !== undefined && v !== null && v !== "");
+function line(o) {
+  if (o === null || typeof o !== "object") return String(o);
+  const id = pick(o, ["ref", "id", "name", "source"])[0] ?? "";
+  const what = pick(o, ["title", "summary", "label", "body", "kind"])[0] ?? "";
+  const state = pick(o, ["status", "state", "health", "station", "syncState"])[0] ?? "";
+  return [id, state && `[${state}]`, String(what).split("\n")[0]].filter(Boolean).join("  ");
+}
+function human(x) {
+  if (x === null || x === undefined) return "ok";
+  if (Array.isArray(x)) return x.length ? x.map(line).join("\n") : "(none)";
+  if (typeof x !== "object") return String(x);
+  const keys = Object.keys(x);
+  // Named wrappers ({ brief }, { handoffs }, { source, resumed }, ...): unwrap the object.
+  if (!("id" in x) && keys.length <= 3 && keys.some((k) => typeof x[k] === "object" && x[k] !== null)) {
+    const k = keys.find((j) => typeof x[j] === "object" && x[j] !== null);
+    const rest = keys.filter((j) => j !== k).map((j) => `${j}: ${JSON.stringify(x[j])}`);
+    return [human(x[k]), ...rest].join("\n");
+  }
+  const extra = [];
+  if (Array.isArray(x.messages) && x.messages.length) extra.push(`${x.messages.length} messages; last: ${String(x.messages.at(-1).body).split("\n")[0]}`);
+  if (Array.isArray(x.versions)) extra.push(`v${x.currentVersion} of ${x.versions.length}`);
+  if (x.url) extra.push(String(x.url));
+  return [line(x), ...extra.map((e) => `  ${e}`)].join("\n");
+}
 const enc = encodeURIComponent;
+
+// ---------- waiters ----------
+// Both poll /api/wait in peek mode (never acks, so the session's own `mesa wait` still gets
+// every event) and re-read the entity after each wake or timeout: the state is the truth,
+// the event is only a hint. A timeout of 0 waits forever.
+const fail3 = (msg) => {
+  process.stderr.write(`mesa: ${msg}\n`);
+  process.exitCode = 3;
+};
+async function peekLoop(sessionId, timeoutS, done) {
+  const deadline = timeoutS > 0 ? Date.now() + timeoutS * 1000 : Infinity;
+  let after;
+  for (;;) {
+    const result = await done();
+    if (result) return result;
+    const left = deadline - Date.now();
+    if (left <= 0) return null;
+    const t = Math.max(1, Math.min(25, Math.ceil(left / 1000)));
+    const q = `session=${enc(sessionId)}&peek=1&timeout=${t}${after === undefined ? "" : `&after=${after}`}`;
+    const r = await call("GET", `/api/wait?${q}`);
+    after = r.cursor;
+  }
+}
+
+async function waitAnswer(ticket, sessionId, timeoutS) {
+  const asked = ticket.messages?.at(-1)?.createdAt ?? ticket.createdAt;
+  const head = (t) => ({ id: t.id, ref: t.ref, status: t.status });
+  const res = await peekLoop(sessionId, timeoutS, async () => {
+    const t = await call("GET", `/api/tickets/${enc(ticket.id)}`);
+    const answer = t.messages.filter((m) => m.author === "andres" && m.createdAt >= asked).at(-1);
+    if (answer) return { ticket: head(t), answer: { body: answer.body, chosen: answer.chosen, at: answer.createdAt } };
+    if (t.status === "closed") return { ticket: head(t), answer: null, closed: true };
+    return null;
+  });
+  if (!res) {
+    fail3(`no answer on ${ticket.ref} within ${timeoutS} s`);
+    return { ticket: head(ticket), answer: null, timedOut: true };
+  }
+  if (res.closed) fail3(`${ticket.ref} was closed without an answer`);
+  return res;
+}
+
+async function waitRelease(salida, sessionId, timeoutS) {
+  const res = await peekLoop(sessionId, timeoutS, async () => {
+    const s = await call("GET", `/api/salidas/${enc(salida.id)}`);
+    if ((s.status === "sending" && s.releasedAt) || s.status === "sent") return { released: true, salida: s };
+    if (["denied", "expired", "deleted"].includes(s.status)) return { released: false, salida: s };
+    return null;
+  });
+  if (!res) {
+    fail3(`salida ${salida.id} not released within ${timeoutS} s`);
+    return { released: false, timedOut: true, salida: { id: salida.id } };
+  }
+  if (!res.released) fail3(`salida ${salida.id} is ${res.salida.status}: do not send it`);
+  return res;
+}
 
 // ---------- commands ----------
 async function main() {
@@ -136,6 +232,7 @@ async function main() {
   const { pos, opt } = parse(argv);
   const [group, cmd, id] = pos;
   const session = opt.session ?? process.env.MESA_SESSION;
+  HUMAN = opt.human ? true : opt.json ? false : Boolean(process.stdout.isTTY) && !session;
   const needSession = () => need(session, "MESA_SESSION (or --session)");
 
   if (!group || opt.help || group === "help") return void process.stdout.write(HELP + "\n");
@@ -155,27 +252,33 @@ async function main() {
           continue;
         }
         for (const e of r.events) process.stdout.write(JSON.stringify(e) + "\n");
+        // Delivery is at least once: without --manual-ack the batch is acked once printed.
+        if (opt["manual-ack"]) return;
         await call("POST", "/api/wait/ack", { session: s, cursor: r.cursor });
         if (!opt.loop) return;
       }
     }
 
+    case "ack":
+      return out(await call("POST", "/api/wait/ack", { session: needSession(), cursor: Number(need(cmd, "<cursor>")) }));
+
     case "ticket":
       switch (cmd) {
-        case "ask":
-          return out(
-            await call("POST", "/api/tickets", {
-              direction: "claude_asks",
-              title: text(opt.title, "--title"),
-              body: opt.body === undefined ? undefined : text(opt.body, "--body"),
-              options: options(opt),
-              recommended: opt.recommend,
-              recommendation: opt.why,
-              project: opt.project,
-              ownerSession: needSession(),
-              refs: list(opt.ref).map((r) => ({ refType: "ticket", target: r })),
-            }),
-          );
+        case "ask": {
+          const created = await call("POST", "/api/tickets", {
+            direction: "claude_asks",
+            title: text(opt.title, "--title"),
+            body: opt.body === undefined ? undefined : text(opt.body, "--body"),
+            options: options(opt),
+            recommended: opt.recommend,
+            recommendation: opt.why,
+            project: opt.project,
+            ownerSession: needSession(),
+            refs: list(opt.ref).map((r) => ({ refType: "ticket", target: r })),
+          });
+          if (!opt.wait) return out(created);
+          return out(await waitAnswer(created, needSession(), Number(opt.timeout ?? 0)));
+        }
         case "reply":
           return out(
             await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/messages`, {
@@ -235,22 +338,22 @@ async function main() {
           } catch {
             usage("--dest must be JSON");
           }
-          return out(
-            await call("POST", "/api/salidas", {
-              source: need(opt.source, "--source"),
-              destination,
-              body: text(opt.body, "--body"),
-              title: opt.title,
-              context: opt.context,
-              ticketId: opt.ticket,
-              expiresAt: opt.expires,
-              ownerSession: needSession(),
-              links: list(opt.link).map((l) => {
-                const [source, label, ...url] = String(l).split(":");
-                return { source, label, url: url.length ? url.join(":") : undefined };
-              }),
+          const created = await call("POST", "/api/salidas", {
+            source: need(opt.source, "--source"),
+            destination,
+            body: text(opt.body, "--body"),
+            title: opt.title,
+            context: opt.context,
+            ticketId: opt.ticket,
+            expiresAt: opt.expires,
+            ownerSession: needSession(),
+            links: list(opt.link).map((l) => {
+              const [source, label, ...url] = String(l).split(":");
+              return { source, label, url: url.length ? url.join(":") : undefined };
             }),
-          );
+          });
+          if (!opt["wait-release"]) return out(created);
+          return out(await waitRelease(created, needSession(), Number(opt.timeout ?? 0)));
         }
         case "version":
           return out(
@@ -313,7 +416,7 @@ async function main() {
           );
         case "retire":
         case "spent":
-          return out(await call("POST", `/api/team/${enc(need(id, "<name>"))}/retire`, {}));
+          return out(await call("POST", `/api/team/${enc(need(id, "<name>"))}/retire`, opt.reason ? { reason: String(opt.reason) } : {}));
         case "list": {
           const q = new URLSearchParams();
           if (opt.status) q.set("status", opt.status);
@@ -368,6 +471,12 @@ async function main() {
 
     case "sweep":
       return out(await call("POST", "/api/sweep", opt.source ? { sources: list(opt.source) } : {}));
+
+    case "github":
+      if (cmd === "sync") return out(await call("POST", "/api/github/sync", {}));
+      if (cmd === "status") return out(await call("GET", "/api/github/status"));
+      if (cmd === "import-reviews") return out(await call("POST", "/api/github/import-reviews", {}));
+      return usage(`unknown github command "${cmd ?? ""}"`);
 
     case "item":
       if (cmd !== "upsert") return usage(`unknown item command "${cmd ?? ""}"`);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 import { NotFoundError, TransitionError } from "../db/util";
+import { publishRequest } from "../live/bus";
 import { repos, type Repos } from "../repo";
 
 export type Ctx<P extends Record<string, string> = Record<string, string>> = { params: Promise<P> };
@@ -24,11 +25,15 @@ export function route<P extends Record<string, string>>(
     try {
       const r = repos();
       r.sweep();
-      return await fn(req, r, (await ctx.params) ?? ({} as P));
+      const res = await fn(req, r, (await ctx.params) ?? ({} as P));
+      publishRequest(req, res.status); // live updates for /api/stream
+      return res;
     } catch (err) {
       if (err instanceof ZodError) return error(400, "invalid_request", "invalid request body", err.issues);
-      if (err instanceof NotFoundError) return error(404, "not_found", err.message);
-      if (err instanceof TransitionError) return error(409, "invalid_transition", err.message);
+      // Match by name too: each route bundle has its own copy of these classes, and the shared
+      // repos singleton may have been created by another bundle, so instanceof can miss.
+      if (err instanceof NotFoundError || (err as Error)?.name === "NotFoundError") return error(404, "not_found", (err as Error).message);
+      if (err instanceof TransitionError || (err as Error)?.name === "TransitionError") return error(409, "invalid_transition", (err as Error).message);
       if (err instanceof SyntaxError) return error(400, "invalid_json", err.message);
       console.error(err);
       return error(500, "internal", err instanceof Error ? err.message : "internal error");
