@@ -105,7 +105,7 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
     if (mainRef.current) mainRef.current.scrollTop = rail ? 0 : saved.current;
     if (!rail && focusList.current) {
       focusList.current = false;
-      mainRef.current?.querySelector<HTMLElement>(".tk-row.sel, .tk-row")?.focus(); // the control he pressed is gone
+      (mainRef.current?.querySelector<HTMLElement>(".tk-row.sel") ?? mainRef.current?.querySelector<HTMLElement>(".tk-row"))?.focus(); // the control he pressed is gone
     }
   }, [rail]);
 

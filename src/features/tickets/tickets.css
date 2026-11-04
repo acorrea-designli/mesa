@@ -1154,6 +1154,11 @@
     bottom: var(--phone-tabs-h);
     padding: 10px 16px 14px;
   }
+  /* The page scrolls here and .tk-pane clips (overflow: hidden), so the pill is fixed to the viewport above the tab bar. */
+  .tk-newmsg {
+    position: fixed;
+    bottom: calc(var(--phone-tabs-h) + 40px); /* clears the sandbox banner that sits on the tab bar */
+  }
   .tk-bar .hint {
     flex: 1;
     min-width: 0;
