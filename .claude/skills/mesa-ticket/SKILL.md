@@ -34,6 +34,23 @@ EOF
 His answer arrives as `ticket.answered`; the lead relays `ANSWER <ref> <message id>` to the owner, who reads it with
 `MESA ticket context <ref>`. Picking an option fills his reply with that option.
 
+## "Pídeme permiso" (a blocked call)
+
+When a call of yours is blocked and Andrés presses **Pídeme permiso** on the ticket, his message "Pídeme permiso"
+(`kind: permission_request`) arrives with the wake `ticket.permission_requested { ticketRef, messageId }`; the lead
+relays `ANSWER <ref> permission_requested <message id>` to the live owner, who passes it to the teammate that is
+blocked. Mesa never edits settings or files the card for you. The blocked agent:
+
+1. Adds the narrowest `permissions.ask` rule for the exact call to `.claude/settings.local.json` in the project root
+   of the session (the cwd, not your worktree): tool plus the exact command or path, no wildcard. Never an `allow`
+   rule, never a broader pattern, never another settings file, and only on this wake.
+2. Retries the exact call once. The `mesa-approval` hook files the ApprovalCard on this ticket; wait for it.
+3. After his decision, removes the ask rule, unless he says to keep it (then say so in the handoff).
+
+The lead's own prompts with no ticket show in Hoy, Permisos. While it acts for a ticket it runs
+`mesa lead focus <ref>` (`--clear` when done; it lapses 2 h after the last set, so run it again to renew) so the
+hook files them to that ticket.
+
 ## Replying to his request
 
 Answer first, then evidence (one line each, linked), then what you could not check. At most 6 lines. Long output

@@ -49,5 +49,7 @@ export const ticketApi = {
   },
   close: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "close", by: "andres" } }),
   reopen: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "reopen", by: "andres" } }),
+  /** "Pídeme permiso": posts the marked message and wakes the owner (ticket.permission_requested). */
+  requestPermission: (id: string) => call<TicketDetail>(`${T(id)}/permission-request`, { body: {} }),
   approvePlan: (id: string, reject: string[]) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { reject } }),
 };

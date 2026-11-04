@@ -14,8 +14,7 @@ const fast = { timeoutMs: 200, pollMs: 5, waitSec: 1, rules, env: {} };
 const decided = (decision, extra = {}) =>
   fakeMesa({
     "POST /api/approvals": { approval: { id: "ap1" } },
-    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision, ...extra } },
-    "POST /api/approvals/ap1/decision": { ok: true },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision, decidedBy: "andres", ...extra } },
   });
 
 const assertShape = (r, behavior) => {
@@ -71,7 +70,6 @@ test("timeout denies, leaves expiry to Mesa and points at a ticket question", as
   const mesa = fakeMesa({
     "POST /api/approvals": { approval: { id: "ap9" } },
     "GET /api/approvals/ap9": { approval: { id: "ap9", status: "pending", decision: null } },
-    "POST /api/approvals/ap9/decision": { ok: true },
   });
   const r = await approve(bash(input, "terraform plan"), { ...fast, timeoutMs: 60, fetchImpl: mesa.fetchImpl });
   assertShape(r, "deny");
@@ -130,6 +128,70 @@ test("the lead passes through untouched unless MESA_APPROVAL_LEAD=1", async () =
   assert.equal(await approve(lead, { ...fast, fetchImpl: unreachable }), null);
   const r = await approve(lead, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: decided("allow").fetchImpl });
   assertShape(r, "allow");
+});
+
+const leadInput = { tool_name: "Bash", tool_input: { command: "ls" }, transcript_path: "x.jsonl", session_id: "s" };
+const withFocus = (ticketRef) =>
+  fakeMesa({
+    "GET /api/lead/focus": { ticketRef },
+    "POST /api/approvals": { approval: { id: "ap1" } },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow", decidedBy: "andres" } },
+  });
+
+test("the lead's prompt is filed to the ticket named with `mesa lead focus`", async () => {
+  const mesa = withFocus("t10");
+  assertShape(await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: mesa.fetchImpl }), "allow");
+  const filed = mesa.calls.find((c) => c.key === "POST /api/approvals").body;
+  assert.equal(filed.ticketRef, "t10");
+  assert.equal(filed.agent, "lead");
+  assert.equal(filed.role, "lead");
+});
+
+test("with no focus (or an unreachable focus) the lead's prompt has no ticket and shows in Hoy, Permisos", async () => {
+  const none = withFocus(null);
+  await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: none.fetchImpl });
+  assert.equal(none.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, null);
+  const down = fakeMesa({
+    "POST /api/approvals": { approval: { id: "ap1" } },
+    "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow", decidedBy: "andres" } },
+  });
+  await approve(leadInput, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: down.fetchImpl });
+  assert.equal(down.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, null);
+});
+
+test("an agent keeps its own ticket whatever the lead's focus is, and the lead pass-through never reads it", async () => {
+  const { input } = fakeAgent({ name: "dev-t12" });
+  const mesa = withFocus("t10");
+  await approve(bash(input, "ls"), { ...fast, fetchImpl: mesa.fetchImpl });
+  assert.equal(mesa.calls.find((c) => c.key === "POST /api/approvals").body.ticketRef, "t12");
+  assert.equal(mesa.calls.some((c) => c.key.includes("/lead/focus")), false);
+  const pass = withFocus("t10");
+  assert.equal(await approve(leadInput, { ...fast, fetchImpl: pass.fetchImpl }), null);
+  assert.deepEqual(pass.calls, []);
+});
+
+test("a decision made by anyone but Andrés is never honoured, whatever it says", async () => {
+  const { input } = fakeAgent({ name: "dev-t12" });
+  for (const decidedBy of ["dev-t12", "mesa-approval-hook", "agent", "Andres ", null, undefined]) {
+    const mesa = decided("allow", { decidedBy });
+    const r = await approve(bash(input, "rm -rf build"), { ...fast, fetchImpl: mesa.fetchImpl });
+    assertShape(r, "deny");
+    assert.match(r.hookSpecificOutput.decision.message, /not by Andrés/);
+  }
+  for (const d of ["read_config", "deny"]) {
+    const r = await approve(bash(input, "x"), { ...fast, fetchImpl: decided(d, { decidedBy: "dev-t12" }).fetchImpl });
+    assert.match(r.hookSpecificOutput.decision.message, /not by Andrés/);
+  }
+});
+
+test("the hook decides nothing itself: it only files the card and reads it back", async () => {
+  const { input } = fakeAgent({ name: "dev-t12" });
+  const mesa = decided("allow");
+  await approve(bash(input, "ls"), { ...fast, fetchImpl: mesa.fetchImpl });
+  assert.deepEqual(
+    mesa.calls.filter((c) => !c.key.startsWith("GET ")).map((c) => c.key),
+    ["POST /api/approvals"],
+  );
 });
 
 test("describe shows Edit and MCP calls", () => {

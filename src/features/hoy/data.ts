@@ -59,6 +59,8 @@ export function loadHoy(now: Date = new Date()): HoyData {
 
   const approvals = r.approvals.list({ status: "pending", hoy: true }, now).map((a) => ({ ...a, createdLabel: clock(a.createdAt) }));
 
+  const leadFocus = r.focus.current(now);
+
   const done = all
     .filter((i) => i.station === "done" && isToday(i.updatedAt, now))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -96,6 +98,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
     details,
     band: items.map((i) => ({ id: i.id, source: i.source, station: i.station, taskId: i.taskId })),
     approvals,
+    leadFocus: leadFocus ? { ticketRef: leadFocus.ticketRef, title: leadFocus.title, until: clock(new Date(leadFocus.expiresAt)) } : null,
     health,
     done,
     doneToday: counts.doneToday,

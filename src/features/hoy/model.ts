@@ -76,6 +76,8 @@ export interface HoyData {
   details: Record<string, ItemDetail>;
   band: { id: string; source: Source; station: Station; taskId: string | null }[];
   approvals: HoyApproval[];
+  /** The ticket the lead's permission prompts are filed to (mesa lead focus), with when it lapses ("14:30"). */
+  leadFocus: { ticketRef: string; title: string; until: string } | null;
   health: Partial<Record<Source, SourceHealth>>;
   done: DoneRow[];
   doneToday: number;

@@ -119,6 +119,12 @@ test("G10: no approvals through the raw API", async () => {
   assert.equal(await rule(sh(lead, `curl -s -X POST http://127.0.0.1:8790/api/salidas/s1/transition -d '{"type":"approve","version":2}'`)), "G10");
   assert.equal(await rule(sh(mate(), "curl -X POST http://localhost:8790/api/tickets/t1/plan/approve")), "G10");
   assert.equal(await rule(sh(mate(), "curl -X POST http://127.0.0.1:8790/api/approvals/ap1/decision -d x")), "G10");
+  for (const p of ["approvals/ap1/approve", "approvals/ap1/read-config", "approvals/ap1/deny", "tickets/t10/permission-request"]) {
+    assert.equal(await rule(sh(mate(), `curl -X POST http://127.0.0.1:8796/api/${p}`)), "G10", p);
+    assert.equal(await rule(sh(mate(), `Invoke-RestMethod -Method Post http://localhost:8790/api/${p}`)), "G10", p);
+  }
+  // reading an approval is fine
+  assert.notEqual(await rule(sh(mate(), "curl http://127.0.0.1:8790/api/approvals/ap1")), "G10");
   assert.equal(await rule(sh(lead, "curl -s -m 3 http://127.0.0.1:8790/api/health")), null);
 });
 

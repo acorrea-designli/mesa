@@ -210,6 +210,9 @@ export function Thread({ data, listening, pick, verbs, onChanged }: Props) {
               onSubmit={() => void send()}
               menuAbove
             >
+              <button className="btn sm perm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.requestPermission(t.id), listening ? "Pedido enviado · Claude despierta para pedirte permiso" : "Pedido guardado · lo lee la próxima sesión")} title="Claude pide el permiso de la llamada bloqueada y verás la tarjeta aquí">
+                Pídeme permiso
+              </button>
               <button className="btn sm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.close(t.id), "Ticket cerrado")}>
                 <IcCheck />
                 Marcar hecho
@@ -307,6 +310,7 @@ function Message({ m, atts, refs, ticketId, titles }: { m: TicketMessage; atts: 
         {m.author === "claude" ? "Claude" : "Tú"}
         <time>{hm(m.createdAt)}</time>
         {m.chosen ? <span className="tk-chose">eligió {m.chosen}</span> : null}
+        {m.kind === "permission_request" ? <span className="tk-chose">pedido de permiso</span> : null}
       </div>
       {m.body ? <p>{m.body}</p> : null}
       {m.options?.length ? (

@@ -1003,3 +1003,37 @@
     height: 58px;
   }
 }
+
+/* "Pídeme permiso" sits in the composer bar next to the other buttons: the hint gives way before the buttons do,
+   and on the phone (where the secondary buttons are hidden) it stays visible. */
+.tk-foot > .tk-reply {
+  min-width: 0;
+}
+.tk-bar .hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tk-bar .acts {
+  flex: none;
+}
+@media (max-width: 720px) {
+  .tk-bar .acts .btn.perm {
+    display: inline-flex;
+    height: 40px;
+  }
+}
+/* With the 440 px pane the three buttons no longer fit beside the clip: drop the hint and let the buttons wrap. */
+@media (min-width: 721px) and (max-width: 1200px) {
+  .tk-bar {
+    flex-wrap: wrap;
+  }
+  .tk-bar .hint {
+    display: none;
+  }
+  .tk-bar .acts {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+}

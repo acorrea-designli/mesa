@@ -168,10 +168,37 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    - **Denegar**: denied, with his optional note.
 4. **Timeout (9 min), an error, an expired card or an unreachable Mesa: deny**, with the instruction to stop trying
    that call and post a ticket question or send `BLOCKED`.
+5. **"Pídeme permiso"** (his own flow). A classifier denial never reaches the hook unless a `permissions.ask` rule
+   matches the call, so no card appears. Every open ticket conversation has a **Pídeme permiso** button next to the
+   composer: it posts his message "Pídeme permiso" (marked `kind: permission_request`, referring to the latest Claude
+   message) and wakes the ticket's live owner with `ticket.permission_requested { ticketRef, messageId }`. The lead
+   relays `ANSWER <ref> permission_requested <message id>` to the live owner, who relays it to the teammate that is
+   blocked. Mesa does nothing else: it never edits a settings file, files no card and creates no rule. The agent that
+   is blocked:
+   1. adds the **narrowest** `permissions.ask` rule for the exact blocked call to the project's
+      `.claude/settings.local.json` (your cwd's project root): the tool and the exact command or path, no wildcard,
+      never an `allow` rule, never a broader pattern, never a user or `settings.json` file, and only on this wake;
+   2. retries that exact call once, so the hook files the ApprovalCard on the ticket, and waits for him;
+   3. after his decision (any of the three buttons, a timeout included) removes the ask rule, unless his reply says to
+      keep it. A kept rule is named in the handoff.
+6. **Only Andrés decides, but nothing proves it yet.** His decisions come from the UI routes `approve`,
+   `read-config` and `deny`, which stamp `decidedBy: "andres"`; there is no other decision route, and the hook honours
+   a decision only when `decidedBy` is `andres` (anything else is a deny). **Those three routes have no credential:**
+   any local process (a node or python script, browser automation, a shell call G10 misses) that POSTs to one is
+   stamped `andres` and honoured. Guardrail G10 is partial: it blocks only curl-style shapes with a literal
+   `127.0.0.1`, `localhost` or `[::1]` host and port 8790 or 8796, and it is known to miss `"$MESA_URL"` and
+   `$env:MESA_URL`, other host spellings (`LOCALHOST`, `127.1`, `2130706433`, `127.0.0.2`, `0.0.0.0`,
+   `[0:0:0:0:0:0:0:1]`), `//approve` and `//api` (with `curl -L`), quoted segments, variable splicing (`A=approve`),
+   and tool-name disguises (`cu''rl`, `c\url`). G10 and the rule that agents never decide are the only barrier until
+   improvement 13 (a credential for Andrés's UI). Security hardening is on hold until he asks.
 
-The lead's own prompts stay in his terminal (the hook passes the main thread through; `MESA_APPROVAL_LEAD=1` routes
-them to Mesa too). When a card pattern repeats, the lead proposes the allow rule to Andrés as a ticket question; the
-team never adds rules itself.
+**The lead's prompts.** They stay in his terminal (the hook passes the main thread through); `MESA_APPROVAL_LEAD=1`
+routes them to Mesa too. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the
+lead acts for one ticket it names it with `mesa lead focus <ref>` (stored by Mesa; it lapses 2 h after the last
+`mesa lead focus <ref>`, so re-run it to renew; `--clear` or the "Quitar foco" button on Hoy removes it; a closed
+ticket counts as none) and the hook files the lead's prompts to that ticket. The lead clears the focus when it moves
+to other work. When a card pattern repeats, the lead proposes the allow rule to Andrés as a ticket question; no one
+adds an `allow` rule on their own.
 
 ## 7. Hooks
 
@@ -180,7 +207,7 @@ piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
 
 | Event | Script | Rules |
 |---|---|---|
-| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** nobody approves, schedules, denies or undoes through the raw API · **G11** sandbox only (`MESA_ENV=sandbox`): no Slack/Basecamp/GitHub write, no `git push`, `mesa salida sent` only `--simulated`, no call to :8790 (`docs/SANDBOX.md`) |
+| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** blocks curl-style calls to the approve, schedule, deny, undo and permission-decision routes (partial, see section 6.6) · **G11** sandbox only (`MESA_ENV=sandbox`): no Slack/Basecamp/GitHub write, no `git push`, `mesa salida sent` only `--simulated`, no call to :8790 (`docs/SANDBOX.md`) |
 | PermissionRequest (all tools) | `mesa-approval.mjs` | § 6 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
 

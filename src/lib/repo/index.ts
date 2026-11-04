@@ -6,6 +6,7 @@ import { approvalsRepo } from "./approvals";
 import { chipsRepo } from "./chips";
 import { dispatchRepo } from "./dispatch";
 import { engramRepo } from "./engram";
+import { leadFocusRepo } from "./focus";
 import { ignoredRepo, ITEM_IGNORED, TASK_IGNORED } from "./ignored";
 import { lastInteractionAt, touchInteraction } from "./interaction";
 import { sourcesRepo } from "./sources";
@@ -29,6 +30,7 @@ export function createRepos(db: Db) {
     engram: engramRepo(db),
     agents: agentsRepo(db),
     approvals: approvalsRepo(db),
+    focus: leadFocusRepo(db),
     reviews: reviewsRepo(db),
     sources: sourcesRepo(db),
     ignored: ignoredRepo(db),
