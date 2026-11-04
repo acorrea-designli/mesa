@@ -1,6 +1,7 @@
 // Tablero read model (server only).
 import { repos } from "@/lib/repo";
 import type { Item } from "@/lib/domain/types";
+import { isSandbox } from "@/lib/env";
 import { ago, clock, isToday, when } from "../hoy/format";
 import { syncSummary, toCard, type Card, type SyncSummary } from "./model";
 
@@ -10,6 +11,8 @@ export interface TableroData {
   projectUrl: string;
   projectLabel: string;
   hasSample: boolean;
+  /** MESA_ENV=sandbox: GitHub is off; the board shows no sync state. */
+  sandbox: boolean;
 }
 
 const OWNER = "acorrea-designli";
@@ -39,5 +42,6 @@ export function loadTablero(now: Date = new Date()): TableroData {
     projectUrl: number ? `https://github.com/users/${OWNER}/projects/${number}` : `https://github.com/${OWNER}?tab=projects`,
     projectLabel: `${OWNER} / Mesa`,
     hasSample: tasks.some((t) => t.isSample),
+    sandbox: isSandbox(),
   };
 }

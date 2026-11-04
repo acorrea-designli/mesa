@@ -90,6 +90,7 @@ function CardView({
   selected,
   selecting,
   onPick,
+  syncOff = false,
 }: {
   c: Card;
   onMove: (c: Card) => void;
@@ -98,6 +99,8 @@ function CardView({
   selected: boolean;
   selecting: boolean;
   onPick: (e: Mods, c: Card) => void;
+  /** Sandbox: GitHub is off, so no card carries a sync flag. */
+  syncOff?: boolean;
 }) {
   const done = c.station === "done";
   const ref = useLift<HTMLElement>(selected);
@@ -153,14 +156,15 @@ function CardView({
           ))}
           <OwnerLink c={c} />
           {showWait && c.wait ? <StatusTag tone={c.wait.tone}>{c.wait.label}</StatusTag> : null}
-          {c.syncState !== "synced" ? <StatusTag tone="off">{c.syncState === "error" ? "Sin sincronizar · error" : "Sin sincronizar"}</StatusTag> : null}
+          {!syncOff && c.syncState !== "synced" ? <StatusTag tone="off">{c.syncState === "error" ? "Sin sincronizar · error" : "Sin sincronizar"}</StatusTag> : null}
         </div>
       )}
     </article>
   );
 }
 
-function SyncStatus({ s }: { s: TableroData["sync"] }) {
+function SyncStatus({ s, sandbox }: { s: TableroData["sync"]; sandbox: boolean }) {
+  if (sandbox) return <span className="tb-sync">GitHub apagado en sandbox</span>;
   if (s.state === "error")
     return (
       <span className="tb-sync" role="status">
@@ -289,7 +293,7 @@ export function TableroView({ data }: { data: TableroData }) {
     setLocal((m) => ({ ...m, [c.id]: station }));
     try {
       await tableroApi.move(c.id, station);
-      toast({ text: `«${c.title}» a ${STATION_LABEL[station]} · Sin sincronizar hasta que GitHub confirme` });
+      toast({ text: `«${c.title}» a ${STATION_LABEL[station]}${data.sandbox ? "" : " · Sin sincronizar hasta que GitHub confirme"}` });
       router.refresh();
     } catch {
       forget([c.id]);
@@ -318,7 +322,7 @@ export function TableroView({ data }: { data: TableroData }) {
     try {
       const r = await tableroApi.moveMany(ids, station);
       toast({
-        text: `${cardsLabel(ids.length)} a ${STATION_LABEL[station]} · Sin sincronizar hasta que GitHub confirme`,
+        text: `${cardsLabel(ids.length)} a ${STATION_LABEL[station]}${data.sandbox ? "" : " · Sin sincronizar hasta que GitHub confirme"}`,
         duration: 8000,
         action: { label: "Deshacer", onClick: () => void undoMoves(r.previous) },
       });
@@ -467,7 +471,7 @@ export function TableroView({ data }: { data: TableroData }) {
     },
   });
 
-  const broken = data.sync.state === "error";
+  const broken = !data.sandbox && data.sync.state === "error";
   const tabs = [{ key: "all" as const, label: "Todas", count: lanes.all }, ...LANES.map((s) => ({ key: s, label: SOURCE_LABEL[s], count: lanes[s], source: s }))];
   const visibleLanes = filter === "all" ? LANES : LANES.filter((l) => l === filter);
   const here = useMemo(() => {
@@ -479,7 +483,7 @@ export function TableroView({ data }: { data: TableroData }) {
   const anyDispatch = selCards.some(canDispatch);
 
   const renderCard = (c: Card) => (
-    <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} selected={sel.has(c.id)} selecting={selecting} onPick={pickDesk} />
+    <CardView key={c.id} c={c} onMove={setMoving} draggable menu={cardMenu(c)} selected={sel.has(c.id)} selecting={selecting} onPick={pickDesk} syncOff={data.sandbox} />
   );
 
   return (
@@ -511,7 +515,7 @@ export function TableroView({ data }: { data: TableroData }) {
           <span className="sr-only">Buscar en el tablero</span>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar en el tablero" type="search" />
         </label>
-        <SyncStatus s={data.sync} />
+        <SyncStatus s={data.sync} sandbox={data.sandbox} />
       </div>
 
       {broken ? (
@@ -684,11 +688,11 @@ export function TableroView({ data }: { data: TableroData }) {
                         {selecting ? <span className={on ? "tb-ph-box on" : "tb-ph-box"} aria-hidden="true" /> : null}
                         <b>{c.title}</b>
                         <small>{[...c.chips.map((x) => x.label), c.time].join(" · ")}</small>
-                        {c.wait || c.owner || c.syncState !== "synced" ? (
+                        {c.wait || c.owner || (!data.sandbox && c.syncState !== "synced") ? (
                           <span className="tb-ph-tags">
                             {c.owner ? <span className="lk src-claude tb-owner">{c.owner.label}</span> : null}
                             {c.wait && !(c.owner && c.wait.tone === "cl") ? <StatusTag tone={c.wait.tone}>{c.wait.label}</StatusTag> : null}
-                            {c.syncState !== "synced" ? <StatusTag tone="off">{c.syncState === "error" ? "Sin sincronizar · error" : "Sin sincronizar"}</StatusTag> : null}
+                            {!data.sandbox && c.syncState !== "synced" ? <StatusTag tone="off">{c.syncState === "error" ? "Sin sincronizar · error" : "Sin sincronizar"}</StatusTag> : null}
                           </span>
                         ) : null}
                       </button>
