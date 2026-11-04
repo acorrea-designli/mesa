@@ -163,7 +163,7 @@ export async function check(input, { fetchImpl = fetch, base } = {}) {
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):8790\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/decision\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+    if (/(127\.0\.0\.1|localhost|\[::1\]):8790\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/decision\b|\/reviews\/[^/\s"']+\/actions\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
       return block("G10", "rule 3: approvals, plan approvals and permission decisions are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, failed) and wait for the wake event.");
     }
 
@@ -189,8 +189,8 @@ export async function check(input, { fetchImpl = fetch, base } = {}) {
       if (/\bgh\s+pr\s+(review|comment|merge|close|reopen|edit|ready)\b|\bgh\s+issue\s+(comment|create|close|reopen|edit|delete)\b|\bgh\s+release\s+create\b/.test(c)) {
         return block("G4", "rule 3: that gh command writes to GitHub on Andrés's behalf. Only `gh pr create --draft` for your own branch is yours; everything else goes through the lead after approval.");
       }
-      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|deleted|restored)\b/.test(c)) {
-        return block("G4", "rule 3: only the lead reports a salida as sent, deleted or restored.");
+      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|failed|hold|bounce|deleted|restored)\b/.test(c)) {
+        return block("G4", "rule 3: only the lead reports a salida as sent, failed, held, bounced, deleted or restored.");
       }
     }
 

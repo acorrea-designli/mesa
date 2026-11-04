@@ -112,3 +112,9 @@ test("G10: no approvals through the raw API", async () => {
   assert.equal(await rule(sh(mate(), "curl -X POST http://127.0.0.1:8790/api/approvals/ap1/decision -d x")), "G10");
   assert.equal(await rule(sh(lead, "curl -s -m 3 http://127.0.0.1:8790/api/health")), null);
 });
+
+test("G10 covers the review buttons; G4 covers every lead-only salida report", async () => {
+  assert.equal(await rule(sh(lead, "curl -X POST http://127.0.0.1:8790/api/reviews/r1/actions -d '{\"action\":\"approve\"}'")), "G10");
+  assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida hold s1 --reason down")), "G4");
+  assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida bounce s1 --reason moved")), "G4");
+});

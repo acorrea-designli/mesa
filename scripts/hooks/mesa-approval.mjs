@@ -13,10 +13,11 @@
 //   stdin  : hook JSON { tool_name, tool_input, cwd, agent_id?, transcript_path, session_id, ... }
 //   stdout : { hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior, message? } } }
 //
-// env: MESA_URL (default http://127.0.0.1:8790), MESA_APPROVAL_TIMEOUT_MS (default 540000; keep it under the
+// env: MESA_URL (default http://127.0.0.1:8790), MESA_TOKEN, MESA_AGENT / MESA_TICKET (separately launched sessions
+//      only), MESA_APPROVAL_TIMEOUT_MS (default 540000; keep it under the
 //      registered hook timeout of 600 s), MESA_APPROVAL_POLL_MS (default 2000).
 import { pathToFileURL } from "node:url";
-import { closestRules, loadAllowRules, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
+import { closestRules, loadAllowRules, mesaCall, parseName, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const MAX_DETAIL = 20_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -72,13 +73,19 @@ export function readConfigMessage(hints, ticketRef) {
 // Never throws and never allows by default.
 export async function approve(
   input,
-  { timeoutMs = 540_000, pollMs = 2000, fetchImpl = fetch, base, env = process.env, rules } = {},
+  { timeoutMs = 540_000, pollMs = 2000, waitSec = 25, fetchImpl = fetch, base, env = process.env, rules } = {},
 ) {
   let agent;
   let call;
   let hints;
   try {
     agent = resolveAgent(input);
+    // A separately launched session (claude -p) carries its identity in MESA_AGENT / MESA_TICKET. In-process
+    // teammates share the lead's environment, so for them the name from the transcript always wins.
+    if ((!agent || !agent.role) && env.MESA_AGENT) {
+      const named = parseName(env.MESA_AGENT);
+      agent = { ...named, ticketRef: named.ticketRef ?? env.MESA_TICKET ?? null };
+    }
     if (!agent && env.MESA_APPROVAL_LEAD !== "1") return null;
     call = describe(input);
     hints = closestRules(input, rules ?? loadAllowRules(input?.cwd, env));
@@ -112,13 +119,16 @@ export async function approve(
     return deny(`Denied: Mesa is unreachable, so nobody could approve ${call.tool} (${call.summary}) (${err.message}). ${NO_RETRY}`);
   }
 
+  // Long-poll (GET /api/approvals/:id?wait=N, N <= 55). Mesa expires the card at expiresAt and refuses any decision
+  // after it, so a call this hook denies on timeout can never be allowed later.
   while (Date.now() < deadline) {
-    await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
+    const wait = Math.max(1, Math.min(waitSec, Math.ceil((deadline - Date.now()) / 1000)));
     let a;
     try {
-      const data = await mesaCall(`/api/approvals/${encodeURIComponent(id)}`, opts);
+      const data = await mesaCall(`/api/approvals/${encodeURIComponent(id)}?wait=${wait}`, { ...opts, timeoutMs: (wait + 5) * 1000 });
       a = data.approval ?? data;
     } catch {
+      await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
       continue; // a Mesa restart while we wait still gets its real decision; the deadline ends it
     }
     if (a.decision === "allow") return output("allow");
@@ -131,10 +141,6 @@ export async function approve(
       return deny(`Denied: approval ${id} was closed (${a.status}) without a decision. ${NO_RETRY}`);
     }
   }
-  await mesaCall(`/api/approvals/${encodeURIComponent(id)}/decision`, {
-    ...opts,
-    body: { decision: "deny", actor: "hook", note: "timeout" },
-  }).catch(() => {});
   return deny(`Denied: nobody answered approval ${id} for ${call.tool} (${call.summary}) before the timeout. ${NO_RETRY}`);
 }
 

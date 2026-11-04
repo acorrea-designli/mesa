@@ -26,7 +26,7 @@ export async function check(input, { fetchImpl = fetch, base, now = Date.now(), 
 
   let handoffs;
   try {
-    const data = await mesaCall(`/api/handoffs?agent=${encodeURIComponent(agent.name)}`, { fetchImpl, base, timeoutMs: 4000 });
+    const data = await mesaCall(`/api/handoffs?agent=${encodeURIComponent(agent.name)}&ticket=${encodeURIComponent(agent.ticketRef)}`, { fetchImpl, base, timeoutMs: 4000 });
     handoffs = (data.handoffs ?? data ?? []).filter((h) => !h.ticketRef || h.ticketRef === agent.ticketRef);
   } catch (err) {
     return {

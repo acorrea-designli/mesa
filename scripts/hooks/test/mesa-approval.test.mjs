@@ -9,7 +9,7 @@ const rules = [
   { rule: "Bash(node G:/WorkSpace/designli/ops/bin/mesa *)", file: "settings.json" },
   { rule: "PowerShell(gh api repos/*)", file: "settings.json" },
 ];
-const fast = { timeoutMs: 200, pollMs: 5, rules, env: {} };
+const fast = { timeoutMs: 200, pollMs: 5, waitSec: 1, rules, env: {} };
 
 const decided = (decision, extra = {}) =>
   fakeMesa({
@@ -66,7 +66,7 @@ test("Denegar denies with Andrés's note", async () => {
   assert.match(r.hookSpecificOutput.decision.message, /Do not retry/);
 });
 
-test("timeout denies, closes the card and points at a ticket question", async () => {
+test("timeout denies, leaves expiry to Mesa and points at a ticket question", async () => {
   const { input } = fakeAgent({ name: "tl-t5" });
   const mesa = fakeMesa({
     "POST /api/approvals": { approval: { id: "ap9" } },
@@ -77,8 +77,18 @@ test("timeout denies, closes the card and points at a ticket question", async ()
   assertShape(r, "deny");
   assert.match(r.hookSpecificOutput.decision.message, /before the timeout/);
   assert.match(r.hookSpecificOutput.decision.message, /ticket reply/);
-  const close = mesa.calls.find((c) => c.key === "POST /api/approvals/ap9/decision");
-  assert.deepEqual(close.body, { decision: "deny", actor: "hook", note: "timeout" });
+  assert.equal(mesa.calls.some((c) => c.key.includes("/decision")), false);
+  assert.ok(mesa.calls.some((c) => c.key.startsWith("GET /api/approvals/ap9?wait=")));
+});
+
+test("a separately launched session is identified by MESA_AGENT and MESA_TICKET", async () => {
+  const mesa = decided("allow");
+  const lead = { tool_name: "Bash", tool_input: { command: "ls" }, transcript_path: "x.jsonl", session_id: "s" };
+  await approve(lead, { ...fast, env: { MESA_AGENT: "researcher-t8" }, fetchImpl: mesa.fetchImpl });
+  assert.equal(mesa.calls[0].body.ticketRef, "t8");
+  const other = decided("allow");
+  await approve(lead, { ...fast, env: { MESA_AGENT: "triage-am", MESA_TICKET: "t3" }, fetchImpl: other.fetchImpl });
+  assert.deepEqual([other.calls[0].body.agent, other.calls[0].body.ticketRef], ["triage-am", "t3"]);
 });
 
 test("unreachable Mesa denies", async () => {
