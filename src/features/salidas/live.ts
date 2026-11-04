@@ -1,38 +1,32 @@
 "use client";
-// Stand-in for lane C's `useLive` (src/lib/live/useLive.ts, SSE on /api/stream).
-// Until it lands on main this polls: the callback runs every 5 s while the tab is
-// visible, and on focus. Swap the import for lane C's hook when it merges.
+// Live updates for Tickets and Salidas: lane C's SSE hook (src/lib/live/useLive.ts on
+// /api/stream), which falls back to polling when the stream cannot be opened.
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLive as useLiveStream, type LiveChange } from "@/lib/live/useLive";
 
-export interface LiveEvent {
-  entityType: string;
-  entityId: string;
-  kind: string;
+export type LiveEvent = LiveChange;
+
+/** Calls `cb` on every change on the board (`pollMs` only applies to the polling fallback). */
+export function useLive(cb: (e: LiveEvent) => void, pollMs = 5000): void {
+  useLiveStream(cb, { pollMs });
 }
 
-export function useLive(cb: (e: LiveEvent) => void, intervalMs = 5000): void {
-  const ref = useRef(cb);
-  useEffect(() => {
-    ref.current = cb;
-  });
-  useEffect(() => {
-    const tick = () => {
-      if (document.visibilityState === "visible") ref.current({ entityType: "poll", entityId: "", kind: "poll" });
-    };
-    const id = window.setInterval(tick, intervalMs);
-    window.addEventListener("focus", tick);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener("focus", tick);
-    };
-  }, [intervalMs]);
-}
-
-/** Refresh the server components on every live event. Returns a manual refresh. */
+/** Refresh the server components on changes, coalesced per burst. Returns a manual refresh. */
 export function useLiveRefresh(): () => void {
   const router = useRouter();
-  useLive(() => router.refresh());
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const later = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => router.refresh(), 250);
+  }, [router]);
+  useLiveStream(later);
   return router.refresh;
 }
 
