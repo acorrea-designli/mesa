@@ -7,7 +7,16 @@ import { homedir } from "node:os";
 export const ROLES = ["tl", "reviewer", "dev", "devops", "researcher", "writer"];
 export const NAME_RE = new RegExp(`^(${ROLES.join("|")})-(t\\d+)(?:-(\\d+))?$`);
 
-export const mesaBase = () => (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, "");
+// Sandbox (docs/SANDBOX.md): MESA_ENV=sandbox from the settings env, or `--env sandbox` on the hook command, which
+// the installer adds for a sandbox folder so the hooks know even when the env does not reach them.
+export function hookSandbox(env = process.env, argv = process.argv) {
+  const i = argv.indexOf("--env");
+  if (i >= 0 && argv[i + 1]) return argv[i + 1] === "sandbox";
+  return String(env.MESA_ENV ?? "").trim().toLowerCase() === "sandbox";
+}
+
+// The board the hooks talk to: MESA_URL, else the sandbox board in sandbox, else the live one.
+export const mesaBase = () => (process.env.MESA_URL ?? (hookSandbox() ? "http://127.0.0.1:8796" : "http://127.0.0.1:8790")).replace(/\/$/, "");
 
 export async function readStdinJson() {
   const chunks = [];

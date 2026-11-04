@@ -35,6 +35,7 @@ function SweepButton({ compact }: { compact?: boolean }) {
     setBusy(true);
     try {
       const res = await fetch("/api/sweep", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (res.status === 409) return void toast({ text: "Sandbox: aquí no se barre Slack ni Basecamp" });
       if (!res.ok) throw new Error();
       toast({ text: "Claude está barriendo Slack y Basecamp" });
     } catch {

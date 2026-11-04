@@ -14,6 +14,16 @@ if `echo $MESA_SESSION` is empty, pass `--session lead` on every call.
 
 Say one line to Andrés before you start and one line per phase. Stop at the first failing check and say which.
 
+**Sandbox check first.** Run `echo $MESA_ENV`. If it prints `sandbox`, your first line to Andrés is
+"Sandbox: Mesa de prueba en :8796, nada sale de aquí." and these replace the steps below (`docs/SANDBOX.md`):
+
+- § 0: `pwd` is `/g/WorkSpace/designli-sandbox`. § 1: Mesa is `curl -s -m 3 http://127.0.0.1:8796/api/health` and
+  must answer `"env":"sandbox"`; down: ask Andrés to run `pnpm -C G:/WorkSpace/designli/ops sandbox` (never start or
+  call the live board on :8790). Hooks: `G:/WorkSpace/designli-sandbox/.claude/settings.json`.
+- engram: pass `project: "mesa-sandbox"` on every call (yours and, through the spawn prompt, every teammate's); the
+  session summary key is `session/mesa-sandbox-lead`. Skip § 1b.
+- § 4: no sweeper (`mesa-sweep` is a no-op here). Sends follow the sandbox notes in `mesa-salida` and `mesa-review`.
+
 ## 0. Where you are
 
 `pwd` must print `/g/WorkSpace/designli` (or `G:\WorkSpace\designli`). Anything else: stop, engram writes would fail.

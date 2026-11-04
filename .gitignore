@@ -34,6 +34,7 @@ src/plugins/impeccable-live.client.ts
 # app
 node_modules/
 .next/
+.next-sandbox/
 out/
 coverage/
 *.log

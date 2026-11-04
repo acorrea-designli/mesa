@@ -300,4 +300,19 @@ describe("mesa CLI", () => {
     expect(requests[4]).toMatchObject({ method: "GET", path: "/api/tasks", query: { station: "todo" } });
     expect((await mesa(["task", "explode"])).code).toBe(2);
   });
+
+  it("sends --simulated as simulated:true without a permalink, in either argument order", async () => {
+    for (const args of [["salida", "sent", "sa_1", "--simulated"], ["salida", "sent", "--simulated", "sa_1"]]) {
+      requests = [];
+      const r = await mesa(args);
+      expect(r.code).toBe(0);
+      expect(requests[0]).toMatchObject({ method: "POST", path: "/api/salidas/sa_1/transition", body: { type: "sent", simulated: true } });
+      expect(requests[0].body.permalink).toBeUndefined();
+    }
+    const both = await mesa(["salida", "sent", "sa_1", "--simulated", "--permalink", "https://x"]);
+    expect(both.code).toBe(2);
+    const real = await mesa(["salida", "sent", "sa_1", "--permalink", "https://x"]);
+    expect(real.code).toBe(0);
+    expect(requests.at(-1).body).toEqual({ type: "sent", permalink: "https://x" });
+  });
 });

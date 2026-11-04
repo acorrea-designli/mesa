@@ -15,13 +15,17 @@
 //                card through the raw API: those are Andrés's clicks.
 //   G6 (rule 8)  run_in_background for git, gh, tests or builds. Only `mesa wait` may run in the background.
 //   G7 (rule 10) `gh pr create` without --draft, bare force push, --no-verify, `gh auth` changes.
+//   G11 (rule 16) Sandbox (MESA_ENV=sandbox, or `--env sandbox` on the hook command), lead and teammates alike:
+//                no Slack or Basecamp write, no pr-gh.mjs write, no gh write (api with a method or fields, pr, issue,
+//                repo, release, workflow ...), no git push, no `mesa salida sent` without --simulated, and no call to
+//                the live board on :8790. Live mode is unaffected. docs/SANDBOX.md.
 //   (G9 retired: commit message shape and attribution belong to the global commit-guard hook,
 //    C:/Users/z4yross/.claude/hooks/commit-guard.mjs.)
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
+import { hookSandbox, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
 
@@ -105,8 +109,39 @@ async function releasedGithubSalida(repo, pr, { fetchImpl, base }) {
   );
 }
 
+// G11: what the sandbox never lets out, for the lead and every teammate. Returns a reason or null.
+const NADA = "sandbox: nada sale de aquí.";
+const GH_WRITE =
+  /\bgh\s+(pr\s+(create|merge|review|comment|close|reopen|edit|ready|lock|unlock)|issue\s+(create|comment|close|reopen|edit|delete|transfer|pin|unpin|lock|unlock|develop)|repo\s+(create|edit|delete|fork|rename|archive|unarchive|sync|deploy-key|set-default)|release\s+(create|edit|delete|upload)|workflow\s+(run|enable|disable)|run\s+(rerun|cancel|delete)|label\s+(create|edit|delete|clone)|secret\s+(set|delete)|variable\s+(set|delete)|gist\s+(create|edit|delete)|project\s+(create|edit|delete|close|copy|item-add|item-create|item-edit|item-delete|item-archive|field-create|field-delete|link|unlink|mark-template)|cache\s+delete)\b/;
+const GH_API_WRITE_FLAGS = /(?:^|\s)(?:-X|--method)[\s=]*(POST|PUT|PATCH|DELETE)\b|(?:^|\s)(?:-f|-F|--field|--raw-field|--input)\s/i;
+
+export function sandboxBlock(tool, ti) {
+  if (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool)) {
+    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
+  }
+  if (tool !== "Bash" && tool !== "PowerShell") return null;
+  const cmd = String(ti.command ?? "");
+  const c = cmd.replace(/'[^']*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""'); // quoted text never matches a verb
+  if (/(127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0):8790\b/.test(cmd)) {
+    return `${NADA} That call goes to the live board on :8790. This session works only against the sandbox board, http://127.0.0.1:8796 (MESA_URL); drop the override.`;
+  }
+  if (/pr-gh\.mjs\s+(approve|review|reply)\b/.test(c)) {
+    return `${NADA} pr-gh.mjs writes to GitHub. Report each github salida as \`mesa salida sent <id> --simulated\` and record findings with \`mesa finding upsert\` (no ghCommentId).`;
+  }
+  if (GH_WRITE.test(c) || (/\bgh\s+api\b/.test(c) && GH_API_WRITE_FLAGS.test(c))) {
+    return `${NADA} That gh command writes to GitHub. Reads (gh api GET, gh pr view/diff, gh search) are fine; a PR is a local branch: commit in your worktree and name the branch in the ticket (\`mesa handoff ... --branch <b>\`).`;
+  }
+  if (/\bgit\b[^\n|;&]*\bpush\b/.test(c)) {
+    return `${NADA} git push publishes the branch. Keep it local in your worktree and name the branch in the ticket (\`mesa handoff ... --branch <b>\`); that branch is the PR.`;
+  }
+  if (/\bmesa\b[^\n|;&]*\bsalida\s+sent\b/.test(c) && !/--simulated\b/.test(c)) {
+    return `${NADA} Nothing was really sent, so report it as \`mesa salida sent <id> --simulated\` (no --permalink); Mesa records sandbox://<source>/<id>.`;
+  }
+  return null;
+}
+
 // Returns null (allowed) or { rule, reason }.
-export async function check(input, { fetchImpl = fetch, base } = {}) {
+export async function check(input, { fetchImpl = fetch, base, sandbox = hookSandbox() } = {}) {
   const tool = String(input?.tool_name ?? "");
   const ti = input?.tool_input ?? {};
   const agent = resolveAgent(input); // null = the lead
@@ -132,6 +167,11 @@ export async function check(input, { fetchImpl = fetch, base } = {}) {
     if (msg && msg.split(/\s+/).length <= 20 && /^(ack(nowledged)?|understood|noted|got it|ok(ay)?|thanks?( you)?|will do|on it|roger|entendido|recibido)\b/i.test(msg.trim())) {
       return block("G3", "rule 5: acknowledgement-only message. Send a message only when it changes the recipient's next action.");
     }
+  }
+
+  if (sandbox) {
+    const why = sandboxBlock(tool, ti);
+    if (why) return block("G11", why);
   }
 
   if (teammate && (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool))) {
@@ -164,7 +204,7 @@ export async function check(input, { fetchImpl = fetch, base } = {}) {
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):8790\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/decision\b|\/reviews\/[^/\s"']+\/actions\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/decision\b|\/reviews\/[^/\s"']+\/actions\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
       return block("G10", "rule 3: approvals, plan approvals and permission decisions are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, failed) and wait for the wake event.");
     }
 

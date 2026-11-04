@@ -164,7 +164,7 @@ piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
 
 | Event | Script | Rules |
 |---|---|---|
-| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** nobody approves, schedules, denies or undoes through the raw API |
+| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** nobody approves, schedules, denies or undoes through the raw API · **G11** sandbox only (`MESA_ENV=sandbox`): no Slack/Basecamp/GitHub write, no `git push`, `mesa salida sent` only `--simulated`, no call to :8790 (`docs/SANDBOX.md`) |
 | PermissionRequest (all tools) | `mesa-approval.mjs` | § 6 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
 
@@ -192,6 +192,9 @@ node G:/WorkSpace/designli/ops/scripts/install-team.mjs --dry-run   # the plan
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs             # links + hooks + env
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs --allow     # also the read-only allow rules
 ```
+
+The sandbox folder (`docs/SANDBOX.md`) installs the same way with
+`--target G:/WorkSpace/designli-sandbox --env sandbox`.
 
 Run it with the mise node (`C:/Users/z4yross/AppData/Local/mise/installs/node/22.23.2/node.exe`); the hooks are
 registered with the node that ran the installer. Re-run after every pull. Restart Claude Code in

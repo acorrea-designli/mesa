@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ALLOW, ENV, hookEntries, install, mergeSettings } from "../install-team.mjs";
+import { ALLOW, ENV, hookEntries, install, mergeSettings, SANDBOX_ENV } from "../install-team.mjs";
 
 const hooks = hookEntries("G:/WorkSpace/designli/ops", "C:/node.exe");
 
@@ -72,4 +72,28 @@ test("dry run writes nothing", () => {
   const target = mkdtempSync(join(tmpdir(), "mesa-install-"));
   install({ target, node: "C:/node.exe", dryRun: true, log: () => {} });
   assert.equal(existsSync(join(target, ".claude")), false);
+});
+
+test("--env sandbox creates the folder, points every session at :8796 and tags the hooks", () => {
+  const target = join(mkdtempSync(join(tmpdir(), "mesa-install-")), "designli-sandbox");
+  const plan = [];
+  install({ target, node: "C:/node.exe", env: "sandbox", dryRun: true, log: (l) => plan.push(l) });
+  assert.equal(existsSync(target), false);
+  assert.ok(plan[0].startsWith("mkdir"));
+  install({ target, node: "C:/node.exe", env: "sandbox", log: () => {} });
+  const s = JSON.parse(readFileSync(join(target, ".claude", "settings.json"), "utf8"));
+  assert.deepEqual(s.env, { MESA_URL: "http://127.0.0.1:8796", MESA_ENV: "sandbox", MESA_SESSION: "lead" });
+  for (const e of ["PreToolUse", "PermissionRequest", "Stop", "SubagentStop"]) assert.match(s.hooks[e][0].hooks[0].command, / --env sandbox$/);
+  assert.ok(lstatSync(join(target, ".claude", "skills", "mesa-start")).isSymbolicLink());
+  assert.ok(existsSync(join(target, ".claude", "mesa", "spawn-preamble.md")));
+});
+
+test("--env sandbox overrides a live MESA_URL and never installs into the live folder", () => {
+  const { settings, added } = mergeSettings({ env: { MESA_URL: "http://127.0.0.1:8790", OTHER: "1" } }, { hooks: {}, env: SANDBOX_ENV, allow: [], forceEnv: true });
+  assert.equal(settings.env.MESA_URL, "http://127.0.0.1:8796");
+  assert.equal(settings.env.OTHER, "1");
+  assert.ok(added.some((a) => a.includes("8790 -> http://127.0.0.1:8796")));
+  assert.throws(() => install({ target: "G:/WorkSpace/designli", env: "sandbox", dryRun: true, log: () => {} }), /never installs into the live folder/);
+  // Live installs keep their hook commands unchanged.
+  assert.doesNotMatch(hookEntries("G:/WorkSpace/designli/ops", "C:/node.exe").Stop[0].hooks[0].command, /--env/);
 });

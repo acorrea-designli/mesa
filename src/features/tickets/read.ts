@@ -1,5 +1,6 @@
 // Server read model for Tickets A (list + thread).
 import type { Repos } from "@/lib/repo";
+import { isSimulated } from "@/lib/domain/sandbox";
 import type { Approval, Brief, Handoff, Item, PlannedAction, Review, Salida, TeamAgent, Ticket, TicketDetail } from "@/lib/domain/types";
 
 export type TicketTab = "open" | "you" | "closed";
@@ -23,7 +24,7 @@ export interface ThreadData {
   approvals: Approval[];
   reviews: Review[];
   item: Pick<Item, "id" | "source" | "title" | "excerpt" | "url" | "project"> | null;
-  salidas: Pick<Salida, "id" | "status" | "source" | "title">[];
+  salidas: (Pick<Salida, "id" | "status" | "source" | "title"> & { simulated?: boolean })[];
   refTitles: Record<string, string>;
 }
 
@@ -108,7 +109,7 @@ export function threadData(r: Repos, idOrRef: string): ThreadData {
     salidas: r.salidas
       .list()
       .filter((s) => s.ticketId === ticket.id)
-      .map((s) => ({ id: s.id, status: s.status, source: s.source, title: s.title })),
+      .map((s) => ({ id: s.id, status: s.status, source: s.source, title: s.title, simulated: isSimulated(s) })),
     refTitles,
   };
 }

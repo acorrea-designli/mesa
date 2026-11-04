@@ -1,0 +1,55 @@
+/* SANDBOX band (MESA_ENV=sandbox): dashed ink frame + top tab. No layout space, no pointer events. */
+.sbx-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  border: 2px dashed var(--ink);
+  pointer-events: none;
+}
+.sbx-tab {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  padding: 3px 12px 4px;
+  background: var(--raise);
+  border: 2px dashed var(--ink);
+  border-top: 0;
+  border-radius: 0 0 var(--r-tag) var(--r-tag);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.sbx-tab b {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.sbx-tab span {
+  color: var(--ink2);
+}
+.sbx-short {
+  display: none;
+}
+@media (max-width: 720px) {
+  .sbx-tab {
+    top: auto;
+    bottom: var(--phone-tabs-h);
+    border-top: 2px dashed var(--ink);
+    border-bottom: 0;
+    border-radius: var(--r-tag) var(--r-tag) 0 0;
+  }
+  .sbx-long {
+    display: none;
+  }
+  .sbx-short {
+    display: inline;
+  }
+}

@@ -5,7 +5,9 @@
 //
 // Enabled when MESA_GITHUB=on, or when MESA_GITHUB is unset and MESA_DB is unset (the real
 // board on data/mesa.db). Dev servers on scratch databases (MESA_DB=…) do not touch GitHub
-// unless they opt in, so test data never reaches the real Project.
+// unless they opt in, so test data never reaches the real Project. In sandbox (MESA_ENV=sandbox) it is
+// always off, MESA_GITHUB=on included: no polling, no Project push or pull.
+import { isSandbox } from "../env";
 import { repos, type Repos } from "../repo";
 import { GH_USER, GhError, runGh, type GhRunner } from "./gh";
 import { ingestTick, initialIngestState, healthNote, type IngestState, type TickResult } from "./github-ingest";
@@ -13,6 +15,7 @@ import { ensureProject, pullProject, pushPending, readProjectSettings, type Proj
 import { publishChange } from "../live/bus";
 
 export function githubEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (isSandbox(env)) return false;
   const v = env.MESA_GITHUB?.toLowerCase();
   if (v === "on" || v === "1" || v === "true") return true;
   if (v === "off" || v === "0" || v === "false") return false;

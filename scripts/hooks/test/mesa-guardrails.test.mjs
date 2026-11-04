@@ -127,3 +127,111 @@ test("G10 covers the review buttons; G4 covers every lead-only salida report", a
   assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida hold s1 --reason down")), "G4");
   assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida bounce s1 --reason moved")), "G4");
 });
+
+// ---------- G11: sandbox (MESA_ENV=sandbox) ----------
+
+const sbx = (base, tool_name, tool_input, fetchImpl = unreachable) => check({ ...base, tool_name, tool_input }, { fetchImpl, sandbox: true });
+const sbxSh = (base, command) => sbx(base, "Bash", { command });
+const live = (base, tool_name, tool_input, fetchImpl = unreachable) => check({ ...base, tool_name, tool_input }, { fetchImpl, sandbox: false });
+const NADA = /^sandbox: nada sale de aquí\. /;
+
+test("G11: Slack and Basecamp writes are blocked for the lead and teammates, with what to do instead", async () => {
+  const released = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [{ id: "s1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, versions: [{ n: 1, body: "hola" }] }] } });
+  for (const who of [lead, mate()]) {
+    for (const [tool, input] of [
+      ["mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola" }],
+      ["mcp__claude_ai_Slack__slack_add_reaction", { name: "eyes" }],
+      ["mcp__basecamp__create_comment", { content: "hola" }],
+      ["mcp__basecamp__trash_comment", { id: 1 }],
+      ["mcp__basecamp__create_campfire_line", { content: "hola" }],
+    ]) {
+      const r = await sbx(who, tool, input, released.fetchImpl);
+      assert.equal(r?.rule, "G11", tool);
+      assert.match(r.reason, NADA);
+      assert.match(r.reason, /mesa salida sent <id> --simulated/);
+    }
+  }
+  // Reads stay open.
+  assert.equal(await rule(sbx(lead, "mcp__basecamp__get_comment", { id: 1 })), null);
+  assert.equal(await rule(sbx(mate(), "mcp__claude_ai_Slack__slack_read_thread", { channel_id: "C1" })), null);
+});
+
+test("G11: pr-gh.mjs and every gh write are blocked; reads pass", async () => {
+  for (const who of [lead, mate()]) {
+    for (const cmd of [
+      "node C:/Users/z4yross/.claude-work/pr-gh.mjs approve a/b 1 abc",
+      "node C:/Users/z4yross/.claude-work/pr-gh.mjs review a/b 1 COMMENT p.json",
+      "gh api -X POST repos/a/b/issues/1/comments -f body=x",
+      "gh api repos/a/b/pulls/1/reviews --method PUT",
+      "gh api graphql -f query=x",
+      'gh pr create --draft --title "feat(x): y" --body-file b.md',
+      "gh pr merge 12 --squash",
+      "gh pr review 12 --approve",
+      'gh pr comment 12 --body "x"',
+      "gh issue create --title x",
+      "gh issue comment 3 --body x",
+      "gh repo create acorrea-designli/x --private",
+      "gh repo edit --visibility public",
+      "gh release create v1",
+      "gh workflow run ci.yml",
+    ]) {
+      const r = await sbxSh(who, cmd);
+      assert.equal(r?.rule, "G11", cmd);
+      assert.match(r.reason, NADA);
+    }
+  }
+  for (const cmd of ["gh api repos/a/b/pulls/1/files", "gh pr view 12 --json title", "gh pr diff 12", "gh search prs --review-requested=@me", "gh issue view 3", "gh repo view a/b"]) {
+    assert.equal(await rule(sbxSh(lead, cmd)), null, cmd);
+  }
+});
+
+test("G11: no git push; local commits and branches are the PR", async () => {
+  for (const cmd of ["git push origin feat/x", "git -C G:/WorkSpace/designli-wt/dev-t3 push -u origin HEAD", "git push --force-with-lease"]) {
+    const r = await sbxSh(mate(), cmd);
+    assert.equal(r?.rule, "G11", cmd);
+    assert.match(r.reason, /--branch/);
+  }
+  const commit = 'git -C G:/WorkSpace/designli-wt/dev-t3 -c user.name="dev" -c user.email="dev@example.com" commit -m "feat(x): push the button"';
+  assert.equal(await rule(sbxSh(mate(), commit)), null);
+  assert.equal(await rule(sbxSh(mate(), "git -C G:/WorkSpace/designli-wt/dev-t3 switch -c feat/t3")), null);
+});
+
+test("G11: the lead reports sends only as simulated and never calls the live board", async () => {
+  const r = await sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida sent s1 --permalink https://x");
+  assert.equal(r?.rule, "G11");
+  assert.match(r.reason, /--simulated/);
+  assert.equal(await rule(sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida sent s1 --simulated")), null);
+  assert.equal(await rule(sbxSh(lead, "MESA_URL=http://127.0.0.1:8790 node G:/WorkSpace/designli/ops/bin/mesa ticket list")), "G11");
+  assert.equal(await rule(sbxSh(lead, "curl -s -m 3 http://127.0.0.1:8790/api/health")), "G11");
+  assert.equal(await rule(sbxSh(lead, "curl -s -m 3 http://127.0.0.1:8796/api/health")), null);
+  // Teammates still cannot report sends at all (G4), simulated or not.
+  assert.equal(await rule(sbxSh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida sent s1 --simulated")), "G4");
+  // G10 also guards the sandbox board's raw API.
+  assert.equal(await rule(sbxSh(lead, `curl -s -X POST http://127.0.0.1:8796/api/salidas/s1/transition -d '{"type":"approve","version":1}'`)), "G10");
+});
+
+test("G11: live mode is unaffected", async () => {
+  const salidas = fakeMesa({
+    "GET /api/salidas?status=sending": {
+      salidas: [
+        { id: "s1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, versions: [{ n: 1, body: "hola Ana" }] },
+        { id: "g1", source: "github", releasedAt: "2026-11-03T20:00:00Z", destination: { kind: "github_review", repo: "a/b", pr: 1, event: "APPROVE", postAs: "x" } },
+      ],
+    },
+  });
+  assert.equal(await rule(live(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola Ana" }, salidas.fetchImpl)), null);
+  assert.equal(await rule(live(lead, "PowerShell", { command: "node C:/Users/z4yross/.claude-work/pr-gh.mjs approve a/b 1 abc" }, salidas.fetchImpl)), null);
+  assert.equal(await rule(live(mate(), "Bash", { command: 'gh pr create --draft --title "feat(x): y" --body-file b.md' })), null);
+  assert.equal(await rule(live(mate(), "Bash", { command: "git push -u origin feat/x" })), null);
+  assert.equal(await rule(live(lead, "Bash", { command: "node G:/WorkSpace/designli/ops/bin/mesa salida sent s1 --permalink https://x" })), null);
+  assert.equal(await rule(live(lead, "Bash", { command: "curl -s -m 3 http://127.0.0.1:8790/api/health" })), null);
+  assert.equal(await rule(live(mate(), "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "x" })), "G4");
+});
+
+test("hookSandbox reads MESA_ENV or the --env argument the installer adds", async () => {
+  const { hookSandbox } = await import("../lib.mjs");
+  assert.equal(hookSandbox({}, ["node", "x.mjs"]), false);
+  assert.equal(hookSandbox({ MESA_ENV: "sandbox" }, ["node", "x.mjs"]), true);
+  assert.equal(hookSandbox({}, ["node", "x.mjs", "--env", "sandbox"]), true);
+  assert.equal(hookSandbox({ MESA_ENV: "sandbox" }, ["node", "x.mjs", "--env", "live"]), false);
+});

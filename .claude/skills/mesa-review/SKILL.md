@@ -113,3 +113,6 @@ github salida for that repo and PR):
   A finding whose file is not in the diff has no `path`: its text goes in the review body.
 - Then for each salida `MESA salida sent <id> --permalink <url>` (or `failed --error`), `MESA finding upsert` with the
   returned `ghCommentId`, and one `SENT <ref> <salidaIds> <commentIds>` to the reviewer.
+- **Sandbox** (`echo $MESA_ENV` prints `sandbox`): no pr-gh.mjs call (hook G11 blocks it). For each salida
+  `MESA salida sent <id> --simulated`, no `ghCommentId` on the findings, and `SENT <ref> <salidaIds> simulated` to
+  the reviewer.
