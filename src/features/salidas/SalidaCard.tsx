@@ -14,6 +14,7 @@ import { hhmm, sourceLabel, undoOpen, whenLabel } from "./model";
 import {
   Banner,
   cx,
+  DestLink,
   Diff,
   DiffLine,
   Facts,
@@ -100,7 +101,10 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
       <OriginStrip s={s} histOpen={histOpen} onToggle={() => setHistOpen((o) => !o)} />
       <Kind source={s.source}>Salida · {sourceLabel(s.source)}</Kind>
       <h2>{s.title || "Mensaje"}</h2>
-      <div className="k">Destino exacto</div>
+      <div className="sa-destrow">
+        <div className="k">Destino exacto</div>
+        <DestLink d={s.destination} url={s.destinationUrl} />
+      </div>
       <div className="sa-desk-only">
         <Route d={s.destination} source={s.source} />
       </div>

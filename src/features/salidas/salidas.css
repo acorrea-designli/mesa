@@ -265,6 +265,38 @@
   line-height: 1.5;
 }
 
+/* "Abrir destino": next to the route label, every state, desktop and phone */
+.sa-destrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sa-destlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.sa-destlink:hover {
+  color: var(--ink);
+  border-bottom-color: currentColor;
+}
+.sa-destlink:focus-visible {
+  outline: 2px solid var(--route, currentColor);
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .sa-destlink {
+    min-height: 44px;
+  }
+}
+
 /* destination route */
 .sa-route {
   position: relative;

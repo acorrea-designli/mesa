@@ -25,6 +25,8 @@ export interface TicketBrief {
 export interface SalidaView extends SalidaDetail {
   ticket: TicketBrief | null;
   history: HistoryEvent[];
+  /** Web URL of where this salida is published (the permalink after the send); null when it cannot be known. */
+  destinationUrl: string | null;
 }
 
 export interface SalidasData {
