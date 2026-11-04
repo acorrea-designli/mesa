@@ -26,10 +26,12 @@ Sessions
 Tickets
   mesa ticket ask --title T [--body B] [--option "A:label[:detail]"]... [--recommend A --why W] [--project P] [--ref t12]...
                   [--wait [--timeout S]]       --wait blocks until Andrés answers and prints { ticket, answer }
-  mesa ticket reply <id|ref> --body B [--option ...] [--recommend A --why W]
+  mesa ticket reply <id|ref> --body B [--ask] [--option ...] [--recommend A --why W]
+                  a reply is informational unless it has options or --ask: only then does the ticket go to "Te espera"
   mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
   mesa ticket claim <id|ref>      take an Andrés request and start work
   mesa ticket close <id|ref>
+  mesa ticket reopen <id|ref> [--reason R]       closed -> waiting_claude (the owner wakes with ticket.reopened)
   mesa ticket action <actionId> --state running|done|failed
   mesa ticket show <id|ref>
   mesa ticket context <ref> [--messages N]     resume payload: brief, plan, last messages, team, handoffs, approvals, findings
@@ -63,6 +65,9 @@ Reviews and approvals
   mesa finding list <ref>
   mesa review open <ref> --repo owner/name --pr N --sha <head>   open/refresh the review card (also with 0 findings; new head reopens an approved one)
   mesa review list [--ticket ref] | show <reviewId>
+                  a closed review ticket reopens by itself when its PR gets a new head (GitHub poll or review open)
+  mesa sandbox push <ref> [--sha <sha>]          sandbox only: simulate a push to the PR of the review on <ref> (random sha
+                                                   when omitted); the same server function as the poll. Refused in live
   mesa approval show <id>
 
 Sources and sweep (github|github_project|slack|basecamp|engram)
@@ -305,6 +310,7 @@ async function main() {
               options: options(opt),
               recommended: opt.recommend,
               recommendation: opt.why,
+              ask: opt.ask ? true : undefined,
               session,
             }),
           );
@@ -323,6 +329,10 @@ async function main() {
           return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "claim", session: needSession() }));
         case "close":
           return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "close", by: "claude", session }));
+        case "reopen":
+          return out(
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "reopen", reason: typeof opt.reason === "string" ? opt.reason : undefined }),
+          );
         case "action":
           return out(await call("PATCH", `/api/actions/${enc(need(id, "<actionId>"))}`, { state: need(opt.state, "--state") }));
         case "show":
@@ -476,6 +486,10 @@ async function main() {
       if (cmd === "show") return out(await call("GET", `/api/reviews/${enc(need(id, "<reviewId>"))}`));
       if (cmd !== "list") return usage(`unknown review command "${cmd ?? ""}"`);
       return out(await call("GET", `/api/reviews${opt.ticket ? `?ticket=${enc(opt.ticket)}` : ""}`));
+
+    case "sandbox":
+      if (cmd !== "push") return usage(`unknown sandbox command "${cmd ?? ""}"`);
+      return out(await call("POST", "/api/sandbox/push", { ref: need(id, "<ref>"), sha: typeof opt.sha === "string" ? opt.sha : undefined }));
 
     case "approval":
       if (cmd !== "show") return usage(`unknown approval command "${cmd ?? ""}"`);

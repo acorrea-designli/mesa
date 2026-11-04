@@ -495,7 +495,10 @@ export interface Review {
   ticketId: string | null;
   repo: string;
   pr: number;
+  /** The reviewed head: only `review open` moves it. */
   headSha: string;
+  /** The newest PR head seen after a push on a closed ticket (where an incremental re-review ends); empty until then. */
+  seenHead: string;
   state: "open" | "approving" | "approved";
   salidaId: string | null;
   createdAt: string;
@@ -544,6 +547,8 @@ export interface TicketContext {
   approvals: Approval[]; // pending
   salidas: Pick<Salida, "id" | "status" | "source" | "title" | "currentVersion">[]; // not final
   findings: Finding[];
+  /** The PR reviews of this ticket, without findings (see `findings`): headSha = reviewed head, seenHead = newest head seen after a push. */
+  reviews: Omit<Review, "findings">[];
   engram: { topicKey: string; project: string; links: EngramLink[] };
 }
 

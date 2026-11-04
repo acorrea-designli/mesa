@@ -40,3 +40,8 @@ export function gateSalidaEvent(sandbox: boolean, s: Pick<Salida, "id" | "source
   }
   return { ok: true, event: ev as SalidaEvent };
 }
+
+/** A simulation that exists only in the sandbox (`mesa sandbox push`): refused in live, like a simulated send. */
+export function gateSandboxOnly(sandbox: boolean, what: string): { ok: true } | { ok: false; code: "not_sandbox"; error: string } {
+  return sandbox ? { ok: true } : { ok: false, code: "not_sandbox", error: `${what} exists only in the sandbox (MESA_ENV=sandbox); it is refused on the live board` };
+}

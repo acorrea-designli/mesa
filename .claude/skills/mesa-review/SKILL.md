@@ -28,7 +28,8 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Review (reviewer)
 
-1. **Boot.** `MESA ticket context <ref>` (its `findings` are the stored findings with their state; the latest
+1. **Boot.** `MESA ticket context <ref>` (its `findings` are the stored findings with their state; `reviews[]` has the
+   reviewed `headSha` and, when the ticket was reopened by a new push, `seenHead`: review `headSha..seenHead`; the latest
    reviewer handoff's `review-state` block has `head` and `approvedHead`, § State). None in Mesa: read (never write) the PR's entry in `C:/Users/z4yross/.claude-work/pr-monitor-state.json`,
    which has the same shape, so a PR pr-monitor already reviewed is not re-reviewed. Neither: the PR is new
    (pr-monitor box A).
@@ -54,7 +55,8 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 ## Ask (reviewer → Andrés)
 
 The findings are the ask: Mesa renders them on the ticket's review card with pr-monitor's buttons, so there is no
-A/B question. Post one ticket reply as the summary, first line in Spanish with the counts, then the findings in
+A/B question. Post one ticket reply as the summary with `--ask` (the card waits on his click, so the ticket goes to
+"Te espera"; a reply without `--ask` or options would not), first line in Spanish with the counts, then the findings in
 English, numbered, in pr-review's candidate format (`[blocker|nit] path:line`, the one-line problem, `fix:`).
 Incremental passes start with `re-review <sha7>..<sha7> · K fixed · M pending · P new`; verification passes with
 `verification · K fixed · M pending`. A clean pass says so and recommends Approve. Then wait, handoff written.

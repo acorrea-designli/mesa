@@ -71,6 +71,7 @@ know they are in the sandbox even if the env does not reach them. It refuses `G:
 | `POST /api/salidas/:id/transition` `sent` | needs `simulated: true` (409 `sandbox` otherwise) and records `sandbox://<source>/<id>`, ignoring any permalink. In live, `simulated` is refused (409 `not_sandbox`) |
 | `request_delete` / `deleted` / `request_restore` / `restored` | only on simulated sends |
 | `GET /api/health` | `env: "sandbox"` (`"live"` on the real board) |
+| `POST /api/sandbox/push` (`mesa sandbox push <ref> [--sha S]`) | exists only here (409 `not_sandbox` in live): records a new head (random 40-hex sha when omitted) for the PR of the review on that ticket and runs `reviews.noteHead`, the function the GitHub poll uses, so a closed review ticket reopens exactly as after a real push (`ticket.reopened { ref, repo, pr, oldHead, newHead }`, its Tablero card back to En curso). The same sha again is a no-op. Gate: `gateSandboxOnly` in `src/lib/domain/sandbox.ts` |
 
 Everything else is unchanged: approve, the 20 s undo, release, schedule, refine turns, tickets, plans, tasks,
 reviews, approvals, agents and the salida sweeper (undo windows, schedules, expiry). `src/lib/domain/sandbox.ts`

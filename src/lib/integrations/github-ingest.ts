@@ -202,6 +202,52 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
   return out;
 }
 
+// ---------- pushes on closed review tickets ----------
+
+export interface HeadSyncResult {
+  checked: number;
+  reopened: number;
+  /** Pushes recorded without reopening: by Andrés himself or by a bot. */
+  ignored: number;
+}
+
+/** Who pushed the head: the head commit's author (or committer), the closest GitHub gives without the events API. */
+async function headPusher(gh: GhRunner, repo: string, sha: string, fallback: string): Promise<{ login: string; bot: boolean }> {
+  const c = JSON.parse((await ghApi(gh, `repos/${repo}/commits/${sha}`)).body) as {
+    author?: { login?: string; type?: string } | null;
+    committer?: { login?: string; type?: string } | null;
+  };
+  const who = c.author?.login ? c.author : c.committer?.login ? c.committer : null;
+  const login = who?.login ?? fallback;
+  return { login, bot: who?.type === "Bot" || login.endsWith("[bot]") };
+}
+
+/**
+ * A PR whose review ticket was closed gets a new head: the same ticket reopens (reviews.noteHead, the function the
+ * sandbox push also calls). A review Andrés approved is no longer in the review-requested search, so each recently
+ * closed one is read directly: one GET per review per sync. Pushes by Andrés himself or by bots do not reopen.
+ * A rate limit stops the pass; any other failure skips that PR until the next sync. The reopen wake is the live signal.
+ */
+export async function syncReviewHeads(r: Repos, gh: GhRunner, login: string, now = new Date()): Promise<HeadSyncResult> {
+  const out: HeadSyncResult = { checked: 0, reopened: 0, ignored: 0 };
+  for (const w of r.reviews.watchedClosed(now)) {
+    try {
+      const pr = JSON.parse((await ghApi(gh, `repos/${w.repo}/pulls/${w.pr}`)).body) as { state?: string; head?: { sha?: string }; user?: { login?: string } | null };
+      const head = pr.head?.sha;
+      out.checked++;
+      if (!head || pr.state !== "open" || head === w.headSha || head === w.seenHead) continue;
+      const who = await headPusher(gh, w.repo, head, pr.user?.login ?? "");
+      const ignore = who.bot || who.login === login;
+      const res = r.reviews.noteHead(w.repo, w.pr, head, { ignore }, now);
+      if (res.reopened) out.reopened++;
+      else if (ignore) out.ignored++;
+    } catch (err) {
+      if (err instanceof GhError && err.kind === "rate_limit") throw err;
+    }
+  }
+  return out;
+}
+
 // ---------- the poller ----------
 
 export interface IngestState {
@@ -222,6 +268,7 @@ export interface TickResult {
   polled: boolean;
   notifications?: NotificationsPoll;
   reviews?: ReviewSyncResult;
+  heads?: HeadSyncResult;
   error?: string;
 }
 
@@ -256,6 +303,7 @@ export async function ingestTick(
     let found = 0;
     if (changed || o.force || t >= st.nextReviewSyncAt) {
       out.reviews = await syncReviewRequests(r, gh, o.login, now);
+      out.heads = await syncReviewHeads(r, gh, o.login, now);
       st.nextReviewSyncAt = t + REVIEW_REFRESH_MS;
       found = out.reviews.created;
     }

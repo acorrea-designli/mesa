@@ -10,6 +10,7 @@ import {
   type Brief,
   type EngramLink,
   type Finding,
+  type Review,
   type Handoff,
   type HandoffStatus,
   type PlannedAction,
@@ -238,6 +239,7 @@ export function agentsRepo(db: Db) {
             )
             .all(t.id),
         ),
+        reviews: fromRows<Omit<Review, "findings">>(db.prepare("SELECT * FROM reviews WHERE ticket_id = ? ORDER BY created_at").all(t.id)),
         engram: {
           topicKey: ticketTopicKey(t.ref),
           project: t.project,

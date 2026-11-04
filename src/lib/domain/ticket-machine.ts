@@ -10,7 +10,7 @@ import type { TicketDirection, TicketStatus, WakeKind } from "./types";
 
 export type TicketEvent =
   | { type: "andres_reply" } // Andrés answers or adds to the ticket (wakes the owner)
-  | { type: "claude_reply" } // Claude asks or answers back
+  | { type: "claude_reply"; asks?: boolean } // Claude answers back; asks = it has options or is flagged as a question
   | { type: "claude_plan"; needsOk: boolean } // Claude posts "Claude va a hacer"
   | { type: "approve_plan" } // Andrés OKs the plan (wakes the owner)
   | { type: "claim" } // a session takes the ticket and starts work
@@ -37,7 +37,10 @@ export function transitionTicket(status: TicketStatus, ev: TicketEvent): TicketT
       return { ok: true, status: "waiting_claude", wake: "ticket.answered" };
 
     case "claude_reply":
-      return { ok: true, status: "waiting_andres" };
+      // Only a question (options or --ask) is Andrés's turn. An informational reply leaves a pending
+      // plan or question where it is and turns a request nobody has claimed yet into work in progress.
+      if (ev.asks) return { ok: true, status: "waiting_andres" };
+      return { ok: true, status: status === "waiting_claude" ? "working" : status };
 
     case "claude_plan":
       return { ok: true, status: ev.needsOk ? "waiting_andres" : "working" };

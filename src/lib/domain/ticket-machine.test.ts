@@ -15,8 +15,18 @@ describe("ticket machine", () => {
     });
   });
 
-  it("Claude replying puts it back on Andrés", () => {
-    expect(transitionTicket("working", { type: "claude_reply" })).toEqual({ ok: true, status: "waiting_andres" });
+  it("Claude asking (options or --ask) puts it back on Andrés", () => {
+    expect(transitionTicket("working", { type: "claude_reply", asks: true })).toEqual({ ok: true, status: "waiting_andres" });
+    expect(transitionTicket("waiting_claude", { type: "claude_reply", asks: true })).toMatchObject({ status: "waiting_andres" });
+  });
+
+  it("an informational reply never puts the ticket in Te espera", () => {
+    expect(transitionTicket("working", { type: "claude_reply" })).toEqual({ ok: true, status: "working" });
+    // a pending plan or question stays pending
+    expect(transitionTicket("waiting_andres", { type: "claude_reply" })).toEqual({ ok: true, status: "waiting_andres" });
+    // a request nobody had claimed yet is now being worked
+    expect(transitionTicket("waiting_claude", { type: "claude_reply" })).toEqual({ ok: true, status: "working" });
+    expect(transitionTicket("closed", { type: "claude_reply" }).ok).toBe(false);
   });
 
   it("a plan with a needs_ok action waits for Andrés; a direct-only plan runs", () => {

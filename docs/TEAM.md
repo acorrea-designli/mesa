@@ -101,6 +101,17 @@ dispatch. On the wake the lead, idempotently (delivery is at least once):
 
 Dispatching never sends anything outward: every Slack, Basecamp or GitHub write is still a salida.
 
+**A reply asks only when it says so.** `mesa ticket reply` puts the ticket in "Te espera" only with `--option` or
+`--ask`; a plain reply is informational and leaves the status as it is (an unclaimed request becomes "Claude trabaja").
+
+**A finished review ticket closes, and a new push reopens it.** After an approve or a post, with nothing depending on
+us, the lead closes the review ticket, open findings included. When the PR gets a new head from its author (not Andrés,
+not a bot) Mesa reopens that same ticket by itself, from the GitHub poll or from `mesa review open` at a new head: it
+goes to `waiting_claude` and the owner gets `ticket.reopened { ref, repo, pr, oldHead, newHead }`. The new reviewer boots
+from `mesa ticket context <ref>`: `reviews[]` has `headSha` (the reviewed head) and `seenHead` (the newest head seen),
+and `findings` keeps its state. `mesa ticket reopen <ref> [--reason R]` reopens by hand. In the sandbox,
+`mesa sandbox push <ref> [--sha S]` simulates the push (`docs/SANDBOX.md`).
+
 | Template | When | Owner | Team | Ends when |
 |---|---|---|---|---|
 | **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed; the ticket stays open while findings are open, and the next push brings `reviewer-<ref>-2` |

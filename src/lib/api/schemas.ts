@@ -95,6 +95,7 @@ export const ticketMessage = z.object({
   recommended: z.string().optional(),
   recommendation: z.string().optional(),
   chosen: z.string().optional(),
+  ask: z.boolean().optional(),
   refs: z.array(refInput).optional(),
   session: z.string().optional(),
 });
@@ -111,6 +112,7 @@ export const ticketPlanApprove = z.object({ reject: z.array(z.string()).optional
 export const ticketTransition = z.object({
   event: z.enum(["claim", "close", "reopen"]),
   by: z.enum(["andres", "claude"]).optional(),
+  reason: z.string().optional(),
   session: z.string().optional(),
 });
 export const actionState = z.object({
@@ -332,4 +334,9 @@ export const ignoreInput = z.object({
   source: z.enum(["github", "slack", "basecamp", "claude", "*"]),
   project: z.string().trim().min(1),
   label: z.string().trim().optional(),
+});
+
+export const sandboxPushInput = z.object({
+  ref: z.string().trim().min(1),
+  sha: z.string().trim().min(1).optional(),
 });
