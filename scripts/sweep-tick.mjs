@@ -10,8 +10,8 @@
 //
 // Every number lives in config/sweep.json. State per source lives in Mesa (`GET /api/sources`,
 // `PATCH /api/sources/:name`: watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError, cadenceS;
-// plus `lastInteractionAt` for the whole board). If Mesa answers 404 (an older build) the state falls back to a local file
-// and every output says `"store": "local"`. Health (ok | degraded | down, down after downAfterErrors consecutive
+// plus `lastInteractionAt`, stamped only by Andrés's UI actions). Mesa unreachable or erroring = `wait` reports
+// `mesa_down` and `report` fails; there is no local fallback. Health (ok | degraded | down, down after downAfterErrors consecutive
 // failures that are not rate limits) rides on the same PATCH and feeds the rail (Estados B); leaving "down" resumes
 // salidas held for that source. "Barrer ahora" emits `sweep.requested` to the session "sweeper", which `wait`
 // long-polls; `force` is the lead's manual equivalent.
@@ -27,7 +27,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const loadConfig = (path = join(REPO, "config", "sweep.json")) => JSON.parse(readFileSync(path, "utf8"));
-const LOCAL_STORE = join(tmpdir(), "mesa-team", "sources.json");
 const FORCE_FLAG = join(tmpdir(), "mesa-team", "sweep-force.json");
 const ms = (iso) => (iso ? Date.parse(iso) : NaN);
 const max = (...xs) => Math.max(...xs.filter((x) => Number.isFinite(x)), -Infinity);
@@ -152,52 +151,22 @@ const PATCH_KEYS = ["health", "note", "watermark", "lastChecked", "lastNewAt", "
 export function makeStore({
   fetchImpl = fetch,
   base = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""),
-  localPath = LOCAL_STORE,
   forcePath = FORCE_FLAG,
   session = process.env.MESA_SWEEPER_SESSION ?? "sweeper",
 } = {}) {
-  let local = false;
   let registered = false;
-  const readLocal = () => {
-    try {
-      return JSON.parse(readFileSync(localPath, "utf8"));
-    } catch {
-      return { sources: {} };
-    }
-  };
-  const writeLocal = (st) => {
-    mkdirSync(dirname(localPath), { recursive: true });
-    writeFileSync(localPath, JSON.stringify(st, null, 2));
-  };
   return {
-    get kind() {
-      return local ? "local" : "mesa";
-    },
+    kind: "mesa",
     async load() {
       const r = await http("/api/sources", { fetchImpl, base });
-      if (r.status === 404) {
-        local = true;
-        return readLocal();
-      }
-      if (r.status >= 400) throw new Error(`Mesa answered ${r.status}`);
+      if (r.status >= 400) throw new Error(`Mesa answered ${r.status} on GET /api/sources`);
       return { sources: r.data.sources ?? {}, lastInteractionAt: r.data.lastInteractionAt ?? null };
     },
     async save(name, s) {
-      if (local) {
-        const st = readLocal();
-        st.sources[name] = s;
-        writeLocal(st);
-        return;
-      }
       const body = Object.fromEntries(PATCH_KEYS.filter((k) => s[k] !== undefined).map((k) => [k, s[k]]));
       const r = await http(`/api/sources/${encodeURIComponent(name)}`, { method: "PATCH", body, fetchImpl, base });
-      if (r.status === 404) {
-        local = true;
-        return this.save(name, s);
-      }
-      if (r.status >= 400) throw new Error(`Mesa answered ${r.status}`);
+      if (r.status >= 400) throw new Error(`Mesa answered ${r.status} on PATCH /api/sources/${name}`);
     },
-    // Sleeps up to `sec` in small steps; returns the forced sources when the lead dropped the flag ("Barrer ahora").
     // Blocks up to `sec`. Returns the forced sources when "Barrer ahora" was pressed (`sweep.requested` on the Mesa
     // session MESA_SWEEPER_SESSION, default "sweeper") or the lead dropped the force flag; null on timeout.
     async forcedWithin(sec, stepSec = 25) {
