@@ -62,13 +62,16 @@ export function reviewsRepo(db: Db) {
   };
 
   const ensure = (repo: string, pr: number, ticketId: string | null, sha: string | undefined, ts: string): string => {
-    const row = db.prepare("SELECT id, ticket_id FROM reviews WHERE repo = ? AND pr = ?").get(repo, pr) as
-      | { id: string; ticket_id: string | null }
+    const row = db.prepare("SELECT id, ticket_id, head_sha, state FROM reviews WHERE repo = ? AND pr = ?").get(repo, pr) as
+      | { id: string; ticket_id: string | null; head_sha: string; state: string }
       | undefined;
     if (row) {
+      // An approved review goes back to open when the PR head moved: the approval covered the old commit.
+      const reopen = row.state === "approved" && !!sha && sha !== row.head_sha;
       db.prepare(
-        "UPDATE reviews SET head_sha = COALESCE(NULLIF(?, ''), head_sha), ticket_id = COALESCE(ticket_id, ?), updated_at = ? WHERE id = ?",
-      ).run(sha ?? "", ticketId, ts, row.id);
+        `UPDATE reviews SET head_sha = COALESCE(NULLIF(?, ''), head_sha), ticket_id = COALESCE(ticket_id, ?),
+           state = CASE WHEN ? THEN 'open' ELSE state END, salida_id = CASE WHEN ? THEN NULL ELSE salida_id END, updated_at = ? WHERE id = ?`,
+      ).run(sha ?? "", ticketId, reopen ? 1 : 0, reopen ? 1 : 0, ts, row.id);
       return row.id;
     }
     const id = newId("rv");
@@ -97,6 +100,18 @@ export function reviewsRepo(db: Db) {
     findings(ticketIdOrRef: string): Finding[] {
       const t = tickets.get(ticketIdOrRef);
       return fromRows<Finding>(db.prepare(`${F_SELECT} WHERE r.ticket_id = ? ORDER BY r.repo, r.pr, f.n`).all(t.id));
+    },
+
+    /**
+     * Open (or refresh) the review of a PR without any finding, so a clean pass still gets its
+     * card with Approve. The head sha is required: Approve pins the GitHub review to it.
+     * Idempotent; a new head reopens an approved review. Findings are never touched.
+     */
+    open(ticketIdOrRef: string, i: { repo: string; pr: number; sha: string }, now = new Date()): Review {
+      if (!i.sha?.trim()) throw new TransitionError("review open needs the head sha");
+      const ts = nowIso(now);
+      const ticketId = tickets.get(ticketIdOrRef).id;
+      return tx(db, () => get(ensure(i.repo, i.pr, ticketId, i.sha.trim(), ts)));
     },
 
     /** Insert or update a finding by (repo, pr, n). Without n, a new number is assigned. */

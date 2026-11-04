@@ -116,6 +116,53 @@ describe("reviews", () => {
   });
 });
 
+describe("reviews without findings (review open)", () => {
+  const PR = { repo: "acme/scout", pr: 60 };
+
+  it("opens the review card with no findings, requires the head sha, and is idempotent", () => {
+    expect(() => r.reviews.open(ref, { ...PR, sha: "" }, T0)).toThrow(/head sha/);
+    expect(r.reviews.list({ ticket: ref })).toEqual([]);
+
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    expect(rev).toMatchObject({ repo: "acme/scout", pr: 60, headSha: "abc1234", state: "open", findings: [] });
+    expect(r.reviews.list({ ticket: ref })).toHaveLength(1);
+
+    const again = r.reviews.open(ref, { ...PR, sha: "abc1234" }, at(1000));
+    expect(again.id).toBe(rev.id);
+    expect(again).toMatchObject({ state: "open", headSha: "abc1234", findings: [] });
+    expect(r.reviews.list({ ticket: ref })).toHaveLength(1);
+  });
+
+  it("approve on a zero-finding review creates the APPROVE salida pinned to the head sha", () => {
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    expect(out.state).toBe("approving");
+    expect(r.salidas.get(out.salidaIds[0]!)).toMatchObject({
+      status: "sending",
+      source: "github",
+      destination: { kind: "github_review", repo: "acme/scout", pr: 60, event: "APPROVE", commitId: "abc1234" },
+    });
+  });
+
+  it("an approved review reopens at a new head, keeps its findings, and stays approved at the same head", () => {
+    r.reviews.upsertFinding(ref, { ...PR, label: "nit", summary: "Naming", sha: "abc1234", state: "waived" }, T0);
+    const rev = r.reviews.open(ref, { ...PR, sha: "abc1234" }, T0);
+    const out = r.reviews.action(rev.id, { action: "approve" }, T0);
+    r.salidas.sweep(at(UNDO_WINDOW_MS));
+    r.salidas.transition(out.salidaIds[0]!, { type: "sent", permalink: "https://github.com/acme/scout/pull/60#pullrequestreview-1" }, at(UNDO_WINDOW_MS + 1));
+    expect(r.reviews.get(rev.id).state).toBe("approved");
+
+    expect(r.reviews.open(ref, { ...PR, sha: "abc1234" }, at(UNDO_WINDOW_MS + 2)).state).toBe("approved");
+
+    const reopened = r.reviews.open(ref, { ...PR, sha: "def5678" }, at(UNDO_WINDOW_MS + 3));
+    expect(reopened).toMatchObject({ id: rev.id, state: "open", headSha: "def5678", salidaId: null });
+    expect(reopened.findings).toMatchObject([{ n: 1, state: "waived" }]);
+
+    const second = r.reviews.action(rev.id, { action: "approve" }, at(UNDO_WINDOW_MS + 4));
+    expect(r.salidas.get(second.salidaIds[0]!)).toMatchObject({ destination: { commitId: "def5678" } });
+  });
+});
+
 describe("source outages", () => {
   it("approving during a Slack outage queues; recovery releases it with a re-check", () => {
     r.sources.set("slack", { health: "down", note: "MCP unreachable" }, T0);

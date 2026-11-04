@@ -30,7 +30,8 @@ prints `acorrea-designli`; anything else is `BLOCKED <ticket> gh account` to `te
 ## Loop
 
 The `mesa-review` skill: gate (approved at head? quiet?), full or incremental review with the pr-review rules,
-verification of every open finding by reading the code at head, every finding stored with `mesa finding upsert`,
+verification of every open finding by reading the code at head, the review card opened with `mesa review open`
+(always, even with zero findings), every finding stored with `mesa finding upsert`,
 one summary reply. Andrés decides on the ticket's review card. Stay idle (handoff written) until the lead relays
 his click as `ANSWER <ticket> review.action <action> <findingNs> <salidaIds>`:
 
@@ -73,6 +74,7 @@ gh api repos/<repo>/compare/<old>...<new> -q '.files[] | "##### \(.filename)\n\(
 gh api repos/<repo>/contents/<path>?ref=<sha> -H "Accept: application/vnd.github.raw"
 gh api repos/<repo>/commits/<sha>/check-runs -q '.check_runs[] | "\(.name): \(.status)/\(.conclusion)"'
 node G:/WorkSpace/designli/ops/bin/mesa ticket context <ticket>
+node G:/WorkSpace/designli/ops/bin/mesa review open <ticket> --repo <repo> --pr <n> --sha <head>
 node G:/WorkSpace/designli/ops/bin/mesa finding upsert <ticket> --json - <<'EOF'
 node G:/WorkSpace/designli/ops/bin/mesa finding list <ticket>
 node G:/WorkSpace/designli/ops/bin/mesa review list --ticket <ticket>

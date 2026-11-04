@@ -300,7 +300,12 @@ export const findingInput = z.object({
   sha: z.string().optional(),
   ghCommentId: z.string().nullable().optional(),
 });
-export const reviewActionInput = z.object({
+export const reviewOpenInput = z.object({
+  repo: z.string().regex(REPO),
+  pr: z.number().int().positive(),
+  sha: z.string().trim().min(1),
+});
+export const reviewActionInput =z.object({
   action: z.enum(["approve", "approve_anyway", "post", "dismiss", "explain"]),
   findingNs: z.array(z.number().int().positive()).optional(),
   note: z.string().optional(),

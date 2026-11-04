@@ -61,6 +61,7 @@ Agents (ephemeral: everything they need lives on the ticket)
 Reviews and approvals
   mesa finding upsert <ref> --json -           {repo, pr, n?, label, at, anchor, summary, explanation, state, sha, ghCommentId}
   mesa finding list <ref>
+  mesa review open <ref> --repo owner/name --pr N --sha <head>   open/refresh the review card (also with 0 findings; new head reopens an approved one)
   mesa review list [--ticket ref] | show <reviewId>
   mesa approval show <id>
 
@@ -467,6 +468,11 @@ async function main() {
       return usage(`unknown finding command "${cmd ?? ""}"`);
 
     case "review":
+      if (cmd === "open") {
+        const pr = Number(need(opt.pr, "--pr"));
+        if (!Number.isInteger(pr) || pr <= 0) usage("--pr must be a positive integer");
+        return out(await call("POST", `/api/tickets/${enc(need(id, "<ref>"))}/reviews`, { repo: need(opt.repo, "--repo"), pr, sha: need(opt.sha, "--sha") }));
+      }
       if (cmd === "show") return out(await call("GET", `/api/reviews/${enc(need(id, "<reviewId>"))}`));
       if (cmd !== "list") return usage(`unknown review command "${cmd ?? ""}"`);
       return out(await call("GET", `/api/reviews${opt.ticket ? `?ticket=${enc(opt.ticket)}` : ""}`));

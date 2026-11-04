@@ -30,6 +30,11 @@
 .rv-list {
   list-style: none;
 }
+.rv-empty {
+  padding: 9px 12px;
+  font-size: 12px;
+  color: var(--mute);
+}
 .rv-f {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);

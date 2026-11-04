@@ -62,6 +62,9 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
         {r.headSha ? <code>{r.headSha.slice(0, 7)}</code> : null}
         <span className="rv-st">{r.state === "approved" ? "Aprobado" : r.state === "approving" ? "Aprobando · en Salidas" : `${open.length} abiertos`}</span>
       </div>
+      {r.findings.length === 0 ? (
+        <p className="rv-empty">{r.state === "open" ? "Sin hallazgos · listo para aprobar" : "Sin hallazgos"}</p>
+      ) : null}
       <ul className="rv-list">
         {r.findings.map((f) => (
           <li key={f.id} className={f.state === "open" ? "rv-f" : "rv-f off"}>
