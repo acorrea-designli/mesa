@@ -1,28 +1,24 @@
 #!/usr/bin/env node
-// PermissionRequest hook for Claude Code: a tool call that needs permission becomes an
-// approval card on Mesa (inside its ticket thread, or on Hoy without a ticket), and the
-// call waits until Andrés presses one of:
-//   Dar permiso              -> allow this one call (no standing rule)
-//   Lee tus configuraciones  -> deny: read your allow rules and retry with an allowed shape
-//   Denegar                  -> deny, with his optional note
+// PermissionRequest hook: a call an agent is not allowed to make becomes an approval card inside its Mesa ticket,
+// and the call waits until Andrés presses one of three buttons there (docs/TEAM.md § Permissions, preamble rule 9):
 //
-//   stdin : hook JSON { tool_name, tool_input, cwd, agent_id?, agent_type?, ... }
-//   stdout: { hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior, message? } } }
+//   allow        "Dar permiso"            -> allow this one call. Never updatedPermissions, never updatedInput.
+//   read_config  "Lee tus configuraciones"-> deny, telling the agent to read its allow rules and reshape the call.
+//   deny         "Denegar"                -> deny, with Andrés's optional note.
 //
-// Allow comes only from an explicit "allow" on Mesa. Timeout, an unreachable board, bad
-// input or any crash print deny. The output never carries updatedInput or
-// updatedPermissions, so approving one call creates no standing rule.
+// A timeout, an unreachable Mesa, an expired card, bad input or any crash is a deny that tells the agent to post a
+// ticket question instead of retrying. The lead session (no agent id) is passed through untouched (no output), so
+// Andrés keeps his normal terminal prompt there; MESA_APPROVAL_LEAD=1 routes the lead to Mesa too.
 //
-// env: MESA_URL (default http://127.0.0.1:8790), MESA_TOKEN (non-local URLs only),
-//      MESA_AGENT, MESA_TICKET (set by the team layer for each agent),
-//      MESA_APPROVAL_TIMEOUT_MS (default 540000; keep it under the hook's registered timeout).
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+//   stdin  : hook JSON { tool_name, tool_input, cwd, agent_id?, transcript_path, session_id, ... }
+//   stdout : { hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior, message? } } }
+//
+// env: MESA_URL (default http://127.0.0.1:8790), MESA_APPROVAL_TIMEOUT_MS (default 540000; keep it under the
+//      registered hook timeout of 600 s), MESA_APPROVAL_POLL_MS (default 2000).
 import { pathToFileURL } from "node:url";
+import { closestRules, loadAllowRules, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
 
-const MAX_DETAIL = 300_000;
-const WAIT_S = 25;
+const MAX_DETAIL = 20_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const output = (behavior, message) => ({
@@ -33,214 +29,127 @@ export const output = (behavior, message) => ({
 });
 const deny = (message) => output("deny", message);
 
-// ---------- what the card shows ----------
+const NO_RETRY =
+  "Do not retry this call and do not try another route to the same effect. Post a ticket question instead " +
+  "(`node G:/WorkSpace/designli/ops/bin/mesa ticket reply <ticket> --body -` with A/B options and your recommendation) " +
+  "or send `BLOCKED <ticket> <why>` to team-lead, then continue with whatever does not need this call.";
 
-const split = (s) => (s === "" ? [] : String(s).split("\n"));
+const cut = (s) => (s.length > MAX_DETAIL ? `${s.slice(0, MAX_DETAIL)}\n[cut: ${s.length - MAX_DETAIL} more characters]` : s);
 
-/** A plain line diff: shared head and tail collapse, the changed middle is "-" old then "+" new. */
-export function lineDiff(before, after, context = 3) {
-  const a = split(before);
-  const b = split(after);
-  let head = 0;
-  while (head < a.length && head < b.length && a[head] === b[head]) head++;
-  let tail = 0;
-  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
-  const out = [];
-  if (head > context) out.push(`@@ ${head - context} unchanged lines @@`);
-  out.push(...a.slice(Math.max(0, head - context), head).map((l) => ` ${l}`));
-  out.push(...a.slice(head, a.length - tail).map((l) => `-${l}`));
-  out.push(...b.slice(head, b.length - tail).map((l) => `+${l}`));
-  out.push(...a.slice(a.length - tail, a.length - tail + context).map((l) => ` ${l}`));
-  if (tail > context) out.push(`@@ ${tail - context} unchanged lines @@`);
-  return out.join("\n");
-}
-
-const clip = (s) => (s.length > MAX_DETAIL ? `${s.slice(0, MAX_DETAIL)}\n[cut: ${s.length - MAX_DETAIL} more characters]` : s);
-
-function readFileOrNull(cwd, file) {
-  try {
-    return readFileSync(resolve(cwd || process.cwd(), file), "utf8");
-  } catch {
-    return null;
-  }
-}
-
-/** { tool, summary, detail, target } for the approval card. Throws on unusable input. */
+// What the card shows: one summary line and the exact call.
 export function describe(input) {
   const tool = String(input?.tool_name ?? "");
+  const ti = input?.tool_input ?? {};
   if (!tool) throw new Error("hook input has no tool_name");
-  const ti = input.tool_input ?? {};
   if (tool === "Bash" || tool === "PowerShell") {
     const command = String(ti.command ?? "");
-    if (!command) throw new Error("hook input has no command");
+    if (!command.trim()) throw new Error("hook input has no command");
     const first = command.split("\n")[0];
-    const summary = String(ti.description ?? "") || (first.length > 120 ? `${first.slice(0, 120)}…` : first);
-    return { tool, summary, target: command, detail: clip(`$ ${command}${input.cwd ? `\n(cwd: ${input.cwd})` : ""}`) };
+    const summary = String(ti.description ?? "") || (first.length > 80 ? `${first.slice(0, 80)}...` : first);
+    return { tool, summary, detail: cut(`$ ${command}${input.cwd ? `\n(cwd: ${input.cwd})` : ""}`) };
   }
-  const file = String(ti.file_path ?? ti.notebook_path ?? ti.path ?? "");
-  if (tool === "Edit") {
-    const d = lineDiff(ti.old_string ?? "", ti.new_string ?? "") + (ti.replace_all ? "\n(replace_all)" : "");
-    return { tool, summary: file, target: file, detail: clip(d) };
+  const file = ti.file_path ?? ti.notebook_path ?? ti.path;
+  if (tool === "Edit" && file) {
+    return { tool, summary: `Edit ${file}`, detail: cut(`--- old\n${ti.old_string ?? ""}\n+++ new\n${ti.new_string ?? ""}`) };
   }
-  if (tool === "MultiEdit" && Array.isArray(ti.edits)) {
-    const d = ti.edits.map((e) => lineDiff(e.old_string ?? "", e.new_string ?? "")).join("\n@@ next edit @@\n");
-    return { tool, summary: file, target: file, detail: clip(d) };
+  if (tool === "Write" && file) {
+    return { tool, summary: `Write ${file}`, detail: cut(String(ti.content ?? "")) };
   }
-  if (tool === "Write") {
-    const was = readFileOrNull(input.cwd, file);
-    return { tool, summary: file, target: file, detail: clip((was === null ? "(new file)\n" : "") + lineDiff(was ?? "", ti.content ?? "")) };
-  }
-  const json = JSON.stringify(ti, null, 2);
-  return { tool, summary: file || (json.length > 120 ? `${json.slice(0, 120)}…` : json), target: file || json, detail: clip(json) };
+  return { tool, summary: file ? `${tool} ${file}` : tool, detail: cut(JSON.stringify(ti, null, 2)) };
 }
 
-// ---------- closest allow rules (for "Lee tus configuraciones") ----------
-
-/** allow rules from project and user settings. */
-export function readAllowRules(cwd, home = homedir()) {
-  const files = [
-    join(cwd || process.cwd(), ".claude", "settings.json"),
-    join(cwd || process.cwd(), ".claude", "settings.local.json"),
-    join(home, ".claude", "settings.json"),
+export function readConfigMessage(hints, ticketRef) {
+  const lines = [
+    `Andrés answered "Lee tus configuraciones" on ${ticketRef ?? "Mesa"}: this call is denied because an allowed shape already exists.`,
+    "Read your own allow rules (permissions.allow in .claude/settings.json and .claude/settings.local.json at the project root, and the user settings.json) and the command sheet in your role definition, then retry with an allowed shape. Do not ask again for this call.",
   ];
-  if (process.env.CLAUDE_PROJECT_DIR) {
-    files.push(join(process.env.CLAUDE_PROJECT_DIR, ".claude", "settings.json"), join(process.env.CLAUDE_PROJECT_DIR, ".claude", "settings.local.json"));
-  }
-  const rules = new Set();
-  for (const f of files) {
-    try {
-      const allow = JSON.parse(readFileSync(f, "utf8"))?.permissions?.allow;
-      if (Array.isArray(allow)) allow.forEach((r) => typeof r === "string" && rules.add(r));
-    } catch {
-      /* missing or invalid settings file */
-    }
-  }
-  return [...rules];
+  if (hints.rules.length) lines.push(`Closest allow rules: ${hints.rules.join("; ")}`);
+  if (hints.advice.length) lines.push(`Shape: ${hints.advice.join("; ")}.`);
+  return lines.join("\n");
 }
 
-const tokens = (s) => String(s).trim().split(/\s+/).filter(Boolean);
-
-/** Up to `limit` allow rules closest to this call, best first. */
-export function closestRules(rules, { tool, target }, limit = 3) {
-  const scored = [];
-  for (const rule of rules) {
-    const m = /^([\w-]+)(?:\((.*)\))?$/.exec(rule.trim());
-    if (!m || m[1] !== tool) continue;
-    const spec = m[2];
-    if (spec === undefined) {
-      scored.push([0.5, rule]);
-      continue;
-    }
-    if (tool === "Bash" || tool === "PowerShell") {
-      const want = tokens(spec.replace(/:\*$|\s*\*$/, ""));
-      const have = tokens(target);
-      let k = 0;
-      while (k < want.length && k < have.length && want[k] === have[k]) k++;
-      if (k > 0) scored.push([k + (k === want.length ? 0.25 : 0), rule]);
-    } else {
-      const want = spec.replace(/\*+$/, "").replace(/\\/g, "/");
-      const have = String(target).replace(/\\/g, "/");
-      let k = 0;
-      while (k < want.length && k < have.length && want[k] === have[k]) k++;
-      if (k > 2) scored.push([k / 10, rule]);
-    }
+// Files the card, waits for the decision, returns the hook output (or null to pass the lead through).
+// Never throws and never allows by default.
+export async function approve(
+  input,
+  { timeoutMs = 540_000, pollMs = 2000, fetchImpl = fetch, base, env = process.env, rules } = {},
+) {
+  let agent;
+  let call;
+  let hints;
+  try {
+    agent = resolveAgent(input);
+    if (!agent && env.MESA_APPROVAL_LEAD !== "1") return null;
+    call = describe(input);
+    hints = closestRules(input, rules ?? loadAllowRules(input?.cwd, env));
+  } catch (err) {
+    return deny(`Denied: the Mesa approval hook could not read this request (${err.message}). ${NO_RETRY}`);
   }
-  return scored.sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, r]) => r);
-}
-
-// ---------- decision messages ----------
-
-export const READ_CONFIG_MESSAGE =
-  "Denied on Mesa (Lee tus configuraciones): do not ask for this. Read your own allow rules in .claude/settings.json and " +
-  ".claude/settings.local.json (project and ~/.claude) and retry with a command shape they already allow.";
-
-export function decisionOutput(approval, { tool, summary, hints }) {
-  const what = `${tool} ${summary}`;
-  if (approval.status === "decided" && approval.decision === "allow") return output("allow");
-  if (approval.status === "decided" && approval.decision === "read_config") {
-    const hint = hints.length ? ` Closest allow rule: ${hints[0]}.` : " No allow rule is close to this call.";
-    const note = approval.note ? ` Andrés: ${approval.note}` : "";
-    return deny(`${READ_CONFIG_MESSAGE}${hint}${note}`);
-  }
-  if (approval.status === "decided") {
-    return deny(`Denied on Mesa by ${approval.decidedBy ?? "Andrés"}: ${what} was not approved.${approval.note ? ` Note: ${approval.note}` : ""}`);
-  }
-  return deny(
-    `Denied: nobody approved ${what} on Mesa (${approval.id}) before the timeout. Do not retry it. ` +
-      "Post a ticket question instead (mesa ticket reply <ref> --body ...) saying what you need and why.",
-  );
-}
-
-// ---------- the flow ----------
-
-/** Files the approval, waits for the decision, returns the hook output. Never throws; never allows by default. */
-export async function approve(input, { base, token, timeoutMs = 540_000, fetchImpl = fetch, env = process.env, home } = {}) {
+  const who = agent?.name ?? "lead";
+  const ticketRef = agent?.ticketRef ?? null;
   const deadline = Date.now() + timeoutMs;
-  let card;
+  const opts = { fetchImpl, base };
+
+  let id;
   try {
-    card = describe(input);
-  } catch (err) {
-    return deny(`Denied: the Mesa approval hook could not read this request (${err.message}).`);
-  }
-  const hints = closestRules(readAllowRules(input.cwd, home), card);
-  const headers = { "content-type": "application/json", ...(token ? { "x-mesa-token": token } : {}) };
-  const call = async (path, body, timeout = 5000) => {
-    const res = await fetchImpl(`${base}${path}`, {
-      method: body ? "POST" : "GET",
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(timeout),
+    const data = await mesaCall("/api/approvals", {
+      ...opts,
+      body: {
+        ticketRef,
+        agent: who,
+        role: agent?.role ?? (agent ? null : "lead"),
+        tool: call.tool,
+        summary: call.summary,
+        detail: call.detail,
+        cwd: input.cwd ?? null,
+        hints: [...hints.rules, ...hints.advice],
+        expiresAt: new Date(deadline).toISOString(),
+      },
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error?.message ?? `Mesa answered ${res.status}`);
-    return data;
-  };
-
-  let approval;
-  try {
-    ({ approval } = await call("/api/approvals", {
-      ticketRef: env.MESA_TICKET || null,
-      agent: env.MESA_AGENT || input.agent_type || input.agent_id || "lead",
-      tool: card.tool,
-      summary: card.summary,
-      detail: card.detail,
-      cwd: input.cwd ?? "",
-      hints,
-      expiresAt: new Date(deadline).toISOString(),
-    }));
+    id = data.approval?.id ?? data.id;
+    if (!id) throw new Error("Mesa returned no approval id");
   } catch (err) {
-    return deny(`Denied: Mesa is unreachable, so nobody could approve ${card.tool} ${card.summary} (${err.message}).`);
+    return deny(`Denied: Mesa is unreachable, so nobody could approve ${call.tool} (${call.summary}) (${err.message}). ${NO_RETRY}`);
   }
 
-  // Long-poll; a board restart while we wait still gets the real decision. Mesa refuses
-  // any decision after expiresAt, so a call we deny on timeout can never be allowed later.
   while (Date.now() < deadline) {
-    const wait = Math.max(1, Math.min(WAIT_S, Math.ceil((deadline - Date.now()) / 1000)));
+    await sleep(Math.min(pollMs, Math.max(0, deadline - Date.now())));
+    let a;
     try {
-      ({ approval } = await call(`/api/approvals/${approval.id}?wait=${wait}`, undefined, (wait + 5) * 1000));
-      if (approval.status !== "pending") break;
+      const data = await mesaCall(`/api/approvals/${encodeURIComponent(id)}`, opts);
+      a = data.approval ?? data;
     } catch {
-      await sleep(2000);
+      continue; // a Mesa restart while we wait still gets its real decision; the deadline ends it
+    }
+    if (a.decision === "allow") return output("allow");
+    if (a.decision === "read_config") return deny(readConfigMessage(hints, ticketRef));
+    if (a.decision === "deny") {
+      const note = a.note ? ` Note from Andrés: ${a.note}` : "";
+      return deny(`Denied by Andrés in Mesa (${ticketRef ?? "approval"} ${id}): ${call.tool} (${call.summary}) was not approved.${note} ${NO_RETRY}`);
+    }
+    if (a.status && a.status !== "pending") {
+      return deny(`Denied: approval ${id} was closed (${a.status}) without a decision. ${NO_RETRY}`);
     }
   }
-  return decisionOutput(approval, { ...card, hints });
+  await mesaCall(`/api/approvals/${encodeURIComponent(id)}/decision`, {
+    ...opts,
+    body: { decision: "deny", actor: "hook", note: "timeout" },
+  }).catch(() => {});
+  return deny(`Denied: nobody answered approval ${id} for ${call.tool} (${call.summary}) before the timeout. ${NO_RETRY}`);
 }
 
 async function main() {
   let result;
   try {
-    const chunks = [];
-    for await (const c of process.stdin) chunks.push(c);
-    const input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const input = await readStdinJson();
     result = await approve(input, {
-      base: (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""),
-      token: process.env.MESA_TOKEN,
       timeoutMs: Number(process.env.MESA_APPROVAL_TIMEOUT_MS || 540_000),
+      pollMs: Number(process.env.MESA_APPROVAL_POLL_MS || 2000),
     });
   } catch (err) {
-    result = deny(`Denied: the Mesa approval hook failed (${err.message}).`);
+    result = deny(`Denied: the Mesa approval hook failed (${err.message}). ${NO_RETRY}`);
   }
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  if (result) process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
