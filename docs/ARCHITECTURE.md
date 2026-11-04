@@ -81,7 +81,8 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
 ### Plumbing
 - **sessions**: `id`, `label`, `cwd`, `project`, `cursor`, `waiting_since`, `last_seen_at`. Unknown owner ids are registered on first use.
 - **wake_events**: `id` (cursor), `session_id` (NULL = any), `kind`, `entity_type`, `entity_id`, `payload`.
-- **source_state** (`0002`): one row per source (github|github_project|slack|basecamp|engram) holding sweep state and health: `watermark` (opaque per source: Slack ts, Basecamp updated_at, GitHub Last-Modified), `last_checked_at` (last probe), `last_new_at` (last probe that found something new), `backoff_until`, `cadence_s` (current probe interval, default 60), `health` ok|degraded|down, `note`. The sweeper reports Slack and Basecamp, and the server reports GitHub (lane C). Health feeds the Estados B rail notice and drives "Aprobar al volver".
+- **source_state** (`0002`): one row per source (github|github_project|slack|basecamp|engram) holding sweep state and health: `watermark` (opaque per source: Slack ts, Basecamp updated_at, GitHub Last-Modified), `last_checked` (last probe), `last_new_at` (last probe that found something new), `backoff_until`, `cadence_s` (current probe interval, default 60), `error_count`, `last_error`, `health` ok|degraded|down, `note` (`0003` renamed `last_checked_at` and added the error fields). The sweeper reports Slack and Basecamp, and the server reports GitHub (lane C). Health feeds the Estados B rail notice and drives "Aprobar al volver".
+- **settings** `last_interaction_at`: stamped whenever Andrés acts in the UI. That covers answering a ticket, approving a plan, any salida decision, refine or edit, deciding an approval, a review action, moving a card and "Barrer ahora". Claude's writes never stamp it.
 - **engram_links**: `entity_type`, `entity_id`, `project`, `topic_key`, `observation_id`. **settings**: key/value.
 
 ## 4. State machines
@@ -221,9 +222,9 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/salidas/:id/turns/:turnId/cancel` | | `SalidaDetail` |
 | POST `/api/salidas/:id/transition` | `SalidaEvent` | `SalidaDetail` |
 | GET `/api/chips` | | `LearnedChip[]` |
-| GET `/api/sources` | | `{ sources: SourceState[] }` |
-| GET/PATCH `/api/sources/:source` | PATCH `{ health?, note?, watermark?, lastCheckedAt?, lastNewAt?, backoffUntil?, cadenceS? }` | `{ source }` / `{ source, resumed }` |
-| POST `/api/sweep` | `{ sources? }` | `{ event }` 202 ("Barrer ahora") |
+| GET `/api/sources` | | `{ sources: { slack, basecamp, …: SourceState }, lastInteractionAt }` (slack and basecamp always present) |
+| GET/PATCH `/api/sources/:source` | PATCH `{ health?, note?, watermark?, lastChecked?, lastNewAt?, backoffUntil?, cadenceS?, errorCount?, lastError? }` | `{ source }` / `{ source, resumed }` |
+| POST `/api/sweep` | `{ sources? }` | `{ event }` 202 ("Barrer ahora": wakes session `sweeper`) |
 | GET/POST `/api/sessions` | `{ id, label?, cwd?, project? }` | sessions / `Session` |
 | GET `/api/wait` | `?session=&after=&timeout=` | `{ events, cursor }` |
 | POST `/api/wait/ack` | `{ session, cursor }` | `Session` |
@@ -242,9 +243,9 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
   2. If `recheckThread` is set, re-read the thread and `bounce` if it changed.
   3. Send `versions[approvedVersion-1].body` to exactly `destination`.
   4. Report with `mesa salida sent|failed|hold`.
-- **On `sweep.requested`:** run `mesa-sweep` for the listed sources now, ignoring `backoff_until`.
+- **On `sweep.requested`** (sent to the sweeper session, `MESA_SWEEPER_SESSION`, default `sweeper`): run the sweep for the listed sources now, ignoring `backoff_until`.
 
-**Sweep tick (lane C):** the haiku sweeper runs about every 60 s per source in two stages. A cheap probe compares the source against `watermark`. When the probe finds something new, a full triage upserts items (`mesa item upsert`, deduped on `(source, external_id)`). The sweeper then writes back `watermark`, `lastCheckedAt`, `lastNewAt`, `health`, and an adaptive `cadenceS`/`backoffUntil` with `mesa source set`: it backs off while a source is quiet or failing and goes back to 60 s when something new arrives.
+**Sweep tick (lane C):** the haiku sweeper runs about every 60 s per source in two stages. A cheap probe compares the source against `watermark`. When the probe finds something new, a full triage upserts items (`mesa item upsert`, deduped on `(source, external_id)`). The sweeper then writes back `watermark`, `lastCheckedAt`, `lastNewAt`, `health`, and an adaptive `cadenceS`/`backoffUntil` with `mesa source set`: It backs off while a source is quiet or failing. It goes back to 60 s when something new arrives or when `lastInteractionAt` shows Andrés is active.
 
 **CLI (`bin/mesa`, `bin/mesa.cmd`):** zero-dependency Node over the REST API.
 - Env: `MESA_URL`, `MESA_SESSION`, `MESA_AGENT`, `MESA_TOKEN`.

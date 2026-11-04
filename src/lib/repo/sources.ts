@@ -29,10 +29,12 @@ export function sourcesRepo(db: Db) {
           health: "ok",
           note: "",
           watermark: null,
-          lastCheckedAt: null,
+          lastChecked: null,
           lastNewAt: null,
           backoffUntil: null,
           cadenceS: 60,
+          errorCount: 0,
+          lastError: null,
           updatedAt: new Date(0).toISOString(),
         }
       );

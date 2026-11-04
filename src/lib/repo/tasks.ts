@@ -2,6 +2,7 @@ import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, insertSql, newId, NotFoundError, nowIso, toAssignments } from "../db/util";
 import type { Item, Source, Station, SyncState, Task } from "../domain/types";
+import { touchInteraction } from "./interaction";
 
 const SPEC = { bool: ["is_sample"] };
 
@@ -111,6 +112,7 @@ export function tasksRepo(db: Db) {
           "UPDATE tasks SET station = ?, position = COALESCE(?, position), sync_state = 'pending', sync_error = NULL, updated_at = ? WHERE id = ?",
         ).run(station, position ?? null, ts, id);
         db.prepare("UPDATE items SET station = ?, updated_at = ? WHERE task_id = ?").run(station, ts, id);
+        touchInteraction(db, now);
       });
       return get(id);
     },

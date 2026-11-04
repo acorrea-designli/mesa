@@ -484,11 +484,19 @@ export interface SourceState {
   health: "ok" | "degraded" | "down";
   note: string;
   watermark: string | null;
-  lastCheckedAt: string | null;
+  lastChecked: string | null;
   lastNewAt: string | null;
   backoffUntil: string | null;
   cadenceS: number;
+  errorCount: number;
+  lastError: string | null;
   updatedAt: string;
+}
+
+/** GET /api/sources: sweep state keyed by source, plus Andrés's last UI action. */
+export interface SourcesPayload {
+  sources: Partial<Record<HealthSource, SourceState>>;
+  lastInteractionAt: string | null;
 }
 
 // ---------- resume payload ----------

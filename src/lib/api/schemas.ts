@@ -302,9 +302,11 @@ export const sourcePatch = z.object({
   health: z.enum(["ok", "degraded", "down"]).optional(),
   note: z.string().max(500).optional(),
   watermark: z.string().max(500).nullable().optional(),
-  lastCheckedAt: isoOrNull.optional(),
+  lastChecked: isoOrNull.optional(),
   lastNewAt: isoOrNull.optional(),
   backoffUntil: isoOrNull.optional(),
   cadenceS: z.number().int().min(5).max(86_400).optional(),
+  errorCount: z.number().int().min(0).optional(),
+  lastError: z.string().max(2000).nullable().optional(),
 });
 export const sweepInput = z.object({ sources: z.array(z.enum(["slack", "basecamp", "github"])).optional() });

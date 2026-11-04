@@ -134,14 +134,23 @@ describe("source outages", () => {
   });
 
   it("keeps sweep watermarks per source", () => {
-    expect(r.sources.get("basecamp")).toMatchObject({ health: "ok", watermark: null, cadenceS: 60 });
-    r.sources.set("basecamp", { watermark: "2026-11-03T09:59:00Z", lastCheckedAt: T0.toISOString(), cadenceS: 120, backoffUntil: at(120_000).toISOString() }, T0);
-    r.sources.set("basecamp", { health: "degraded", note: "429" }, at(1));
-    expect(r.sources.get("basecamp")).toMatchObject({ health: "degraded", watermark: "2026-11-03T09:59:00Z", cadenceS: 120 });
+    expect(r.sources.get("basecamp")).toMatchObject({ health: "ok", watermark: null, cadenceS: 60, errorCount: 0, lastError: null });
+    r.sources.set("basecamp", { watermark: "2026-11-03T09:59:00Z", lastChecked: T0.toISOString(), cadenceS: 120, backoffUntil: at(120_000).toISOString() }, T0);
+    r.sources.set("basecamp", { health: "degraded", errorCount: 2, lastError: "429 Too Many Requests" }, at(1));
+    expect(r.sources.get("basecamp")).toMatchObject({ health: "degraded", watermark: "2026-11-03T09:59:00Z", cadenceS: 120, errorCount: 2, lastError: "429 Too Many Requests" });
   });
 
-  it("Barrer ahora wakes the lead", () => {
+  it("Barrer ahora wakes the sweeper and counts as interaction", () => {
+    expect(r.lastInteractionAt()).toBeNull();
     r.requestSweep(["slack"], T0);
-    expect(eventsAfter(r.db, "lead", 0).at(-1)).toMatchObject({ kind: "sweep.requested", sessionId: "lead", payload: { sources: ["slack"] } });
+    expect(eventsAfter(r.db, "sweeper", 0).at(-1)).toMatchObject({ kind: "sweep.requested", sessionId: "sweeper", payload: { sources: ["slack"] } });
+    expect(r.lastInteractionAt()).toBe(T0.toISOString());
+  });
+
+  it("Andrés acting in the UI stamps lastInteractionAt; Claude does not", () => {
+    r.tickets.addMessage(ref, { author: "claude", body: "q" }, at(5));
+    expect(r.lastInteractionAt()).toBeNull();
+    r.tickets.addMessage(ref, { author: "andres", body: "a" }, at(6));
+    expect(r.lastInteractionAt()).toBe(at(6).toISOString());
   });
 });

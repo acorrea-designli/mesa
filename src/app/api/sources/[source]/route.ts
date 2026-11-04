@@ -9,7 +9,7 @@ type P = { source: string };
 export const GET = route<P>((_req, r, p) => json({ source: r.sources.get(healthSource.parse(p.source)) }));
 
 /**
- * PATCH /api/sources/:source { health?, note?, watermark?, lastCheckedAt?, lastNewAt?, backoffUntil?, cadenceS? }
+ * PATCH /api/sources/:source { health?, note?, watermark?, lastChecked?, lastNewAt?, backoffUntil?, cadenceS?, errorCount?, lastError? }
  * -> { source, resumed }. Leaving "down" resumes salidas queued for this source.
  */
 export const PATCH = route<P>(async (req, r, p) => {

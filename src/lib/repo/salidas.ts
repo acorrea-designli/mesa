@@ -30,7 +30,21 @@ import type {
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { chipsRepo } from "./chips";
+import { touchInteraction } from "./interaction";
 import { ensureSession } from "./sessions";
+
+/** Events only Andrés triggers from the UI; they count as interaction for the sweeper. */
+const ANDRES_EVENTS = new Set<SalidaEvent["type"]>([
+  "approve",
+  "undo",
+  "deny",
+  "schedule",
+  "unschedule",
+  "unqueue",
+  "retry",
+  "request_delete",
+  "request_restore",
+]);
 
 const S_SPEC = { json: ["destination", "links"], bool: ["is_sample"] };
 const V_SPEC = { bool: ["starred"] };
@@ -201,10 +215,12 @@ export function salidasRepo(db: Db) {
       if (!canAddVersion(s.status)) throw new TransitionError(`cannot change the version of a salida that is ${s.status}`);
       if (n < 1 || n > versionCount(id)) throw new TransitionError(`version ${n} does not exist`);
       patch(id, { currentVersion: n }, nowIso(now));
+      touchInteraction(db, now);
       return repo.detail(id);
     },
 
     star(id: string, n: number, starred: boolean): SalidaDetail {
+      touchInteraction(db);
       const r = db.prepare("UPDATE salida_versions SET starred = ? WHERE salida_id = ? AND n = ?").run(starred ? 1 : 0, id, n);
       if (!r.changes) throw new NotFoundError("version", `${id}/v${n}`);
       return repo.detail(id);
@@ -226,6 +242,7 @@ export function salidasRepo(db: Db) {
         );
         db.prepare(sql).run(...values);
         if (t.chipLabel) chipsRepo(db).learn(t.chipLabel, null, now);
+        touchInteraction(db, now);
         emitWake(db, { sessionId: s.ownerSession, kind: "salida.turn", entityType: "salida", entityId: id, payload: { turnId } }, now);
         return repo.detail(id);
       });
@@ -244,6 +261,7 @@ export function salidasRepo(db: Db) {
     edit(id: string, body: string, now = new Date()): SalidaDetail {
       return tx(db, () => {
         db.prepare("UPDATE salida_turns SET state = 'cancelled' WHERE salida_id = ? AND state = 'open'").run(id);
+        touchInteraction(db, now);
         return repo.addVersion(id, { body, author: "andres" }, now);
       });
     },
@@ -259,6 +277,7 @@ export function salidasRepo(db: Db) {
         });
         if (!r.ok) throw new TransitionError(r.error);
         patch(id, r.patch, nowIso(now));
+        if (ANDRES_EVENTS.has(ev.type)) touchInteraction(db, now);
         if (r.wake) {
           const next = get(id);
           emitWake(
