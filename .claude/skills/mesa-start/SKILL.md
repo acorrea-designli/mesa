@@ -64,6 +64,8 @@ node G:/WorkSpace/designli/ops/bin/mesa team list --status live
 - A salida in `sending` that is released and not sent: send it now (`mesa-salida` § Send). One that is not released
   yet: leave it, the watcher will deliver `salida.released`.
 - An answered ticket nobody acted on (`waiting_claude`): it gets an owner in step 4.
+- A `waiting_claude` `andres_asks` ticket with no team at all is a dispatched card whose `ticket.created` was missed:
+  handle it as that event (§ 5).
 
 ## 4. Resume live tickets and start the sweeper
 
@@ -83,7 +85,7 @@ from the brief and the handoffs and asks for its teammates again with NEED. Do n
 
 | Event | Do |
 |---|---|
-| `ticket.created` (Andrés asked) | classify it (`docs/TEAM.md` § 4), `MESA ticket claim <ref>`, write the brief, spawn the owner |
+| `ticket.created` (Andrés asked, or handed a card to Claude) | payload `{ ticketRef, taskId, kind? }`. Idempotent: `MESA ticket show <ticketRef>` and `MESA team list --ticket <ticketRef>`; closed or a live owner already → nothing. Else triage by `kind` (`docs/TEAM.md` § 4): `review` → reviewer, `request` → tl (+team by NEED), `investigation` → researcher, `reply` → writer; no kind: read the ticket and its card's links, and ask Andrés in the ticket only if it stays unclear. Then `MESA ticket claim <ref>`, write the brief, `MESA team add <ref> --agent <name> --role <role> --owner`, spawn the owner. Never send anything outward from this event |
 | `ticket.answered` | `ANSWER <ref> <message id>` to the live owner; no live owner: spawn one |
 | `ticket.plan_approved` | `ANSWER <ref> plan_approved` to the owner |
 | `ticket.closed` / `ticket.reopened` | `CLOSED <ref>` / `REOPENED <ref>` to the owner (spawn one if needed) |

@@ -55,12 +55,12 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
 
 ### Work
 - **items** (`0001`): one row per thing waiting on Andrés, unique by `(source, external_id)`. That pair is the dedupe key: `pr:<owner>/<repo>#<n>`, `slack:<channel>:<ts>`, `basecamp:<recording id>`, and so on. Columns: `source` github|slack|basecamp|claude, `kind`, `title`, `excerpt`, `project`, `url`, `need`, `station` (inbox|todo|doing|waiting|done), `wait_on` (you|client|claude|none|person:<name>), `tag`, `task_id`, `meta`, `is_sample`, `received_at`. Hoy draws items.
-- **tasks** (`0001`): kanban cards on Tablero. `source` is the card's lane (Tablero B), plus `station`, `wait_on`, `position`, and the GitHub Project mapping `gh_item_id`, `gh_content_url`, `sync_state` synced|pending|error|local, `sync_error`, `synced_at`. Items link with `items.task_id`; moving a task moves its items. Project ids live in `settings` (`gh_project.*`, written by lane C). Station ↔ Status: Inbox, Todo, In Progress, Waiting, Done.
+- **tasks** (`0001`): kanban cards on Tablero. `source` is the card's lane (Tablero B), plus `station`, `wait_on`, `position`, and the GitHub Project mapping `gh_item_id`, `gh_content_url`, `sync_state` synced|pending|error|local, `sync_error`, `synced_at`. Items link with `items.task_id`; moving a task moves its items. `ticket_id` (`0500`) is the ticket Claude works the card in ("Dárselo a Claude"); null for a note-only card. The repository fills `owner` (`TaskOwner`: `ticketRef`, `ticketStatus`, and the live owner agent from `ticket_team`, null until the lead spawns one) for the owner chip. Project ids live in `settings` (`gh_project.*`, written by lane C). Station ↔ Status: Inbox, Todo, In Progress, Waiting, Done.
 - **ignored_projects** (`0400`): projects Andrés chose to ignore ("Ignorar proyecto «X»"). Columns `source` (one of the four, or `*` for every source), `project` (the project key), `label` (what «X» reads), `created_at`; unique `(source, project)`. The project key is the most specific stable id, read from the dedupe key by the generated column `items.project_key` (mirrored by `projectKey()` in `src/lib/domain/ignore.ts`): GitHub `owner/repo` (from `pr:<owner>/<repo>#<n>`; `items.project` is the bare repo name), Slack the channel id (the segment before the last `:` of `<channelId>:<ts>`), Basecamp the project name, Claude the project. A row matches an item when the source is the same (or the row is `*`) and the row's project equals the item's key or its plain `project`; a task matches by its own `project` or by a linked item of its lane's source (a GitHub task made from Hoy carries the bare repo name, its PR item carries `owner/repo`).
   - **Filtered by query, never flagged or deleted.** `items.list({ ignored: "exclude" })`, `tasks.list({ ignored: "exclude" })` and `counts()` leave them out, so they leave Hoy, the band, the rail counts and the Tablero; deleting the row brings them all back as they were. The ingest never upserts them: the GitHub review search skips them (and leaves their existing items alone instead of moving them to Hecho), `POST /api/items/upsert` answers `{ ignored: true }` without storing, and the sweeper reads `mesa ignore list` each tick and skips them before triage. `tasks.pendingSync()` skips them, so the GitHub Project is not written. Salidas and tickets are never filtered: a pending salida of an ignored project stays in Salidas.
 
 ### Tickets and agents
-- **tickets** (`0001`): `ref`, `direction` (claude_asks|andres_asks), `title`, `status` (§4), `project` (engram scope), `owner_session` (normally `lead`), `item_id`, `woke_at`, `closed_at`. Engram topic key: `mesa/<ref>` (`ticketTopicKey`).
+- **tickets** (`0001`): `ref`, `direction` (claude_asks|andres_asks), `title`, `status` (§4), `project` (engram scope), `owner_session` (normally `lead`), `item_id`, `task_id` (`0500`, the board card it works; `tasks.ticket_id` points back), `woke_at`, `closed_at`. Engram topic key: `mesa/<ref>` (`ticketTopicKey`).
   - **ticket_messages**: `author` andres|claude, `body` (Markdown), `options` (`[{key,label,detail}]`), `recommended`, `recommendation`, `chosen`.
   - **attachments**: files under `data/uploads/<ticket id>/`.
   - **ticket_refs**: `@` references (`ticket`|`item`|`url`).
@@ -84,7 +84,7 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
 - **sessions**: `id`, `label`, `cwd`, `project`, `cursor`, `waiting_since`, `last_seen_at`. Unknown owner ids are registered on first use.
 - **wake_events**: `id` (cursor), `session_id` (NULL = any), `kind`, `entity_type`, `entity_id`, `payload`.
 - **source_state** (`0002`): one row per source (github|github_project|slack|basecamp|engram) holding sweep state and health: `watermark` (opaque per source: Slack ts, Basecamp updated_at, GitHub Last-Modified), `last_checked` (last probe), `last_new_at` (last probe that found something new), `backoff_until`, `cadence_s` (current probe interval, default 60), `error_count`, `last_error`, `health` ok|degraded|down, `note` (`0003` renamed `last_checked_at` and added the error fields). The sweeper reports Slack and Basecamp, and the server reports GitHub (lane C). Health feeds the Estados B rail notice and drives "Aprobar al volver".
-- **settings** `last_interaction_at`: stamped whenever Andrés acts in the UI. That covers answering a ticket, approving a plan, any salida decision, refine or edit, deciding an approval, a review action, moving a card and "Barrer ahora". Claude's writes never stamp it.
+- **settings** `last_interaction_at`: stamped whenever Andrés acts in the UI. That covers answering a ticket, approving a plan, any salida decision, refine or edit, deciding an approval, a review action, moving a card (single or batch, and its Deshacer), "Dárselo a Claude" and "Barrer ahora". Claude's writes never stamp it.
 - **engram_links**: `entity_type`, `entity_id`, `project`, `topic_key`, `observation_id`. **settings**: key/value.
 
 ## 4. State machines
@@ -120,7 +120,11 @@ Rules (`transitionSalida`, tested in `salida-machine.test.ts`):
 | `working` | Claude trabaja | the lead / its agents |
 | `closed` | Cerrado · Reabrir | nobody |
 
-Events: `andres_reply` → waiting_claude (wake `ticket.answered`); `claude_reply` → waiting_andres; `claude_plan(needsOk)` → waiting_andres if any action needs OK, else working; `approve_plan` → working (wake `ticket.plan_approved`); `claim` → working; `close` → closed (wake when Andrés closes); `reopen` → waiting_claude (wake). A new `andres_asks` ticket wakes its named owner, or every session.
+Events: `andres_reply` → waiting_claude (wake `ticket.answered`); `claude_reply` → waiting_andres; `claude_plan(needsOk)` → waiting_andres if any action needs OK, else working; `approve_plan` → working (wake `ticket.plan_approved`); `claim` → working; `close` → closed (wake when Andrés closes); `reopen` → waiting_claude (wake). A new `andres_asks` ticket wakes its named owner, or every session; tickets made by the dispatch service (below) always name `lead`.
+
+### Dispatch: tasks go straight to an agent
+
+`src/lib/repo/dispatch.ts`. Every way Andrés creates a task hands it to Claude unless he ticks "Solo anotar (sin agente)": Tablero "+ Tarea" and `mesa task create` (`POST /api/tasks`), Nuevo pedido (`POST /api/tickets` with `andres_asks`, which also creates the card on the Claude lane). "Dárselo a Claude" (`POST /api/tasks/:id/dispatch`, or `action: dispatch` in the batch) does the same for an existing card, including cards of ingested items. Handing a card to Claude creates, in one transaction, an `andres_asks` ticket owned by `lead`, linked both ways (`tickets.task_id`, `tasks.ticket_id`), sets the card's `wait_on` to `claude`, and emits one `ticket.created` wake `{ ref, ticketRef, taskId, kind? }` (`kind` review|request|investigation|reply: given, or `review` when the card links a GitHub PR). Rules: idempotent (a card with an open ticket returns it, `created: false`, no second wake; a closed ticket lets it dispatch again); sample cards are refused (409; skipped in a batch); cards created from ingested items (`itemIds`, e.g. Hoy "Crear tarea") never auto-dispatch; dispatching writes only to Mesa, nothing goes to Slack, Basecamp or GitHub.
 
 ### Approval
 
@@ -189,12 +193,14 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | GET/POST `/api/ignored-projects` | / `{ source: github|slack|basecamp|claude|*, project, label? }` | `(IgnoredProject & { hidden: { items, tasks } })[]` / `{ ignored, created }` 201 (200 when already ignored) |
 | DELETE `/api/ignored-projects/:id` | | the removed `IgnoredProject` (its items and tasks come back) |
 | GET/PATCH/DELETE `/api/items/:id` | `ItemPatch` | `Item` / 204 |
-| GET/POST `/api/tasks` | `?station=&source=` / `TaskInput` | `Task[]` / `Task` 201 |
+| GET/POST `/api/tasks` | `?station=&source=` / `TaskInput & { noteOnly?, kind? }` | `Task[]` / `Task & { ticket: { id, ref } \| null }` 201 (dispatched unless `noteOnly`, ingested items or samples) |
+| POST `/api/tasks/batch` | `{ action: move, ids, station }` · `{ action: dispatch, ids, kind? }` · `{ action: restore, moves: [{ id, station }] }` | move/restore: `{ tasks, previous: [{ id, station }] }`; dispatch: `{ results: [{ task, ticket, created }], skipped: [{ id, reason }] }`. One transaction (an unknown id rolls back, 404), one `/api/stream` change, stamps `lastInteractionAt` |
+| POST `/api/tasks/:id/dispatch` | `{ kind? }` | `{ task, ticket: { id, ref }, created }`; 409 for sample cards |
 | GET/PATCH/DELETE `/api/tasks/:id` | `TaskPatch` | `Task` / 204 |
 | POST `/api/tasks/:id/move` | `{ station, position? }` | `Task` (sync pending) |
 | POST `/api/tasks/:id/sync` | `{ syncState, ghItemId?, ghContentUrl?, syncError? }` | `Task` |
 | POST `/api/tasks/:id/items` | `{ itemIds }` | `Task` |
-| GET/POST `/api/tickets` | `?status=&open=1` / `TicketInput` | `Ticket[]` / `TicketDetail` 201 |
+| GET/POST `/api/tickets` | `?status=&open=1` / `TicketInput` | `Ticket[]` / `TicketDetail` 201 (`andres_asks` also gets its card, `taskId`) |
 | GET `/api/tickets/:idOrRef` | | `TicketDetail` |
 | GET `/api/tickets/:ref/context` | `?messages=20` | `TicketContext` |
 | GET/PUT `/api/tickets/:ref/brief` | PUT `BriefInput` | `{ brief }` |
@@ -245,6 +251,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 
 **Wake (long-poll):** the lead blocks on `mesa wait` (`GET /api/wait?session=lead`). The server answers as soon as there are events after the session's cursor (targeted or broadcast), or with `[]` after `timeout`.
 - **Delivery is at least once.** `mesa wait` acks a batch after printing it (`--manual-ack` leaves it to `mesa ack <cursor>`), so a handler must check current state before it acts. Waiters inside a command (`ticket ask --wait`, `salida propose --wait-release`) poll with `peek=1`, which never acks. Events older than 7 days are pruned hourly. `docs/SESSIONS.md` is the session guide.
+- **`ticket.created`** payload: `{ ref, ticketRef, taskId, kind? }`, targeted at `lead` for dispatched cards and Nuevo pedido. The lead triages by `kind` (TEAM.md § 4), claims, spawns the owner and records the team; handlers check the ticket first (at least once).
 - **Kinds:** `ticket.created|answered|plan_approved|closed|reopened`, `salida.turn|released|queued|undone|denied|delete_requested|restore_requested`, `review.action`, `sweep.requested`, `task.moved` (reserved; the UI gets task moves from `/api/stream`).
 - **On `salida.released`:**
   1. `mesa salida show <id>`.
@@ -258,7 +265,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 **CLI (`bin/mesa`, `bin/mesa.cmd`):** zero-dependency Node over the REST API.
 - Env: `MESA_URL`, `MESA_SESSION`, `MESA_AGENT`, `MESA_TOKEN`.
 - Output: JSON on stdout, errors on stderr (exit 1, usage exit 2). `--body -` reads stdin.
-- Commands (`node bin/mesa help` lists them all): `session`, `wait [--once|--loop]`, `ticket ask|reply|plan|claim|close|action|show|list|context|brief|handoff`, `handoff`, `handoffs`, `team add|join|retire|spent|list`, `finding upsert|list`, `review list|show`, `approval show`, `salida propose|version|sent|failed|hold|bounce|deleted|restored|show|list`, `source get|set`, `sweep`, `item upsert`, `engram link`.
+- Commands (`node bin/mesa help` lists them all): `session`, `wait [--once|--loop]`, `ticket ask|reply|plan|claim|close|action|show|list|context|brief|handoff`, `handoff`, `handoffs`, `team add|join|retire|spent|list`, `finding upsert|list`, `review list|show`, `approval show`, `salida propose|version|sent|failed|hold|bounce|deleted|restored|show|list`, `source get|set`, `sweep`, `task create [--note-only]|dispatch|list|move`, `item upsert`, `engram link`.
 - Missing on purpose: there is no approve, schedule, deny or undo for salidas, and no decision for approvals. Those are Andrés's buttons.
 
 ## 10. Design system in code
@@ -268,7 +275,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 - `src/components/ui/primitives.tsx`: `Btn`, `Chip`, `LinkChip`, `StatusTag`, `Kind`, `Label`, `ContextQuote`, `ExactText`, `Alert`. `interactive.tsx`: `SplitApprove`, `Tabs`, `Sheet`, `ToastProvider`/`useToast`, `ThemeToggle` (+ `THEME_BOOT`).
 - `src/components/line/Line.tsx`: `SourceDot`, `LineStub`, `Ring`, `Interchange`, `DirectionMarker`, `BrokenLine`, `BrandMark`.
 - `src/components/shell/*`: `AppShell`, `Rail` (counts, source health slot, theme toggle), `PhoneTabs`, `ScreenFrame` (temporary).
-- `src/lib/motion`: `layLines`, `arrive`, `rise`, `riseSheet`, `confirmPick`, `paintMarks`, `travel`, `pressable`, hooks `useLayLines`, `useArrive`, `usePress`, `useRise`. All of them respect `prefers-reduced-motion`.
+- `src/lib/motion`: `layLines`, `arrive`, `rise`, `riseSheet`, `riseBar` (docked bars, e.g. the Tablero batch bar), `lift` (a selected card rises 2 px), `confirmPick`, `paintMarks`, `travel`, `pressable`, hooks `useLayLines`, `useArrive`, `usePress`, `useLift`, `useRise`. All of them respect `prefers-reduced-motion`.
 - `/kit` renders every shared component.
 
 ## 11. Security
