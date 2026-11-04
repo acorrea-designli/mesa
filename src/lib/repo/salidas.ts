@@ -30,6 +30,7 @@ import type {
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { chipsRepo } from "./chips";
+import { ensureSession } from "./sessions";
 
 const S_SPEC = { json: ["destination", "links"], bool: ["is_sample"] };
 const V_SPEC = { bool: ["starred"] };
@@ -81,6 +82,9 @@ export function salidasRepo(db: Db) {
       db.prepare("SELECT 1 FROM salida_turns WHERE salida_id = ? AND author = 'andres' AND state = 'open' LIMIT 1").get(id),
     );
 
+  const sourceDown = (source: string) =>
+    Boolean(db.prepare("SELECT 1 FROM source_health WHERE source = ? AND state = 'down'").get(source));
+
   const insertVersion = (salidaId: string, v: VersionInput, ts: string): number => {
     const n = versionCount(salidaId) + 1;
     const { sql, values } = insertSql(
@@ -130,6 +134,7 @@ export function salidasRepo(db: Db) {
       const id = newId("sa");
       const ts = nowIso(now);
       return tx(db, () => {
+        ensureSession(db, input.ownerSession, now);
         const { sql, values } = insertSql(
           "salidas",
           {
@@ -247,7 +252,11 @@ export function salidasRepo(db: Db) {
     transition(id: string, ev: SalidaEvent, now = new Date()): SalidaDetail {
       return tx(db, () => {
         const s = get(id);
-        const r = transitionSalida(s, ev, now, { versionCount: versionCount(id), rewritePending: rewritePending(id) });
+        const r = transitionSalida(s, ev, now, {
+          versionCount: versionCount(id),
+          rewritePending: rewritePending(id),
+          sourceDown: sourceDown(s.source),
+        });
         if (!r.ok) throw new TransitionError(r.error);
         patch(id, r.patch, nowIso(now));
         if (r.wake) {
@@ -259,7 +268,12 @@ export function salidasRepo(db: Db) {
               kind: r.wake,
               entityType: "salida",
               entityId: id,
-              payload: { version: next.approvedVersion, status: next.status },
+              payload: {
+                version: next.approvedVersion,
+                status: next.status,
+                // A salida that waited for its source must re-read the thread before sending.
+                recheckThread: ev.type === "resume",
+              },
             },
             now,
           );

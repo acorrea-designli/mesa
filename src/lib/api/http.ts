@@ -23,7 +23,7 @@ export function route<P extends Record<string, string>>(
   return async (req: Request, ctx: Ctx<P>): Promise<Response> => {
     try {
       const r = repos();
-      r.salidas.sweep();
+      r.sweep();
       return await fn(req, r, (await ctx.params) ?? ({} as P));
     } catch (err) {
       if (err instanceof ZodError) return error(400, "invalid_request", "invalid request body", err.issues);

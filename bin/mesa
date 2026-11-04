@@ -15,7 +15,7 @@ const HELP = `mesa <command> [options]
 
 Sessions
   mesa session [--label L] [--project P]          register / heartbeat this session
-  mesa wait [--timeout S] [--loop]                 long-poll for wake events (prints them, then acks)
+  mesa wait [--timeout S] [--loop|--once]          long-poll for wake events (prints them, then acks); --once returns after one poll
 
 Tickets
   mesa ticket ask --title T [--body B] [--option "A:label[:detail]"]... [--recommend A --why W] [--project P] [--ref t12]...
@@ -25,16 +25,38 @@ Tickets
   mesa ticket close <id|ref>
   mesa ticket action <actionId> --state running|done|failed
   mesa ticket show <id|ref>
+  mesa ticket context <ref> [--messages N]     resume payload: brief, plan, last messages, team, handoffs, approvals, findings
+  mesa ticket brief <ref> [--body -] [--goal G] [--step S] [--next N] [--decision D]... [--question Q]...
   mesa ticket list [--open]
 
 Salidas (outgoing messages; nothing is sent without Andrés's approval)
-  mesa salida propose --source slack|basecamp --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
+  mesa salida propose --source slack|basecamp|github --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
   mesa salida sent <id> [--permalink URL]          only after salida.released
   mesa salida failed <id> --error E
+  mesa salida hold <id> --reason R               released but the source is down (waits as "Aprobar al volver")
+  mesa salida bounce <id> --reason R             the thread changed: back to Andrés for a new approval
   mesa salida deleted <id> | restored <id>
   mesa salida show <id>
   mesa salida list [--status pending,scheduled]
+
+Agents (ephemeral: everything they need lives on the ticket)
+  mesa handoff <ref> --agent A --status done|paused|blocked --body - [--role R] [--done D] [--left L] [--branch B] [--pr P] [--file F]...
+  mesa handoffs [--agent A] [--ticket ref]
+  mesa team add <ref> --agent <role>-<ref>[-k] --role R [--owner]
+  mesa team retire <name>
+  mesa team list [--status live|retired] [--ticket ref]
+
+Reviews and approvals
+  mesa finding upsert <ref> --json -           {repo, pr, n?, label, at, anchor, summary, explanation, state, sha, ghCommentId}
+  mesa finding list <ref>
+  mesa review list [--ticket ref]
+  mesa approval show <id>
+
+Health and sweep
+  mesa health set <source> ok|down|limited [--note N]   github|github_project|slack|basecamp|engram
+  mesa health list
+  mesa sweep [--source slack|basecamp|github]...        same as "Barrer ahora"
 
 Items and memory
   mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...)
@@ -123,7 +145,10 @@ async function main() {
       // Without --loop: keep polling until the first batch arrives, print it, ack, exit.
       for (;;) {
         const r = await call("GET", `/api/wait?session=${enc(s)}&timeout=${timeout}`);
-        if (!r.events.length) continue;
+        if (!r.events.length) {
+          if (opt.once) return;
+          continue;
+        }
         for (const e of r.events) process.stdout.write(JSON.stringify(e) + "\n");
         await call("POST", "/api/wait/ack", { session: s, cursor: r.cursor });
         if (!opt.loop) return;
@@ -176,6 +201,21 @@ async function main() {
           return out(await call("PATCH", `/api/actions/${enc(need(id, "<actionId>"))}`, { state: need(opt.state, "--state") }));
         case "show":
           return out(await call("GET", `/api/tickets/${enc(need(id, "<id>"))}`));
+        case "context":
+          return out(await call("GET", `/api/tickets/${enc(need(id, "<ref>"))}/context${opt.messages ? `?messages=${enc(opt.messages)}` : ""}`));
+        case "brief": {
+          const b = {
+            body: opt.body === undefined ? undefined : text(opt.body, "--body"),
+            goal: opt.goal,
+            planStep: opt.step,
+            nextAction: opt.next,
+            decisions: opt.decision === undefined ? undefined : list(opt.decision).map(String),
+            openQuestions: opt.question === undefined ? undefined : list(opt.question).map(String),
+            updatedBy: opt.agent ?? process.env.MESA_AGENT ?? session,
+          };
+          const method = Object.values(b).some((v) => v !== undefined && v !== b.updatedBy) ? "PUT" : "GET";
+          return out(await call(method, `/api/tickets/${enc(need(id, "<ref>"))}/brief`, method === "PUT" ? b : undefined));
+        }
         case "list":
           return out(await call("GET", `/api/tickets${opt.open ? "?open=1" : ""}`));
       }
@@ -220,6 +260,9 @@ async function main() {
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "sent", permalink: opt.permalink }));
         case "failed":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "failed", error: text(opt.error, "--error") }));
+        case "hold":
+        case "bounce":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd, reason: text(opt.reason, "--reason") }));
         case "deleted":
         case "restored":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd }));
@@ -229,6 +272,81 @@ async function main() {
           return out(await call("GET", `/api/salidas${opt.status ? `?status=${enc(opt.status)}` : ""}`));
       }
       return usage(`unknown salida command "${cmd ?? ""}"`);
+
+    case "handoff": {
+      const ref = need(cmd, "<ref>");
+      const artifacts = {};
+      if (opt.branch) artifacts.branch = opt.branch;
+      if (opt.pr) artifacts.pr = String(opt.pr);
+      if (opt.file) artifacts.files = list(opt.file).map(String);
+      return out(
+        await call("POST", `/api/tickets/${enc(ref)}/handoffs`, {
+          agent: need(opt.agent ?? process.env.MESA_AGENT, "--agent"),
+          role: opt.role,
+          status: need(opt.status, "--status"),
+          body: opt.body === undefined ? undefined : text(opt.body, "--body"),
+          done: opt.done,
+          remaining: opt.left,
+          artifacts,
+        }),
+      );
+    }
+
+    case "handoffs": {
+      const q = new URLSearchParams();
+      if (opt.agent) q.set("agent", opt.agent);
+      if (opt.ticket) q.set("ticket", opt.ticket);
+      return out(await call("GET", `/api/handoffs?${q}`));
+    }
+
+    case "team":
+      switch (cmd) {
+        case "add":
+          return out(
+            await call("POST", "/api/team", { ticketRef: need(id, "<ref>"), agent: need(opt.agent, "--agent"), role: need(opt.role, "--role"), owner: Boolean(opt.owner) }),
+          );
+        case "retire":
+          return out(await call("POST", `/api/team/${enc(need(id, "<name>"))}/retire`, {}));
+        case "list": {
+          const q = new URLSearchParams();
+          if (opt.status) q.set("status", opt.status);
+          if (opt.ticket) q.set("ticket", opt.ticket);
+          return out(await call("GET", `/api/team?${q}`));
+        }
+      }
+      return usage(`unknown team command "${cmd ?? ""}"`);
+
+    case "finding":
+      switch (cmd) {
+        case "upsert": {
+          let f;
+          try {
+            f = JSON.parse(text(opt.json, "--json"));
+          } catch {
+            usage("--json must be JSON");
+          }
+          return out(await call("POST", `/api/tickets/${enc(need(id, "<ref>"))}/findings`, f));
+        }
+        case "list":
+          return out(await call("GET", `/api/tickets/${enc(need(id, "<ref>"))}/findings`));
+      }
+      return usage(`unknown finding command "${cmd ?? ""}"`);
+
+    case "review":
+      if (cmd !== "list") return usage(`unknown review command "${cmd ?? ""}"`);
+      return out(await call("GET", `/api/reviews${opt.ticket ? `?ticket=${enc(opt.ticket)}` : ""}`));
+
+    case "approval":
+      if (cmd !== "show") return usage(`unknown approval command "${cmd ?? ""}"`);
+      return out(await call("GET", `/api/approvals/${enc(need(id, "<id>"))}`));
+
+    case "health":
+      if (cmd === "list") return out(await call("GET", "/api/sources/health"));
+      if (cmd !== "set") return usage(`unknown health command "${cmd ?? ""}"`);
+      return out(await call("POST", "/api/sources/health", { source: need(id, "<source>"), state: need(pos[3], "<state>"), note: opt.note }));
+
+    case "sweep":
+      return out(await call("POST", "/api/sweep", opt.source ? { sources: list(opt.source) } : {}));
 
     case "item":
       if (cmd !== "upsert") return usage(`unknown item command "${cmd ?? ""}"`);

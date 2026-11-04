@@ -28,6 +28,7 @@ import type {
   TicketStatus,
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
+import { ensureSession } from "./sessions";
 
 const T_SPEC = { bool: ["is_sample"] };
 const M_SPEC = { json: ["options"] };
@@ -195,6 +196,7 @@ export function ticketsRepo(db: Db) {
       const ts = nowIso(now);
       const status = initialTicketStatus(input.direction);
       return tx(db, () => {
+        ensureSession(db, input.ownerSession, now);
         const ref = nextRef();
         const { sql, values } = insertSql(
           "tickets",
@@ -238,6 +240,7 @@ export function ticketsRepo(db: Db) {
       return tx(db, () => {
         let t = get(id);
         if (m.author === "claude" && m.session && !t.ownerSession) {
+          ensureSession(db, m.session, now);
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(m.session, t.id);
           t = get(t.id);
         }
@@ -255,6 +258,7 @@ export function ticketsRepo(db: Db) {
       return tx(db, () => {
         let t = get(id);
         if (session && !t.ownerSession) {
+          ensureSession(db, session, now);
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(session, t.id);
           t = get(t.id);
         }
@@ -319,6 +323,7 @@ export function ticketsRepo(db: Db) {
       return tx(db, () => {
         let t = get(id);
         if (ev.type === "claim" && session) {
+          ensureSession(db, session, now);
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(session, t.id);
           t = get(t.id);
         }

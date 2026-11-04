@@ -34,7 +34,9 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 
 ## Safety rules for Claude sessions using Mesa
 
-- Nothing is sent on Andrés's behalf without his approval of the exact text and destination. A session **never** calls approve, schedule, deny or undo on a salida; it proposes, adds versions, and reports `sent`/`failed`.
-- Send a salida only after `mesa wait` delivers `salida.released` for it, and send exactly `versions[approvedVersion - 1].body` to exactly `destination`.
-- Save ticket conversations and decisions to engram (scoped by project) and link them with `mesa engram link`. Nothing important lives only in agent-local memory.
-- Never put tokens, webhooks or secrets in the repo. Never touch `G:/WorkSpace/designli` outside `ops/`.
+- Nothing is sent on Andrés's behalf without his approval of the exact text and destination. Slack, Basecamp and GitHub writes (review approvals, PR comments) are all salidas. A session or agent **never** calls approve, schedule, deny, undo or unqueue on a salida, and never decides a permission approval. It proposes, adds versions, and reports `sent`, `failed`, `hold` or `bounce`.
+- Send a salida only after `mesa wait` delivers `salida.released` for it, and send exactly `versions[approvedVersion - 1].body` to exactly `destination`. If the event says `recheckThread`, re-read the thread first and `bounce` when it changed. If the source is down at send time, `hold` it ("Aprobar al volver") and report the outage with `mesa health set`.
+- One lead session (`MESA_SESSION=lead`) owns every ticket and relays wakes to agents. Agents are ephemeral: start from `mesa ticket context <ref>`, rewrite the brief on every milestone (`mesa ticket brief`), write a handoff before stopping (`mesa handoff`), and keep nothing important only in the context window. Agent names are `<role>-<ticketRef>[-k]` and are never reused.
+- Save ticket conversations and decisions to engram under topic key `mesa/<ref>` (scoped by the ticket's project) and link them with `mesa engram link`.
+- Slack and Basecamp are read only through MCP by the `mesa-sweep` skill. Mesa holds no Slack or Basecamp tokens, apps, webhooks or OAuth.
+- Never put tokens, webhooks or secrets in the repo (`.env.local` is gitignored; `.env.example` lists the variable names). Never touch `G:/WorkSpace/designli` outside `ops/`.

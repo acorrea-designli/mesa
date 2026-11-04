@@ -66,3 +66,12 @@ export function sessionsRepo(db: Db) {
     },
   };
 }
+
+/** Register a session id if it is new (owner columns reference sessions). */
+export function ensureSession(db: Db, id: string | null | undefined, now = new Date()): void {
+  if (!id) return;
+  db.prepare(
+    `INSERT OR IGNORE INTO sessions (id, label, cwd, project, cursor, last_seen_at, created_at)
+     VALUES (?, '', '', '', (SELECT COALESCE(MAX(id), 0) FROM wake_events), ?, ?)`,
+  ).run(id, nowIso(now), nowIso(now));
+}

@@ -142,3 +142,11 @@ describe("ticket flow", () => {
     expect(await waiting).toEqual([]);
   });
 });
+
+describe("sessions", () => {
+  it("an unknown owner session is registered on first use", () => {
+    const t = r.tickets.create({ direction: "claude_asks", title: "q", ownerSession: "lead" }, T0);
+    expect(t.ownerSession).toBe("lead");
+    expect(r.sessions.find("lead")).not.toBeNull();
+  });
+});

@@ -176,9 +176,10 @@ export type SalidaStatus =
   | "denied"
   | "expired"
   | "scheduled"
+  | "queued_until_back" // approved while the source was down ("Aprobar al volver")
   | "deleted";
 
-export type SalidaSource = "slack" | "basecamp";
+export type SalidaSource = "slack" | "basecamp" | "github";
 
 export type Destination =
   | {
@@ -197,6 +198,18 @@ export type Destination =
       recordingId?: string;
       recordingTitle?: string;
       postAs: string;
+    }
+  | {
+      /** A PR review (approve or comment) or an inline/PR comment, written with gh by the lead. */
+      kind: "github_review" | "github_comment";
+      repo: string; // owner/name
+      pr: number;
+      event?: "APPROVE" | "COMMENT" | "REQUEST_CHANGES"; // github_review
+      path?: string; // github_comment inline
+      line?: number;
+      commitId?: string;
+      findingN?: number;
+      postAs: string;
     };
 
 export type DestinationKind = Destination["kind"];
@@ -208,6 +221,8 @@ export const DELETE_POLICY: Record<DestinationKind, "trash" | "permanent" | "non
   basecamp_comment: "trash", // recoverable 25 days
   basecamp_message: "trash",
   basecamp_campfire: "permanent",
+  github_review: "none", // a submitted review cannot be deleted
+  github_comment: "permanent",
 };
 
 export interface SalidaLink {
@@ -311,13 +326,16 @@ export type WakeKind =
   | "salida.denied"
   | "salida.delete_requested"
   | "salida.restore_requested"
+  | "salida.queued" // approved while the source is down
+  | "review.action" // Andrés pressed Approve / Approve anyway / Post / Dismiss / Explain more
+  | "sweep.requested" // "Barrer ahora": run the mesa-sweep skill
   | "task.moved";
 
 export interface WakeEvent {
   id: number;
   sessionId: string | null;
   kind: WakeKind;
-  entityType: "ticket" | "salida" | "task";
+  entityType: "ticket" | "salida" | "task" | "review" | "sweep";
   entityId: string;
   payload: Record<string, unknown>;
   createdAt: string;
@@ -339,6 +357,139 @@ export interface Counts {
   tablero: number;
   tickets: number;
   salidas: number;
+  approvals: number; // pending permission approvals
   doneToday: number;
   stations: Record<Station, number>;
 }
+
+// ---------- ephemeral agents ----------
+
+/** The living summary of a ticket. Updated by its owner on every milestone. */
+export interface Brief {
+  ticketId: string;
+  body: string;
+  goal: string;
+  decisions: string[];
+  planStep: string;
+  openQuestions: string[];
+  nextAction: string;
+  revision: number;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export type HandoffStatus = "done" | "paused" | "blocked";
+export interface Handoff {
+  id: string;
+  ticketId: string;
+  ticketRef: string;
+  agent: string;
+  role: string;
+  status: HandoffStatus;
+  body: string;
+  done: string;
+  remaining: string;
+  artifacts: { branch?: string; pr?: string; files?: string[]; [k: string]: unknown };
+  createdAt: string;
+}
+
+export interface TeamAgent {
+  name: string;
+  ticketId: string;
+  ticketRef: string;
+  role: string;
+  owner: boolean;
+  status: "live" | "retired";
+  spawnedAt: string;
+  retiredAt: string | null;
+}
+
+// ---------- permission approvals ----------
+
+export type ApprovalDecision = "allow" | "read_config" | "deny";
+export interface Approval {
+  id: string;
+  ticketId: string | null;
+  ticketRef: string | null;
+  agent: string;
+  tool: string;
+  summary: string;
+  detail: string;
+  cwd: string;
+  hints: string[];
+  status: "pending" | "decided" | "expired";
+  decision: ApprovalDecision | null;
+  note: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  expiresAt: string;
+  createdAt: string;
+}
+
+// ---------- reviews ----------
+
+export type FindingState = "open" | "fixed" | "waived" | "dismissed";
+export interface Finding {
+  id: string;
+  reviewId: string;
+  repo: string;
+  pr: number;
+  n: number;
+  label: "blocker" | "nit" | "comment";
+  at: string;
+  anchor: string;
+  summary: string;
+  explanation: string;
+  state: FindingState;
+  sha: string;
+  ghCommentId: string | null;
+  salidaId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Review {
+  id: string;
+  ticketId: string | null;
+  repo: string;
+  pr: number;
+  headSha: string;
+  state: "open" | "approving" | "approved";
+  salidaId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  findings: Finding[];
+}
+
+export type ReviewAction = "approve" | "approve_anyway" | "post" | "dismiss" | "explain";
+
+// ---------- source health ----------
+
+export type HealthSource = "github" | "github_project" | "slack" | "basecamp" | "engram";
+export interface SourceHealthRow {
+  source: HealthSource;
+  state: "ok" | "down" | "limited";
+  note: string;
+  updatedAt: string;
+}
+
+// ---------- resume payload ----------
+
+/** Everything a fresh agent needs to resume a ticket, in one compact payload. */
+export interface TicketContext {
+  ticket: Ticket;
+  brief: Brief | null;
+  plan: PlannedAction[];
+  messages: TicketMessage[]; // last N, oldest first
+  openQuestions: string[];
+  team: TeamAgent[];
+  handoffs: Handoff[]; // latest per agent, newest first
+  latestHandoff: Handoff | null;
+  approvals: Approval[]; // pending
+  salidas: Pick<Salida, "id" | "status" | "source" | "title" | "currentVersion">[]; // not final
+  findings: Finding[];
+  engram: { topicKey: string; project: string; links: EngramLink[] };
+}
+
+/** Engram topic key for a ticket: every ticket thread is saved under it. */
+export const ticketTopicKey = (ref: string) => `mesa/${ref}`;

@@ -4,6 +4,7 @@
 //     │                 │  ▲  │                 │ undo ▲                          │ sent / failed
 //     │                 │  │  └─schedule─▶ scheduled ─(send_at)─▶ sending(released)│
 //     │                 │  └──unschedule──────┘                                    ▼
+//     │                 │   (approve while the source is down ──▶ queued_until_back ─resume─▶ sending(released))
 //     │                 ├─deny──▶ denied                       sent ──deleted──▶ deleted
 //     │                 └─expire─▶ expired                     failed ──retry──▶ pending
 //
@@ -29,7 +30,11 @@ export type SalidaEvent =
   | { type: "request_delete" }
   | { type: "deleted" }
   | { type: "request_restore" }
-  | { type: "restored" };
+  | { type: "restored" }
+  | { type: "hold"; reason: string } // released, but the source is down: wait for it
+  | { type: "resume" } // the source is back: release again (the session re-checks the thread)
+  | { type: "unqueue" } // Andrés pulls a queued salida back to pending
+  | { type: "bounce"; reason: string }; // the thread changed before sending: back to pending for a new approval
 
 export type SalidaEventType = SalidaEvent["type"];
 
@@ -39,6 +44,8 @@ export interface SalidaGuards {
   versionCount: number;
   /** A refine turn is waiting for Claude ("Claude reescribiendo…"). */
   rewritePending: boolean;
+  /** The destination source is reported down ("Aprobar al volver"). */
+  sourceDown?: boolean;
 }
 
 export type Transition =
@@ -88,6 +95,13 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (g.rewritePending) return fail("Claude is rewriting; approve the new version when it arrives");
       if (ev.version < 1 || ev.version > g.versionCount) return fail(`version ${ev.version} does not exist`);
       if (ev.version !== s.currentVersion) return fail("approve sends the version shown; select it first");
+      if (g.sourceDown) {
+        return {
+          ok: true,
+          patch: { status: "queued_until_back", approvedVersion: ev.version, undoUntil: null, releasedAt: null, error: null },
+          wake: "salida.queued",
+        };
+      }
       return {
         ok: true,
         patch: {
@@ -153,7 +167,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
     }
 
     case "deny": {
-      const bad = expect(s, ["draft", "pending", "scheduled"], "deny");
+      const bad = expect(s, ["draft", "pending", "scheduled", "queued_until_back"], "deny");
       if (bad) return bad;
       return { ok: true, patch: { status: "denied", sendAt: null }, wake: "salida.denied" };
     }
@@ -207,6 +221,35 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (bad) return bad;
       if (DELETE_POLICY[s.destination.kind] !== "trash") return fail("this deletion is permanent");
       return { ok: true, patch: {}, wake: "salida.restore_requested" };
+    }
+
+    case "hold": {
+      const bad = expect(s, ["sending"], "hold");
+      if (bad) return bad;
+      if (!s.releasedAt) return fail("only a released salida can wait for its source");
+      return { ok: true, patch: { status: "queued_until_back", releasedAt: null, error: ev.reason } };
+    }
+
+    case "resume": {
+      const bad = expect(s, ["queued_until_back"], "resume");
+      if (bad) return bad;
+      return { ok: true, patch: { status: "sending", undoUntil: iso, releasedAt: iso, error: null }, wake: "salida.released" };
+    }
+
+    case "unqueue": {
+      const bad = expect(s, ["queued_until_back"], "unqueue");
+      if (bad) return bad;
+      return { ok: true, patch: { status: "pending", approvedVersion: null, error: null } };
+    }
+
+    case "bounce": {
+      const bad = expect(s, ["sending", "queued_until_back"], "bounce");
+      if (bad) return bad;
+      if (s.status === "sending" && !s.releasedAt) return fail("the undo window is still open; Andrés can undo");
+      return {
+        ok: true,
+        patch: { status: "pending", approvedVersion: null, undoUntil: null, releasedAt: null, error: ev.reason },
+      };
     }
 
     case "restored": {

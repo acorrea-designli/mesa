@@ -138,8 +138,8 @@ CREATE INDEX planned_actions_ticket ON planned_actions (ticket_id, seq);
 -- Outgoing messages that need Andrés's approval.
 CREATE TABLE salidas (
   id                  TEXT PRIMARY KEY,
-  status              TEXT NOT NULL CHECK (status IN ('draft','pending','sending','sent','failed','denied','expired','scheduled','deleted')),
-  source              TEXT NOT NULL CHECK (source IN ('slack','basecamp')),
+  status              TEXT NOT NULL CHECK (status IN ('draft','pending','sending','sent','failed','denied','expired','scheduled','queued_until_back','deleted')),
+  source              TEXT NOT NULL CHECK (source IN ('slack','basecamp','github')),
   destination         TEXT NOT NULL,  -- JSON Destination
   title               TEXT NOT NULL DEFAULT '',
   context             TEXT NOT NULL DEFAULT '',

@@ -9,7 +9,7 @@ export function startSweeper(): void {
   if (g.__mesaSweeper) return;
   g.__mesaSweeper = setInterval(() => {
     try {
-      repos().salidas.sweep();
+      repos().sweep();
     } catch (err) {
       console.error("[mesa] sweep failed", err);
     }

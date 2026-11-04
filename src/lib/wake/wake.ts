@@ -92,3 +92,26 @@ export function waitForEvents(db: Db, o: WaitOptions): Promise<WakeEvent[]> {
     if (existing.length) finish(existing);
   });
 }
+
+/** Fire an in-process signal (no persistence), e.g. "approval:<id>" when it is decided. */
+export function signal(key: string): void {
+  bus().emit(`signal:${key}`);
+}
+
+/** Resolve true when `key` is signalled, false on timeout or abort. */
+export function waitSignal(key: string, timeoutMs: number, abort?: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    const name = `signal:${key}`;
+    const done = (v: boolean) => {
+      clearTimeout(timer);
+      bus().off(name, onSignal);
+      abort?.removeEventListener("abort", onAbort);
+      resolve(v);
+    };
+    const onSignal = () => done(true);
+    const onAbort = () => done(false);
+    bus().once(name, onSignal);
+    abort?.addEventListener("abort", onAbort);
+    const timer = setTimeout(() => done(false), timeoutMs);
+  });
+}

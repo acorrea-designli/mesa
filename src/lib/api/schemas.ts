@@ -5,6 +5,8 @@ import { SOURCES, STATIONS } from "../domain/types";
 export const source = z.enum(SOURCES);
 export const station = z.enum(STATIONS);
 const waitOn = z.string().regex(/^(you|client|claude|none|person:.+)$/);
+/** owner/name */
+const REPO = /^[\w.-]+\/[\w.-]+$/;
 const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "expected an ISO date");
 
 export const itemInput = z.object({
@@ -121,11 +123,22 @@ const basecampDest = z.object({
   recordingTitle: z.string().optional(),
   postAs: z.string().min(1),
 });
-export const destination = z.union([slackDest, basecampDest]);
+const githubDest = z.object({
+  kind: z.enum(["github_review", "github_comment"]),
+  repo: z.string().regex(REPO),
+  pr: z.number().int().positive(),
+  event: z.enum(["APPROVE", "COMMENT", "REQUEST_CHANGES"]).optional(),
+  path: z.string().optional(),
+  line: z.number().int().positive().optional(),
+  commitId: z.string().optional(),
+  findingN: z.number().int().optional(),
+  postAs: z.string().min(1),
+});
+export const destination = z.union([slackDest, basecampDest, githubDest]);
 
 export const salidaInput = z
   .object({
-    source: z.enum(["slack", "basecamp"]),
+    source: z.enum(["slack", "basecamp", "github"]),
     destination,
     body: z.string().min(1),
     title: z.string().optional(),
@@ -172,6 +185,9 @@ export const salidaTransition = z.discriminatedUnion("type", [
   z.object({ type: z.literal("deleted") }),
   z.object({ type: z.literal("request_restore") }),
   z.object({ type: z.literal("restored") }),
+  z.object({ type: z.literal("hold"), reason: z.string().min(1) }),
+  z.object({ type: z.literal("unqueue") }),
+  z.object({ type: z.literal("bounce"), reason: z.string().min(1) }),
 ]);
 
 export const salidaSelect = z.object({ n: z.number().int().min(1) });
@@ -193,3 +209,78 @@ export const engramLink = z.object({
   topicKey: z.string().optional(),
   observationId: z.string().optional(),
 });
+
+// ---------- ephemeral agents ----------
+export const briefInput = z.object({
+  body: z.string().optional(),
+  goal: z.string().optional(),
+  decisions: z.array(z.string()).optional(),
+  planStep: z.string().optional(),
+  openQuestions: z.array(z.string()).optional(),
+  nextAction: z.string().optional(),
+  updatedBy: z.string().optional(),
+});
+
+export const handoffInput = z.object({
+  agent: z.string().min(1),
+  role: z.string().optional(),
+  status: z.enum(["done", "paused", "blocked"]),
+  body: z.string().optional(),
+  done: z.string().optional(),
+  remaining: z.string().optional(),
+  artifacts: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** <role>-<ticketRef>[-k], lowercase. */
+export const agentName = z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/, "agent names look like <role>-<ticketRef>[-k]");
+export const teamInput = z.object({
+  ticketRef: z.string().min(1),
+  agent: agentName,
+  role: z.string().min(1),
+  owner: z.boolean().optional(),
+});
+
+// ---------- approvals ----------
+export const approvalInput = z.object({
+  ticketRef: z.string().nullable().optional(),
+  agent: z.string().min(1),
+  tool: z.string().min(1),
+  summary: z.string().min(1).max(500),
+  detail: z.string().max(400_000).optional(),
+  cwd: z.string().optional(),
+  hints: z.array(z.string()).max(10).optional(),
+  expiresAt: isoDate.optional(),
+});
+export const approvalDecision = z.object({
+  decision: z.enum(["allow", "read_config", "deny"]),
+  actor: z.string().min(1),
+  note: z.string().max(2000).optional(),
+});
+
+// ---------- reviews ----------
+export const findingInput = z.object({
+  repo: z.string().regex(REPO),
+  pr: z.number().int().positive(),
+  n: z.number().int().positive().optional(),
+  label: z.enum(["blocker", "nit", "comment"]),
+  at: z.string().optional(),
+  anchor: z.string().optional(),
+  summary: z.string().min(1),
+  explanation: z.string().optional(),
+  state: z.enum(["open", "fixed", "waived", "dismissed"]).optional(),
+  sha: z.string().optional(),
+  ghCommentId: z.string().nullable().optional(),
+});
+export const reviewActionInput = z.object({
+  action: z.enum(["approve", "approve_anyway", "post", "dismiss", "explain"]),
+  findingNs: z.array(z.number().int().positive()).optional(),
+  note: z.string().optional(),
+});
+
+// ---------- health and sweep ----------
+export const healthInput = z.object({
+  source: z.enum(["github", "github_project", "slack", "basecamp", "engram"]),
+  state: z.enum(["ok", "down", "limited"]),
+  note: z.string().optional(),
+});
+export const sweepInput = z.object({ sources: z.array(z.enum(["slack", "basecamp", "github"])).optional() });

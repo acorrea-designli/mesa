@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueEvent, transitionSalida, UNDO_WINDOW_MS, type SalidaEvent } from "./salida-machine";
+import { dueEvent, transitionSalida, UNDO_WINDOW_MS, type SalidaEvent, type SalidaGuards } from "./salida-machine";
 import type { Destination, Salida } from "./types";
 
 const slack: Destination = { kind: "slack_thread", workspace: "Designli", channel: "#scout-dev", postAs: "Andrés" };
@@ -21,7 +21,7 @@ const base = (over: Partial<Salida> = {}): S => ({
 });
 const T0 = new Date("2026-11-03T10:00:00.000Z");
 const at = (ms: number) => new Date(T0.getTime() + ms);
-const g = { versionCount: 1, rewritePending: false };
+const g: SalidaGuards = { versionCount: 1, rewritePending: false };
 
 function run(s: S, ev: SalidaEvent, now = T0, guards = g): S {
   const r = transitionSalida(s, ev, now, guards);
@@ -121,5 +121,33 @@ describe("salida machine", () => {
     const sending = run(base(), { type: "approve", version: 1 });
     expect(dueEvent(sending, at(UNDO_WINDOW_MS - 1))).toBeNull();
     expect(dueEvent(sending, at(UNDO_WINDOW_MS))).toEqual({ type: "release" });
+  });
+});
+
+describe("salida machine: source outages", () => {
+  it("approve while the source is down queues it (Aprobar al volver)", () => {
+    const r = transitionSalida(base(), { type: "approve", version: 1 }, T0, { ...g, sourceDown: true });
+    expect(r).toMatchObject({ ok: true, wake: "salida.queued", patch: { status: "queued_until_back", approvedVersion: 1 } });
+  });
+
+  it("a released salida can hold, then resume releases it again", () => {
+    const released = run(run(base(), { type: "approve", version: 1 }), { type: "release" }, at(UNDO_WINDOW_MS));
+    const held = run(released, { type: "hold", reason: "slack unreachable" });
+    expect(held).toMatchObject({ status: "queued_until_back", releasedAt: null });
+    const r = transitionSalida(held, { type: "resume" }, at(60_000), g);
+    expect(r).toMatchObject({ ok: true, wake: "salida.released", patch: { status: "sending" } });
+  });
+
+  it("hold refuses inside the undo window", () => {
+    const sending = run(base(), { type: "approve", version: 1 });
+    expect(transitionSalida(sending, { type: "hold", reason: "x" }, at(1), g).ok).toBe(false);
+  });
+
+  it("unqueue and deny pull a queued salida back; bounce asks for a new approval", () => {
+    const q = run(base(), { type: "approve", version: 1 }, T0, { ...g, sourceDown: true });
+    expect(run(q, { type: "unqueue" }).status).toBe("pending");
+    expect(run(q, { type: "deny" }).status).toBe("denied");
+    const b = run(q, { type: "bounce", reason: "new messages in the thread" });
+    expect(b).toMatchObject({ status: "pending", approvedVersion: null, error: "new messages in the thread" });
   });
 });
