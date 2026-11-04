@@ -58,6 +58,19 @@ describe("live (default)", () => {
     expect(JSON.parse((r.db.prepare("SELECT payload FROM wake_events WHERE kind = 'ticket.reopened'").get() as { payload: string }).payload)).toMatchObject({ ref, reason: "otra vuelta" });
   });
 
+  it("only Andrés's reopen is an interaction of his: the route passes `by` (a teammate's `by: claude` is not)", async () => {
+    const reopen = (ref: string, by?: string) =>
+      TICKET_TRANSITION(req("POST", `/api/tickets/${ref}/transition`, { event: "reopen", ...(by ? { by } : {}) }), ctx({ id: ref }));
+    const a = closedReview();
+    expect((await reopen(a, "claude")).status).toBe(200);
+    expect(r.tickets.get(a).status).toBe("waiting_claude");
+    expect(r.lastInteractionAt()).toBeNull();
+
+    const b = closedReview();
+    await reopen(b); // the UI's Reabrir sends by: andres; a missing `by` is Andrés too
+    expect(r.lastInteractionAt()).not.toBeNull();
+  });
+
   it("sends with the real permalink and refuses simulated", async () => {
     const a = released();
     const bad = await send(a, { simulated: true });

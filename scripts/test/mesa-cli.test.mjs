@@ -31,12 +31,12 @@ async function run(args) {
 test("ticket reopen posts the transition with its reason", async () => {
   const { code, calls } = await run(["ticket", "reopen", "t6", "--reason", "new push"]);
   assert.equal(code, 0);
-  assert.deepEqual(calls, [{ method: "POST", url: "/api/tickets/t6/transition", body: { event: "reopen", reason: "new push" } }]);
+  assert.deepEqual(calls, [{ method: "POST", url: "/api/tickets/t6/transition", body: { event: "reopen", by: "claude", reason: "new push" } }]);
 });
 
 test("ticket reopen without a reason sends none", async () => {
   const { calls } = await run(["ticket", "reopen", "t6"]);
-  assert.deepEqual(calls[0].body, { event: "reopen" });
+  assert.deepEqual(calls[0].body, { event: "reopen", by: "claude" });
 });
 
 test("ticket reply --ask flags the reply as a question; without it nothing is sent", async () => {

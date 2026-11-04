@@ -17,8 +17,10 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 ## Spawning (lead)
 
 - **Requested review**: one ticket per PR, titled exactly `Review <owner/repo>#<n>: <PR title>`. Find it with
-  `MESA ticket list --open`; none: `MESA ticket ask --title "Review <owner/repo>#<n>: <title>" --body "FYI: revisión
-  en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked advance / post-approve push).
+  `MESA ticket list` by that title, closed tickets included (never only `--open`): a closed one is that PR's
+  ticket and comes back with `MESA ticket reopen <ref> --reason "new push"` (Mesa also reopens it by itself on a new
+  head), never as a duplicate; none at all: `MESA ticket ask --title "Review <owner/repo>#<n>: <title>" --body "FYI:
+  revisión en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked advance / post-approve push).
   Spawn `reviewer-<ref>` (next suffix if that name was used) as the owner.
 - **Review pass** ("haz un review pass"): run `mesa-sweep` § 1, then one ticket and one reviewer per entering PR,
   at most 5 at a time in pr-monitor's order (tracked advance, moved, new, untracked advance; oldest first). The
@@ -55,11 +57,14 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 ## Ask (reviewer → Andrés)
 
 The findings are the ask: Mesa renders them on the ticket's review card with pr-monitor's buttons, so there is no
-A/B question. Post one ticket reply as the summary with `--ask` (the card waits on his click, so the ticket goes to
-"Te espera"; a reply without `--ask` or options would not), first line in Spanish with the counts, then the findings in
+A/B question. Post one ticket reply as the summary, first line in Spanish with the counts, then the findings in
 English, numbered, in pr-review's candidate format (`[blocker|nit] path:line`, the one-line problem, `fix:`).
 Incremental passes start with `re-review <sha7>..<sha7> · K fixed · M pending · P new`; verification passes with
 `verification · K fixed · M pending`. A clean pass says so and recommends Approve. Then wait, handoff written.
+
+`--ask` only on a review Andrés requested (his decision is pending on the card): that summary reply goes with `--ask`,
+so the ticket moves to "Te espera"; a reply without `--ask` or options leaves the status alone. A team review for a
+tl reports without `--ask`: the tl's ticket must not park in "Te espera" for a card Andrés does not own.
 
 Buttons by state, as in pr-monitor: open blockers → Post, Explain more, Dismiss, Approve anyway; open nits only →
 Post, Dismiss, Approve; nothing open → Approve (and Re-review, which is a ticket reply asking for it).

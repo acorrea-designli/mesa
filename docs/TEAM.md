@@ -119,7 +119,7 @@ and `findings` keeps its state. `mesa ticket reopen <ref> [--reason R]` reopens 
 
 | Template | When | Owner | Team | Ends when |
 |---|---|---|---|---|
-| **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed; the ticket stays open while findings are open, and the next push brings `reviewer-<ref>-2` |
+| **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed (approve or post); then the lead closes the ticket, open findings included, and a new push from the PR author reopens that same ticket (`ticket.reopened`; `mesa ticket reopen` by hand) and brings `reviewer-<ref>-2` |
 | **Client technical request** | a client asks for a change (Basecamp, Slack, a forwarded email): "Matt asked for infra" | `tl-<ref>` | `devops-` or `dev-`, then `reviewer-`, then `writer-`; `researcher-` if the cause is unknown | the client reply is sent and Andrés closes it |
 | **Investigation** | "resume este hilo", "por qué falla el build", "qué pasó con X" | `researcher-<ref>` | `writer-` if a message comes out of it | Andrés closes it; escalates to a tl when it needs a change |
 | **Simple reply** | a message that only needs words: answer a question, confirm, follow up | `writer-<ref>` | none | the salida is sent or denied |

@@ -331,7 +331,7 @@ async function main() {
           return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "close", by: "claude", session }));
         case "reopen":
           return out(
-            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "reopen", reason: typeof opt.reason === "string" ? opt.reason : undefined }),
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "reopen", by: "claude", reason: typeof opt.reason === "string" ? opt.reason : undefined }),
           );
         case "action":
           return out(await call("PATCH", `/api/actions/${enc(need(id, "<actionId>"))}`, { state: need(opt.state, "--state") }));

@@ -15,7 +15,7 @@ export type TicketEvent =
   | { type: "approve_plan" } // Andrés OKs the plan (wakes the owner)
   | { type: "claim" } // a session takes the ticket and starts work
   | { type: "close"; by: "andres" | "claude" }
-  | { type: "reopen" };
+  | { type: "reopen"; by?: "andres" | "claude" }; // by defaults to Andrés (the UI); Claude's reopen is not his interaction
 
 export type TicketEventType = TicketEvent["type"];
 

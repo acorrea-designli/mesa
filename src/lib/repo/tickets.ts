@@ -361,7 +361,7 @@ export function ticketsRepo(db: Db) {
           t = get(t.id);
         }
         apply(t, ev, now, ev.type === "reopen" && reason ? { reason } : {});
-        if ((ev.type === "close" && ev.by === "andres") || ev.type === "reopen") touchInteraction(db, now);
+        if ((ev.type === "close" && ev.by === "andres") || (ev.type === "reopen" && ev.by !== "claude")) touchInteraction(db, now);
         return this.detail(t.id);
       });
     },
