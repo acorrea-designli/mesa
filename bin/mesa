@@ -1,0 +1,262 @@
+#!/usr/bin/env node
+// mesa: the CLI Claude Code sessions use to talk to the Mesa board.
+// Thin wrapper over the REST API (docs/ARCHITECTURE.md). No dependencies.
+//
+//   MESA_URL      board URL (default http://127.0.0.1:8790)
+//   MESA_SESSION  this session's id (or --session); required for wait and ownership
+//   MESA_TOKEN    only needed when MESA_URL is not localhost
+//
+// Output is JSON on stdout. Errors go to stderr with exit code 1 (2 for usage).
+
+import { readFileSync } from "node:fs";
+import process from "node:process";
+
+const HELP = `mesa <command> [options]
+
+Sessions
+  mesa session [--label L] [--project P]          register / heartbeat this session
+  mesa wait [--timeout S] [--loop]                 long-poll for wake events (prints them, then acks)
+
+Tickets
+  mesa ticket ask --title T [--body B] [--option "A:label[:detail]"]... [--recommend A --why W] [--project P] [--ref t12]...
+  mesa ticket reply <id|ref> --body B [--option ...] [--recommend A --why W]
+  mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
+  mesa ticket claim <id|ref>      take an Andrés request and start work
+  mesa ticket close <id|ref>
+  mesa ticket action <actionId> --state running|done|failed
+  mesa ticket show <id|ref>
+  mesa ticket list [--open]
+
+Salidas (outgoing messages; nothing is sent without Andrés's approval)
+  mesa salida propose --source slack|basecamp --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
+  mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
+  mesa salida sent <id> [--permalink URL]          only after salida.released
+  mesa salida failed <id> --error E
+  mesa salida deleted <id> | restored <id>
+  mesa salida show <id>
+  mesa salida list [--status pending,scheduled]
+
+Items and memory
+  mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...)
+  mesa engram link --entity ticket:<id> --project P [--topic KEY] [--obs ID]
+
+--body - reads the body from stdin. --session overrides MESA_SESSION.`;
+
+// ---------- args ----------
+function parse(argv) {
+  const pos = [];
+  const opt = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--")) {
+      const key = a.slice(2);
+      const next = argv[i + 1];
+      const val = next === undefined || (next.startsWith("--") && next !== "-") ? true : (i++, next);
+      if (key in opt) opt[key] = [].concat(opt[key], val);
+      else opt[key] = val;
+    } else pos.push(a);
+  }
+  return { pos, opt };
+}
+const list = (v) => (v === undefined ? [] : [].concat(v));
+const usage = (msg) => {
+  process.stderr.write(`mesa: ${msg}\n\n${HELP}\n`);
+  process.exit(2);
+};
+const need = (v, name) => (v === undefined || v === true ? usage(`missing ${name}`) : v);
+
+let stdinCache;
+function text(v, name) {
+  const s = need(v, name);
+  if (s !== "-") return String(s);
+  stdinCache ??= readFileSync(0, "utf8");
+  return stdinCache.replace(/\r?\n$/, "");
+}
+
+function options(opt) {
+  const opts = list(opt.option).map((o) => {
+    const [key, label, ...rest] = String(o).split(":");
+    if (!key || !label) usage(`bad --option "${o}" (want "A:label[:detail]")`);
+    return { key, label, detail: rest.length ? rest.join(":") : undefined };
+  });
+  return opts.length ? opts : undefined;
+}
+
+// ---------- http ----------
+const BASE = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, "");
+async function call(method, path, body) {
+  const headers = { "content-type": "application/json" };
+  if (process.env.MESA_TOKEN) headers["x-mesa-token"] = process.env.MESA_TOKEN;
+  let res;
+  try {
+    res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch (err) {
+    process.stderr.write(`mesa: cannot reach ${BASE} (${err.cause?.code ?? err.message}). Is "pnpm dev" running?\n`);
+    process.exit(1);
+  }
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (!res.ok) {
+    process.stderr.write(`mesa: ${res.status} ${data?.error?.message ?? res.statusText}\n`);
+    process.exit(1);
+  }
+  return data;
+}
+const out = (x) => process.stdout.write(JSON.stringify(x, null, 2) + "\n");
+const enc = encodeURIComponent;
+
+// ---------- commands ----------
+async function main() {
+  const { pos, opt } = parse(process.argv.slice(2));
+  const [group, cmd, id] = pos;
+  const session = opt.session ?? process.env.MESA_SESSION;
+  const needSession = () => need(session, "MESA_SESSION (or --session)");
+
+  if (!group || opt.help || group === "help") return void process.stdout.write(HELP + "\n");
+
+  switch (group) {
+    case "session":
+      return out(await call("POST", "/api/sessions", { id: needSession(), label: opt.label, project: opt.project, cwd: process.cwd() }));
+
+    case "wait": {
+      const s = needSession();
+      const timeout = Number(opt.timeout ?? 25);
+      // Without --loop: keep polling until the first batch arrives, print it, ack, exit.
+      for (;;) {
+        const r = await call("GET", `/api/wait?session=${enc(s)}&timeout=${timeout}`);
+        if (!r.events.length) continue;
+        for (const e of r.events) process.stdout.write(JSON.stringify(e) + "\n");
+        await call("POST", "/api/wait/ack", { session: s, cursor: r.cursor });
+        if (!opt.loop) return;
+      }
+    }
+
+    case "ticket":
+      switch (cmd) {
+        case "ask":
+          return out(
+            await call("POST", "/api/tickets", {
+              direction: "claude_asks",
+              title: text(opt.title, "--title"),
+              body: opt.body === undefined ? undefined : text(opt.body, "--body"),
+              options: options(opt),
+              recommended: opt.recommend,
+              recommendation: opt.why,
+              project: opt.project,
+              ownerSession: needSession(),
+              refs: list(opt.ref).map((r) => ({ refType: "ticket", target: r })),
+            }),
+          );
+        case "reply":
+          return out(
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/messages`, {
+              author: "claude",
+              body: text(opt.body, "--body"),
+              options: options(opt),
+              recommended: opt.recommend,
+              recommendation: opt.why,
+              session,
+            }),
+          );
+        case "plan": {
+          const actions = list(opt.action).map((a) => {
+            const [kind, source, mode, ...label] = String(a).split(":");
+            if (!kind || !source || !["direct", "needs_ok"].includes(mode) || !label.length) {
+              usage(`bad --action "${a}" (want "kind:source:direct|needs_ok:label")`);
+            }
+            return { kind, source, mode, label: label.join(":") };
+          });
+          if (!actions.length) usage("plan needs at least one --action");
+          return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/plan`, { actions, session }));
+        }
+        case "claim":
+          return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "claim", session: needSession() }));
+        case "close":
+          return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "close", by: "claude", session }));
+        case "action":
+          return out(await call("PATCH", `/api/actions/${enc(need(id, "<actionId>"))}`, { state: need(opt.state, "--state") }));
+        case "show":
+          return out(await call("GET", `/api/tickets/${enc(need(id, "<id>"))}`));
+        case "list":
+          return out(await call("GET", `/api/tickets${opt.open ? "?open=1" : ""}`));
+      }
+      return usage(`unknown ticket command "${cmd ?? ""}"`);
+
+    case "salida":
+      switch (cmd) {
+        case "propose": {
+          let destination;
+          try {
+            destination = JSON.parse(need(opt.dest, "--dest"));
+          } catch {
+            usage("--dest must be JSON");
+          }
+          return out(
+            await call("POST", "/api/salidas", {
+              source: need(opt.source, "--source"),
+              destination,
+              body: text(opt.body, "--body"),
+              title: opt.title,
+              context: opt.context,
+              ticketId: opt.ticket,
+              expiresAt: opt.expires,
+              ownerSession: needSession(),
+              links: list(opt.link).map((l) => {
+                const [source, label, ...url] = String(l).split(":");
+                return { source, label, url: url.length ? url.join(":") : undefined };
+              }),
+            }),
+          );
+        }
+        case "version":
+          return out(
+            await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/versions`, {
+              body: text(opt.body, "--body"),
+              author: "claude",
+              turnId: opt.turn,
+              chipLabel: opt.chip,
+            }),
+          );
+        case "sent":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "sent", permalink: opt.permalink }));
+        case "failed":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "failed", error: text(opt.error, "--error") }));
+        case "deleted":
+        case "restored":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd }));
+        case "show":
+          return out(await call("GET", `/api/salidas/${enc(need(id, "<id>"))}`));
+        case "list":
+          return out(await call("GET", `/api/salidas${opt.status ? `?status=${enc(opt.status)}` : ""}`));
+      }
+      return usage(`unknown salida command "${cmd ?? ""}"`);
+
+    case "item":
+      if (cmd !== "upsert") return usage(`unknown item command "${cmd ?? ""}"`);
+      try {
+        return out(await call("POST", "/api/items/upsert", JSON.parse(text(opt.json, "--json"))));
+      } catch (err) {
+        if (err instanceof SyntaxError) usage("--json must be JSON");
+        throw err;
+      }
+
+    case "engram": {
+      if (cmd !== "link") return usage(`unknown engram command "${cmd ?? ""}"`);
+      const [entityType, entityId] = String(need(opt.entity, "--entity")).split(":");
+      return out(
+        await call("POST", "/api/engram/links", {
+          entityType,
+          entityId,
+          project: need(opt.project, "--project"),
+          topicKey: opt.topic,
+          observationId: opt.obs,
+        }),
+      );
+    }
+  }
+  return usage(`unknown command "${group}"`);
+}
+
+main().catch((err) => {
+  process.stderr.write(`mesa: ${err.stack ?? err}\n`);
+  process.exit(1);
+});

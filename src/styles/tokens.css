@@ -1,0 +1,117 @@
+/*
+ * Mesa design tokens. Source of truth: DESIGN.md + .impeccable/design.json.
+ * Names follow the approved mockups (.impeccable/mocks/screens/*.html) so mock CSS
+ * ports without renaming. DESIGN.md name -> token:
+ *   ground --gnd · deep --deep · porcelain --raise · rule --rule · rule-soft --rule2
+ *   edge --edge · ink --ink · ink-soft --ink2 · need-ink --need · mute --mute · dim --dim
+ *   line-<src> --gh/--sl/--cl/--bc · text-<src> --gh-ink/... · tint-<src> --gh-tint/...
+ * Light "Tokio" is the default; dark "Grafito" is [data-theme="dark"].
+ */
+:root {
+  color-scheme: light;
+
+  --gnd: #eceae5;
+  --deep: #e2dfd8;
+  --raise: #fbfaf7;
+  --rule: #d3cfc5;
+  --rule2: #dcd8cf;
+  --edge: #c3beb2;
+  --ink: #1c1d21;
+  --ink2: #3e4047;
+  --need: #2c2e33;
+  --mute: #5d5f68; /* all secondary text */
+  --dim: #6f717a; /* non-text marks only: below AA for text */
+
+  /* Lines carry source and nothing else. */
+  --gh: #e60012;
+  --sl: #00a3a8;
+  --cl: #f39700;
+  --bc: #00b07c;
+  --gh-ink: #b8000e;
+  --sl-ink: #00777b;
+  --cl-ink: #8a5300;
+  --bc-ink: #006b4d;
+  --gh-tint: #fbe6e5;
+  --sl-tint: #e6f6f5;
+  --cl-tint: #fdf0dc;
+  --bc-tint: #e2f5ed;
+
+  /* Semáforo marks (Salidas). Shape carries meaning; text stays --ink on tints. */
+  --keep-tint: #dcefc9;
+  --keep-ink: #3d6b14;
+  --redo-tint: #fbefb4;
+  --redo-ink: #8a6a00;
+  --drop-tint: #f6dbd6;
+  --drop-ink: #a1271c;
+
+  --shade: rgba(28, 29, 33, 0.1);
+
+  /* Shape */
+  --r-line: 2px;
+  --r-tag: 4px;
+  --r-control: 6px;
+  --r-panel: 8px;
+  --r-pill: 15px;
+
+  /* Spacing rhythm */
+  --s-xs: 6px;
+  --s-sm: 8px;
+  --s-md: 12px;
+  --s-lg: 16px;
+  --s-xl: 24px;
+  --s-gutter: 28px;
+
+  /* Layout */
+  --rail-w: 184px;
+  --detail-w: 392px;
+  --thread-w: 520px;
+  --phone-tabs-h: 82px;
+
+  /* Shadows: only for floating layers */
+  --float-low: 0 2px 8px var(--shade);
+  --float-mid: 0 4px 18px var(--shade);
+  --float-toast: 0 6px 20px var(--shade);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: var(--font-hanken), "Hanken Grotesk", system-ui, sans-serif;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --gnd: #17191d;
+  --deep: #111316;
+  --raise: #20232a;
+  --rule: #2b2f37;
+  --rule2: #23262d;
+  --edge: #3d424b;
+  --ink: #f1efe9;
+  --ink2: #c7cbd2;
+  --need: #dadde2;
+  --mute: #9a9fa8;
+  --dim: #8e939c;
+
+  --gh: #ff5d52;
+  --sl: #2ec5c2;
+  --cl: #ffb428;
+  --bc: #3cc983;
+  --gh-ink: #ff8f86;
+  --sl-ink: #74dcd9;
+  --cl-ink: #ffc965;
+  --bc-ink: #7fdca4;
+  --gh-tint: #3a1f1e;
+  --sl-tint: #123130;
+  --cl-tint: #3a2d14;
+  --bc-tint: #15301f;
+
+  --keep-tint: #25371b;
+  --keep-ink: #a8d98a;
+  --redo-tint: #3a3214;
+  --redo-ink: #efcf5c;
+  --drop-tint: #3f201c;
+  --drop-ink: #ff9b90;
+
+  --shade: rgba(0, 0, 0, 0.4);
+}
