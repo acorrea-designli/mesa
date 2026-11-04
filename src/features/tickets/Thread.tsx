@@ -3,7 +3,7 @@
 // client's words, sources, Claude's plan, permission approvals, reviews, the
 // messages, the agents on the ticket and the reply composer.
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Attachment, PlannedAction, TicketMessage, TicketRef } from "@/lib/domain/types";
 import { Alert, Chip, srcClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/interactive";
@@ -14,6 +14,7 @@ import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/feature
 import { ticketApi } from "./api";
 import { DirLine, dirLabel, hm } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
+import { isNearBottom, onNewMessage } from "./follow";
 import type { PickTicket, ThreadData } from "./read";
 
 interface Props {
@@ -44,6 +45,40 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
   useEffect(() => {
     if (bodyRef.current) arrive(bodyRef.current.querySelectorAll(".tk-msg, .tk-act, .ap-card"));
   }, [t.id]);
+
+  // Autoscroll (follow.ts): opening a ticket and sending land on the last message; a message from
+  // Claude scrolls only when he is already near the bottom, otherwise the "nuevo mensaje" pill shows.
+  // Only the thread's own scroll moves: never the list, the focus or the composer.
+  const [pill, setPill] = useState(false);
+  const nearBottom = useRef(true);
+  const lastMsg = t.messages[t.messages.length - 1];
+  const seenMsg = useRef(lastMsg?.id);
+  const scrollable = () => {
+    const el = bodyRef.current;
+    return el && getComputedStyle(el).overflowY === "auto" ? el : null; // on the phone the page scrolls, not the thread
+  };
+  const toBottom = (smooth: boolean) => {
+    const el = scrollable();
+    if (!el) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth && !calm ? "smooth" : "auto" });
+  };
+  useLayoutEffect(() => {
+    toBottom(false); // opening: already at the end on first paint, no jump from the top
+    nearBottom.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useLayoutEffect(() => {
+    if (!lastMsg || seenMsg.current === lastMsg.id) return;
+    seenMsg.current = lastMsg.id;
+    if (!scrollable()) return;
+    if (onNewMessage({ own: lastMsg.author === "andres", wasNearBottom: nearBottom.current }) === "scroll") {
+      toBottom(true);
+    } else {
+      setPill(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMsg?.id]);
 
   const first = t.messages[0];
   const rest = t.messages.slice(1);
@@ -94,96 +129,120 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
         <IcBack />
         Tickets
       </Link>
-      <div className="tk-scroll" ref={bodyRef}>
-        <div className="kind">
-          <DirLine direction={t.direction} />
-          {t.ref} · {dirLabel(t.direction)} · {hm(t.createdAt)}
-        </div>
-        <h2>{t.title}</h2>
-        {first?.body && first.body !== t.title ? <div className="ctx">{first.body}</div> : null}
+      <div className="tk-scrollwrap">
+        <div
+          className="tk-scroll"
+          ref={bodyRef}
+          onScroll={(e) => {
+            const near = isNearBottom(e.currentTarget);
+            nearBottom.current = near;
+            if (near) setPill(false);
+          }}
+        >
+          <div className="kind">
+            <DirLine direction={t.direction} />
+            {t.ref} · {dirLabel(t.direction)} · {hm(t.createdAt)}
+          </div>
+          <h2>{t.title}</h2>
+          {first?.body && first.body !== t.title ? <div className="ctx">{first.body}</div> : null}
 
-        {first?.options?.length ? (
-          <>
-            <div className="k">Elige</div>
-            <div className="tk-opts">
-              {first.options.map((o) => (
-                <button
-                  key={o.key}
-                  type="button"
-                  className={["tk-opt", first.recommended === o.key && "rec", chosen === o.key && "pick"].filter(Boolean).join(" ")}
-                  disabled={busy || closed}
-                  aria-pressed={chosen === o.key}
-                  onClick={(e) => {
-                    confirmPick(e.currentTarget);
-                    void send(o.key);
-                  }}
-                >
-                  <b>{o.key}</b>
+          {first?.options?.length ? (
+            <>
+              <div className="k">Elige</div>
+              <div className="tk-opts">
+                {first.options.map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    className={["tk-opt", first.recommended === o.key && "rec", chosen === o.key && "pick"].filter(Boolean).join(" ")}
+                    disabled={busy || closed}
+                    aria-pressed={chosen === o.key}
+                    onClick={(e) => {
+                      confirmPick(e.currentTarget);
+                      void send(o.key);
+                    }}
+                  >
+                    <b>{o.key}</b>
+                    <span>
+                      {o.label}
+                      {o.detail ? <small>{o.detail}</small> : null}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {first.recommended ? (
+                <div className="tk-rec">
+                  <span className="ln src-claude" style={{ background: "var(--c)" }} />
                   <span>
-                    {o.label}
-                    {o.detail ? <small>{o.detail}</small> : null}
+                    <b>Claude recomienda {first.recommended}:</b> {first.recommendation}
                   </span>
-                </button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          {data.item ? (
+            <>
+              <div className="k">Lo que pidió el cliente</div>
+              <div className="ctx">{data.item.excerpt || data.item.title}</div>
+            </>
+          ) : null}
+
+          <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} />
+
+          {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
+
+          {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
+            <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
+          ) : null}
+
+          {pending.map((a) => (
+            <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
+          ))}
+          {pastApprovals.map((a) => (
+            <ApprovalCard key={a.id} approval={a} />
+          ))}
+
+          {data.reviews.map((r) => (
+            <ReviewCard key={r.id} review={r} onChange={onChanged} />
+          ))}
+
+          {rest.length ? (
+            <div className="tk-msgs">
+              {rest.map((m) => (
+                <Message key={m.id} m={m} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
               ))}
             </div>
-            {first.recommended ? (
-              <div className="tk-rec">
-                <span className="ln src-claude" style={{ background: "var(--c)" }} />
-                <span>
-                  <b>Claude recomienda {first.recommended}:</b> {first.recommendation}
-                </span>
-              </div>
-            ) : null}
-          </>
+          ) : null}
+
+          {data.salidas.length ? (
+            <div className="tk-sal">
+              {data.salidas.map((s) => (
+                <Link key={s.id} className={`lk ${srcClass(s.source)}`} href={`/salidas?s=${s.id}`}>
+                  <span className="ln" style={{ background: "var(--c)", width: 12, height: 4 }} />
+                  Salida · {s.title} · {s.simulated && s.status === "sent" ? "simulado · no salió" : (SAL_STATUS[s.status] ?? s.status)}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+
+          <StatusLine t={t} listening={listening} />
+          <Agents data={data} />
+        </div>
+        {pill ? (
+          <button
+            className="tk-newmsg"
+            type="button"
+            // The composer keeps its focus and caret: the pill only moves the thread.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              toBottom(true);
+              setPill(false);
+            }}
+          >
+            nuevo mensaje <span aria-hidden="true">↓</span>
+          </button>
         ) : null}
-
-        {data.item ? (
-          <>
-            <div className="k">Lo que pidió el cliente</div>
-            <div className="ctx">{data.item.excerpt || data.item.title}</div>
-          </>
-        ) : null}
-
-        <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} />
-
-        {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
-
-        {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
-          <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
-        ) : null}
-
-        {pending.map((a) => (
-          <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
-        ))}
-        {pastApprovals.map((a) => (
-          <ApprovalCard key={a.id} approval={a} />
-        ))}
-
-        {data.reviews.map((r) => (
-          <ReviewCard key={r.id} review={r} onChange={onChanged} />
-        ))}
-
-        {rest.length ? (
-          <div className="tk-msgs">
-            {rest.map((m) => (
-              <Message key={m.id} m={m} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
-            ))}
-          </div>
-        ) : null}
-
-        {data.salidas.length ? (
-          <div className="tk-sal">
-            {data.salidas.map((s) => (
-              <Link key={s.id} className={`lk ${srcClass(s.source)}`} href={`/salidas?s=${s.id}`}>
-                <span className="ln" style={{ background: "var(--c)", width: 12, height: 4 }} />
-                Salida · {s.title} · {s.simulated && s.status === "sent" ? "simulado · no salió" : (SAL_STATUS[s.status] ?? s.status)}
-              </Link>
-            ))}
-          </div>
-        ) : null}
-
-        <StatusLine t={t} listening={listening} />
-        <Agents data={data} />
       </div>
 
       <div className="tk-foot">

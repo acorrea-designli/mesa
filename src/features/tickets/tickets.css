@@ -217,6 +217,45 @@
 .tk-back {
   display: none;
 }
+/* The thread scrolls inside the wrap; the "nuevo mensaje" pill floats over its bottom edge. */
+.tk-scrollwrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.tk-newmsg {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  border-radius: var(--r-pill);
+  background: var(--raise);
+  color: var(--ink);
+  box-shadow: var(--float-low);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: tk-newmsg-in 140ms var(--ease-out);
+}
+.tk-newmsg:hover {
+  background: var(--ink);
+  color: var(--gnd);
+}
+.tk-newmsg:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+@keyframes tk-newmsg-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
 .tk-scroll {
   flex: 1;
   min-height: 0;
@@ -858,7 +897,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lb-travel {
+  .lb-travel,
+  .tk-newmsg {
     animation: none;
   }
   .tk-app {
@@ -1080,6 +1120,9 @@
     height: 52px;
     padding: 0 16px;
     flex: none;
+  }
+  .tk-scrollwrap {
+    display: contents; /* the page scrolls on the phone, not the thread */
   }
   .tk-scroll {
     padding: 0 16px 12px;
