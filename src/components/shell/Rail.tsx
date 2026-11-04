@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Counts, Source } from "@/lib/domain/types";
-import { SOURCE_LABEL } from "@/lib/domain/types";
+import type { Counts } from "@/lib/domain/types";
 import { BrandMark, BrokenLine, LineStub } from "../line/Line";
 import { ThemeToggle } from "../ui/interactive";
 import { usePress } from "@/lib/motion";
+import type { SourceHealth } from "./health";
+
+export type { SourceHealth } from "./health";
 
 export const NAV = [
   { href: "/", label: "Hoy", count: (c: Counts) => c.hoy, line: "ink" as const },
@@ -16,14 +18,7 @@ export const NAV = [
 
 export const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
-/** Source health for the rail notice (Estados B). Empty until lane C reports it. */
-export interface SourceHealth {
-  source: Source | "github_project";
-  state: "ok" | "degraded" | "down";
-  note: string; // "sin conexión", "límite de API · 14:05"
-}
-
-export function Rail({ counts, health = [] }: { counts: Counts; health?: SourceHealth[] }) {
+export function Rail({ counts, health = [] }: { counts: Counts; health?: (SourceHealth & { name: string })[] }) {
   const path = usePathname();
   const ref = usePress<HTMLElement>(".nav");
   return (
@@ -39,18 +34,23 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: SourceH
             {n.label} <b>{n.count(counts)}</b>
           </Link>
         ))}
+        {counts.approvals > 0 ? (
+          <Link href="/#permisos" className="rl-perm">
+            <span className="rl-perm-dot" aria-hidden="true" />
+            {counts.approvals === 1 ? "1 permiso espera" : `${counts.approvals} permisos esperan`}
+          </Link>
+        ) : null}
       </nav>
       <div className="rail-foot">
         {health.length ? (
-          <div className="rl-health" aria-label="Fuentes">
+          <div className="rl-health" role="status" aria-label="Fuentes">
             <div className="k">Fuentes</div>
             {health.map((h) => {
-              const src = h.source === "github_project" ? "github" : h.source;
-              const name = h.source === "github_project" ? "GitHub Project" : SOURCE_LABEL[h.source];
+              const line = h.source === "github_project" ? "github" : h.source;
               return (
                 <div key={h.source} className={h.state === "ok" ? "rl-src" : "rl-src bad"}>
-                  {h.state === "ok" ? <LineStub source={src} width={16} /> : <BrokenLine source={src} width={24} />}
-                  {name}
+                  {h.state === "ok" ? <LineStub source={line} width={16} /> : <BrokenLine source={line} width={24} title={`${h.name} ${h.note}`} />}
+                  {h.name}
                   <small>{h.note}</small>
                 </div>
               );
