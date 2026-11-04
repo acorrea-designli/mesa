@@ -244,18 +244,26 @@ export function basecampAccountId(raw: string | null | undefined): string | null
   return /^https:\/\/(?:[a-z0-9]+\.)?basecamp\.com\/(\d+)(?:\/|$)/i.exec(v)?.[1] ?? null;
 }
 
-/** Fill the gaps in the config from the origin links of the salida when they are URLs of the same place. */
+/**
+ * Fill the gaps in the config from the origin links of the salida, but only a link to the same place:
+ * a Slack /archives/<channelId> link whose channel is the destination's, a Basecamp /buckets/<projectId>/
+ * link whose project is the destination's. A link elsewhere says nothing about the workspace or account.
+ */
 function resolvedConfig(s: Pick<Salida, "links" | "destination">, cfg: DestinationConfig) {
   let slack = slackSubdomain(cfg.slackDomain);
   let basecamp = basecampAccountId(cfg.basecampAccount);
+  const d = s.destination;
   for (const l of s.links) {
     if (!l.url) continue;
-    if (!slack && l.source === "slack") slack = /^https:\/\/([a-z0-9-]+)\.slack\.com\//i.exec(l.url)?.[1]?.toLowerCase() ?? null;
-    if (!basecamp && l.source === "basecamp") basecamp = basecampAccountId(l.url);
+    if (!slack && l.source === "slack" && (d.kind === "slack_thread" || d.kind === "slack_channel") && d.channelId) {
+      const m = /^https:\/\/([a-z0-9-]+)\.slack\.com\/archives\/([A-Z0-9]+)(?:[/?#]|$)/i.exec(l.url);
+      if (m && m[2]!.toLowerCase() === d.channelId.toLowerCase()) slack = m[1]!.toLowerCase();
+    }
+    if (!basecamp && l.source === "basecamp" && (d.kind === "basecamp_comment" || d.kind === "basecamp_message" || d.kind === "basecamp_campfire") && d.projectId) {
+      const m = /^https:\/\/(?:[a-z0-9]+\.)?basecamp\.com\/(\d+)\/buckets\/(\d+)(?:[/?#]|$)/i.exec(l.url);
+      if (m && m[2] === d.projectId) basecamp = m[1]!;
+    }
   }
-  // A Slack destination can carry its workspace as a host ("designli.slack.com").
-  const d = s.destination;
-  if (!slack && (d.kind === "slack_thread" || d.kind === "slack_channel") && /\.slack\.com$/i.test(d.workspace.trim())) slack = slackSubdomain(d.workspace);
   return { slack, basecamp };
 }
 

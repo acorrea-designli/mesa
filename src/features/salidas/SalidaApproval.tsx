@@ -14,7 +14,7 @@ import { useSalidaController } from "./controller";
 import { IcPencil } from "./icons";
 import { useLive, useNow } from "./live";
 import { hhmm, sourceLabel } from "./model";
-import { DestChips, Route } from "./parts";
+import { DestChips, DestLink, Route } from "./parts";
 import { ExactBlock, StateBlocks } from "./SalidaCard";
 import "./salidas.css";
 
@@ -62,7 +62,10 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
         Salida · {sourceLabel(s.source)} · {hhmm(s.createdAt)}
       </Kind>
       <h2>{s.title || "Mensaje"}</h2>
-      <div className="k">Destino exacto</div>
+      <div className="sa-destrow">
+        <div className="k">Destino exacto</div>
+        <DestLink d={s.destination} url={s.destinationUrl} />
+      </div>
       {compact ? <DestChips d={s.destination} source={s.source} /> : <Route d={s.destination} source={s.source} />}
       {s.context ? <blockquote className="ctx">{s.context}</blockquote> : null}
       {c.mode === "edit" && draft !== null ? (

@@ -52,14 +52,20 @@ describe("destinationUrl", () => {
     expect(destinationUrl(sal(slack({ kind: "slack_channel", channelId: undefined })), cfg)).toBeNull();
   });
 
-  it("slack domain also comes from an origin link of the same place, or a host-like workspace", () => {
-    const origin: SalidaLink = { source: "slack", label: "hilo", url: "https://acme.slack.com/archives/C1/p1" };
+  it("slack domain comes from an origin link to the same channel, never from the workspace label", () => {
+    const origin: SalidaLink = { source: "slack", label: "hilo", url: "https://acme.slack.com/archives/C0SAMPLE01/p1730640660118000" };
     expect(destinationUrl(sal(slack(), { links: [origin] }))).toBe("https://acme.slack.com/archives/C0SAMPLE01/p1730640660118000");
-    expect(destinationUrl(sal(slack({ workspace: "designli.slack.com" })))).toBe("https://designli.slack.com/archives/C0SAMPLE01/p1730640660118000");
-    // a link from another source, or without a URL, says nothing about the Slack domain
+    expect(destinationUrl(sal(slack({ kind: "slack_channel", threadTs: undefined }), { links: [origin] }))).toBe("https://acme.slack.com/archives/C0SAMPLE01");
+    // the workspace is a free label: even a host-like one is not a source for the domain
+    expect(destinationUrl(sal(slack({ workspace: "designli.slack.com" })))).toBeNull();
+    // a link to another channel says nothing about this one
+    const otherChannel: SalidaLink = { source: "slack", label: "otro", url: "https://acme.slack.com/archives/C0OTHER99/p1" };
+    expect(destinationUrl(sal(slack(), { links: [otherChannel] }))).toBeNull();
+    // a link from another source, without a URL, or not an archives link, says nothing either
     const noise: SalidaLink[] = [
-      { source: "github", label: "PR", url: "https://acme.slack.com/x" },
+      { source: "github", label: "PR", url: "https://acme.slack.com/archives/C0SAMPLE01/p1" },
       { source: "slack", label: "sin url" },
+      { source: "slack", label: "home", url: "https://acme.slack.com/" },
     ];
     expect(destinationUrl(sal(slack(), { links: noise }))).toBeNull();
     // the config wins over the origin link
@@ -81,11 +87,17 @@ describe("destinationUrl", () => {
     expect(destinationUrl(sal(bc()), { basecampAccount: "not-a-number" })).toBeNull();
   });
 
-  it("basecamp account also comes from an origin link of the same place", () => {
+  it("basecamp account comes from an origin link to the same bucket only", () => {
     const origin: SalidaLink = { source: "basecamp", label: "To-do", url: "https://3.basecamp.com/7654321/buckets/1001/todos/9" };
     expect(destinationUrl(sal(bc(), { links: [origin] }))).toBe("https://3.basecamp.com/7654321/buckets/1001/recordings/5003");
-    const other: SalidaLink = { source: "basecamp", label: "x", url: "https://basecamp.example.com/0000000/buckets/1/recordings/2" };
-    expect(destinationUrl(sal(bc(), { links: [other] }))).toBeNull();
+    expect(destinationUrl(sal(bc({ kind: "basecamp_campfire" }), { links: [origin] }))).toBe("https://3.basecamp.com/7654321/buckets/1001/chats/5003");
+    // another bucket (project) gives null
+    const otherBucket: SalidaLink = { source: "basecamp", label: "otro", url: "https://3.basecamp.com/7654321/buckets/2002/todos/9" };
+    expect(destinationUrl(sal(bc(), { links: [otherBucket] }))).toBeNull();
+    // a non-basecamp host, or a link with no bucket, gives null
+    const sample: SalidaLink = { source: "basecamp", label: "x", url: "https://basecamp.example.com/0000000/buckets/1001/recordings/2" };
+    const noBucket: SalidaLink = { source: "basecamp", label: "y", url: "https://3.basecamp.com/7654321/projects" };
+    expect(destinationUrl(sal(bc(), { links: [sample, noBucket] }))).toBeNull();
   });
 
   it("the permalink wins after the send, for every kind", () => {

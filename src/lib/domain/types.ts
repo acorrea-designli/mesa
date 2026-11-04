@@ -328,6 +328,8 @@ export interface SalidaDetail extends Salida {
   versions: SalidaVersion[];
   turns: SalidaTurn[];
   engram: EngramLink[];
+  /** "Abrir destino": where this salida is published (the permalink once sent). Set by the read model and the salida API; null when unknowable. */
+  destinationUrl?: string | null;
 }
 
 export interface LearnedChip {

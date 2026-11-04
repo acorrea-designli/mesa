@@ -1,7 +1,7 @@
 // Server read model for Salidas B: the queue with every detail the card needs,
 // the ticket it came from and that ticket's history as a line of stations.
 import type { Repos } from "@/lib/repo";
-import type { SalidaStatus } from "@/lib/domain/types";
+import type { SalidaDetail, SalidaStatus } from "@/lib/domain/types";
 import { destinationUrl, type DestinationConfig } from "./model";
 import type { HistoryEvent, SalidaView, SalidasData, TicketBrief } from "./types";
 
@@ -75,9 +75,14 @@ export function destinationConfig(env: Record<string, string | undefined> = proc
   return { slackDomain: env.MESA_SLACK_DOMAIN, basecampAccount: env.MESA_BASECAMP_ACCOUNT };
 }
 
+/** A salida detail with its destinationUrl: what GET /api/salidas/:id and the transition answer carry. */
+export function withDestinationUrl<T extends SalidaDetail>(s: T, cfg: DestinationConfig = destinationConfig()): T & { destinationUrl: string | null } {
+  return { ...s, destinationUrl: destinationUrl(s, cfg) };
+}
+
 export function salidaView(r: Repos, id: string, cfg: DestinationConfig = destinationConfig()): SalidaView {
-  const s = r.salidas.detail(id);
-  return { ...s, ticket: ticketBrief(r, s.ticketId), history: s.ticketId ? ticketHistory(r, s.ticketId, s.id) : [], destinationUrl: destinationUrl(s, cfg) };
+  const s = withDestinationUrl(r.salidas.detail(id), cfg);
+  return { ...s, ticket: ticketBrief(r, s.ticketId), history: s.ticketId ? ticketHistory(r, s.ticketId, s.id) : [] };
 }
 
 /** Open salidas plus today's decided ones (they stay in the strip, dashed). */
