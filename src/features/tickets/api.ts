@@ -39,6 +39,14 @@ export const ticketApi = {
     if (input.state.files.length) await upload(d.id, input.state.files, d.messages[0]?.id);
     return d;
   },
+  /** Nuevo pedido with "Solo anotar (sin agente)": only a card on the Claude lane, no ticket. */
+  note(input: { text: string; project: string; link?: string }) {
+    const lines = input.text.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    const first = lines[0] ?? input.text.trim();
+    const title = first.length > 90 ? first.slice(0, 89) + "…" : first;
+    const excerpt = [lines.slice(1).join(" "), input.link?.trim()].filter(Boolean).join(" · ");
+    return call<{ id: string }>("/api/tasks", { body: { title, source: "claude", excerpt: excerpt || undefined, project: input.project || undefined, noteOnly: true } });
+  },
   close: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "close", by: "andres" } }),
   reopen: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "reopen", by: "andres" } }),
   approvePlan: (id: string, reject: string[]) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { reject } }),

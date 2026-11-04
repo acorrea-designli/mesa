@@ -1,0 +1,343 @@
+/* Tablero batch selection, owner chip and "+ Tarea". Ink and neutrals only: line colours mean
+   source, so selection is carried by ink weight (outline), never by a hue. */
+
+/* The checkbox takes the line stub's place while you point at a card or while anything is
+   selected. The input stays in the tab order (opacity, not display) so the keyboard reaches it. */
+.tb-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: 16px;
+  height: 18px;
+}
+.tb-pick {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 16px;
+  height: 16px;
+  opacity: 0;
+  z-index: 2;
+}
+.tb-pick.static {
+  position: relative;
+  top: 0;
+  opacity: 1;
+  flex: none;
+}
+.tb-pick input {
+  position: absolute;
+  inset: -4px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.tb-box {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-tag);
+  background: var(--raise);
+  position: relative;
+  pointer-events: none;
+}
+.tb-pick input:checked + .tb-box,
+.tb-ph-box.on {
+  background: var(--ink);
+}
+.tb-pick input:checked + .tb-box::after,
+.tb-ph-box.on::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--gnd);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.tb-pick input:focus-visible + .tb-box {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tb-card:hover .tb-pick,
+.tb-card:focus-within .tb-pick,
+.tb.is-selecting .tb-pick {
+  opacity: 1;
+}
+.tb-card:hover .tb-stub,
+.tb-card:focus-within .tb-stub,
+.tb.is-selecting .tb-stub {
+  visibility: hidden;
+}
+.tb.is-selecting .tb-card {
+  cursor: pointer;
+}
+.tb-card.is-sel {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink), var(--float-low);
+}
+.tb-card.is-sel.done {
+  background: var(--raise);
+}
+
+/* "Seleccionar carril" / "Seleccionar estación": quiet text buttons, shown on hover, focus or
+   while selecting. */
+.tb-selall {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+  text-decoration: underline;
+  text-decoration-color: var(--edge);
+  text-underline-offset: 3px;
+  padding: 2px 0;
+  white-space: nowrap;
+  opacity: 0;
+}
+.tb-st .tb-selall {
+  margin-left: auto;
+}
+.tb-selall.lane {
+  align-self: flex-start;
+  margin-left: 18px;
+}
+.tb-st:hover .tb-selall,
+.tb-lab:hover .tb-selall,
+.tb-selall:focus-visible,
+.tb.is-selecting .tb-selall,
+.tb-selall.on {
+  opacity: 1;
+}
+.tb-selall:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+.tb-lane.quiet .tb-selall.lane {
+  margin-left: 10px;
+  align-self: center;
+}
+
+/* Owner chip: who works the card's ticket. Dashed while nobody has claimed it yet. */
+.lk.tb-owner {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lk.tb-owner.is-open {
+  border-style: dashed;
+}
+.tb-owner-ref {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+a.lk.tb-owner:hover {
+  border-color: var(--ink);
+}
+a.lk.tb-owner:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The batch bar docks at the bottom of the work area. */
+.tb-batch {
+  position: fixed;
+  z-index: 39;
+  left: var(--rail-w);
+  right: 0;
+  bottom: 24px;
+  margin: 0 auto;
+  width: max-content;
+  max-width: calc(100vw - var(--rail-w) - 56px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  background: var(--raise);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-panel);
+  box-shadow: var(--float-toast);
+}
+.tb-batch-n {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.tb-batch-acts {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.tb-batch-acts .btn {
+  white-space: nowrap;
+}
+.tb-batch-acts .btn:last-child {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  line-height: 30px;
+}
+.tb-batch-x {
+  border-color: transparent;
+}
+.tb-batch-short {
+  display: none;
+}
+body:has(.tb-batch) .toasts {
+  bottom: 88px;
+}
+.tb.is-selecting .tb-grid {
+  padding-bottom: 72px;
+}
+
+/* Sheet extras */
+.tb-sheet-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* + Tarea */
+.tb-new {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tb-new > label:not(.tb-check-row) {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink2);
+  margin-top: 6px;
+}
+.tb-new .opt {
+  font-weight: 500;
+  color: var(--mute);
+}
+.tb-field {
+  background: var(--raise);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 14px;
+  resize: vertical;
+}
+.tb-field::placeholder {
+  color: var(--mute);
+}
+.tb-field:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -1px;
+}
+.tb-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tb-check-row .tb-pick {
+  margin-top: 1px;
+}
+.tb-check-row small {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mute);
+  margin-top: 2px;
+}
+.tb-new-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .tb-ph-top .tb-selall,
+  .tb-ph-new {
+    margin-left: auto;
+  }
+  .tb-ph-lane .lh .tb-selall {
+    margin-left: auto;
+  }
+  .tb-ph-hint {
+    margin: 8px 18px 0;
+    font-size: 12px;
+    color: var(--mute);
+  }
+  .tb-ph-card {
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .tb.is-selecting .tb-ph-card {
+    padding-right: 40px;
+  }
+  .tb-ph-card.is-sel {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+  .tb-ph-box {
+    position: absolute;
+    right: 11px;
+    top: 11px;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--ink);
+    border-radius: var(--r-tag);
+    background: var(--raise);
+  }
+  .tb-ph-box.on::after {
+    left: 5.5px;
+    top: 2px;
+  }
+  .tb.is-selecting .tb-ph-lanes {
+    padding-bottom: 150px;
+  }
+  .tb-batch {
+    left: 10px;
+    right: 10px;
+    bottom: calc(var(--phone-tabs-h) + 10px);
+    width: auto;
+    max-width: none;
+    flex-wrap: wrap;
+    padding: 10px 10px 10px 14px;
+  }
+  .tb-batch-n {
+    flex: 1;
+  }
+  .tb-batch-acts {
+    order: 3;
+    flex-basis: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+  }
+  .tb-batch-acts .btn {
+    height: 44px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+  .tb-batch-acts .btn:last-child {
+    line-height: 44px;
+    max-width: none;
+  }
+  .tb-batch-full {
+    display: none;
+  }
+  .tb-batch-short {
+    display: inline;
+  }
+  body:has(.tb-batch) .toasts {
+    bottom: calc(var(--phone-tabs-h) + 130px);
+  }
+}

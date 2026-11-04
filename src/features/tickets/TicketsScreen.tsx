@@ -131,6 +131,7 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
   const [project, setProject] = useState(data.projects[0] ?? "");
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
+  const [noteOnly, setNoteOnly] = useState(false);
   const fileIn = useRef<HTMLInputElement>(null);
   const verbs: SlashAction[] = [
     { key: "archivo", label: "Adjuntar archivo", run: () => fileIn.current?.click() },
@@ -140,6 +141,13 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
     if (!c.state.text.trim() || busy) return;
     setBusy(true);
     try {
+      if (noteOnly) {
+        // "Solo anotar (sin agente)": only the card on the Tablero, no ticket and no wake.
+        await ticketApi.note({ text: c.state.text, project, link });
+        toast({ text: "Anotado en el Tablero · sin agente" });
+        router.push("/tablero");
+        return;
+      }
       const t = await ticketApi.create({ text: c.state.text, project, link, owner: data.listening.owner, state: c.state });
       toast({ text: data.listening.listening ? "Pedido enviado · Claude prepara el plan" : "Pedido guardado · lo recoge la próxima sesión" });
       router.push(href({ tab, t: t.ref }));
@@ -194,13 +202,20 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
               <option key={p} value={p} />
             ))}
           </datalist>
-          <p className="tk-wait">Cuando Claude lo lea, verás aquí lo que va a hacer (directo o te pide OK) antes de que empiece.</p>
+          <label className="tk-note-only">
+            <input type="checkbox" checked={noteOnly} onChange={(e) => setNoteOnly(e.target.checked)} />
+            <span>
+              Solo anotar (sin agente)
+              <small>{noteOnly ? "Solo crea la tarjeta en el Tablero; nadie la trabaja. Los archivos no se guardan." : "Crea el ticket y su tarjeta; el lead le asigna un agente."}</small>
+            </span>
+          </label>
+          {noteOnly ? null : <p className="tk-wait">Cuando Claude lo lea, verás aquí lo que va a hacer (directo o te pide OK) antes de que empiece.</p>}
         </div>
       </div>
       <div className="tk-foot">
         <div className="acts">
           <button className="btn p" type="button" disabled={busy || !c.state.text.trim()} onClick={() => void submit()}>
-            Enviar a Claude
+            {noteOnly ? "Anotar en el Tablero" : "Enviar a Claude"}
           </button>
           <Link className="btn" href={href({ tab })}>
             Cancelar

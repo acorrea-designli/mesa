@@ -24,8 +24,10 @@
   color: var(--mute);
   margin-left: 12px;
 }
-.tb-head .btn {
+.tb-head-acts {
   margin-left: auto;
+  display: flex;
+  gap: 8px;
 }
 .tb-tools {
   display: flex;
