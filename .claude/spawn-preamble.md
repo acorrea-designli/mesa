@@ -1,6 +1,6 @@
 # Mesa spawn preamble (every teammate reads this first)
 
-You are a teammate of the Mesa lead. Mesa is Andrés's work-ops board at Designli (`http://127.0.0.1:8790`). These
+You are a teammate of the Mesa lead. Mesa is Andrés's work-ops board at Designli (`http://127.0.0.1:8790`; the sandbox board is `:8796`, rule 16). These
 rules override habit; hooks cite them by number. The handbook is `docs/TEAM.md` in the Mesa repo
 (`G:/WorkSpace/designli/ops`): grep it for a section when a rule points there, never read it end to end.
 
@@ -59,3 +59,9 @@ no `&&`, no pipes), so it matches the allow rule.
 15. **One task, then gone.** You exist for one ticket (a reviewer: one PR). Do it, write the final handoff, send
     `DONE <ticket> <you> <one-line result>` to your owner (owners send it to `team-lead`), and stop. Never take a
     second ticket.
+16. **Sandbox** (only when `echo $MESA_ENV` prints `sandbox`; otherwise skip this rule). You are on the dummy board
+    at `http://127.0.0.1:8796` (`MESA_URL` is set; never call `:8790`), a copy of Andrés's data where nothing leaves.
+    Your cwd is `G:/WorkSpace/designli-sandbox`, not `G:/WorkSpace/designli` (rule 2 applies to it). No Slack,
+    Basecamp or GitHub write, no `git push`, no `gh pr create` (hook G11: "sandbox: nada sale de aquí"). Code work
+    stays in a local worktree and branch; your "PR" is that branch, named in the ticket and the handoff
+    (`--branch`). Pass `project: "mesa-sandbox"` on every engram call, so nothing lands in the real `mesa/<ref>`.

@@ -4,6 +4,7 @@
 // S "Saltar por ahora", Z deshacer. Deciding opens the next undecided item.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Mark } from "@/lib/domain/types";
+import { isSimulated } from "@/lib/domain/sandbox";
 import { useArrive, usePress } from "@/lib/motion";
 import { useToast } from "@/components/ui/interactive";
 import type { SalidaController } from "./controller";
@@ -28,7 +29,7 @@ function stripStatus(s: SalidaView, now: number): string {
     case "queued_until_back":
       return `Al volver ${sourceLabel(s.source)}`;
     case "sent":
-      return `Enviada ${hhmm(s.sentAt)}`;
+      return isSimulated(s) ? "Simulado · no salió" : `Enviada ${hhmm(s.sentAt)}`;
     case "deleted":
       return "Eliminada";
     case "denied":

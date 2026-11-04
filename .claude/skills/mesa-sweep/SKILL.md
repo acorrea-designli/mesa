@@ -5,6 +5,10 @@ description: Ingest of everything waiting on Andrés into Mesa with mesa item up
 
 # Mesa sweep (read-only toward every source)
 
+**Sandbox: no-op.** If `echo $MESA_ENV` prints `sandbox`, stop here: say "Sandbox: no se barre Slack ni Basecamp
+(la copia ya trae los items)." and do nothing else. The sandbox board refuses `sweep.requested` (409 `sandbox`), and
+the lead spawns no sweeper there.
+
 Slack and Basecamp are read only by Claude sessions through MCP (Andrés, 2026-11-03: no Slack app, no Basecamp
 OAuth), so this skill is their only ingest path. GitHub is polled by the Mesa server; § 1 is the on-demand
 fallback. Nothing here writes to a source: no comments, no reactions, no mark-as-read. The only writes are

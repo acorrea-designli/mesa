@@ -56,7 +56,7 @@ node G:/WorkSpace/designli/ops/bin/mesa salida version <salida> --turn <turnId> 
 
 `--chip` is the request summarized as a 1-3 word label in Spanish, grouped by meaning with his past requests
 (`acórtalo`, `menos texto` → `Más corto`; `quita el hola`, `sin saludo` → `Sin saludo`). Reuse an existing label
-when the meaning matches (`curl -s http://127.0.0.1:8790/api/chips` lists the top ones); never a preset.
+when the meaning matches (`curl -s http://127.0.0.1:8790/api/chips` lists the top ones; `:8796` in sandbox); never a preset.
 Each version is immutable; he may star one or go back to an earlier one, and Aprobar always sends the version he
 sees. A manual edit by him is his version: never overwrite it.
 
@@ -76,6 +76,11 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 4. Source down at send time (the MCP call fails as unreachable or rate limited): `MESA salida hold <id> --reason
    "<error>"` ("Aprobar al volver") and `MESA source set <slack|basecamp> --health down --note "<error>"`. When the
    source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with `recheckThread: true` (step 0).
+
+**Sandbox** (`echo $MESA_ENV` prints `sandbox`): step 2 is skipped, never call the MCP tool (hook G11 blocks it).
+Step 3 is `MESA salida sent <id> --simulated` (no `--permalink`; Mesa records `sandbox://<source>/<id>` and shows
+"Simulado · no salió"). Steps 0, 1 and 4 are the same. A delete is `MESA salida deleted <id>` alone, a restore
+`MESA salida restored <id>`.
 
 Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases the salida and the same
 `salida.released` arrives. Never use `slack_schedule_message` (hook G5).

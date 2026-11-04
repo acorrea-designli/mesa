@@ -204,7 +204,7 @@ export const salidaTransition = z.discriminatedUnion("type", [
   z.object({ type: z.literal("propose") }),
   z.object({ type: z.literal("approve"), version: z.number().int().min(1) }),
   z.object({ type: z.literal("undo") }),
-  z.object({ type: z.literal("sent"), permalink: z.string().optional() }),
+  z.object({ type: z.literal("sent"), permalink: z.string().optional(), simulated: z.boolean().optional() }),
   z.object({ type: z.literal("failed"), error: z.string().min(1) }),
   z.object({ type: z.literal("retry") }),
   z.object({ type: z.literal("deny") }),

@@ -13,6 +13,7 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 - Data lives in `data/mesa.db` (gitignored; `MESA_DB` overrides). Migrations in `db/migrations` apply on startup; `pnpm db:migrate` applies them by hand.
 - `/kit` shows every shared component in both themes.
 - CLI for sessions: `node bin/mesa help` (`bin/mesa.cmd` on Windows). Set `MESA_SESSION` to the session id.
+- Sandbox (a dummy copy where nothing leaves, `docs/SANDBOX.md`): `pnpm sandbox:reset [--from live|seed]`, then `pnpm sandbox` serves `MESA_ENV=sandbox` on http://127.0.0.1:8796 over `data/sandbox.db`; open Claude Code in `G:/WorkSpace/designli-sandbox` (installed with `scripts/install-team.mjs --target G:/WorkSpace/designli-sandbox --env sandbox`). Never point it at `data/mesa.db` or :8790.
 - The "SQLite is an experimental feature" warning from Node is expected.
 
 ## Conventions

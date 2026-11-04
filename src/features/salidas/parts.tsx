@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Destination, SalidaDetail, SalidaTurn, SalidaVersion } from "@/lib/domain/types";
 import { DELETE_POLICY } from "@/lib/domain/types";
+import { isSimulated } from "@/lib/domain/sandbox";
 import { Chip, srcClass } from "@/components/ui/primitives";
 import { confirmPick, rise, travel } from "@/lib/motion";
 import { IcCheck, IcClock, IcCopy, IcExternal, IcStar, IcUndo } from "./icons";
@@ -356,11 +357,19 @@ export function SentBlock({
       </Banner>
     );
   const whyId = `why-${s.id}`;
+  // Sandbox: the lead reported the send as simulated; there is no real message and no link to open.
+  const simulated = isSimulated(s);
+  const permalink = simulated ? null : s.permalink;
   return (
-    <Banner tone="done" icon={<IcCheck />} title={`Enviada a ${destShort(s.destination)} · ${hhmm(s.sentAt)}`}>
-      {s.permalink ? (
+    <Banner
+      tone="done"
+      icon={<IcCheck />}
+      title={simulated ? `Simulado · no salió · ${destShort(s.destination)} · ${hhmm(s.sentAt)}` : `Enviada a ${destShort(s.destination)} · ${hhmm(s.sentAt)}`}
+      text={simulated ? "Sandbox: Claude marcó el envío sin publicar nada en la fuente." : undefined}
+    >
+      {permalink ? (
         <div className="sa-perma">
-          <span>{s.permalink.replace(/^https?:\/\//, "")}</span>
+          <span>{permalink.replace(/^https?:\/\//, "")}</span>
           <button className="ico-btn btn sm" type="button" aria-label="Copiar enlace" onClick={copy}>
             <IcCopy />
           </button>
@@ -374,8 +383,8 @@ export function SentBlock({
             <button className="btn" type="button" disabled aria-disabled="true" aria-describedby={whyId}>
               Eliminar
             </button>
-            {s.permalink ? (
-              <a className="btn sm" href={s.permalink} target="_blank" rel="noreferrer">
+            {permalink ? (
+              <a className="btn sm" href={permalink} target="_blank" rel="noreferrer">
                 {openLabel} <IcExternal />
               </a>
             ) : null}
@@ -388,8 +397,8 @@ export function SentBlock({
             <button className="btn" type="button" onClick={() => setConfirming(true)}>
               {campfire || s.source === "github" ? "Eliminar" : "Eliminar mensaje"}
             </button>
-            {s.permalink ? (
-              <a className="btn sm" href={s.permalink} target="_blank" rel="noreferrer">
+            {permalink ? (
+              <a className="btn sm" href={permalink} target="_blank" rel="noreferrer">
                 {openLabel} <IcExternal />
               </a>
             ) : null}

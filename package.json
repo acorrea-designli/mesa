@@ -21,6 +21,8 @@
     "test:watch": "vitest",
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
     "seed": "node --experimental-strip-types scripts/seed.ts",
+    "sandbox": "node scripts/sandbox.mjs",
+    "sandbox:reset": "node --experimental-strip-types scripts/sandbox-reset.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {

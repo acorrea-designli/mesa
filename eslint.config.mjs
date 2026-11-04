@@ -5,7 +5,7 @@ const config = [
   ...next,
   ...nextTs,
   {
-    ignores: [".next/**", "node_modules/**", ".impeccable/**", "data/**", "next-env.d.ts", "coverage/**"],
+    ignores: [".next/**", ".next-sandbox/**", "node_modules/**", ".impeccable/**", "data/**", "next-env.d.ts", "coverage/**"],
   },
 ];
 

@@ -5,6 +5,7 @@
 //   MESA_URL      board URL (default http://127.0.0.1:8790)
 //   MESA_SESSION  this session's id (or --session); required for wait and ownership
 //   MESA_TOKEN    only needed when MESA_URL is not localhost
+//   MESA_ENV      "sandbox" for the dummy board (docs/SANDBOX.md); the server decides, the CLI only passes flags
 //
 // Output is JSON on stdout for sessions (MESA_SESSION set, --json, or stdout not a terminal)
 // and a short human summary in a terminal (--human forces it). Errors go to stderr with exit
@@ -40,6 +41,8 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
                   [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired (exit 3)
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
   mesa salida sent <id> [--permalink URL]          only after salida.released
+  mesa salida sent <id> --simulated                sandbox only (MESA_ENV=sandbox): nothing was sent; Mesa records
+                                                   sandbox://<source>/<id>. Refused in live
   mesa salida failed <id> --error E
   mesa salida hold <id> --reason R               released but the source is down (waits as "Aprobar al volver")
   mesa salida bounce <id> --reason R             the thread changed: back to Andrés for a new approval
@@ -378,8 +381,15 @@ async function main() {
               chipLabel: opt.chip,
             }),
           );
-        case "sent":
-          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "sent", permalink: opt.permalink }));
+        case "sent": {
+          // --simulated is a flag; `sent --simulated <id>` would otherwise read the id as its value.
+          const sid = id ?? (typeof opt.simulated === "string" ? opt.simulated : undefined);
+          const simulated = opt.simulated !== undefined;
+          if (simulated && opt.permalink) usage("--simulated takes no --permalink: Mesa records sandbox://<source>/<id>");
+          return out(
+            await call("POST", `/api/salidas/${enc(need(sid, "<id>"))}/transition`, simulated ? { type: "sent", simulated: true } : { type: "sent", permalink: opt.permalink }),
+          );
+        }
         case "failed":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "failed", error: text(opt.error, "--error") }));
         case "hold":

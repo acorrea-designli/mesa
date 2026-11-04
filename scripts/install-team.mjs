@@ -2,6 +2,12 @@
 // Links the Mesa team (skills, agents, spawn preamble) into the sessions folder and wires its hooks.
 //
 //   node scripts/install-team.mjs [--target G:/WorkSpace/designli] [--allow] [--dry-run] [--force]
+//   node scripts/install-team.mjs --target G:/WorkSpace/designli-sandbox --env sandbox [--repo G:/WorkSpace/designli/ops]
+//
+// --env sandbox installs the same skills, agents and hooks for the sandbox board (docs/SANDBOX.md): the folder is
+// created when missing, env is MESA_URL=http://127.0.0.1:8796, MESA_ENV=sandbox, MESA_SESSION=lead (these three are
+// set even when the file has other values), and every hook command carries `--env sandbox`. It refuses the live
+// sessions folder. --repo links a checkout other than the one running the installer (e.g. from a worktree).
 //
 // What it does, idempotently (run it again after every pull):
 //   <target>/.claude/skills/<name>  -> junction to <repo>/.claude/skills/<name>, one per Mesa skill
@@ -26,8 +32,9 @@ export const HOOK_SCRIPTS = {
   rails: "scripts/hooks/mesa-guardrails.mjs",
 };
 
-export function hookEntries(repo, node) {
-  const cmd = (rel) => `"${fwd(node)}" "${fwd(join(repo, rel))}"`;
+export function hookEntries(repo, node, env = "live") {
+  const tail = env === "sandbox" ? " --env sandbox" : "";
+  const cmd = (rel) => `"${fwd(node)}" "${fwd(join(repo, rel))}"${tail}`;
   return {
     PreToolUse: [
       {
@@ -42,6 +49,8 @@ export function hookEntries(repo, node) {
 }
 
 export const ENV = { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead" };
+export const SANDBOX_ENV = { MESA_URL: "http://127.0.0.1:8796", MESA_ENV: "sandbox", MESA_SESSION: "lead" };
+export const LIVE_FOLDER = "G:/WorkSpace/designli";
 
 const MESA_CLI = "node G:/WorkSpace/designli/ops/bin/mesa";
 export const ALLOW = [
@@ -59,6 +68,7 @@ export const ALLOW = [
   "Bash(git -C * show *)",
   "Bash(git -C * fetch origin)",
   "Bash(curl -s -m 3 http://127.0.0.1:8790/api/health)",
+  "Bash(curl -s -m 3 http://127.0.0.1:8796/api/health)",
   "mcp__engram__mem_context",
   "mcp__engram__mem_search",
   "mcp__engram__mem_get_observation",
@@ -83,7 +93,7 @@ export const ALLOW = [
 
 // Pure merge: adds what is missing, keeps everything that is there. A hook entry counts as present when any
 // existing entry of that event already runs the same script.
-export function mergeSettings(current, { hooks, env, allow }) {
+export function mergeSettings(current, { hooks, env, allow, forceEnv = false }) {
   const s = structuredClone(current ?? {});
   const added = [];
   s.hooks ??= {};
@@ -103,6 +113,10 @@ export function mergeSettings(current, { hooks, env, allow }) {
     if (!(k in s.env)) {
       s.env[k] = v;
       added.push(`env.${k}`);
+    } else if (forceEnv && s.env[k] !== v) {
+      // Sandbox: a session there must never reach the live board, whatever the file said before.
+      added.push(`env.${k}: ${s.env[k]} -> ${v}`);
+      s.env[k] = v;
     }
   }
   if (allow?.length) {
@@ -171,23 +185,34 @@ function agentFiles(dest, src, opt, log) {
   }
 }
 
-export function install({ target, allow = false, dryRun = false, force = false, node = process.execPath, log = console.log }) {
+export function install({ target, allow = false, dryRun = false, force = false, node = process.execPath, log = console.log, env = "live", repo = REPO }) {
   const claude = join(target, ".claude");
   const opt = { dryRun, force };
-  if (!existsSync(target)) throw new Error(`target ${target} does not exist`);
+  const sandbox = env === "sandbox";
+  if (sandbox && same(target, fwd(resolve(LIVE_FOLDER)).toLowerCase())) throw new Error(`--env sandbox never installs into the live folder ${LIVE_FOLDER}`);
+  if (!existsSync(target)) {
+    if (!sandbox) throw new Error(`target ${target} does not exist`);
+    log(`mkdir   ${fwd(target)}`);
+    if (!dryRun) mkdirSync(target, { recursive: true });
+  }
   if (!dryRun) mkdirSync(join(claude, "skills"), { recursive: true });
 
-  for (const name of readdirSync(join(REPO, ".claude", "skills"))) {
-    junction(join(claude, "skills", name), join(REPO, ".claude", "skills", name), opt, log);
+  for (const name of readdirSync(join(repo, ".claude", "skills"))) {
+    junction(join(claude, "skills", name), join(repo, ".claude", "skills", name), opt, log);
   }
   const agents = join(claude, "agents");
-  if (!existsSync(agents) || isLink(agents)) junction(agents, join(REPO, ".claude", "agents"), opt, log);
-  else agentFiles(agents, join(REPO, ".claude", "agents"), opt, log);
-  junction(join(claude, "mesa"), join(REPO, ".claude"), opt, log);
+  if (!existsSync(agents) || isLink(agents)) junction(agents, join(repo, ".claude", "agents"), opt, log);
+  else agentFiles(agents, join(repo, ".claude", "agents"), opt, log);
+  junction(join(claude, "mesa"), join(repo, ".claude"), opt, log);
 
   const file = join(claude, "settings.json");
   const current = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
-  const { settings, added } = mergeSettings(current, { hooks: hookEntries(REPO, node), env: ENV, allow: allow ? ALLOW : [] });
+  const { settings, added } = mergeSettings(current, {
+    hooks: hookEntries(repo, node, env),
+    env: sandbox ? SANDBOX_ENV : ENV,
+    allow: allow ? ALLOW : [],
+    forceEnv: sandbox,
+  });
   if (!added.length) {
     log(`ok      ${fwd(file)} already has every Mesa entry`);
     return { added };
@@ -203,13 +228,21 @@ export function install({ target, allow = false, dryRun = false, force = false, 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
   const ti = argv.indexOf("--target");
-  const target = ti >= 0 ? argv[ti + 1] : "G:/WorkSpace/designli";
-  if (!same(REPO, fwd(resolve("G:/WorkSpace/designli/ops")).toLowerCase())) {
-    console.log(`note    running from ${fwd(REPO)}, not G:/WorkSpace/designli/ops: hooks and links will point here`);
+  const target = ti >= 0 ? argv[ti + 1] : LIVE_FOLDER;
+  const ei = argv.indexOf("--env");
+  const env = ei >= 0 ? argv[ei + 1] : "live";
+  const ri = argv.indexOf("--repo");
+  const repo = ri >= 0 ? resolve(argv[ri + 1]) : REPO;
+  if (env !== "live" && env !== "sandbox") {
+    console.error(`install-team: --env must be live or sandbox, not ${env}`);
+    process.exit(2);
+  }
+  if (!same(repo, fwd(resolve("G:/WorkSpace/designli/ops")).toLowerCase())) {
+    console.log(`note    linking ${fwd(repo)}, not G:/WorkSpace/designli/ops: hooks and links will point there`);
   }
   try {
-    install({ target, allow: argv.includes("--allow"), dryRun: argv.includes("--dry-run"), force: argv.includes("--force") });
-    console.log(argv.includes("--dry-run") ? "dry run: nothing written" : "done. Restart Claude Code in G:/WorkSpace/designli so it loads the hooks, skills and agents.");
+    install({ target, allow: argv.includes("--allow"), dryRun: argv.includes("--dry-run"), force: argv.includes("--force"), env, repo });
+    console.log(argv.includes("--dry-run") ? "dry run: nothing written" : `done. Restart Claude Code in ${fwd(target)} so it loads the hooks, skills and agents.`);
   } catch (err) {
     console.error(`install-team: ${err.message}`);
     process.exit(1);

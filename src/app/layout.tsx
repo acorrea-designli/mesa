@@ -3,7 +3,9 @@ import { Hanken_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { THEME_BOOT, ToastProvider } from "@/components/ui/interactive";
+import { isSandbox } from "@/lib/env";
 import { repos } from "@/lib/repo";
+import { readSandboxCopy } from "@/lib/sandbox/copy";
 import "@/styles/tokens.css";
 import "@/styles/base.css";
 import "@/styles/components.css";
@@ -16,10 +18,13 @@ const hanken = Hanken_Grotesk({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: { default: "Mesa", template: "%s · Mesa" },
-  description: "Lo que te espera hoy: PRs, Basecamp, Slack y Claude en una sola línea.",
-};
+const DESCRIPTION = "Lo que te espera hoy: PRs, Basecamp, Slack y Claude en una sola línea.";
+
+// The sandbox board's tab title starts with "[sandbox]" on every page.
+export function generateMetadata(): Metadata {
+  const p = isSandbox() ? "[sandbox] " : "";
+  return { title: { default: `${p}Mesa`, template: `${p}%s · Mesa` }, description: DESCRIPTION };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -34,15 +39,17 @@ export const viewport: Viewport = {
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const counts = repos().counts();
+  const r = repos();
+  const counts = r.counts();
+  const sandbox = isSandbox() ? { copy: readSandboxCopy(r.db) } : undefined;
   return (
-    <html lang="es" className={hanken.variable} suppressHydrationWarning>
+    <html lang="es" className={hanken.variable} data-env={sandbox ? "sandbox" : undefined} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body>
         <ToastProvider>
-          <AppShell counts={counts}>{children}</AppShell>
+          <AppShell counts={counts} sandbox={sandbox}>{children}</AppShell>
         </ToastProvider>
       </body>
     </html>
