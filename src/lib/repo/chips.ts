@@ -11,7 +11,7 @@ export function chipsRepo(db: Db) {
     top(limit = MAX_CHIPS): LearnedChip[] {
       return fromRows<LearnedChip>(
         db.prepare("SELECT * FROM learned_chips ORDER BY uses DESC, last_used_at DESC LIMIT ?").all(limit),
-        { json: ["phrasings"] },
+        { json: ["phrasings"], bool: ["is_sample"] },
       );
     },
 

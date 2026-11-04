@@ -61,6 +61,15 @@ test("G5: the lead sends only the text of a released salida", async () => {
   assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_schedule_message", { channel_id: "C1", message: "x" })), "G5");
 });
 
+test("G5: a released sample salida never authorises a send", async () => {
+  const salidas = fakeMesa({
+    "GET /api/salidas?status=sending": {
+      salidas: [{ id: "s9", source: "basecamp", isSample: true, releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, versions: [{ n: 1, body: "Muestra" }] }],
+    },
+  });
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { content: "<p>Muestra</p>" }, salidas.fetchImpl)), "G5");
+});
+
 test("G5: a list without bodies is resolved through salida show", async () => {
   const mesa = fakeMesa({
     "GET /api/salidas?status=sending": { salidas: [{ id: "s2", source: "slack", releasedAt: "2026-11-03T20:00:00Z" }] },

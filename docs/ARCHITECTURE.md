@@ -226,18 +226,22 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | GET/PATCH `/api/sources/:source` | PATCH `{ health?, note?, watermark?, lastChecked?, lastNewAt?, backoffUntil?, cadenceS?, errorCount?, lastError? }` | `{ source }` / `{ source, resumed }` |
 | POST `/api/sweep` | `{ sources? }` | `{ event }` 202 ("Barrer ahora": wakes session `sweeper`) |
 | GET/POST `/api/sessions` | `{ id, label?, cwd?, project? }` | sessions / `Session` |
-| GET `/api/wait` | `?session=&after=&timeout=` | `{ events, cursor }` |
+| GET `/api/wait` | `?session=&after=&timeout=&peek=1` (peek never acks) | `{ events, cursor }` |
 | POST `/api/wait/ack` | `{ session, cursor }` | `Session` |
 | GET/POST `/api/engram/links` | | `EngramLink[]` / `EngramLink` 201 |
-| GET `/api/engram/search` | `?q=&project=&limit=5` | 501 until lane C |
+| GET `/api/engram/search` | `?q=&project=&limit=5` | `{ status: connected\|offline, observations: { id, type, title, createdAt, project }[] }` (engram CLI, titles only, always 200) |
+| GET `/api/stream` | | `text/event-stream`: `event: change` `{ entityType, entityId, kind }` per write; `useLive()` / `useLiveRefresh()` in `src/lib/live/useLive.ts` |
+| POST `/api/github/sync` | | `{ ingest, project }`: notifications, review requests, Project push and pull now |
+| GET `/api/github/status` | | `{ enabled, project, github, githubProject }` |
+| POST `/api/github/import-reviews` | | `{ prs, findings, skipped }` from pr-monitor's state file (read only) |
 
 Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalink?}`, `failed {error}`, `retry`, `deny`, `schedule {at, version}`, `unschedule`, `request_delete`, `deleted`, `request_restore`, `restored`, `hold {reason}`, `unqueue`, `bounce {reason}`. `release`, `expire` and `resume` are internal (sweeper, health).
 
 ## 9. Wake protocol and CLI
 
 **Wake (long-poll):** the lead blocks on `mesa wait` (`GET /api/wait?session=lead`). The server answers as soon as there are events after the session's cursor (targeted or broadcast), or with `[]` after `timeout`.
-- **Delivery is at least once.** The CLI acks only after handling (`POST /api/wait/ack`), so a handler must check current state before it acts.
-- **Kinds:** `ticket.created|answered|plan_approved|closed|reopened`, `salida.turn|released|queued|undone|denied|delete_requested|restore_requested`, `review.action`, `sweep.requested`, `task.moved` (reserved).
+- **Delivery is at least once.** `mesa wait` acks a batch after printing it (`--manual-ack` leaves it to `mesa ack <cursor>`), so a handler must check current state before it acts. Waiters inside a command (`ticket ask --wait`, `salida propose --wait-release`) poll with `peek=1`, which never acks. Events older than 7 days are pruned hourly. `docs/SESSIONS.md` is the session guide.
+- **Kinds:** `ticket.created|answered|plan_approved|closed|reopened`, `salida.turn|released|queued|undone|denied|delete_requested|restore_requested`, `review.action`, `sweep.requested`, `task.moved` (reserved; the UI gets task moves from `/api/stream`).
 - **On `salida.released`:**
   1. `mesa salida show <id>`.
   2. If `recheckThread` is set, re-read the thread and `bounce` if it changed.
@@ -245,7 +249,7 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
   4. Report with `mesa salida sent|failed|hold`.
 - **On `sweep.requested`** (sent to the sweeper session, `MESA_SWEEPER_SESSION`, default `sweeper`): run the sweep for the listed sources now, ignoring `backoff_until`.
 
-**Sweep tick (lane C):** the haiku sweeper runs about every 60 s per source in two stages. A cheap probe compares the source against `watermark`. When the probe finds something new, a full triage upserts items (`mesa item upsert`, deduped on `(source, external_id)`). The sweeper then writes back `watermark`, `lastCheckedAt`, `lastNewAt`, `health`, and an adaptive `cadenceS`/`backoffUntil` with `mesa source set`: It backs off while a source is quiet or failing. It goes back to 60 s when something new arrives or when `lastInteractionAt` shows Andrés is active.
+**Sweep tick (lane C):** the haiku sweeper runs about every 60 s per source in two stages. A cheap probe compares the source against `watermark`. When the probe finds something new, a full triage upserts items (`mesa item upsert`, deduped on `(source, external_id)`). The sweeper then writes back `watermark`, `lastChecked`, `lastNewAt`, `health`, and an adaptive `cadenceS`/`backoffUntil` with `mesa source set`: It backs off while a source is quiet or failing. It goes back to 60 s when something new arrives or when `lastInteractionAt` shows Andrés is active.
 
 **CLI (`bin/mesa`, `bin/mesa.cmd`):** zero-dependency Node over the REST API.
 - Env: `MESA_URL`, `MESA_SESSION`, `MESA_AGENT`, `MESA_TOKEN`.
@@ -272,3 +276,13 @@ Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalin
 - **Approval rules are not enforced by the API.** The local API does not authenticate callers, so "sessions and agents never approve, schedule, deny, undo or decide" rests on CLAUDE.md and on the CLI having no such commands.
 - **Uploads** are stored under `data/uploads/<ticket>/` with sanitized names and a 25 MB cap.
 - **Sample data is labelled** (`is_sample`) and shown with "Datos de muestra.".
+
+## 12. GitHub, server side (lane C)
+
+`src/lib/integrations/github-worker.ts`, started from `src/instrumentation.ts`. It runs with Andrés's `gh` login (the token is read from gh's keyring for `MESA_GH_USER`, default `acorrea-designli`, and passed only to the child process; nothing is stored). It is enabled when `MESA_GITHUB=on`, or when neither `MESA_GITHUB` nor `MESA_DB` is set (the real board). Dev servers on scratch databases stay off GitHub unless they opt in.
+
+- **Notifications** (`github-ingest.ts`): `GET /notifications` with `If-Modified-Since` (the last `Last-Modified`, kept as `source_state.github.watermark`), never sooner than `X-Poll-Interval` (floor 60 s, kept as `cadenceS`). A 304 costs nothing.
+- **Review requests**: REST search `is:pr is:open review-requested:@me` (GraphQL is left to pr-monitor), when the notifications changed, every 5 minutes, or on `POST /api/github/sync`. Each non-draft PR is an item `{source: github, externalId: pr:<owner>/<repo>#<n>, kind: pr_review, need: approve_pr, project: <owner>/<repo>, excerpt: "+120 −34 · sin revisar"}`. Details (`+/−`, Andrés's last review) are fetched only when the PR's `updated_at` moved. A request that disappears from a complete search moves its item to Hecho; one that comes back returns to the inbox.
+- **Health**: success sets `github` ok; a rate limit sets degraded with note `límite de API · HH:MM` and waits for the reset; auth or a missing `gh` sets down.
+- **GitHub Project** (`github-project.ts`): the private Project "Mesa" owned by `acorrea-designli`, created only when missing. Its Status field carries Inbox, Todo, In Progress, Waiting, Done (existing option ids are kept). Settings: `gh_project.id`, `.number`, `.url`, `.owner`, `.status_field_id`, `.status_options` (name → option id), `.known_items`, `.last_pull_at`. Push (every 5 s when there are pending tasks): a task without `gh_item_id` becomes a draft item, or the PR itself when the task links a GitHub PR item; then its Status is set and `markSync(synced)` clears "Sin sincronizar". A task moved again while the write was in flight stays pending. Write errors mark the task `error`; a missing `project` scope sets `github_project` down ("sin permiso": run `gh auth refresh -s project`). Pull (every 2 min): a Status changed in GitHub moves a synced task and its items; a pending local move wins until acked; items added in GitHub become tasks once (items of tasks deleted in Mesa are never re-imported). Sample tasks never leave Mesa.
+- Mesa never writes PR reviews or comments: those are salidas the lead sends.

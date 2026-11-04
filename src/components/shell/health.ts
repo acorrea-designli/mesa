@@ -1,6 +1,8 @@
 // Source health for the rail notice (Estados B) and the Hoy states. Pure: maps the
 // source_state rows (repos().sources) to what the rail and the band show.
-// Lane C's getSourceHealth() can replace sourceHealth() without changing callers.
+// getSourceHealth() in src/lib/integrations/health.ts reads the rows and calls these.
+// Server notes win when they say more than the generic text: the GitHub worker writes
+// "límite de API · 14:05" and "sin permiso", the sweeper writes its own outage notes.
 import type { HealthSource, Source, SourceState } from "@/lib/domain/types";
 import { clock } from "@/features/hoy/format";
 
@@ -37,17 +39,19 @@ export function mapHealth(s: SourceState): SourceHealth {
   const since = last ? clock(last) : null;
   const source = (s.source === "engram" ? "claude" : s.source) as SourceHealth["source"];
   if (s.health === "down") {
+    const note = s.note || "sin conexión";
     return {
       source,
       state: "down",
-      note: "sin conexión",
-      legend: `${name} · sin conexión`,
+      note,
+      legend: `${name} · ${note}`,
       rowNote: since ? `Último dato ${since} · ${name} no responde` : `${name} no responde`,
       since,
     };
   }
   if (s.health === "degraded") {
-    const until = s.backoffUntil ? clock(s.backoffUntil) : null;
+    // "límite de API · 14:05" already names the reason and the time.
+    const until = s.backoffUntil && !/límite de API/.test(s.note) ? clock(s.backoffUntil) : null;
     return {
       source,
       state: "degraded",

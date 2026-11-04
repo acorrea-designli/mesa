@@ -46,6 +46,9 @@ const ANDRES_EVENTS = new Set<SalidaEvent["type"]>([
   "request_restore",
 ]);
 
+/** Events only the sending session reports; refused for sample salidas. */
+const SEND_EVENTS = new Set<SalidaEvent["type"]>(["sent", "failed", "hold", "bounce", "deleted", "restored"]);
+
 const S_SPEC = { json: ["destination", "links"], bool: ["is_sample"] };
 const V_SPEC = { bool: ["starred"] };
 const TURN_SPEC = { json: ["marks"] };
@@ -266,10 +269,17 @@ export function salidasRepo(db: Db) {
       });
     },
 
-    /** Apply a state machine event and emit its wake. */
-    transition(id: string, ev: SalidaEvent, now = new Date()): SalidaDetail {
+    /**
+     * Apply a state machine event and emit its wake. Sample salidas ("Datos de muestra.")
+     * can never be sent: the send-side events are refused unless the seed itself is
+     * building the sample states (`opts.seed`).
+     */
+    transition(id: string, ev: SalidaEvent, now = new Date(), opts: { seed?: boolean } = {}): SalidaDetail {
       return tx(db, () => {
         const s = get(id);
+        if (s.isSample && !opts.seed && SEND_EVENTS.has(ev.type)) {
+          throw new TransitionError(`salida ${id} is sample data (Datos de muestra.) and can never be sent: do not send it, ignore it`);
+        }
         const r = transitionSalida(s, ev, now, {
           versionCount: versionCount(id),
           rewritePending: rewritePending(id),
@@ -306,9 +316,10 @@ export function salidasRepo(db: Db) {
       const rows = db
         .prepare(
           `SELECT * FROM salidas WHERE
-             (status = 'sending' AND released_at IS NULL AND undo_until <= ?)
+             ((status = 'sending' AND released_at IS NULL AND undo_until <= ?)
           OR (status = 'scheduled' AND send_at <= ?)
-          OR (status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?)`,
+          OR (status = 'pending' AND expires_at IS NOT NULL AND expires_at <= ?))
+           AND is_sample = 0`,
         )
         .all(nowIso(now), nowIso(now), nowIso(now));
       const touched: string[] = [];

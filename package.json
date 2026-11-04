@@ -20,6 +20,7 @@
     "test:team": "node --test \"scripts/hooks/test/*.test.mjs\" \"scripts/test/*.test.mjs\"",
     "test:watch": "vitest",
     "db:migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "seed": "node --experimental-strip-types scripts/seed.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {
