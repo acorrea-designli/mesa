@@ -10,6 +10,7 @@ import {
   TransitionError,
 } from "../db/util";
 import { initialTicketStatus, transitionTicket, type TicketEvent } from "../domain/ticket-machine";
+import { matchOptionKey, openOptions } from "../domain/ticket-options";
 import type {
   ActionMode,
   ActionState,
@@ -308,6 +309,16 @@ export function ticketsRepo(db: Db) {
           ensureSession(db, m.session, now);
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(m.session, t.id);
           t = get(t.id);
+        }
+        // His habit of typing the letter counts as picking it: a reply that is just an option key
+        // of the latest options message he has not answered records chosen = that key.
+        if (m.author === "andres" && !m.chosen && m.body) {
+          const prior = fromRows<TicketMessage>(
+            db.prepare("SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at, rowid").all(t.id),
+            M_SPEC,
+          );
+          const key = matchOptionKey(m.body, openOptions(prior));
+          if (key) m = { ...m, chosen: key };
         }
         const msgId = insertMessage(t.id, m, nowIso(now));
         if (m.author === "andres") touchInteraction(db, now);

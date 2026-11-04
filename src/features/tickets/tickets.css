@@ -611,11 +611,12 @@
   margin-top: 3px;
   white-space: pre-wrap;
 }
-.tk-mopts {
-  list-style: none;
-  margin-top: 4px;
-  font-size: 13.5px;
-  color: var(--ink2);
+/* options in a later message: same buttons; answered or superseded ones are read-only */
+.tk-msg .tk-opts {
+  margin-top: 8px;
+}
+.tk-opts.ro .tk-opt:not(.pick) {
+  opacity: 0.6;
 }
 .tk-status {
   display: flex;

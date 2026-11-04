@@ -15,6 +15,7 @@ import { ticketApi } from "./api";
 import { DirLine, dirLabel, hm } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { isNearBottom, onNewMessage } from "./follow";
+import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
 import type { PickTicket, ThreadData } from "./read";
 
 interface Props {
@@ -82,17 +83,19 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
 
   const first = t.messages[0];
   const rest = t.messages.slice(1);
-  const chosen = [...t.messages].reverse().find((m) => m.chosen)?.chosen ?? null;
+  // Every message with options gets buttons; only the latest one Andrés has not answered is live.
+  const optStates = optionStates(t.messages);
+  const openMsg = t.messages.find((m) => optStates.get(m.id)?.actionable);
   const closed = t.status === "closed";
   const pending = data.approvals.filter((a) => a.status === "pending");
   const pastApprovals = data.approvals.filter((a) => a.status !== "pending").slice(-3);
 
-  const send = async (chosenKey?: string) => {
+  const send = async (chosenKey?: string, from?: TicketMessage) => {
     if (busy) return;
     if (!chosenKey && !c.state.text.trim() && !c.state.files.length && !c.state.refs.length) return;
     setBusy(true);
     try {
-      const state = chosenKey && !c.state.text.trim() ? { ...c.state, text: optionText(first, chosenKey) } : c.state;
+      const state = chosenKey && !c.state.text.trim() ? { ...c.state, text: optionText(from ?? openMsg, chosenKey) } : c.state;
       await ticketApi.reply(t.id, state, chosenKey);
       c.reset();
       toast({ text: listening ? "Respuesta enviada · Claude despierta" : "Respuesta guardada · la lee la próxima sesión" });
@@ -148,36 +151,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
 
           {first?.options?.length ? (
             <>
-              <div className="k">Elige</div>
-              <div className="tk-opts">
-                {first.options.map((o) => (
-                  <button
-                    key={o.key}
-                    type="button"
-                    className={["tk-opt", first.recommended === o.key && "rec", chosen === o.key && "pick"].filter(Boolean).join(" ")}
-                    disabled={busy || closed}
-                    aria-pressed={chosen === o.key}
-                    onClick={(e) => {
-                      confirmPick(e.currentTarget);
-                      void send(o.key);
-                    }}
-                  >
-                    <b>{o.key}</b>
-                    <span>
-                      {o.label}
-                      {o.detail ? <small>{o.detail}</small> : null}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {first.recommended ? (
-                <div className="tk-rec">
-                  <span className="ln src-claude" style={{ background: "var(--c)" }} />
-                  <span>
-                    <b>Claude recomienda {first.recommended}:</b> {first.recommendation}
-                  </span>
-                </div>
-              ) : null}
+              <div className="k">{optStates.get(first.id)?.actionable ? "Elige" : "Opciones"}</div>
+              <Options m={first} state={optStates.get(first.id)} disabled={busy || closed} onPick={(key) => send(key, first)} />
             </>
           ) : null}
 
@@ -210,7 +185,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
           {rest.length ? (
             <div className="tk-msgs">
               {rest.map((m) => (
-                <Message key={m.id} m={m} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
+                <Message key={m.id} m={m} options={optStates.get(m.id)} disabled={busy || closed} onPick={(key) => send(key, m)} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
               ))}
             </div>
           ) : null}
@@ -275,7 +250,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
               pick={pick.filter((p) => p.ref !== t.ref)}
               actions={actions}
               label="Respuesta"
-              placeholder={first?.options?.length && !chosen ? `Responde, elige ${first.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
+              placeholder={openMsg?.options?.length ? `Responde, elige ${openMsg.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
               onSubmit={() => void send()}
               onFocusChange={(on) => {
                 setFocused(on);
@@ -322,9 +297,42 @@ const SAL_STATUS: Record<string, string> = {
   draft: "borrador",
 };
 
-function optionText(first: TicketMessage | undefined, key: string): string {
-  const o = first?.options?.find((x) => x.key === key);
-  return o ? `${key}. ${o.label}` : key;
+/** A/B choices of one message as real buttons: the recommended one marked, the picked one pressed. */
+function Options({ m, state, disabled, onPick }: { m: TicketMessage; state?: OptionState; disabled: boolean; onPick: (key: string) => void }) {
+  const live = Boolean(state?.actionable);
+  return (
+    <>
+      <div className={live ? "tk-opts" : "tk-opts ro"} role="group" aria-label="Opciones">
+        {m.options?.map((o) => (
+          <button
+            key={o.key}
+            type="button"
+            className={["tk-opt", m.recommended === o.key && "rec", state?.chosen === o.key && "pick"].filter(Boolean).join(" ")}
+            disabled={!live || disabled}
+            aria-pressed={state?.chosen === o.key}
+            onClick={(e) => {
+              confirmPick(e.currentTarget);
+              onPick(o.key);
+            }}
+          >
+            <b>{o.key}</b>
+            <span>
+              {o.label}
+              {o.detail ? <small>{o.detail}</small> : null}
+            </span>
+          </button>
+        ))}
+      </div>
+      {m.recommended ? (
+        <div className="tk-rec">
+          <span className="ln src-claude" style={{ background: "var(--c)" }} />
+          <span>
+            <b>Claude recomienda {m.recommended}:</b> {m.recommendation}
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function Sources({ refs, titles, owner, item }: { refs: TicketRef[]; titles: Record<string, string>; owner: string | null; item: ThreadData["item"] }) {
@@ -375,7 +383,7 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   );
 }
 
-function Message({ m, atts, refs, ticketId, titles }: { m: TicketMessage; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+function Message({ m, options, disabled, onPick, atts, refs, ticketId, titles }: { m: TicketMessage; options?: OptionState; disabled: boolean; onPick: (key: string) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
   return (
     <div className="tk-msg">
       <div className="tk-who">
@@ -386,15 +394,7 @@ function Message({ m, atts, refs, ticketId, titles }: { m: TicketMessage; atts: 
         {m.kind === "permission_request" ? <span className="tk-chose">pedido de permiso</span> : null}
       </div>
       {m.body ? <p>{m.body}</p> : null}
-      {m.options?.length ? (
-        <ul className="tk-mopts">
-          {m.options.map((o) => (
-            <li key={o.key}>
-              <b>{o.key}</b> {o.label}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {m.options?.length ? <Options m={m} state={options} disabled={disabled} onPick={onPick} /> : null}
       {refs.length ? (
         <div className="tk-files">
           {refs.map((r) => (
