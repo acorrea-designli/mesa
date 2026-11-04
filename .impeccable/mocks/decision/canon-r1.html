@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1011;--p:#161718;--l:#232426;--t:#e6e6e6;--d:#8a8f98;--a:#5e6ad2}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--bg);color:var(--t);font:400 13px/1.4 Inter,sans-serif;display:grid;grid-template-columns:232px 1fr 380px}
+aside{background:var(--p);border-right:1px solid var(--l);padding:14px 10px}
+aside h1{font:600 14px Inter;padding:6px 8px 16px}
+.n{padding:6px 8px;border-radius:5px;color:#c9ccd1;display:flex;justify-content:space-between}.n.on{background:var(--l);color:#fff}
+main{padding:0}
+.top{height:48px;border-bottom:1px solid var(--l);display:flex;align-items:center;padding:0 18px;font-weight:500}
+.g{padding:10px 18px 4px;color:var(--d);font-weight:500;background:#121314;border-bottom:1px solid var(--l)}
+.r{display:grid;grid-template-columns:20px 90px 1fr 110px 60px;gap:10px;align-items:center;padding:9px 18px;border-bottom:1px solid var(--l)}
+.dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--d)}.dot.a{border-color:var(--a)}
+.tag{color:var(--d)} .age{color:var(--d);text-align:right}
+.pill{border:1px solid var(--l);border-radius:10px;padding:1px 8px;color:#c9ccd1;font-size:12px}
+section{border-left:1px solid var(--l);padding:18px}
+section h2{font:600 16px Inter;margin:8px 0 12px}
+.box{background:var(--p);border:1px solid var(--l);border-radius:6px;padding:12px;margin-top:8px;color:#d6d8dc}
+.b{display:inline-block;margin-top:14px;margin-right:6px;padding:7px 12px;border-radius:6px;border:1px solid var(--l)}.b.p{background:var(--a);border-color:var(--a);color:#fff}
+</style></head><body>
+<aside><h1>Designli Ops</h1><div class="n on">Inbox <span>9</span></div><div class="n">My tasks <span>23</span></div><div class="n">Tickets <span>4</span></div><div class="n">Approvals <span>3</span></div></aside>
+<main><div class="top">Inbox</div>
+<div class="g">Needs you · 5</div>
+<div class="r"><span class="dot a"></span><span class="tag">Basecamp</span><span>Freightmate · tarifa por milla</span><span class="pill">Reply</span><span class="age">2h</span></div>
+<div class="r"><span class="dot a"></span><span class="tag">GitHub</span><span>prospec-admin #212 feat: bulk export</span><span class="pill">Review</span><span class="age">1h</span></div>
+<div class="r"><span class="dot a"></span><span class="tag">Slack</span><span>#scout-dev deploy thread</span><span class="pill">Reply</span><span class="age">1h</span></div>
+<div class="r"><span class="dot a"></span><span class="tag">Claude</span><span>¿Cierro el to-do de Bseen?</span><span class="pill">Decide</span><span class="age">37m</span></div>
+<div class="g">Approvals · 2</div>
+<div class="r"><span class="dot"></span><span class="tag">Slack</span><span>→ #scout-dev "Confirmed, set on staging"</span><span class="pill">Approve</span><span class="age">4m</span></div>
+<div class="r"><span class="dot"></span><span class="tag">Basecamp</span><span>→ Freightmate "Sí, para el viernes"</span><span class="pill">Approve</span><span class="age">2m</span></div>
+</main>
+<section><span class="tag">Approval · Slack</span><h2>Reply in deploy thread</h2><div class="tag">#scout-dev · thread by Matt</div><div class="box">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div><span class="b p">Approve</span><span class="b">Edit</span><span class="b">Deny</span></section>
+</body></html>

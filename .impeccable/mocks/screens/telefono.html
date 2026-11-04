@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="es" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=1440">
+<title>Mesa · Teléfono</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mesa mockup: telefono. Generated from the shared shell; tokens copied from screens/hoy.html. Sample data. -->
+<style>
+:root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--ink:#1c1d21;--dim:#6f717a;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c}
+:root{--mute:#5d5f68;--ink2:#3e4047;--need:#2c2e33;--rule2:#dcd8cf;--edge:#c3beb2;--gh-ink:#b8000e;--sl-ink:#00777b;--cl-ink:#8a5300;--bc-ink:#006b4d;--gh-tint:#fbe6e5;--sl-tint:#e6f6f5;--cl-tint:#fdf0dc;--bc-tint:#e2f5ed;--shade:rgba(28,29,33,.10)}
+[data-theme="dark"]{--gnd:#17191d;--deep:#111316;--raise:#20232a;--rule:#2b2f37;--ink:#f1efe9;--dim:#8e939c;--gh:#ff5d52;--sl:#2ec5c2;--cl:#ffb428;--bc:#3cc983;--mute:#9a9fa8;--ink2:#c7cbd2;--need:#dadde2;--rule2:#23262d;--edge:#3d424b;--gh-ink:#ff8f86;--sl-ink:#74dcd9;--cl-ink:#ffc965;--bc-ink:#7fdca4;--gh-tint:#3a1f1e;--sl-tint:#123130;--cl-tint:#3a2d14;--bc-tint:#15301f;--shade:rgba(0,0,0,.40)}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--deep);color-scheme:light}
+[data-theme="dark"]{color-scheme:dark}
+body{width:1440px;background:var(--deep);color:var(--ink);font:500 14px/1.3 "Hanken Grotesk",sans-serif;font-variant-numeric:tabular-nums;caret-color:var(--ink)}
+::selection{background:var(--ink);color:var(--gnd)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+textarea,input{font:inherit;color:var(--ink);caret-color:var(--ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+a{color:inherit;text-decoration:none;text-underline-offset:3px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--edge);border-radius:5px;border:2px solid var(--gnd)}::-webkit-scrollbar-track{background:transparent}
+
+/* mock chrome (not part of the product) */
+.mk-bar{height:56px;display:flex;align-items:center;gap:18px;padding:0 28px;border-bottom:1px solid var(--rule);background:var(--deep)}
+.mk-bar strong{font-size:15px;font-weight:700}
+.mk-bar .mk-sub{color:var(--mute);font-size:12.5px}
+.mk-seg{display:flex;border:1px solid var(--edge);border-radius:6px;overflow:hidden}
+.mk-seg button{height:30px;padding:0 12px;font-size:13px;font-weight:600;color:var(--ink2);border-right:1px solid var(--edge)}
+.mk-seg button:last-child{border-right:0}
+.mk-seg button[aria-pressed="true"]{background:var(--ink);color:var(--gnd)}
+.mk-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--mute)}
+.mk-cap{margin:44px 28px 14px;display:flex;align-items:baseline;gap:14px}
+.mk-cap b{font-size:16px;font-weight:700}
+.mk-cap span{color:var(--mute);font-size:13px}
+.mk-frame{margin:0 0 0 0;border-bottom:1px solid var(--rule)}
+.mk-grid{display:flex;flex-wrap:wrap;gap:24px;padding:0 28px 8px;align-items:flex-start}
+.mk-panel{background:var(--gnd);border:1px solid var(--rule);border-radius:8px;overflow:hidden;position:relative}
+.mk-panel>.mk-tag{z-index:3;position:absolute;right:12px;top:10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.mk-end{height:56px}
+
+/* app frame */
+.app{width:1440px;height:900px;background:var(--gnd);display:grid;grid-template-columns:184px 1fr;overflow:hidden;position:relative}
+
+/* rail, verbatim anatomy from hoy.html */
+.rail{grid-row:1/-1;background:var(--deep);border-right:1px solid var(--rule);padding:22px 14px;display:flex;flex-direction:column;gap:3px}
+.brand{display:flex;align-items:center;gap:10px;font:700 20px/1.3 "Hanken Grotesk";letter-spacing:.02em;margin:0 6px 4px}
+.brand svg{flex:none}
+.who{color:var(--mute);font-size:12px;margin:0 6px 22px 38px}
+.nav{display:flex;justify-content:space-between;align-items:center;height:38px;padding:0 10px;border-radius:6px;color:var(--ink2);font-weight:600;border-left:3px solid transparent}
+.nav b{font-weight:600;font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.nav.on{background:var(--raise);color:var(--ink);border-left-color:var(--ink)}
+.nav.on b{color:var(--ink)}
+.nav.foot{margin-top:auto;color:var(--mute)}
+
+/* shared pieces from hoy.html */
+.tabs{display:flex;gap:6px;align-items:center}
+.tab{height:30px;padding:0 12px;display:flex;align-items:center;gap:7px;border:1px solid var(--rule);border-radius:6px;color:var(--ink2);font-weight:600;font-size:13px;white-space:nowrap;flex:none}
+.tab.on{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.tab u{width:8px;height:8px;border-radius:50%}
+.sort{margin-left:auto;color:var(--mute);font-size:12px}
+.src{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+.src i{width:10px;height:10px;border-radius:50%;flex:none}
+.subj{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subj small{display:block;font-weight:400;font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.need{font-size:13px;font-weight:600;color:var(--need)}
+.st{justify-self:start;height:24px;padding:0 9px;border-radius:4px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.st.you{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.st.ok{border-color:var(--bc);color:var(--bc-ink)}
+.st.cl{border-color:var(--cl);color:var(--cl-ink)}
+.st.off{border-style:dashed;color:var(--mute)}
+.cols,.tk-cols,.sa-cols{padding-bottom:4px}
+.row,.tk-row,.sa-row,.ph-row,.setup-row{padding-block:6px}
+.grp{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;height:34px;display:flex;align-items:flex-end;padding-bottom:6px}
+.k{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;margin-top:16px}
+.k:first-child{margin-top:0}
+.kind{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--mute);letter-spacing:0;text-transform:none}
+.kind i{width:10px;height:10px;border-radius:50%;background:var(--sl)}
+.dest{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--sl);border-radius:4px;padding:4px 9px;font-weight:600;font-size:13px;background:var(--sl-tint);display:inline-flex;align-items:center;gap:6px}
+.chip.gh{border-color:var(--gh);background:var(--gh-tint)}
+.chip.bc{border-color:var(--bc);background:var(--bc-tint)}
+.chip.cl{border-color:var(--cl);background:var(--cl-tint)}
+.chip.plain{border-color:var(--edge);background:var(--raise)}
+.ctx{margin-top:8px;font-size:13.5px;line-height:1.5;color:var(--ink2);border-left:2px solid var(--rule);padding-left:12px}
+/* exact text: the source line runs into the block from the top (no side-tab) */
+.msg{margin-top:10px;background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:16px 16px 14px;font-size:16px;line-height:1.5;position:relative}
+.msg::before{content:"";position:absolute;left:15px;top:-4px;width:30px;height:7px;border-radius:4px;background:var(--sl)}
+.msg.gh::before{background:var(--gh)}.msg.bc::before{background:var(--bc)}.msg.cl::before{background:var(--cl)}
+.acts{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.btn{height:40px;padding:0 16px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;line-height:1.35;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--raise)}
+.btn.p{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.btn.p:hover{background:var(--ink2);border-color:var(--ink2)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn[disabled],.btn.is-off{opacity:.45;cursor:not-allowed}
+.btn svg{flex:none}
+.meta{margin-top:18px;padding-top:12px;border-top:1px solid var(--rule);font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:12px}
+.ln{display:inline-block;width:22px;height:5px;border-radius:3px;background:var(--ink);flex:none}
+.ln.gh{background:var(--gh)}.ln.sl{background:var(--sl)}.ln.cl{background:var(--cl)}.ln.bc{background:var(--bc)}
+.ring{display:inline-block;width:11px;height:11px;border-radius:50%;border:2.5px solid var(--ink);background:var(--raise);flex:none;margin:0 -2px}
+.mark{display:inline-flex;align-items:center}
+.sample{font-size:12px;color:var(--mute)}
+.alert{display:flex;align-items:center;gap:14px;background:var(--raise);border:1px solid var(--ink);border-radius:6px;padding:10px 12px 10px 14px;font-size:13.5px;line-height:1.4;box-shadow:0 2px 8px var(--shade)}
+.alert p{flex:1}
+.alert p b{font-weight:700}
+.alert .acts{margin:0;flex-wrap:nowrap}
+.alert svg.brk{flex:none}
+
+/* SVG line language, themed through tokens */
+.sv-ln{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.s-gh{stroke:var(--gh)}.s-sl{stroke:var(--sl)}.s-cl{stroke:var(--cl)}.s-bc{stroke:var(--bc)}.s-ink{stroke:var(--ink)}
+.f-gh{fill:var(--gh)}.f-sl{fill:var(--sl)}.f-cl{fill:var(--cl)}.f-bc{fill:var(--bc)}
+.sv-cap{fill:var(--gnd);stroke:var(--ink);stroke-width:2.5}
+.sv-cap.on{fill:var(--raise);stroke-width:3.5}
+.sv-tick{stroke:var(--ink);stroke-width:1.6}
+.sv-ring{fill:var(--gnd);stroke:var(--ink);stroke-width:3}
+.sv-ring.on{fill:var(--raise)}
+.sv-ring.cl{stroke:var(--cl)}
+.sv-txt{fill:var(--ink)}
+.sv-mute{fill:var(--mute)}
+.sv-dash{stroke-dasharray:1 11}
+@keyframes mk-travel{0%{transform:translateX(0)}100%{transform:translateX(26px)}}
+.travel{animation:mk-travel 1.6s cubic-bezier(.16,1,.3,1) infinite}
+@media (prefers-reduced-motion:reduce){.travel{animation:none}}
+
+[data-variant]{display:none}
+body[data-view="a"] [data-variant="a"]{display:block}
+body[data-view="b"] [data-variant="b"]{display:block}
+
+.f-ink{fill:var(--ink)}
+.ph-stage{display:flex;gap:48px;justify-content:center;padding:36px 28px 40px;background:var(--deep)}
+.ph-col{display:flex;flex-direction:column;gap:12px;align-items:center}
+.ph-col>.mk-note{font-size:13px;font-weight:700}
+.ph-col>.mk-note span{font-weight:500;color:var(--mute);margin-left:6px}
+.ph{width:390px;height:844px;border-radius:40px;border:1px solid var(--edge);background:var(--gnd);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 10px 30px var(--shade);font-size:15px}
+.ph-sb{height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:4px 30px 0;font-size:14px;font-weight:700}
+.ph-sb small{font-size:12px;font-weight:600;color:var(--mute)}
+.ph-top{height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 18px}
+.ph-top h1{font:700 21px/1.3 "Hanken Grotesk"}
+.ph-top h1 span{font-weight:500;font-size:13px;color:var(--mute);margin-left:8px}
+.ph-top .back{display:flex;align-items:center;gap:4px;font-size:15px;font-weight:600;height:44px;padding-right:8px}
+.ph-top .right{margin-left:auto;font-size:13px;color:var(--mute);font-weight:600}
+.ph-band{flex:none;border-bottom:1px solid var(--rule)}
+.ph-band svg{display:block}
+.ph-sts{flex:none;display:flex;gap:6px;padding:10px 18px;overflow:hidden;border-bottom:1px solid var(--rule)}
+.ph-sts .tab{height:34px;flex:none;font-size:13.5px}
+.ph-list{flex:1;overflow:hidden;padding:0 18px}
+.ph-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;column-gap:12px;align-items:center;min-height:66px;border-bottom:1px solid var(--rule2)}
+.ph-row i{width:10px;height:10px;border-radius:50%}
+.ph-row .subj{font-size:15px}
+.ph-row .subj small{font-size:13px}
+.ph-row.sel{background:var(--raise);margin:0 -18px;padding:0 18px}
+.ph-tabs{flex:none;height:82px;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:22px;background:var(--deep)}
+.ph-tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--ink2);text-decoration:none}
+.ph-tabs a .ln{width:20px;opacity:.3}
+.ph-tabs a.on{color:var(--ink)}
+.ph-tabs a.on .ln{opacity:1}
+.ph-tabs a b{font-weight:600;color:var(--mute);margin-left:3px}
+.ph-body{flex:1;overflow:hidden;padding:4px 20px 0}
+.ph-body h2{font:700 23px/1.3 "Hanken Grotesk";margin-top:8px;text-wrap:balance}
+.ph-body .msg{font-size:17px}
+.ph-dock{flex:none;padding:12px 20px 30px;border-top:1px solid var(--rule);background:var(--deep);display:flex;flex-direction:column;gap:8px}
+.ph-dock .btn{height:52px;justify-content:center;font-size:16px;width:100%}
+.ph-dock .btn.p{height:58px;font-size:17px}
+.ph-split{display:flex}
+.ph-dock .ph-split .btn.p{width:auto;flex:1;border-radius:6px 0 0 6px;gap:10px}
+.ph-dock .ph-split .btn.p.ph-more{flex:none;width:60px;padding:0;border-radius:0 6px 6px 0;border-left:1px solid color-mix(in srgb,var(--gnd) 40%,transparent)}
+.ap-v{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:10px;font-size:12px;font-weight:700;line-height:1;color:var(--gnd);border:1px solid color-mix(in srgb,var(--gnd) 50%,transparent)}
+.ph-scrim{position:absolute;inset:0;z-index:5;background:color-mix(in srgb,var(--ink) 40%,transparent)}
+.ph-sheet{position:absolute;left:0;right:0;bottom:0;z-index:6;display:grid;gap:8px;padding:10px 16px 30px;background:var(--raise);border-top:1px solid var(--edge);border-radius:18px 18px 0 0}
+.ph-sheet .grab{justify-self:center;width:40px;height:5px;border-radius:3px;background:var(--edge);margin-bottom:4px}
+.sh-h{font-size:13px;font-weight:600;color:var(--mute)}
+.sh-it{display:grid;gap:2px;text-align:left;padding:12px 14px;border-radius:8px;border:1px solid var(--rule);background:var(--gnd);font:inherit;line-height:1.3;color:var(--ink)}
+.sh-it.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.sh-it b{font-size:16px;font-weight:700}.sh-it small{font-size:13px;color:var(--mute)}
+.sh-when{display:flex;gap:8px}.sh-when .btn{flex:1;height:44px;justify-content:center;font-size:15px}
+.ph-sched{display:grid;gap:2px;padding:10px 12px;border:1px solid var(--ink);border-radius:8px;background:var(--raise);font-size:13px;color:var(--ink2)}
+.ph-sched b{display:inline-flex;align-items:center;gap:7px;font-size:16px;color:var(--ink)}
+.ph-dock .pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ph-dock .hint{font-size:12.5px;color:var(--mute);text-align:center}
+.sa-route{position:relative;margin-top:10px;padding-left:28px;display:flex;flex-direction:column}
+.sa-stop{position:relative;padding:5px 0}
+.sa-stop:not(:last-child)::after{content:"";position:absolute;left:-20.5px;top:16px;bottom:-16px;width:5px;background:var(--route,var(--sl));z-index:0}
+.sa-stop::before{z-index:1;content:"";position:absolute;left:-25px;top:9px;width:9px;height:9px;border-radius:50%;border:2.5px solid var(--ink);background:var(--raise)}
+.sa-stop:last-child::before{width:13px;height:13px;left:-27px;top:7px;border-width:3px}
+.sa-stop span{font-size:12px;font-weight:700;color:var(--mute);display:block}
+.sa-stop b{font-size:15px;font-weight:600}
+.sa-stop small{display:block;font-size:13px;font-weight:400;color:var(--ink2);margin-top:2px;line-height:1.4}
+.tk-opt{display:flex;gap:12px;align-items:center;text-align:left;padding:14px;border:1px solid var(--edge);border-radius:8px;background:var(--raise);min-height:68px;width:100%;margin-top:8px}
+.tk-opt>b{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:700}
+.tk-opt span{font-weight:600;font-size:15.5px;line-height:1.3}
+.tk-opt small{display:block;font-weight:400;font-size:13px;color:var(--mute);margin-top:2px}
+.tk-opt.rec{border-color:var(--cl)}
+.tk-opt.pick{border:2px solid var(--ink);padding:13px}
+.tk-opt.pick>b{background:var(--ink);color:var(--gnd)}
+.tk-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tk-pair .tk-opt{flex-direction:column;align-items:flex-start;min-height:104px}
+.tk-rec{display:flex;gap:10px;align-items:baseline;margin-top:12px;font-size:14px;line-height:1.45;color:var(--ink2)}
+.tk-rec .ln{transform:translateY(-3px)}
+.tk-rec b{color:var(--ink)}
+.ph-reply{background:var(--raise);border:1px solid var(--edge);border-radius:8px;display:flex;align-items:center;gap:6px;padding:4px 4px 4px 12px;min-height:48px;font-size:15px;color:var(--mute)}
+.ph-reply span{flex:1}
+.ico-btn{width:40px;height:40px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink2)}
+/* variant B: vertical strip map */
+.vs{flex:1;overflow:hidden;position:relative;padding:6px 18px 0 0}
+.vs-bundle{position:absolute;left:22px;top:0;bottom:0;width:30px}
+.vs-bundle i{position:absolute;top:0;bottom:0;width:4px;border-radius:2px;opacity:.38}
+.vs-stop{position:relative;padding-left:64px;margin-bottom:6px}
+.vs-cap{position:absolute;left:16px;top:6px;width:42px;height:26px;border-radius:13px;border:2.5px solid var(--ink);background:var(--gnd)}
+.vs-stop.on .vs-cap{background:var(--raise);border-width:3.5px}
+.vs-name{height:38px;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700}
+.vs-name b{font-weight:600;color:var(--mute);font-size:14px}
+.vs-name .sort{font-size:12.5px}
+.vs-stop:not(.on) .vs-name{color:var(--ink2);font-size:15px}
+.vs-rows .ph-row{min-height:62px}
+.vs-rows .ph-row.sel{margin:0 -18px 0 -10px;padding:0 18px 0 10px}
+.vs-on-line{position:absolute;left:22px;top:0;height:356px;width:30px}
+.vs-on-line i{position:absolute;top:0;bottom:0;width:4px;border-radius:2px}
+/* states */
+.ph-done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 28px;gap:12px}
+.ph-done h2{font:700 23px/1.3 "Hanken Grotesk"}
+.ph-done p{color:var(--ink2);font-size:15px;line-height:1.5}
+.ph-toast{position:absolute;left:14px;right:14px;bottom:96px;background:var(--ink);color:var(--gnd);border-radius:8px;padding:12px 8px 12px 16px;display:flex;align-items:center;gap:10px;font-size:14.5px;box-shadow:0 6px 20px var(--shade)}
+.ph-toast span{flex:1}
+.ph-toast .btn:hover{background:transparent;opacity:.85}
+.ph-toast .btn{height:40px;color:var(--gnd);border-color:transparent;text-decoration:underline;text-underline-offset:3px}
+
+
+/* Steer b6af8924: desktop parity on the phone (Salidas, Tickets, Tablero B). */
+:root{--keep-tint:#dcefc9;--keep-ink:#3d6b14;--redo-tint:#fbefb4;--redo-ink:#8a6a00;--drop-tint:#f6dbd6;--drop-ink:#a1271c}
+[data-theme="dark"]{--keep-tint:#25371b;--keep-ink:#a8d98a;--redo-tint:#3a3214;--redo-ink:#efcf5c;--drop-tint:#3f201c;--drop-ink:#ff9b90}
+mark.m-keep,mark.m-redo,mark.m-drop{color:var(--ink);border-radius:3px;padding:0 2px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+mark.m-keep{background:var(--keep-tint);text-decoration:underline solid var(--keep-ink);text-decoration-thickness:2px;text-underline-offset:4px}
+mark.m-redo{background:var(--redo-tint);text-decoration:underline wavy var(--redo-ink);text-decoration-thickness:1.5px;text-underline-offset:4px}
+mark.m-drop{background:var(--drop-tint);text-decoration:line-through var(--drop-ink);text-decoration-thickness:2px}
+.pp-wrap{display:flex;flex-wrap:wrap;gap:40px 40px;justify-content:center;padding:28px 28px 44px;background:var(--deep)}
+.pp-scroll{flex:1;overflow:hidden;padding:2px 18px 0;display:flex;flex-direction:column}
+.pp-org{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--raise);font-size:12.5px;font-weight:600}
+.pp-org .ring{width:9px;height:9px;border-width:2px}
+.pp-org .hist{margin-left:auto;font-weight:700;color:var(--ink2);height:28px;display:inline-flex;align-items:center;gap:4px}
+.pp-route{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;font-weight:600;flex-wrap:wrap}
+.pp-route .ln{width:16px}
+.pp-route .sep{color:var(--mute);font-weight:500}
+.pp-vers{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12.5px;font-weight:700}
+.pp-v{height:28px;min-width:34px;padding:0 8px;border:1px solid var(--edge);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;gap:4px;color:var(--ink2);background:var(--gnd)}
+.pp-v.cmp{border-style:dashed}
+.pp-v.on{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.pp-v.more{border-color:transparent;color:var(--mute)}
+.pp-vers .lbl{margin-left:auto;color:var(--mute);font-weight:500}
+.pp-text{margin-top:8px;background:var(--raise);border:1px solid var(--rule);border-radius:8px;padding:14px 14px 12px;font-size:16px;line-height:1.6;position:relative}
+.pp-tool{position:absolute;left:10px;top:-50px;display:flex;gap:2px;padding:4px;background:var(--ink);border-radius:8px;box-shadow:0 6px 18px var(--shade);z-index:2}
+.pp-tool button{height:36px;padding:0 10px;border-radius:5px;color:var(--gnd);font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+.pp-tool button i{width:10px;height:10px;border-radius:2px}
+.pp-chat{display:flex;flex-direction:column;gap:6px;margin-top:12px;font-size:13.5px;line-height:1.4}
+.pp-chat .fold{font-size:12.5px;color:var(--mute);font-weight:600}
+.pp-turn b{font-weight:700;margin-right:6px}
+.pp-turn small{color:var(--mute);margin-left:4px}
+.pp-in{display:flex;align-items:center;gap:6px;background:var(--raise);border:1px solid var(--edge);border-radius:8px;padding:4px 4px 4px 12px;min-height:48px;font-size:15px;color:var(--mute)}
+.pp-in span{flex:1}
+.pp-in .send{height:40px;padding:0 14px;border-radius:6px;background:var(--ink);color:var(--gnd);font-weight:700;font-size:14px}
+.pp-marks{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;height:30px;padding:0 6px 0 10px;border:1px solid var(--edge);border-radius:15px;background:var(--raise);font-size:12.5px;font-weight:600}
+.pp-marks i{width:9px;height:9px;border-radius:2px}
+.pp-chips{display:flex;gap:6px;overflow:hidden}
+.pp-chip{flex:none;height:32px;padding:0 12px;border:1px solid var(--edge);border-radius:16px;background:var(--gnd);font-size:13px;font-weight:600;color:var(--ink2)}
+.pp-x{width:22px;height:22px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;color:var(--mute)}
+.pp-q{display:flex;gap:8px;overflow:hidden;padding:8px 18px 10px;border-bottom:1px solid var(--rule)}
+.pp-qi{flex:none;width:150px;padding:8px 10px;border:1px solid var(--edge);border-radius:8px;background:var(--raise);font-size:12.5px;line-height:1.35}
+.pp-qi.on{border:2px solid var(--ink);padding:7px 9px}
+.pp-qi.done{border-style:dashed;background:transparent;color:var(--mute)}
+.pp-qi b{display:flex;align-items:center;gap:6px;font-size:12.5px}
+.pp-qi .ln{width:14px}
+.pp-qi small{display:block;color:var(--mute);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-count{font-size:13px;font-weight:600;color:var(--ink2)}
+.pp-undo{display:grid;gap:10px;padding:14px;border:1px solid var(--ink);border-radius:10px;background:var(--raise);margin-top:14px}
+.pp-undo b{font-size:17px}
+.pp-undo p{font-size:13.5px;color:var(--ink2);line-height:1.45}
+.pp-track{position:relative;height:16px}
+.pp-track .ln{position:absolute;left:0;right:12px;top:5px;width:auto;height:5px;opacity:.35}
+.pp-track .tk{position:absolute;left:58%;top:1px;width:13px;height:13px;border-radius:50%;background:var(--sl);border:2.5px solid var(--ink)}
+.pp-track .end{position:absolute;right:0;top:0;width:16px;height:16px;border-radius:50%;border:3px solid var(--ink);background:var(--gnd)}
+.pp-sent{display:grid;gap:4px;padding:12px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--raise);margin-top:10px;font-size:13.5px}
+.pp-sent .row{display:flex;align-items:center;gap:8px}
+.pp-sent .row .btn{margin-left:auto;height:40px}
+.pp-sent .no{color:var(--mute);font-size:12.5px;line-height:1.4}
+.pp-mem{display:grid;gap:0;margin-top:6px}
+.pp-mem .h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;padding:4px 0 8px}
+.pp-mem .h .dot{width:9px;height:9px;border-radius:50%;background:var(--ink)}
+.pp-mem .h small{margin-left:auto;font-weight:500;color:var(--mute)}
+.pp-find{height:40px;border:1px solid var(--edge);border-radius:8px;background:var(--gnd);display:flex;align-items:center;padding:0 12px;font-size:14px;color:var(--mute);margin-bottom:6px}
+.pp-obs{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--rule2);font-size:14px;line-height:1.35}
+.pp-obs small{display:block;font-size:12px;font-weight:700;color:var(--ink);margin-top:2px}
+.pp-obs time{font-size:12px;color:var(--mute)}
+.pp-type{font-size:11px;font-weight:700;height:20px;padding:0 6px;border-radius:3px;display:inline-flex;align-items:center;border:1px solid var(--ink)}
+.pp-type.dec{background:var(--ink);color:var(--gnd)}
+.pp-type.les{background:transparent}
+.pp-type.pro{border-style:dashed}
+.pp-foot{font-size:12px;color:var(--mute);padding:10px 0 0;border-top:1px solid var(--rule)}
+.pp-att{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 6px 0 10px;border:1px solid var(--edge);border-radius:6px;background:var(--gnd);font-size:13px;font-weight:600;max-width:100%}
+.pp-att small{font-weight:500;color:var(--mute)}
+.pp-att.ref{border-color:var(--ink)}
+.pp-atts{display:flex;flex-wrap:wrap;gap:6px}
+.pp-comp{background:var(--raise);border:1px solid var(--edge);border-radius:10px;padding:10px 10px 6px;display:grid;gap:8px}
+.pp-comp .txt{font-size:15px;line-height:1.45;padding:0 2px}
+.pp-comp .bar{display:flex;align-items:center;gap:4px;border-top:1px solid var(--rule);padding-top:4px}
+.pp-comp .bar .hint{font-size:12px;color:var(--mute);flex:1}
+.pp-comp .bar .send{height:40px;padding:0 14px;border-radius:6px;background:var(--ink);color:var(--gnd);font-weight:700;font-size:14px}
+.pp-menu{background:var(--raise);border:1px solid var(--edge);border-radius:10px;box-shadow:0 8px 22px var(--shade);overflow:hidden}
+.pp-menu .q{padding:8px 12px;font-size:12.5px;color:var(--mute);border-bottom:1px solid var(--rule)}
+.pp-menu .q b{color:var(--ink)}
+.pp-mi{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;min-height:48px;padding:6px 12px;font-size:14.5px;border-top:1px solid var(--rule2)}
+.pp-mi:first-of-type{border-top:0}
+.pp-mi.on{background:var(--deep)}
+.pp-mi small{display:block;font-size:12px;color:var(--mute)}
+.pp-mi .id{font-weight:700;color:var(--ink2);font-size:13px}
+.pp-plan{border:1px solid var(--edge);border-radius:10px;background:var(--raise);overflow:hidden}
+.pp-plan .h{display:flex;justify-content:space-between;padding:10px 12px 8px;font-size:13px;font-weight:700;color:var(--ink2)}
+.pp-plan .h small{font-weight:500;color:var(--mute)}
+.pp-act{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--rule);font-size:14px;line-height:1.35}
+.pp-act .ln{width:18px}
+.pp-act small{display:block;font-size:12px;color:var(--mute);margin-top:1px}
+.pp-act .gate{font-size:11.5px;font-weight:700;color:var(--ink2)}
+.pp-act .gate.ask{color:var(--ink);border:1px solid var(--ink);border-radius:4px;padding:2px 6px}
+.pp-mem-l{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute)}
+.pp-lanes{flex:1;overflow:hidden;padding:0 0 0 0;display:flex;flex-direction:column}
+.pp-lane{position:relative;padding:8px 18px 10px 40px;border-bottom:1px solid var(--rule)}
+.pp-lane::before{content:"";position:absolute;left:18px;top:0;bottom:0;width:5px;border-radius:3px;background:var(--lane)}
+.pp-lane .lh{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;height:28px}
+.pp-lane .lh small{font-weight:500;color:var(--mute)}
+.pp-card{position:relative;background:var(--raise);border:1px solid var(--rule);border-radius:8px;padding:9px 11px;margin-top:6px;font-size:14px;line-height:1.35}
+.pp-card::before{content:"";position:absolute;left:-26px;top:16px;width:11px;height:11px;border-radius:50%;border:2.5px solid var(--ink);background:var(--gnd)}
+.pp-card small{display:block;font-size:12px;color:var(--mute);margin-top:2px}
+.pp-card .st{margin-top:6px}
+.pp-card.drag{box-shadow:0 10px 24px var(--shade);border-color:var(--ink);transform:rotate(-1.5deg)}
+.pp-quiet{font-size:12.5px;color:var(--mute);padding:4px 0}
+.pp-move{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.pp-move .btn{height:56px;flex-direction:column;justify-content:center;gap:2px;font-size:13px;padding:0}
+.pp-move .btn small{font-size:11px;color:var(--mute);font-weight:600}
+.pp-move .btn.on{border:2px solid var(--ink)}
+</style></head><body data-view="a">
+<header class="mk-bar"><strong>Mesa · Teléfono</strong><span class="mk-sub">maqueta</span><div class="mk-seg" role="group" aria-label="Variante"><button type="button" data-show="a" aria-pressed="false">A · Corredor</button><button type="button" data-show="b" aria-pressed="false">B · Mapa vertical</button></div>
+<div class="mk-right"><span>Datos de muestra.</span><div class="mk-seg"><button type="button" data-theme-toggle aria-pressed="false">Grafito (oscuro)</button></div></div></header>
+<section data-variant="a"><div class="ph-stage"><div class="ph-col"><div class="mk-note">Hoy<span>banda en corredor</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" class="s-sl"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg><h1>Hoy<span>mar 3 nov</span></h1></div><div class="ph-band"><svg width="388" height="136" viewBox="0 0 388 136" font-family="Hanken Grotesk" font-weight="600" role="img" aria-label="Corredor de Inbox: 4 GitHub, 2 Slack, 1 Claude, 2 Basecamp">
+<g class="sv-ln" style="stroke-width:5" opacity=".35"><path d="M234 46H388" class="s-gh"/><path d="M234 62H388" class="s-sl"/><path d="M234 78H388" class="s-cl"/><path d="M234 94H330l16 16H388" class="s-bc"/></g>
+<g class="sv-ln" style="stroke-width:5"><path d="M14 46H200" class="s-gh"/><path d="M14 62H200" class="s-sl"/><path d="M14 78H200" class="s-cl"/><path d="M14 94H200" class="s-bc"/></g>
+<rect x="200" y="28" width="34" height="84" rx="17" class="sv-cap on"/>
+<g class="sv-tick"><circle cx="44" cy="46" r="5" class="f-gh"/><circle cx="76" cy="46" r="5" class="f-gh"/><circle cx="108" cy="46" r="5" class="f-gh"/><circle cx="60" cy="62" r="5" class="f-sl"/><circle cx="124" cy="62" r="5" class="f-sl"/><circle cx="92" cy="78" r="5" class="f-cl"/><circle cx="44" cy="94" r="5" class="f-bc"/><circle cx="140" cy="94" r="5" class="f-bc"/></g>
+<path d="M164 46L148 62" class="s-ink" stroke-width="2" fill="none"/><circle cx="164" cy="46" r="7.5" class="sv-ring on"/><circle cx="148" cy="62" r="7.5" class="sv-ring on"/>
+<text x="217" y="18" text-anchor="middle" font-size="16" font-weight="700" class="sv-txt">Inbox 9</text>
+<text x="366" y="18" text-anchor="end" font-size="13" class="sv-mute">Todo 6</text><path d="M372 9l4.5 4.5L372 18" fill="none" style="stroke:var(--mute)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="217" y="130" text-anchor="middle" font-size="12" class="sv-mute">4 te esperan</text>
+</svg></div><div class="ph-sts"><span class="tab on">Inbox 9</span><span class="tab">Todo 6</span><span class="tab">En curso 4</span><span class="tab">Esperando 3</span><span class="tab">Hecho 11</span></div>
+<div class="ph-list"><div class="ph-row "><i style="background:var(--bc)"></i><span class="subj">Freightmate · tarifa por milla<small>"¿Pueden tenerlo para el viernes?"</small></span><span class="st you">Te espera</span></div><div class="ph-row "><i style="background:var(--gh)"></i><span class="subj">prospec-admin #212 · bulk export<small>Review · +418 −36 · 2 hallazgos</small></span><span class="st you">Te espera</span></div><div class="ph-row "><i style="background:var(--sl)"></i><span class="subj">#scout-dev · hilo de deploy<small>Matt: "confirm the env var before 2pm?"</small></span><span class="st you">Te espera</span></div><div class="ph-row "><i style="background:var(--cl)"></i><span class="subj">¿Cierro el to-do de Bseen o espero QA?<small>Ticket b14 · Claude pregunta</small></span><span class="st you">Te espera</span></div><div class="grp">Salidas · esperan tu firma</div><div class="ph-row sel"><i style="background:var(--sl)"></i><span class="subj">Para #scout-dev · hilo de Matt<small>"Confirmed, SCOUT_API_URL is set on staging…"</small></span><span class="st you">Firmar</span></div></div><nav class="ph-tabs"><a href="#" class="on"><span class="ln"></span><span>Hoy<b>9</b></span></a><a href="#" class=""><span class="ln"></span><span>Tablero<b>22</b></span></a><a href="#" class=""><span class="ln"></span><span>Tickets<b>4</b></span></a><a href="#" class=""><span class="ln"></span><span>Salidas<b>3</b></span></a></nav></div></div><div class="ph-col"><div class="mk-note">Aprobar salida<span>pantalla completa · ▾ para programar</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">1 de 3</span></div><div class="ph-body"><div class="kind"><i></i>Salida · Slack</div><h2>Respuesta en el hilo de deploy</h2><div class="k">Destino exacto</div><div class="sa-route"><div class="sa-stop"><span>Slack · Workspace</span><b>designli.slack.com</b></div><div class="sa-stop"><span>Canal</span><b>#scout-dev</b></div><div class="sa-stop"><span>En el hilo de</span><b>Matt Ross · 09:31<small>"andres can you confirm the env var before 2pm?"</small></b></div></div><div class="k">Contexto</div><div class="ctx">Matt sostiene el deploy a prod hasta confirmar la variable.</div><div class="k">Texto exacto que se enviará</div><div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div><div class="meta"><span>Claude · 10:38 · caduca 14:00</span><span>Datos de muestra.</span></div></div>
+<div class="ph-dock"><div class="ph-split"><button class="btn p" type="button">Aprobar y enviar<span class="ap-v">v3</span></button><button class="btn p ph-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Más formas de enviar"><svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><div class="pair"><button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5l2 2L5 11H3V9z"/></svg>Editar</button><button class="btn" type="button">Denegar</button></div></div></div></div><div class="ph-col"><div class="mk-note">Responder ticket<span>opciones apiladas</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Tickets</a><span class="right">Claude escuchando</span></div><div class="ph-body"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="ctx">«Ajustar onboarding, paso 2» ya está en staging. Laura (QA) aún no lo revisa.</div><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button><div class="tk-rec"><span class="ln cl"></span><span><b>Claude recomienda B:</b> el cliente pidió ver QA antes de cerrar.</span></div></div><div class="ph-dock"><div class="ph-reply"><span>Responde o elige arriba…</span><button class="ico-btn" type="button" aria-label="Adjuntar imagen"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button></div><div class="pair"><button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>Marcar hecho</button><button class="btn p" type="button" style="height:52px;font-size:16px">Responder</button></div><div class="hint">Al responder despierta la sesión de Claude que preguntó.</div></div></div></div></div></section><section data-variant="b"><div class="ph-stage"><div class="ph-col"><div class="mk-note">Hoy<span>mapa vertical de la línea</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><svg width="24" height="24" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" class="s-sl"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg><h1>Hoy<span>mar 3 nov</span></h1></div>
+<div class="vs"><div class="vs-bundle"><i style="left:5px;background:var(--gh);"></i><i style="left:11px;background:var(--sl);"></i><i style="left:17px;background:var(--cl);"></i><i style="left:23px;background:var(--bc);"></i></div><div class="vs-on-line"><i style="left:5px;background:var(--gh);opacity:1"></i><i style="left:11px;background:var(--sl);opacity:1"></i><i style="left:17px;background:var(--cl);opacity:1"></i><i style="left:23px;background:var(--bc);opacity:1"></i></div>
+<div class="vs-stop on"><span class="vs-cap"></span><div class="vs-name">Inbox <b>9</b><span class="sort">4 te esperan</span></div><div class="vs-rows"><div class="ph-row "><i style="background:var(--bc)"></i><span class="subj">Freightmate · tarifa por milla<small>"¿Pueden tenerlo para el viernes?"</small></span><span class="st you">Te espera</span></div><div class="ph-row "><i style="background:var(--gh)"></i><span class="subj">prospec-admin #212 · bulk export<small>Review · +418 −36 · 2 hallazgos</small></span><span class="st you">Te espera</span></div><div class="ph-row "><i style="background:var(--sl)"></i><span class="subj">#scout-dev · hilo de deploy<small>Matt: "confirm the env var before 2pm?"</small></span><span class="st you">Te espera</span></div><div class="ph-row "><i style="background:var(--cl)"></i><span class="subj">¿Cierro el to-do de Bseen o espero QA?<small>Ticket b14 · Claude pregunta</small></span><span class="st you">Te espera</span></div><div class="ph-row sel"><i style="background:var(--sl)"></i><span class="subj">Para #scout-dev · hilo de Matt<small>"Confirmed, SCOUT_API_URL is set on staging…"</small></span><span class="st you">Firmar</span></div></div></div>
+<div class="vs-stop"><span class="vs-cap"></span><div class="vs-name">Todo <b>6</b></div></div>
+<div class="vs-stop"><span class="vs-cap"></span><div class="vs-name">En curso <b>4</b></div></div>
+<div class="vs-stop"><span class="vs-cap"></span><div class="vs-name">Esperando <b>3</b></div></div>
+<div class="vs-stop"><span class="vs-cap"></span><div class="vs-name">Hecho <b>11</b></div></div>
+</div><nav class="ph-tabs"><a href="#" class="on"><span class="ln"></span><span>Hoy<b>9</b></span></a><a href="#" class=""><span class="ln"></span><span>Tablero<b>22</b></span></a><a href="#" class=""><span class="ln"></span><span>Tickets<b>4</b></span></a><a href="#" class=""><span class="ln"></span><span>Salidas<b>3</b></span></a></nav></div></div><div class="ph-col"><div class="mk-note">Aprobar salida<span>Denegar | Aprobar · mantén para programar</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">1 de 3</span></div><div class="ph-body"><div class="kind"><i></i>Salida · Slack</div><h2>Respuesta en el hilo de deploy</h2><div class="k">Destino exacto</div><div class="sa-route"><div class="sa-stop"><span>Slack · Workspace</span><b>designli.slack.com</b></div><div class="sa-stop"><span>Canal</span><b>#scout-dev</b></div><div class="sa-stop"><span>En el hilo de</span><b>Matt Ross · 09:31<small>"andres can you confirm the env var before 2pm?"</small></b></div></div><div class="k">Contexto</div><div class="ctx">Matt sostiene el deploy a prod hasta confirmar la variable.</div><div class="k">Texto exacto que se enviará</div><div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div><div class="meta"><span>Claude · 10:38 · caduca 14:00</span><span>Datos de muestra.</span></div></div>
+<div class="ph-dock"><button class="btn" type="button" style="height:40px;border-color:transparent"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5l2 2L5 11H3V9z"/></svg>Editar el texto</button><div class="pair"><button class="btn" type="button" style="height:58px">Denegar</button><button class="btn p" type="button">Aprobar y enviar<span class="ap-v">v3</span></button></div><div class="hint">Mantén pulsado Aprobar para programar</div></div></div></div><div class="ph-col"><div class="mk-note">Responder ticket<span>opciones lado a lado</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Tickets</a><span class="right">Claude escuchando</span></div><div class="ph-body"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="ctx">«Ajustar onboarding, paso 2» ya está en staging. Laura (QA) aún no lo revisa.</div><div class="tk-pair"><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button></div><div class="tk-rec"><span class="ln cl"></span><span><b>Claude recomienda B:</b> el cliente pidió ver QA antes de cerrar.</span></div></div><div class="ph-dock"><div class="ph-reply"><span>Responde o elige arriba…</span><button class="ico-btn" type="button" aria-label="Adjuntar imagen"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button></div><div class="pair"><button class="btn" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>Marcar hecho</button><button class="btn p" type="button" style="height:52px;font-size:16px">Responder</button></div><div class="hint">Al responder despierta la sesión de Claude que preguntó.</div></div></div></div></div></section>
+<div class="mk-cap"><b>Estados</b><span>Después de firmar y después de responder. Iguales en A y B.</span></div>
+<div class="ph-stage" style="padding-top:8px"><div class="ph-col"><div class="mk-note">Enviado<span>con siguiente a mano</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">2 de 3</span></div><div class="ph-done">
+<svg width="120" height="40" viewBox="0 0 120 40" aria-hidden="true"><path d="M6 20H92" class="sv-ln s-sl"/><circle cx="100" cy="20" r="11" class="sv-ring on"/><path d="M95 20.5l3.5 3.5 6-7" fill="none" class="s-ink" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<h2>Enviado a #scout-dev</h2><p>10:44 · en el hilo de Matt.<br>La sesión de Claude lo publicó por ti.</p><a class="btn" href="#">Ver en Slack <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div>
+<div class="ph-dock"><button class="btn p" type="button">Siguiente: Freightmate <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></button><div class="hint">Quedan 2 por firmar.</div></div></div></div><div class="ph-col"><div class="mk-note">Denegada<span>deshacer 8 s</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">2 de 3</span></div><div class="ph-body"><div class="kind"><i></i>Salida · Slack</div><h2>Respuesta en el hilo de deploy</h2><div class="k">Destino exacto</div><div class="sa-route"><div class="sa-stop"><span>Slack · Workspace</span><b>designli.slack.com</b></div><div class="sa-stop"><span>Canal</span><b>#scout-dev</b></div><div class="sa-stop"><span>En el hilo de</span><b>Matt Ross · 09:31<small>"andres can you confirm the env var before 2pm?"</small></b></div></div><div class="k">Contexto</div><div class="ctx">Matt sostiene el deploy a prod hasta confirmar la variable.</div><div class="k">Texto exacto que se enviará</div><div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div><div class="meta"><span>Claude · 10:38 · caduca 14:00</span><span>Datos de muestra.</span></div></div>
+<div class="ph-toast"><span>Denegada. Claude no la enviará.</span><button class="btn" type="button">Deshacer</button></div><nav class="ph-tabs"><a href="#" class=""><span class="ln"></span><span>Hoy<b>9</b></span></a><a href="#" class=""><span class="ln"></span><span>Tablero<b>22</b></span></a><a href="#" class=""><span class="ln"></span><span>Tickets<b>4</b></span></a><a href="#" class="on"><span class="ln"></span><span>Salidas<b>3</b></span></a></nav></div></div><div class="ph-col"><div class="mk-note">Ticket respondido<span>Claude despertó</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Tickets</a><span class="right">Claude trabaja</span></div><div class="ph-body"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="ctx">«Ajustar onboarding, paso 2» ya está en staging. Laura (QA) aún no lo revisa.</div><button type="button" class="tk-opt rec pick"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button>
+<div class="k">Tu respuesta · 10:47</div><div class="msg cl" style="font-size:15.5px">B. Y recuérdale a Laura mañana a las 9.</div><div class="tk-rec"><span class="ln cl"></span><span><b>Claude despertó 10:47</b> y está en ello.</span></div></div><nav class="ph-tabs"><a href="#" class=""><span class="ln"></span><span>Hoy<b>9</b></span></a><a href="#" class=""><span class="ln"></span><span>Tablero<b>22</b></span></a><a href="#" class="on"><span class="ln"></span><span>Tickets<b>4</b></span></a><a href="#" class=""><span class="ln"></span><span>Salidas<b>3</b></span></a></nav></div></div></div>
+<div class="ph-stage" style="padding-top:8px"><div class="ph-col"><div class="mk-note">Programar<span>B: mantener pulsado Aprobar</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">3 pendientes</span></div><div class="ph-body"><div class="kind"><i></i>Salida · Slack</div><h2>Respuesta en el hilo de deploy</h2><div class="k">Destino exacto</div><div class="sa-route"><div class="sa-stop"><span>Slack · Workspace</span><b>designli.slack.com</b></div><div class="sa-stop"><span>Canal</span><b>#scout-dev</b></div><div class="sa-stop"><span>En el hilo de</span><b>Matt Ross · 09:31<small>"andres can you confirm the env var before 2pm?"</small></b></div></div><div class="k">Contexto</div><div class="ctx">Matt sostiene el deploy a prod hasta confirmar la variable.</div><div class="k">Texto exacto que se enviará</div><div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div><div class="meta"><span>Claude · 10:38 · caduca 14:00</span><span>Datos de muestra.</span></div></div>
+<div class="ph-scrim"></div><div class="ph-sheet" role="menu" aria-label="Aprobar y enviar v3"><span class="grab" aria-hidden="true"></span><span class="sh-h">Aprobar y enviar v3 · #scout-dev</span>
+<button class="sh-it on" type="button" role="menuitem"><b>Enviar en 20 s</b><small>Con Deshacer, como siempre</small></button>
+<button class="sh-it" type="button" role="menuitem" aria-expanded="true"><b>Programar…</b><small>Elige día y hora de salida</small></button>
+<div class="sh-when"><button class="btn" type="button">Hoy 16:00</button><button class="btn" type="button">mié 9:00</button><button class="btn" type="button">mar 9:00</button></div></div></div></div><div class="ph-col"><div class="mk-note">Programado<span>Sale mar 9:00 · Cambiar · Cancelar</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">2 pendientes · 1 programada</span></div><div class="ph-body"><div class="kind"><i></i>Salida · Slack</div><h2>Respuesta en el hilo de deploy</h2><div class="k">Destino exacto</div><div class="sa-route"><div class="sa-stop"><span>Slack · Workspace</span><b>designli.slack.com</b></div><div class="sa-stop"><span>Canal</span><b>#scout-dev</b></div><div class="sa-stop"><span>En el hilo de</span><b>Matt Ross · 09:31<small>"andres can you confirm the env var before 2pm?"</small></b></div></div><div class="k">Contexto</div><div class="ctx">Matt sostiene el deploy a prod hasta confirmar la variable.</div><div class="k">Texto programado · sale mar 9:00</div><div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div><div class="meta"><span>Claude · 10:38 · caduca 14:00</span><span>Datos de muestra.</span></div></div>
+<div class="ph-dock"><div class="ph-sched"><b><svg width="15" height="15" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 4v3.3l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Sale mar 9:00</b><span>a #scout-dev · firmada; al salir tendrá sus 20 s de Deshacer</span></div><div class="pair"><button class="btn" type="button">Cambiar</button><button class="btn" type="button">Cancelar</button></div></div></div></div></div>
+<div class="mk-cap" id="paridad-cap"><b>Lo del escritorio, en el teléfono</b><span>Todo lo acordado hoy en Salidas, Tickets y Tablero. Igual en A y B.</span></div>
+<div class="pp-wrap"><div class="ph-col" id="paridad"><div class="mk-note">Salida · afinar<span>semáforo, versiones, chat</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">3 pendientes</span></div><div class="pp-scroll"><div class="pp-org"><span class="ln cl" style="width:14px"></span>Ticket a17<span class="ring"></span><span class="ln gh" style="width:12px"></span>PR #59<span class="ring"></span><span class="ln sl" style="width:12px"></span>#scout-dev<button class="hist" type="button">Historial 9 <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div><div class="pp-route"><span class="ln sl"></span>#scout-dev<span class="sep">›</span>hilo de Matt 09:31<span class="sep">›</span>como Andrés</div><div class="pp-vers" aria-label="Versiones"><span class="pp-v">v1</span><span class="pp-v more">…</span><span class="pp-v">v4 ★</span><span class="pp-v cmp">v8</span><span class="pp-v on">v9</span><span class="lbl">vs v8 · 2 cambios</span></div>
+<div class="pp-text" data-sema style="margin-top:58px"><div class="pp-tool" role="toolbar" aria-label="Marcar texto"><button type="button"><i style="background:var(--keep-ink)"></i>Mantener</button><button type="button"><i style="background:var(--redo-ink)"></i>Reformular</button><button type="button"><i style="background:var(--drop-ink)"></i>Quitar</button><button type="button">Limpiar</button></div><mark class="m-keep">Confirmed, SCOUT_API_URL is set on staging.</mark> <mark class="m-redo">I'll double check prod</mark> right after 2pm <mark class="m-drop">and ping you here</mark>.</div>
+<div class="pp-chat"><span class="fold">6 vueltas anteriores · ver</span><div class="pp-turn"><b>Tú</b>más corto, sin saludo<small>10:31</small></div><div class="pp-turn"><b style="color:var(--cl-ink)">Claude</b>v9 lista<small>10:32</small></div></div></div>
+<div class="ph-dock" style="gap:8px"><span class="pp-marks"><i style="background:var(--keep-ink)"></i>1 mantener · <i style="background:var(--redo-ink)"></i>1 reformular · <i style="background:var(--drop-ink)"></i>1 quitar<button class="pp-x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span><div class="pp-in"><span>Pídele un cambio a Claude…</span><button class="send" type="button">Enviar</button></div><div class="pp-chips" aria-label="Tus pedidos frecuentes"><button class="pp-chip" type="button" title="agrupa: acórtalo · menos texto, porfa">Más corto</button><button class="pp-chip" type="button" title="agrupa: quita el hola · sin el saludo">Sin saludo</button><button class="pp-chip" type="button">En inglés</button><button class="pp-chip" type="button">Más directo</button></div><div class="ph-split"><button class="btn p" type="button">Aprobar y enviar<span class="ap-v">v9</span></button><button class="btn p ph-more" type="button" aria-haspopup="menu" aria-label="Enviar en 20 s o programar"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div></div></div><div class="ph-col"><div class="mk-note">Salida · memoria<span>cola libre, engram en hoja</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right"><span class="pp-count">3 pendientes · 1 programada</span></span></div><div class="pp-q" aria-label="Pendientes, en cualquier orden"><div class="pp-qi on"><b><span class="ln sl"></span>#scout-dev</b><small>Confirmed, SCOUT_API…</small><small>10 min · caduca 14:00</small></div><div class="pp-qi"><b><span class="ln bc"></span>Freightmate</b><small>Rates for the new lanes…</small><small>25 min</small></div><div class="pp-qi done"><b><span class="ln bc"></span>Bseen</b><small>Enviada 10:12</small></div></div>
+<div class="pp-scroll"><div class="pp-route"><span class="ln sl"></span>#scout-dev<span class="sep">›</span>hilo de Matt 09:31<span class="sep">›</span>como Andrés</div><div class="pp-text" style="margin-top:12px">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div></div>
+<div class="ph-scrim"></div><div class="ph-sheet" style="max-height:470px"><span class="grab"></span><div class="pp-mem"><div class="h"><span class="dot"></span>Memoria · engram<small>conectado</small></div><div class="pp-find">Buscar en la memoria</div>
+<div class="pp-obs"><span class="pp-type dec">decisión</span><span>Matt confirma por escrito, no por llamada<small>aplica a este mensaje</small></span><time>2 d</time></div>
+<div class="pp-obs"><span class="pp-type les">lección</span><span>Prod de Scout solo después de las 2pm</span><time>1 sem</time></div>
+<div class="pp-obs"><span class="pp-type pro">proceso</span><span>Deploys de Scout: staging, luego prod con OK de Matt</span><time>3 sem</time></div>
+<div class="pp-foot">Registrado en engram · board/a17 · sincronizado hace 1 min</div></div></div><div style="position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:var(--mute);z-index:7">Elige cualquiera arriba · desliza a la izquierda para saltarla</div></div></div><div class="ph-col"><div class="mk-note">Salida · deshacer y eliminar<span>20 s para arrepentirte</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Salidas</a><span class="right">2 pendientes</span></div><div class="pp-scroll"><div class="pp-route"><span class="ln sl"></span>#scout-dev<span class="sep">›</span>hilo de Matt 09:31<span class="sep">›</span>como Andrés</div><div class="pp-undo" role="status"><b>Enviando en 14 s</b><div class="pp-track" aria-hidden="true"><span class="ln sl"></span><span class="tk"></span><span class="end"></span></div><p>Slack no deja borrar desde Mesa: esta es la única forma de volver atrás.</p><button class="btn" type="button" style="height:52px;justify-content:center;font-size:16px">Deshacer</button></div>
+<div class="k">Enviadas hoy</div>
+<div class="pp-sent"><div class="row"><span class="ln bc" style="width:16px"></span><b>Bseen · comentario</b><button class="btn" type="button">Eliminar mensaje</button></div><span class="no">Va a la papelera de Basecamp · recuperable 25 días</span></div>
+<div class="pp-sent"><div class="row"><span class="ln bc" style="width:16px"></span><b>Freightmate · Campfire</b><button class="btn" type="button">Eliminar</button></div><span class="no">Borrar una línea de Campfire es permanente</span></div>
+<div class="pp-sent"><div class="row"><span class="ln sl" style="width:16px"></span><b>#buckhub-dev</b><button class="btn" type="button" disabled style="opacity:.45">Eliminar</button></div><span class="no">Slack no permite borrar desde Mesa · <a href="#" style="color:var(--ink);font-weight:600">Abrir en Slack</a></span></div></div>
+<div class="ph-toast" style="bottom:28px"><span>Bseen eliminado.</span><button class="btn" type="button">Restaurar</button></div></div></div><div class="ph-col"><div class="mk-note">Ticket · responder<span>archivos, @ tickets, engram</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Tickets</a><span class="right">Claude escuchando</span></div><div class="pp-scroll"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2 style="font:700 22px/1.3 'Hanken Grotesk';margin-top:8px">¿Cierro el to-do de Bseen o espero QA?</h2><div class="tk-pair" style="margin-top:4px"><button type="button" class="tk-opt"><b>A</b><span>Cerrar ahora<small>Hecho hoy para el cliente</small></span></button><button type="button" class="tk-opt rec pick"><b>B</b><span>Esperar a QA<small>Recordar a Laura 09:00</small></span></button></div><div class="tk-rec"><span class="ln cl"></span><span><b>Claude recomienda B.</b></span></div>
+<div style="margin-top:auto;padding-bottom:10px" class="pp-menu" role="listbox" aria-label="Referenciar ticket"><div class="q">@<b>fact</b> · tickets abiertos y de esta semana</div><div class="pp-mi on" role="option" aria-selected="true"><span class="ln" style="width:18px;background:var(--cl)"></span><span>¿Uso la plantilla vieja de factura?<small>b12 · cerrado hoy</small></span><span class="id">b12</span></div><div class="pp-mi" role="option"><span class="ln" style="width:18px"></span><span>Revisa las tarifas de Freightmate<small>a16 · cerrado hoy</small></span><span class="id">a16</span></div></div></div>
+<div class="ph-dock"><div class="pp-comp"><div class="pp-atts"><span class="pp-att"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>qa-checklist.pdf <small>184 KB</small><button class="pp-x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span><span class="pp-att ref"><b>@b13</b> PR #212<button class="pp-x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span></div><div class="txt">B, y adjunto el checklist. Mira también @fact</div><div class="bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">@ tickets · / acciones</span><button class="send" type="button">Responder</button></div></div><span class="pp-mem-l"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>En engram · bseen</span></div></div></div><div class="ph-col"><div class="mk-note">Nuevo pedido<span>Claude va a hacer</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><a class="back" href="#"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Tickets</a><span class="right"></span></div><div class="pp-scroll"><h2 style="font:700 22px/1.3 'Hanken Grotesk';margin-top:4px">¿Qué necesitas?</h2>
+<div class="pp-comp" style="margin-top:10px"><div class="txt">Cancela la respuesta a Matt, mueve el export de prospec a Esperando y crea una tarea para el lockfile de buckhub.</div><div class="pp-atts"><span class="pp-att"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>build-main.log <small>42 KB</small><button class="pp-x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span><span class="pp-att ref"><b>@a11</b> lockfile<button class="pp-x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span></div><div class="bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">@ tickets · / acciones</span></div></div>
+<div class="pp-plan" style="margin-top:12px"><div class="h">Claude va a hacer<small>antes de empezar</small></div>
+<div class="pp-act"><span class="ln sl"></span><span><b>Cancelar salida</b><small>Respuesta a Matt · #scout-dev</small></span><span class="gate">directo</span></div>
+<div class="pp-act"><span class="ln gh"></span><span><b>Mover en el tablero</b><small>Export CSV · En curso → Esperando</small></span><span class="gate">directo</span></div>
+<div class="pp-act"><span class="ln cl"></span><span><b>Crear tarea</b><small>Lockfile de buckhub · Todo</small></span><span class="gate">directo</span></div>
+<div class="pp-act"><span class="ln bc"></span><span><b>Escribir al cliente</b><small>Buckhub · pasa por Salidas</small></span><span class="gate ask">te pide OK</span></div></div>
+<div class="pp-chips" style="margin-top:10px;flex-wrap:wrap"><button class="pp-chip" type="button">Cancelar salida</button><button class="pp-chip" type="button">Mover</button><button class="pp-chip" type="button">Crear tarea</button><button class="pp-chip" type="button">Revisar PR</button></div></div>
+<div class="ph-dock"><button class="btn p" type="button">Enviar a Claude</button><span class="pp-mem-l" style="justify-content:center"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Se guarda en engram</span></div></div></div><div class="ph-col"><div class="mk-note">Tablero<span>B · carriles por fuente</span></div><div class="ph"><div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div><div class="ph-top"><h1>Tablero<span>En curso 4</span></h1></div><div class="ph-sts"><span class="tab">Inbox 9</span><span class="tab">Todo 6</span><span class="tab on">En curso 4</span><span class="tab">Esperando 3</span><span class="tab">Hecho 11</span></div>
+<div class="pp-lanes"><div class="pp-lane" style="--lane:var(--gh)"><div class="lh">GitHub<small>2</small></div><div class="pp-card drag"><b>Export CSV de prospec-admin</b><small>PR #212 · 2 hallazgos</small></div><div class="pp-card"><b>Review buckhub #88</b><small>PR #88 · +40 −12</small></div></div><div class="pp-lane" style="--lane:var(--sl)"><div class="lh">Slack<small>1</small></div><div class="pp-card"><b>Env var de Scout en prod</b><small>#scout-dev · Matt</small><span class="st you">Te espera</span></div></div><div class="pp-lane" style="--lane:var(--cl)"><div class="lh">Claude<small>1</small></div><div class="pp-card"><b>Resumen de hilos de Buckhub</b><small>Ticket a19 · desde 09:12</small></div></div><div class="pp-lane" style="--lane:var(--bc)"><div class="lh">Basecamp<small>0</small></div><div class="pp-quiet">Nada en curso</div></div></div>
+<div class="ph-scrim"></div><div class="ph-sheet"><span class="grab"></span><div class="sh-h">Mover «Export CSV de prospec-admin»</div><div class="pp-move"><button class="btn" type="button">Inbox<small>9</small></button><button class="btn" type="button">Todo<small>6</small></button><button class="btn on" type="button">En curso<small>aquí</small></button><button class="btn" type="button">Espera<small>3</small></button><button class="btn" type="button">Hecho<small>11</small></button></div><div class="sh-h" style="text-align:center">Se sincroniza con el GitHub Project · Sin sincronizar hasta confirmar</div></div></div></div></div>
+<div class="mk-end"></div>
+<script>
+(function(){var d=document.documentElement,b=document.body,q=new URLSearchParams(location.search);
+if(q.get('v'))b.dataset.view=q.get('v');if(q.get('theme')==='dark')d.dataset.theme='dark';
+function sync(){document.querySelectorAll('[data-show]').forEach(function(t){t.setAttribute('aria-pressed',String(t.dataset.show===b.dataset.view))});
+document.querySelector('[data-theme-toggle]').setAttribute('aria-pressed',String(d.dataset.theme==='dark'))}
+document.querySelectorAll('[data-show]').forEach(function(t){t.addEventListener('click',function(){b.dataset.view=t.dataset.show;sync()})});
+document.querySelector('[data-theme-toggle]').addEventListener('click',function(){d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';sync()});
+sync()})();
+</script>
+<script src="vendor/motion-14.3.1.js"></script><script src="mesa-motion.js"></script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js?token=4927661c-6daf-407e-a188-081ff1f0b489"></script>
+<!-- impeccable-live-end -->
+</body></html>

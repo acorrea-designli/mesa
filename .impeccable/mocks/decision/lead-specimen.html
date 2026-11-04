@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Mesa · Hoy</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f4f2ec;--ink:#111;--hot:#ff4f1f;--grey:#8a8780;--rule:#dedbd2;--raise:#fbfaf6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);font:400 15px/1.35 "Bricolage Grotesque",sans-serif;display:grid;grid-template-columns:216px 1fr 432px}
+.m{font:400 11px/1 "JetBrains Mono",monospace;letter-spacing:.04em;color:var(--grey)}
+.rail{border-right:1px solid var(--ink);padding:28px 20px;display:flex;flex-direction:column}
+.brand{font:800 44px/.9 "Bricolage Grotesque";letter-spacing:-.04em;font-variation-settings:"opsz" 96}
+.brand+.m{margin:8px 0 40px}
+.nav{display:flex;justify-content:space-between;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--rule);font-size:17px;font-weight:400;color:#3a3935}
+.nav .m{color:var(--grey);font-size:12px}
+.nav.on{font-weight:800;color:var(--ink);border-bottom:1px solid var(--ink)}
+.nav.on .m{color:var(--hot);font-weight:500}
+.rail .foot{margin-top:auto;line-height:1.7}
+.main{padding:28px 0 0;position:relative;overflow:hidden}
+.head{display:flex;align-items:flex-end;padding:0 32px;gap:16px}
+.head h1{font:800 76px/.8 "Bricolage Grotesque";letter-spacing:-.05em;font-variation-settings:"opsz" 96}
+.head .m{margin-bottom:4px}.head .r{margin-left:auto;text-align:right;line-height:1.6}
+.tabs{display:flex;gap:22px;padding:0 32px;margin:26px 0 0;border-bottom:1px solid var(--ink)}
+.tab{padding:0 0 10px;font-size:15px;color:var(--grey);margin-bottom:-1px;display:flex;gap:6px;align-items:baseline}
+.tab .m{font-size:11px}
+.tab.on{color:var(--ink);font-weight:700;border-bottom:3px solid var(--ink)}
+.cols,.row{display:grid;grid-template-columns:72px 56px 1fr 128px 148px;margin:0 32px}
+.cols{height:28px;align-items:center;border-bottom:1px solid var(--rule)}
+.cols span,.row>*{padding:0 12px}
+.cols span:first-child,.row>*:first-child{padding-left:0}
+.cols span+span,.row>*+*{border-left:1px solid var(--rule)}
+.row{height:58px;align-items:center;border-bottom:1px solid var(--rule);position:relative}
+.row>*{height:100%;display:flex;flex-direction:column;justify-content:center}
+.t{font-size:21px;letter-spacing:-.015em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t small{display:block;font:400 12.5px/1.3 "Bricolage Grotesque";letter-spacing:0;color:var(--grey);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl{width:32px;height:22px;border:1px solid var(--ink);display:grid;place-items:center;font:500 11px/1 "JetBrains Mono";color:var(--ink);letter-spacing:.02em}
+.need{font-size:13px;color:#3a3935}
+.you{color:var(--hot);font:500 11px/1 "JetBrains Mono";letter-spacing:.06em}
+.you::before{content:"";display:inline-block;width:7px;height:7px;background:var(--hot);margin-right:6px;border-radius:50%}
+.row.sel{background:var(--raise)}
+.row.sel::before{content:"";position:absolute;left:-32px;width:32px;height:100%;background:var(--paper)}
+.row.sel::after{content:"";position:absolute;left:-12px;top:0;bottom:0;width:4px;background:var(--ink)}
+.sec{display:flex;align-items:baseline;gap:12px;margin:22px 32px 0;padding-bottom:8px;border-bottom:1px solid var(--ink)}
+.sec b{font:700 15px "Bricolage Grotesque"}
+.row.dr .t{font-weight:300;color:#5b5953}
+.row.dr .t small{font-style:italic;color:#6d6a63}
+.row.dr .pl{border-style:dashed;color:var(--grey);border-color:var(--grey)}
+.bor{font:500 10px/1 "JetBrains Mono";letter-spacing:.1em;border:1px dashed var(--grey);color:#5b5953;padding:3px 5px;align-self:flex-start}
+.row.done .t{color:var(--grey)}
+.det{border-left:1px solid var(--ink);padding:28px 32px;background:var(--raise);display:flex;flex-direction:column}
+.det h2{font:700 34px/1 "Bricolage Grotesque";letter-spacing:-.035em;margin:12px 0 0;font-variation-settings:"opsz" 72}
+.k{font:500 10.5px/1 "JetBrains Mono";letter-spacing:.1em;color:var(--grey);text-transform:uppercase;margin:26px 0 9px}
+.dest{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--rule)}
+.dest b{font-weight:700;font-size:17px}
+.ctx{font-size:14px;line-height:1.5;color:#3a3935;padding-left:14px;border-left:2px solid var(--rule)}
+.ctx .m{display:block;margin-bottom:5px}
+.draft{border:1.5px dashed var(--ink);padding:18px 18px 20px;position:relative;background:var(--paper)}
+.draft .bor{position:absolute;top:-8px;left:12px;background:var(--raise);border:none;padding:0 6px;color:var(--ink)}
+.draft p{font:300 24px/1.25 "Bricolage Grotesque";letter-spacing:-.015em}
+.acts{display:flex;gap:8px;margin-top:28px}
+.btn{height:44px;padding:0 18px;display:grid;place-items:center;font:600 15px "Bricolage Grotesque";border:1px solid var(--ink)}
+.btn.p{background:var(--hot);border-color:var(--hot);color:#111;flex:1;font-weight:800}
+.note{margin-top:auto;line-height:1.6}
+</style></head><body>
+<aside class="rail">
+  <div class="brand">Mesa</div><div class="m">DESIGNLI · ANDRÉS</div>
+  <div class="nav on">Hoy <span class="m">9</span></div>
+  <div class="nav">Tablero <span class="m">23</span></div>
+  <div class="nav">Tickets <span class="m">4</span></div>
+  <div class="nav">Salidas <span class="m">3</span></div>
+  <div class="nav">Hecho hoy <span class="m">11</span></div>
+  <div class="foot m">wght 200 → 800<br>peso = tiempo esperando<br>Datos de muestra.</div>
+</aside>
+<main class="main">
+  <div class="head"><h1>Hoy</h1><span class="m r">MARTES 3 NOV<br>10:42 · 9 ESPERAN</span></div>
+  <div class="tabs"><span class="tab on">Todo <span class="m">9</span></span><span class="tab">GitHub <span class="m">4</span></span><span class="tab">Basecamp <span class="m">2</span></span><span class="tab">Slack <span class="m">2</span></span><span class="tab">Claude <span class="m">1</span></span></div>
+  <div class="cols m"><span>HORA</span><span>SRC</span><span>ASUNTO · PESO</span><span>NECESITA</span><span>ESTADO</span></div>
+  <div class="row sel"><span class="m">08:15</span><span><i class="pl">BC</i></span><div class="t" style="font-weight:800">Freightmate · cambio en tarifa por milla<small>"¿Pueden tenerlo para el viernes? El cliente lo pidió ayer"</small></div><span class="need">Respuesta</span><span><span class="you">TE ESPERA</span><span class="m" style="margin-top:6px">wght 800 · 2h 27m</span></span></div>
+  <div class="row"><span class="m">07:35</span><span><i class="pl">SL</i></span><div class="t" style="font-weight:780">#bseen-qa · ¿listo el build de QA?<small>Camila: "avísame cuando puedas probarlo"</small></div><span class="need">Respuesta</span><span><span class="you">TE ESPERA</span><span class="m" style="margin-top:6px">wght 780 · 3h 07m</span></span></div>
+  <div class="row"><span class="m">09:02</span><span><i class="pl">GH</i></span><div class="t" style="font-weight:640">prospec-admin #212 · feat: bulk export<small>Review solicitado · +418 −36 · monitor: 2 hallazgos</small></div><span class="need">Aprobar PR</span><span><span class="you">TE ESPERA</span><span class="m" style="margin-top:6px">wght 640 · 1h 40m</span></span></div>
+  <div class="row"><span class="m">09:31</span><span><i class="pl">SL</i></span><div class="t" style="font-weight:520">#scout-dev · hilo de deploy<small>Matt: "andres can you confirm the env var before 2pm?"</small></div><span class="need">Respuesta</span><span><span class="you">TE ESPERA</span><span class="m" style="margin-top:6px">wght 520 · 1h 11m</span></span></div>
+  <div class="row"><span class="m">10:05</span><span><i class="pl">CL</i></span><div class="t" style="font-weight:420">¿Cierro el to-do de Bseen o espero QA?<small>Ticket b14 · Claude pregunta</small></div><span class="need">Decisión</span><span><span class="you">TE ESPERA</span><span class="m" style="margin-top:6px">wght 420 · 37m</span></span></div>
+  <div class="row"><span class="m">10:20</span><span><i class="pl">GH</i></span><div class="t" style="font-weight:300">buckhub #88 · fix: token refresh<small>Monitor: sin hallazgos · listo para aprobar</small></div><span class="need">Aprobar PR</span><span><span class="m" style="color:var(--ink)">LIMPIO</span><span class="m" style="margin-top:6px">wght 300 · 22m</span></span></div>
+  <div class="row"><span class="m">10:41</span><span><i class="pl">BC</i></span><div class="t" style="font-weight:200">Prospec · comentario nuevo en hill chart<small>Sin pedido directo</small></div><span class="need">Leer</span><span><span class="m" style="color:var(--ink)">NUEVO</span><span class="m" style="margin-top:6px">wght 200 · 1m</span></span></div>
+  <div class="sec"><b>Salidas · esperan tu firma</b><span class="m">3 BORRADORES · NADA SE ENVÍA SIN TU OK</span></div>
+  <div class="row dr"><span class="m">10:38</span><span><i class="pl">SL</i></span><div class="t">→ #scout-dev · hilo de deploy<small>Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</small></div><span class="need">Aprobar</span><span><span class="bor">BORRADOR</span></span></div>
+  <div class="row dr"><span class="m">10:40</span><span><i class="pl">BC</i></span><div class="t">→ Freightmate · tarifa por milla<small>Sí, lo tenemos para el viernes. Mañana subo una vista previa.</small></div><span class="need">Aprobar</span><span><span class="bor">BORRADOR</span></span></div>
+  <div class="row dr"><span class="m">10:41</span><span><i class="pl">SL</i></span><div class="t">→ DM Camila · build de QA<small>Lo subo en 20 min y te aviso por aquí.</small></div><span class="need">Aprobar</span><span><span class="bor">BORRADOR</span></span></div>
+</main>
+<aside class="det">
+  <div class="m">SALIDA · SLACK · 1 DE 3</div>
+  <h2>Respuesta en el hilo de deploy</h2>
+  <div class="k">Destino exacto</div>
+  <div class="dest"><i class="pl">SL</i><b>#scout-dev</b><span class="m">· HILO DE MATT · 09:31</span></div>
+  <div class="k">Contexto</div>
+  <div class="ctx"><span class="m">MATT · 09:31</span>andres can you confirm the env var before 2pm? we are holding the prod deploy</div>
+  <div class="k">Texto que se enviará</div>
+  <div class="draft"><span class="bor">BORRADOR</span><p>Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</p></div>
+  <div class="acts"><span class="btn p">Aprobar y enviar</span><span class="btn">Editar</span><span class="btn">Denegar</span></div>
+  <div class="note m">Redactado por Claude · 10:38<br>Datos de muestra.</div>
+</aside>
+</body></html>

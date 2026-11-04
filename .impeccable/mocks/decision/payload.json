@@ -1,0 +1,73 @@
+{
+  "title": "Elige el mundo visual del board",
+  "question": "El sorteo asignó el Tablero de Salidas. Quédatelo, toma una alternativa o vuelve a sortear.",
+  "options": [
+    {
+      "id": "assigned",
+      "kind": "assigned",
+      "label": "Tablero de Salidas",
+      "kicker": "THE ROLL",
+      "lineage": "Solari split-flap departure boards, estaciones y aeropuertos",
+      "thesis": "Tu día como tablero de llegadas y salidas: lo que llega a tu mesa y lo que sale en tu nombre.",
+      "palette": ["#14181f", "#232a35", "#f2efe6", "#ffc629", "#3fb37f", "#e5533d", "#5aa2ff"],
+      "materials": ["flaps de grafito con letra blanca cálida", "carcasa azul noche", "celdas de estado a color"],
+      "viewport": "Riel izquierdo (Hoy, Tablero, Tickets, Salidas). Al centro, filas tipo vuelo: hora, origen (GitHub, Basecamp, Slack, Claude), asunto, qué necesita y estado. A la derecha, el detalle con la fuente y las acciones.",
+      "risk": "Si las filas se vuelven decoración retro, lee como disfraz y no como herramienta.",
+      "raised": [
+        {"from": "wayfinding-cartography-signage-terminal-yellow-wayfinding", "raise": "El amarillo se reserva para un solo significado, \"te espera a ti\", y no aparece en ningún otro lugar."},
+        {"from": "editorial-sequence-montage-botanical-folio-season", "raise": "Todas las filas tienen la misma anatomía y la misma escala: origen, asunto, necesita y estado siempre en las mismas columnas."},
+        {"from": "pop-culture-shelf-doujin-event-catalog", "raise": "El estado también es una marca y no solo un color: lo hecho se tacha y lo seleccionado se enmarca."},
+        {"from": "digital-design-canon-monochrome-product-marketing", "raise": "Cada fila trae su prueba: un extracto real de la fuente (la línea del cliente, el título del PR)."},
+        {"from": "notation-diagram-systems-star-atlas", "raise": "La urgencia es una sola rampa ordenada (antigüedad por quién espera) y no tres badges sueltos."},
+        {"from": "ikeda-datamatics", "raise": "Una sola cara tabular para los datos, con columnas exactas y horas alineadas."}
+      ],
+      "html": ".impeccable/mocks/decision/assigned.html"
+    },
+    {
+      "id": "model-pick",
+      "kind": "pick",
+      "label": "Bahía de fichas",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "fichas de progreso de vuelo en una bahía de control",
+      "thesis": "Cada pedido es una ficha que se desliza entre bahías; el color del portafichas dice quién la mandó.",
+      "palette": ["#2b2f33", "#e9e2cf", "#7fb0d9", "#e79aa3", "#f0c45a", "#1d1f22"],
+      "materials": ["fichas de cartulina", "portafichas de color", "anotación a mano"],
+      "viewport": "Bahías en columnas (Inbox, Todo, En curso, Esperando, Hecho) con fichas apiladas; el portafichas azul es tuyo, el rosa de Claude y el ámbar es para enviar.",
+      "risk": "Es poco conocida fuera de aviación y un kanban con otra piel puede leer como lo de siempre.",
+      "html": ".impeccable/mocks/decision/model-pick.html"
+    },
+    {
+      "id": "challenger-wayfinding",
+      "kind": "challenger",
+      "catalogId": "wayfinding-cartography-signage-terminal-yellow-wayfinding",
+      "label": "Señalética de terminal",
+      "verdict": "competitive",
+      "lineage": "señalética amarilla de aeropuerto",
+      "thesis": "Solo la próxima decisión, en grande, con la distancia en minutos.",
+      "palette": ["#ffd200", "#111111", "#ffffff", "#2a2a2a"],
+      "materials": ["paneles amarillos", "pictogramas blancos sobre negro"],
+      "viewport": "Una banda amarilla arriba con la próxima decisión (Aprobar mensaje a #acme-dev, 3 en cola) y debajo la cola en bandas negras.",
+      "case": "Gana en el teléfono (una decisión a la vez) pero pierde en el escritorio, donde necesitas ver todo el día.",
+      "risk": "El amarillo a pantalla completa cansa en una pestaña abierta 8 horas.",
+      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding-hero.webp",
+      "html": ".impeccable/mocks/decision/challenger-wayfinding.html"
+    },
+    {"id": "challenger-botanical", "kind": "challenger", "catalogId": "editorial-sequence-montage-botanical-folio-season", "label": "Folio botánico", "verdict": "declined", "lineage": "láminas botánicas por estación", "thesis": "Cada pedido como una planta en su estación.", "palette": ["#f3ecd9", "#4f6b3a", "#b8322a"], "materials": ["lámina", "grabado"], "viewport": "Cinco láminas alineadas por etapa.", "risk": "Crema y serif: el default de siempre.", "case": "No identifica a un ingeniero y oculta el estado tras la metáfora.", "kept": "Escala y anatomía fijas en cada fila."},
+    {"id": "challenger-doujin", "kind": "challenger", "catalogId": "pop-culture-shelf-doujin-event-catalog", "label": "Catálogo de convención", "verdict": "declined", "lineage": "catálogos de círculos en papel periódico", "thesis": "Cientos de celdas, marcadas a mano.", "palette": ["#e9e6df", "#151515", "#d6336c"], "materials": ["papel periódico", "birome"], "viewport": "Grilla densa de miniaturas.", "risk": "Ilegible con 15 ítems de texto.", "case": "Tus ítems son texto y no miniaturas, así que la grilla no tiene qué mostrar.", "kept": "El estado como marca: tachado o enmarcado."},
+    {"id": "challenger-monochrome", "kind": "challenger", "catalogId": "digital-design-canon-monochrome-product-marketing", "label": "Monocromo de producto", "verdict": "declined", "lineage": "marketing de software neutral", "thesis": "Cada afirmación con su prueba.", "palette": ["#fafafa", "#111111", "#4f46e5"], "materials": ["escala neutra"], "viewport": "Pares afirmación/prueba.", "risk": "Es exactamente el look genérico que no quieres.", "case": "Cae en el look genérico, tu anti-goal explícito.", "kept": "Cada fila con su extracto de fuente como prueba."},
+    {"id": "challenger-atlas", "kind": "challenger", "catalogId": "notation-diagram-systems-star-atlas", "label": "Atlas estelar", "verdict": "declined", "lineage": "cartas celestes", "thesis": "Importancia como magnitud.", "palette": ["#0e1a33", "#f4f1e8", "#d9534f"], "materials": ["carta", "linterna roja"], "viewport": "Campo de puntos por magnitud.", "risk": "Bello pero no se lee como lista de trabajo.", "case": "Un campo espacial no sirve para decidir cosas en orden.", "kept": "La urgencia como una sola rampa ordenada."},
+    {"id": "challenger-ikeda", "kind": "challenger", "catalogId": "ikeda-datamatics", "label": "Datamatics", "verdict": "declined", "lineage": "Ryoji Ikeda", "thesis": "Campo de datos en blanco y negro.", "palette": ["#000000", "#ffffff"], "materials": ["barras", "mono"], "viewport": "Columnas de código de barras.", "risk": "Estroboscópico, agotador todo el día.", "case": "Sin color de estado no se distingue lo que te espera.", "kept": "Una cara tabular con columnas exactas."}
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "canon": true,
+  "canonCard": {
+    "label": "El estándar de la categoría",
+    "thesis": "Un kanban oscuro tipo Linear, con sidebar e issues en lista, ejecutado impecable.",
+    "palette": ["#0f1011", "#1c1d1f", "#e6e6e6", "#5e6ad2"],
+    "materials": ["grilla limpia", "hairlines", "un acento violeta"],
+    "viewport": "Sidebar, lista de ítems agrupada por estado y panel de detalle.",
+    "risk": "Indistinguible de cualquier herramienta, que es justo lo que pediste evitar.",
+    "html": ".impeccable/mocks/decision/canon.html"
+  },
+  "steer": true
+}

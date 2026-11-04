@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=1440">
+<title>Mesa · Tickets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mesa mockup: tickets. Generated from the shared shell; tokens copied from screens/hoy.html. Sample data. -->
+<style>
+:root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--ink:#1c1d21;--dim:#6f717a;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c}
+:root{--mute:#5d5f68;--ink2:#3e4047;--need:#2c2e33;--rule2:#dcd8cf;--edge:#c3beb2;--gh-ink:#b8000e;--sl-ink:#00777b;--cl-ink:#8a5300;--bc-ink:#006b4d;--gh-tint:#fbe6e5;--sl-tint:#e6f6f5;--cl-tint:#fdf0dc;--bc-tint:#e2f5ed;--shade:rgba(28,29,33,.10)}
+[data-theme="dark"]{--gnd:#17191d;--deep:#111316;--raise:#20232a;--rule:#2b2f37;--ink:#f1efe9;--dim:#8e939c;--gh:#ff5d52;--sl:#2ec5c2;--cl:#ffb428;--bc:#3cc983;--mute:#9a9fa8;--ink2:#c7cbd2;--need:#dadde2;--rule2:#23262d;--edge:#3d424b;--gh-ink:#ff8f86;--sl-ink:#74dcd9;--cl-ink:#ffc965;--bc-ink:#7fdca4;--gh-tint:#3a1f1e;--sl-tint:#123130;--cl-tint:#3a2d14;--bc-tint:#15301f;--shade:rgba(0,0,0,.40)}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--deep);color-scheme:light}
+[data-theme="dark"]{color-scheme:dark}
+body{width:1440px;background:var(--deep);color:var(--ink);font:500 14px/1.3 "Hanken Grotesk",sans-serif;font-variant-numeric:tabular-nums;caret-color:var(--ink)}
+::selection{background:var(--ink);color:var(--gnd)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+textarea,input{font:inherit;color:var(--ink);caret-color:var(--ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+a{color:inherit;text-decoration:none;text-underline-offset:3px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--edge);border-radius:5px;border:2px solid var(--gnd)}::-webkit-scrollbar-track{background:transparent}
+
+/* mock chrome (not part of the product) */
+.mk-bar{height:56px;display:flex;align-items:center;gap:18px;padding:0 28px;border-bottom:1px solid var(--rule);background:var(--deep)}
+.mk-bar strong{font-size:15px;font-weight:700}
+.mk-bar .mk-sub{color:var(--mute);font-size:12.5px}
+.mk-seg{display:flex;border:1px solid var(--edge);border-radius:6px;overflow:hidden}
+.mk-seg button{height:30px;padding:0 12px;font-size:13px;font-weight:600;color:var(--ink2);border-right:1px solid var(--edge)}
+.mk-seg button:last-child{border-right:0}
+.mk-seg button[aria-pressed="true"]{background:var(--ink);color:var(--gnd)}
+.mk-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--mute)}
+.mk-cap{margin:44px 28px 14px;display:flex;align-items:baseline;gap:14px}
+.mk-cap b{font-size:16px;font-weight:700}
+.mk-cap span{color:var(--mute);font-size:13px}
+.mk-frame{margin:0 0 0 0;border-bottom:1px solid var(--rule)}
+.mk-grid{display:flex;flex-wrap:wrap;gap:24px;padding:0 28px 8px;align-items:flex-start}
+.mk-panel{background:var(--gnd);border:1px solid var(--rule);border-radius:8px;overflow:hidden;position:relative}
+.mk-panel>.mk-tag{z-index:3;position:absolute;right:12px;top:10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.mk-end{height:56px}
+
+/* app frame */
+.app{width:1440px;height:900px;background:var(--gnd);display:grid;grid-template-columns:184px 1fr;overflow:hidden;position:relative}
+
+/* rail, verbatim anatomy from hoy.html */
+.rail{grid-row:1/-1;background:var(--deep);border-right:1px solid var(--rule);padding:22px 14px;display:flex;flex-direction:column;gap:3px}
+.brand{display:flex;align-items:center;gap:10px;font:700 20px/1.3 "Hanken Grotesk";letter-spacing:.02em;margin:0 6px 4px}
+.brand svg{flex:none}
+.who{color:var(--mute);font-size:12px;margin:0 6px 22px 38px}
+.nav{display:flex;justify-content:space-between;align-items:center;height:38px;padding:0 10px;border-radius:6px;color:var(--ink2);font-weight:600;border-left:3px solid transparent}
+.nav b{font-weight:600;font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.nav.on{background:var(--raise);color:var(--ink);border-left-color:var(--ink)}
+.nav.on b{color:var(--ink)}
+.nav.foot{margin-top:auto;color:var(--mute)}
+
+/* shared pieces from hoy.html */
+.tabs{display:flex;gap:6px;align-items:center}
+.tab{height:30px;padding:0 12px;display:flex;align-items:center;gap:7px;border:1px solid var(--rule);border-radius:6px;color:var(--ink2);font-weight:600;font-size:13px;white-space:nowrap;flex:none}
+.tab.on{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.tab u{width:8px;height:8px;border-radius:50%}
+.sort{margin-left:auto;color:var(--mute);font-size:12px}
+.src{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+.src i{width:10px;height:10px;border-radius:50%;flex:none}
+.subj{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subj small{display:block;font-weight:400;font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.need{font-size:13px;font-weight:600;color:var(--need)}
+.st{justify-self:start;height:24px;padding:0 9px;border-radius:4px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.st.you{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.st.ok{border-color:var(--bc);color:var(--bc-ink)}
+.st.cl{border-color:var(--cl);color:var(--cl-ink)}
+.st.off{border-style:dashed;color:var(--mute)}
+.cols,.tk-cols,.sa-cols{padding-bottom:4px}
+.row,.tk-row,.sa-row,.ph-row,.setup-row{padding-block:6px}
+.grp{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;height:34px;display:flex;align-items:flex-end;padding-bottom:6px}
+.k{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;margin-top:16px}
+.k:first-child{margin-top:0}
+.kind{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--mute);letter-spacing:0;text-transform:none}
+.kind i{width:10px;height:10px;border-radius:50%;background:var(--sl)}
+.dest{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--sl);border-radius:4px;padding:4px 9px;font-weight:600;font-size:13px;background:var(--sl-tint);display:inline-flex;align-items:center;gap:6px}
+.chip.gh{border-color:var(--gh);background:var(--gh-tint)}
+.chip.bc{border-color:var(--bc);background:var(--bc-tint)}
+.chip.cl{border-color:var(--cl);background:var(--cl-tint)}
+.chip.plain{border-color:var(--edge);background:var(--raise)}
+.ctx{margin-top:8px;font-size:13.5px;line-height:1.5;color:var(--ink2);border-left:2px solid var(--rule);padding-left:12px}
+/* exact text: the source line runs into the block from the top (no side-tab) */
+.msg{margin-top:10px;background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:16px 16px 14px;font-size:16px;line-height:1.5;position:relative}
+.msg::before{content:"";position:absolute;left:15px;top:-4px;width:30px;height:7px;border-radius:4px;background:var(--sl)}
+.msg.gh::before{background:var(--gh)}.msg.bc::before{background:var(--bc)}.msg.cl::before{background:var(--cl)}
+.acts{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.btn{height:40px;padding:0 16px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;line-height:1.35;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--raise)}
+.btn.p{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.btn.p:hover{background:var(--ink2);border-color:var(--ink2)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn[disabled],.btn.is-off{opacity:.45;cursor:not-allowed}
+.btn svg{flex:none}
+.meta{margin-top:18px;padding-top:12px;border-top:1px solid var(--rule);font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:12px}
+.ln{display:inline-block;width:22px;height:5px;border-radius:3px;background:var(--ink);flex:none}
+.ln.gh{background:var(--gh)}.ln.sl{background:var(--sl)}.ln.cl{background:var(--cl)}.ln.bc{background:var(--bc)}
+.ring{display:inline-block;width:11px;height:11px;border-radius:50%;border:2.5px solid var(--ink);background:var(--raise);flex:none;margin:0 -2px}
+.mark{display:inline-flex;align-items:center}
+.sample{font-size:12px;color:var(--mute)}
+.alert{display:flex;align-items:center;gap:14px;background:var(--raise);border:1px solid var(--ink);border-radius:6px;padding:10px 12px 10px 14px;font-size:13.5px;line-height:1.4;box-shadow:0 2px 8px var(--shade)}
+.alert p{flex:1}
+.alert p b{font-weight:700}
+.alert .acts{margin:0;flex-wrap:nowrap}
+.alert svg.brk{flex:none}
+
+/* SVG line language, themed through tokens */
+.sv-ln{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.s-gh{stroke:var(--gh)}.s-sl{stroke:var(--sl)}.s-cl{stroke:var(--cl)}.s-bc{stroke:var(--bc)}.s-ink{stroke:var(--ink)}
+.f-gh{fill:var(--gh)}.f-sl{fill:var(--sl)}.f-cl{fill:var(--cl)}.f-bc{fill:var(--bc)}
+.sv-cap{fill:var(--gnd);stroke:var(--ink);stroke-width:2.5}
+.sv-cap.on{fill:var(--raise);stroke-width:3.5}
+.sv-tick{stroke:var(--ink);stroke-width:1.6}
+.sv-ring{fill:var(--gnd);stroke:var(--ink);stroke-width:3}
+.sv-ring.on{fill:var(--raise)}
+.sv-ring.cl{stroke:var(--cl)}
+.sv-txt{fill:var(--ink)}
+.sv-mute{fill:var(--mute)}
+.sv-dash{stroke-dasharray:1 11}
+@keyframes mk-travel{0%{transform:translateX(0)}100%{transform:translateX(26px)}}
+.travel{animation:mk-travel 1.6s cubic-bezier(.16,1,.3,1) infinite}
+@media (prefers-reduced-motion:reduce){.travel{animation:none}}
+
+[data-variant]{display:none}
+body[data-view="a"] [data-variant="a"]{display:block}
+body[data-view="b"] [data-variant="b"]{display:block}
+
+.f-cl{fill:var(--cl)}
+.tk-app{grid-template-columns:184px 1fr 520px}
+.tk-main{padding:0 28px;min-width:0;overflow:hidden}
+.tk-head{display:flex;align-items:center;gap:14px;height:72px}
+.tk-head h1{font:700 20px/1.3 "Hanken Grotesk"}
+.tk-head h1 span{font-weight:500;font-size:13px;color:var(--mute);margin-left:12px}
+.live{margin-left:auto;display:inline-flex;align-items:center;gap:9px;min-height:30px;padding:4px 12px 4px 10px;border:1px solid var(--cl);border-radius:15px;background:var(--cl-tint);font-size:12.5px;font-weight:600;white-space:nowrap}
+.live small{font-weight:500;color:var(--ink2);font-size:12.5px}
+.live.off{border:1px dashed var(--ink);background:var(--raise)}
+.tk-tools{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.tk-tools .btn{margin-left:auto}
+.tk-cols,.tk-row{display:grid;grid-template-columns:44px 146px minmax(0,1fr) 50px 118px;column-gap:12px;align-items:center}
+.tk-cols{height:26px;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;border-bottom:1px solid var(--rule)}
+.tk-row{height:54px;border-bottom:1px solid var(--rule2);position:relative}
+.tk-row .id{font-weight:700;font-size:13px;color:var(--mute)}
+.tk-row .t{color:var(--mute);font-weight:600;font-size:13px}
+.tk-dir{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.tk-dir svg{flex:none}
+.tk-row .subj{font-size:14.5px}
+.tk-row.sel{background:var(--raise);margin:0 -28px;padding:0 28px;box-shadow:inset 3px 0 0 var(--cl)}
+.tk-row.sel .id{color:var(--ink)}
+.tk-row.closed .subj,.tk-row.closed .tk-dir{color:var(--mute)}
+.tk-pane{background:var(--deep);border-left:1px solid var(--rule);padding:22px 24px;display:flex;flex-direction:column;overflow:hidden}
+.tk-pane h2{font:700 22px/1.3 "Hanken Grotesk";margin-top:10px;text-wrap:balance}
+.tk-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.tk-opt{display:flex;gap:10px;align-items:flex-start;text-align:left;padding:12px;border:1px solid var(--edge);border-radius:6px;background:var(--raise);min-height:72px}
+.tk-opt:hover{border-color:var(--ink)}
+.tk-opt>b{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700}
+.tk-opt span{font-weight:600;font-size:14px;line-height:1.3}
+.tk-opt small{display:block;font-weight:400;font-size:12.5px;color:var(--mute);margin-top:3px}
+.tk-opt.rec{border-color:var(--cl)}
+.tk-opt.pick{border:2px solid var(--ink);padding:11px}
+.tk-opt.pick>b{background:var(--ink);color:var(--gnd)}
+.tk-rec{display:flex;gap:10px;align-items:baseline;margin-top:10px;font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.tk-rec .ln{transform:translateY(-3px)}
+.tk-rec b{color:var(--ink);font-weight:700}
+.tk-reply{margin-top:auto;background:var(--raise);border:1px solid var(--edge);border-radius:8px;overflow:hidden}
+.tk-reply:focus-within{border-color:var(--ink)}
+.tk-reply textarea{display:block;width:100%;height:84px;border:0;background:transparent;resize:none;padding:12px 14px;font-size:14.5px;line-height:1.45;outline:none}
+.tk-reply textarea::placeholder{color:var(--mute)}
+.tk-bar{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 8px;border-top:1px solid var(--rule)}
+.tk-bar .hint{font-size:12px;color:var(--mute)}
+.tk-bar .acts{margin:0 0 0 auto;flex-wrap:nowrap}
+.tk-bar .hint{white-space:nowrap}
+.ico-btn{width:32px;height:32px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink2)}
+.ico-btn:hover{background:var(--deep)}
+.tk-msgs{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.tk-msg .who{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;margin:0}
+.tk-msg .who time{font-weight:500;color:var(--mute)}
+.tk-msg p{font-size:14.5px;line-height:1.5;margin-top:3px}
+.tk-status{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:var(--ink2);font-weight:500}
+.tk-status b{font-weight:700;color:var(--ink)}
+/* variant B: expanded in place */
+.tk-wide{padding:0 28px;min-width:0}
+.tk-wide .tk-cols,.tk-wide .tk-row{grid-template-columns:44px 156px minmax(0,1fr) 140px 56px 124px}
+.tk-exp{margin:0 -28px;padding:20px 28px 22px 84px;background:var(--raise);border-bottom:1px solid var(--rule);display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:32px}
+.tk-exp h2{font:700 21px/1.3 "Hanken Grotesk"}
+.tk-exp .tk-reply{margin-top:0;background:var(--gnd)}
+.tk-exp .tk-opt{background:var(--gnd)}
+.tk-row.open{background:var(--raise);margin:0 -28px;padding:0 28px;border-bottom-color:transparent}
+.tk-proj{font-size:13px;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* states */
+.tk-st{width:520px;height:640px;background:var(--deep)}
+.tk-st .tk-pane{height:100%;border-left:0;padding-top:38px}
+.tk-none{width:840px;padding:18px 28px 32px}
+.tk-blank{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 0 24px;gap:10px}
+.tk-blank h2{font-size:20px;font-weight:700}
+.tk-blank p{color:var(--mute);font-size:13.5px;max-width:42ch;line-height:1.5}
+.tk-blank .btn{margin-top:8px}
+.tk-form{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.tk-form label{font-size:12.5px;font-weight:700;color:var(--ink2);margin-top:8px}
+.tk-field{background:var(--raise);border:1px solid var(--edge);border-radius:6px;min-height:38px;padding:8px 10px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tk-field.area{min-height:96px;align-items:flex-start;line-height:1.45}
+.tk-field .ph{color:var(--mute)}
+.tk-sel{justify-content:space-between}
+.tk-closed{opacity:.92}
+.tk-closed h2{color:var(--ink2)}
+
+
+/* Steer 72906846: tickets are the main work input. Files attach, actions plan before they run. */
+.tk-atts{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px 0}
+.tk-att{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 6px 0 9px;border:1px solid var(--edge);border-radius:5px;background:var(--gnd);font-size:12.5px;font-weight:600;max-width:100%}
+.tk-att svg{flex:none;color:var(--ink2)}
+.tk-att small{font-weight:500;color:var(--mute)}
+.tk-att .x{width:20px;height:20px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--mute)}
+.tk-att .x:hover{background:var(--deep);color:var(--ink)}
+.tk-plan{margin-top:12px;border:1px solid var(--edge);border-radius:8px;background:var(--raise);overflow:hidden}
+.tk-plan-h{display:flex;align-items:baseline;justify-content:space-between;padding:10px 12px 8px;font-size:12.5px;font-weight:700;color:var(--ink2)}
+.tk-plan-h small{font-weight:500;color:var(--mute)}
+.tk-act{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--rule);font-size:13.5px;line-height:1.35}
+.tk-act b{font-weight:700}
+.tk-act small{display:block;font-size:12px;color:var(--mute);margin-top:1px}
+.tk-act .gate{font-size:11.5px;font-weight:700;color:var(--ink2);white-space:nowrap}
+.tk-act .gate.ask{color:var(--ink);border:1px solid var(--ink);border-radius:4px;padding:2px 6px}
+.tk-verbs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tk-verb{height:28px;padding:0 10px;border:1px solid var(--edge);border-radius:14px;background:var(--raise);font-size:12.5px;font-weight:600;color:var(--ink2)}
+.tk-verb:hover{border-color:var(--ink);color:var(--ink)}
+
+/* Steer 7ffb3ab9: ticket references and engram memory. */
+.tk-att.ref{border-color:var(--ink);background:var(--raise)}
+.tk-att.ref .at{font-weight:800}
+.tk-mention{margin:0 12px 10px;border:1px solid var(--edge);border-radius:6px;background:var(--raise);box-shadow:0 6px 18px rgb(0 0 0 / .08);overflow:hidden}
+.tk-mention .q{padding:7px 10px;font-size:12px;color:var(--mute);border-bottom:1px solid var(--rule)}
+.tk-mention .q b{color:var(--ink);font-weight:700}
+.tk-mi{display:grid;grid-template-columns:36px 34px minmax(0,1fr);gap:8px;align-items:center;padding:7px 10px;font-size:13px}
+.tk-mi.on{background:var(--deep)}
+.tk-mi .id{font-weight:700;color:var(--ink2)}
+.tk-mi span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-mem{display:inline-flex;align-items:center;gap:6px}
+.tk-mem svg{flex:none}
+</style></head><body data-view="a">
+<header class="mk-bar"><strong>Mesa · Tickets</strong><span class="mk-sub">maqueta</span><div class="mk-seg" role="group" aria-label="Variante"><button type="button" data-show="a" aria-pressed="false">A · Lista + hilo</button><button type="button" data-show="b" aria-pressed="false">B · Abierto en su sitio</button></div>
+<div class="mk-right"><span>Datos de muestra.</span><div class="mk-seg"><button type="button" data-theme-toggle aria-pressed="false">Grafito (oscuro)</button></div></div></header>
+<section data-variant="a"><div class="app tk-app"><aside class="rail"><div class="brand"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" class="s-sl"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg>Mesa</div><div class="who">Designli · Andrés</div><a class="nav" href="#">Hoy <b>9</b></a><a class="nav" href="#">Tablero <b>22</b></a><a class="nav on" href="#">Tickets <b>4</b></a><a class="nav" href="#">Salidas <b>3</b></a><a class="nav foot" href="#">Hecho hoy <b>11</b></a></aside><main class="tk-main"><div class="tk-head"><h1>Tickets<span>Claude y tú, en un solo flujo</span></h1><span class="live"><svg width="28" height="10" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5H26" class="sv-ln s-cl" stroke-width="3" opacity=".35"/><circle cx="5" cy="5" r="3.5" class="f-cl travel" style="animation-duration:2.2s"/></svg>Claude escuchando <small>· te despierta al responder</small></span></div><div class="tk-tools"><span class="tab on">Abiertos 4</span><span class="tab">Te esperan 3</span><span class="tab">Cerrados hoy 2</span><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>Nuevo pedido para Claude</button></div><div class="tk-cols"><span>ID</span><span>Dirección</span><span>Asunto</span><span>Hora</span><span>Estado</span></div><div class="tk-row sel"><span class="id">b14</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">¿Cierro el to-do de Bseen o espero QA?<small>Bseen · elige A o B · Claude recomienda B</small></span><span class="t">10:05</span><span class="st you">Te espera</span></div><div class="tk-row "><span class="id">b15</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">¿Le contesto a Matt por escrito o pido llamada?<small>Scout · hilo de deploy en #scout-dev</small></span><span class="t">10:22</span><span class="st you">Te espera</span></div><div class="tk-row "><span class="id">b13</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">PR #212: ¿pido tests del export o apruebo?<small>prospec-admin · monitor: 2 hallazgos</small></span><span class="t">09:40</span><span class="st you">Te espera</span></div><div class="tk-row "><span class="id">a19</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg>Pediste</span><span class="subj">Resume los hilos de Buckhub de la semana<small>Buckhub · Claude trabaja desde las 09:12</small></span><span class="t">09:12</span><span class="st cl">Claude trabaja</span></div><div class="grp">Cerrados hoy</div><div class="tk-row closed"><span class="id">a16</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg>Pediste</span><span class="subj">Revisa las tarifas nuevas de Freightmate<small>Hecho por Claude · resumen en el ticket</small></span><span class="t">08:31</span><span class="st ok">Cerrado</span></div><div class="tk-row closed"><span class="id">b12</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">¿Uso la plantilla vieja de factura?<small>Respondiste A · 08:07</small></span><span class="t">08:05</span><span class="st ok">Cerrado</span></div></main><aside class="tk-pane"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="ctx">El to-do «Ajustar onboarding, paso 2» ya está en staging. Laura (QA) aún no lo revisa.</div><div class="k">Elige</div><div class="tk-opts"><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button></div><div class="tk-rec"><span class="ln cl"></span><span><b>Claude recomienda B:</b> el cliente pidió ver QA antes de cerrar (mensaje del 28 oct).</span></div><div class="k">Lo que pidió el cliente</div><div class="ctx">Dana Whitfield, 28 oct: "Please run it by QA before you close anything on onboarding."</div><div class="k">Fuente</div><div class="dest"><a class="chip bc" href="#">Basecamp · Bseen · To-do <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a><span class="chip cl">Sesión de Claude · designli</span></div><div style="height:20px"></div><div class="tk-reply"><div class="tk-atts"><span class="tk-att ref"><span class="at">@b12</span> plantilla vieja de factura <button class="x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span><span class="tk-att"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>qa-checklist-onboarding.pdf <small>184 KB</small><button class="x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span><span class="tk-att"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2.5 11.5l3.5-3.5 3 3 2-2 2.5 2.5"/></svg>staging-paso2.png <small>620 KB</small><button class="x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span></div><textarea aria-label="Respuesta" placeholder="Responde, elige A o B, o pide algo más"></textarea><div class="tk-bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">Archivos · <b style="color:var(--ink2)">@</b> tickets · <b style="color:var(--ink2)">/</b> acciones</span><div class="acts"><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>Marcar hecho</button><button class="btn sm p" type="button">Responder</button></div></div></div><div class="meta"><span>Al responder despierta la sesión que preguntó.</span><span class="tk-mem"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>En engram · bseen</span></div></aside></div></section><section data-variant="b"><div class="app"><aside class="rail"><div class="brand"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" class="s-sl"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg>Mesa</div><div class="who">Designli · Andrés</div><a class="nav" href="#">Hoy <b>9</b></a><a class="nav" href="#">Tablero <b>22</b></a><a class="nav on" href="#">Tickets <b>4</b></a><a class="nav" href="#">Salidas <b>3</b></a><a class="nav foot" href="#">Hecho hoy <b>11</b></a></aside><main class="tk-wide"><div class="tk-head"><h1>Tickets<span>Claude y tú, en un solo flujo</span></h1><span class="live"><svg width="28" height="10" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5H26" class="sv-ln s-cl" stroke-width="3" opacity=".35"/><circle cx="5" cy="5" r="3.5" class="f-cl travel" style="animation-duration:2.2s"/></svg>Claude escuchando <small>· te despierta al responder</small></span></div><div class="tk-tools"><span class="tab on">Abiertos 4</span><span class="tab">Te esperan 3</span><span class="tab">Cerrados hoy 2</span><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>Nuevo pedido para Claude</button></div><div class="tk-cols"><span>ID</span><span>Dirección</span><span>Asunto</span><span>Proyecto</span><span>Hora</span><span>Estado</span></div><div class="tk-row open"><span class="id">b14</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">¿Cierro el to-do de Bseen o espero QA?<small>elige A o B · Claude recomienda B</small></span><span class="tk-proj">bseen</span><span class="t">10:05</span><span class="st you">Te espera</span></div><div class="tk-exp"><div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="ctx">El to-do «Ajustar onboarding, paso 2» ya está en staging. Laura (QA) aún no lo revisa.</div><div class="tk-opts"><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button></div><div class="tk-rec"><span class="ln cl"></span><span><b>Claude recomienda B:</b> el cliente pidió ver QA antes de cerrar (mensaje del 28 oct).</span></div><div class="dest" style="margin-top:14px"><a class="chip bc" href="#">Basecamp · Bseen · To-do <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div></div><div style="display:flex;flex-direction:column"><div class="tk-reply"><textarea aria-label="Respuesta" placeholder="Responde, elige A o B, o pide algo más"></textarea><div class="tk-bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">Archivos · <b style="color:var(--ink2)">@</b> tickets · <b style="color:var(--ink2)">/</b> acciones</span><div class="acts"><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>Marcar hecho</button><button class="btn sm p" type="button">Responder</button></div></div></div><div class="meta" style="margin-top:10px"><span>Al responder despierta la sesión que preguntó.</span></div></div></div><div class="tk-row "><span class="id">b15</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">¿Le contesto a Matt por escrito o pido llamada?<small>hilo de deploy en #scout-dev</small></span><span class="tk-proj">scout</span><span class="t">10:22</span><span class="st you">Te espera</span></div><div class="tk-row "><span class="id">b13</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">PR #212: ¿pido tests del export o apruebo?<small>monitor: 2 hallazgos</small></span><span class="tk-proj">prospec-admin</span><span class="t">09:40</span><span class="st you">Te espera</span></div><div class="tk-row "><span class="id">a19</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg>Pediste</span><span class="subj">Resume los hilos de Buckhub de la semana<small>Claude trabaja desde las 09:12</small></span><span class="tk-proj">buckhub</span><span class="t">09:12</span><span class="st cl">Claude trabaja</span></div><div class="grp">Cerrados hoy</div><div class="tk-row closed"><span class="id">a16</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg>Pediste</span><span class="subj">Revisa las tarifas nuevas de Freightmate<small>resumen en el ticket</small></span><span class="tk-proj">freightmate</span><span class="t">08:31</span><span class="st ok">Cerrado</span></div><div class="tk-row closed"><span class="id">b12</span><span class="tk-dir"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>Claude pregunta</span><span class="subj">¿Uso la plantilla vieja de factura?<small>08:07</small></span><span class="tk-proj">freightmate</span><span class="t">08:05</span><span class="st ok">Cerrado</span></div><div class="sample" style="margin-top:14px">Datos de muestra.</div></main></div></section>
+<div class="mk-cap"><b>Estados</b><span>Panel de hilo a 520 px, como en la variante A.</span></div>
+<div class="mk-grid"><div class="mk-panel tk-none"><span class="mk-tag">Sin tickets</span><div class="tk-head"><h1>Tickets<span>Claude y tú, en un solo flujo</span></h1><span class="live"><svg width="28" height="10" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5H26" class="sv-ln s-cl" stroke-width="3" opacity=".35"/><circle cx="5" cy="5" r="3.5" class="f-cl travel" style="animation-duration:2.2s"/></svg>Claude escuchando <small>· te despierta al responder</small></span></div><div class="tk-tools"><span class="tab on">Abiertos 0</span><span class="tab">Te esperan 0</span><span class="tab">Cerrados hoy 2</span><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>Nuevo pedido para Claude</button></div><div class="tk-cols"><span>ID</span><span>Dirección</span><span>Asunto</span><span>Hora</span><span>Estado</span></div>
+<div class="tk-blank"><svg width="180" height="56" viewBox="0 0 180 56" aria-hidden="true"><path d="M6 20H66l12 12h18" class="sv-ln s-cl" opacity=".55"/><path d="M174 44H114l-12-12H90" class="sv-ln s-ink" opacity=".55"/><circle cx="90" cy="32" r="10" class="sv-ring on"/></svg><h2>Nada pendiente entre tú y Claude</h2><p>Cuando Claude necesite una decisión aparece aquí. Tú también puedes pedirle algo.</p><button class="btn p" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 2v10M2 7h10"/></svg>Nuevo pedido para Claude</button></div></div><div class="mk-panel tk-st"><span class="mk-tag">Claude no escucha</span><aside class="tk-pane"><div style="margin-bottom:14px"><span class="live off"><svg class="brk" width="32" height="14" viewBox="0 0 32 14" aria-hidden="true"><path d="M2 7H11" class="sv-ln s-cl" stroke-width="4"/><path d="M21 7H30" class="sv-ln s-cl" stroke-width="4"/><path d="M13 11L19 3" class="sv-ln s-ink" stroke-width="2"/></svg><span>Nadie escucha <small>· ninguna sesión atenta</small></span></span></div><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="tk-opts"><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button></div><div class="tk-rec"><span class="ln cl"></span><span><b>Claude recomienda B:</b> el cliente pidió ver QA antes de cerrar (mensaje del 28 oct).</span></div><div style="height:16px"></div>
+<div class="alert" style="margin-top:auto;margin-bottom:10px"><svg class="brk" width="32" height="14" viewBox="0 0 32 14" aria-hidden="true"><path d="M2 7H11" class="sv-ln s-cl" stroke-width="4"/><path d="M21 7H30" class="sv-ln s-cl" stroke-width="4"/><path d="M13 11L19 3" class="sv-ln s-ink" stroke-width="2"/></svg><p><b>Nadie te va a leer todavía.</b> Ninguna sesión de Claude escucha este ticket. Tu respuesta se guarda y la lee la próxima sesión que abras en G:/WorkSpace/designli.</p></div>
+<div class="tk-reply"><textarea aria-label="Respuesta" placeholder="Responde, elige A o B, o pide algo más"></textarea><div class="tk-bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">Archivos · <b style="color:var(--ink2)">@</b> tickets · <b style="color:var(--ink2)">/</b> acciones</span><div class="acts"><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>Marcar hecho</button><button class="btn sm p" type="button">Guardar respuesta</button></div></div></div></aside></div><div class="mk-panel tk-st"><span class="mk-tag">Respondido</span><aside class="tk-pane"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="tk-opts"><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec pick"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button></div>
+<div class="tk-msgs"><div class="tk-msg"><div class="who">Tú<time>10:47</time></div><p>B. Y recuérdale a Laura mañana a las 9, con el link de staging.</p></div></div>
+<div class="tk-status"><span class="live" style="margin:0"><svg width="28" height="10" viewBox="0 0 28 10" aria-hidden="true"><path d="M2 5H26" class="sv-ln s-cl" stroke-width="3" opacity=".35"/><circle cx="5" cy="5" r="3.5" class="f-cl travel" style="animation-duration:2.2s"/></svg>Claude trabaja <small>· despertó 10:47</small></span></div>
+<div style="height:16px"></div><div class="tk-reply"><textarea aria-label="Respuesta" placeholder="Añade algo más (opcional)"></textarea><div class="tk-bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">Archivos · <b style="color:var(--ink2)">@</b> tickets · <b style="color:var(--ink2)">/</b> acciones</span><div class="acts"><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>Marcar hecho</button><button class="btn sm p" type="button">Responder</button></div></div></div><div class="meta"><span>Se cierra cuando Claude termine o lo marques hecho.</span><span class="tk-mem"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Guardado en engram</span></div></aside></div><div class="mk-panel tk-st"><span class="mk-tag">Cerrado</span><aside class="tk-pane tk-closed"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg>b14 · Claude pregunta · 10:05</div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><div class="tk-opts"><button type="button" class="tk-opt"><b>A</b><span>Cerrar el to-do ahora<small>El cliente lo ve como hecho hoy</small></span></button><button type="button" class="tk-opt rec pick"><b>B</b><span>Esperar a QA<small>Y recordarle a Laura mañana 09:00</small></span></button></div>
+<div class="tk-msgs"><div class="tk-msg"><div class="who">Tú<time>10:47</time></div><p>B. Y recuérdale a Laura mañana a las 9, con el link de staging.</p></div>
+<div class="tk-msg"><div class="who"><span class="ln cl" style="width:14px"></span>Claude<time>10:51</time></div><p>Listo: dejé el to-do abierto y un recordatorio para Laura mañana 09:00.</p></div></div>
+<div class="tk-status"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg><span><b>Cerrado por ti</b> · 10:52</span></div>
+<div class="acts" style="margin-top:auto"><button class="btn sm" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3L2 6l3 3"/><path d="M2 6h7.5a4.5 4.5 0 010 9H6"/></svg>Reabrir</button></div><div class="meta"><span>Queda en Cerrados hoy hasta medianoche.</span><span class="tk-mem"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Decisión en engram</span></div></aside></div><div class="mk-panel tk-st" style="height:auto;min-height:640px"><span class="mk-tag">Nuevo pedido</span><aside class="tk-pane"><div class="kind"><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg>Nuevo pedido para Claude</div><h2>¿Qué necesitas?</h2>
+<div class="tk-form"><div class="tk-reply" style="margin-top:0"><textarea aria-label="Pedido">Cancela la respuesta a Matt, mueve el export de prospec a Esperando y crea una tarea para revisar el lockfile de buckhub con el log adjunto.</textarea><div class="tk-atts" style="padding:0 12px 10px"><span class="tk-att ref"><span class="at">@b13</span> PR #212 export <button class="x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span><span class="tk-att"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/></svg>build-main-1103.log <small>42 KB</small><button class="x" type="button" aria-label="Quitar"><svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 2l6 6M8 2L2 8"/></svg></button></span></div><div class="tk-mention" role="listbox" aria-label="Referenciar ticket"><div class="q">@<b>buck</b> · tickets abiertos y de esta semana</div><div class="tk-mi on" role="option" aria-selected="true"><span class="id">a19</span><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg><span>Resume los hilos de Buckhub de la semana</span></div><div class="tk-mi" role="option"><span class="id">a11</span><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-ink" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring cl" stroke-width="2.4"/></svg><span>Actualiza el lockfile de buckhub tras el bump de next</span></div><div class="tk-mi" role="option"><span class="id">b09</span><svg width="34" height="12" viewBox="0 0 34 12" aria-hidden="true"><path d="M2 6H24" class="sv-ln s-cl" stroke-width="4"/><circle cx="28" cy="6" r="4" class="sv-ring" stroke-width="2.4"/></svg><span>¿Pinneo pnpm 9 en el CI de buckhub?</span></div></div><div class="tk-bar"><button class="ico-btn" type="button" aria-label="Adjuntar archivo"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5L8 12.5a3 3 0 01-4.3-4.3l5.3-5.3a2 2 0 012.8 2.8L6.6 10.9a1 1 0 01-1.4-1.4L10 4.6"/></svg></button><span class="hint">Archivos · <b style="color:var(--ink2)">@</b> tickets · <b style="color:var(--ink2)">/</b> acciones</span></div></div>
+<div class="tk-plan"><div class="tk-plan-h">Claude va a hacer<small>antes de empezar</small></div>
+<div class="tk-act"><span class="ln sl"></span><span><b>Cancelar salida</b> · respuesta a Matt<small>Slack #scout-dev · hilo de deploy · aún no enviada</small></span><span class="gate">directo</span></div>
+<div class="tk-act"><span class="ln gh"></span><span><b>Mover en el tablero</b> · Export CSV<small>prospec-admin · En curso → Esperando</small></span><span class="gate">directo</span></div>
+<div class="tk-act"><span class="ln cl"></span><span><b>Crear tarea</b> · Revisar lockfile de buckhub<small>Todo · con build-main-1103.log</small></span><span class="gate">directo</span></div>
+<div class="tk-act"><span class="ln bc"></span><span><b>Escribir al cliente</b> si el lockfile es la causa<small>Basecamp · Buckhub · pasa por Salidas</small></span><span class="gate ask">te pide OK</span></div></div>
+<div class="tk-verbs" aria-label="Acciones frecuentes"><button class="tk-verb" type="button">Cancelar salida</button><button class="tk-verb" type="button">Mover en el tablero</button><button class="tk-verb" type="button">Crear tarea</button><button class="tk-verb" type="button">Revisar PR</button><button class="tk-verb" type="button">Investigar</button></div>
+<label>Relacionar con <span style="font-weight:500;color:var(--mute)">(opcional)</span></label><div class="tk-field"><span class="chip sl">Slack #buckhub-dev · hilo de Matt 09:05</span><span class="ph">PR, recording de Basecamp o hilo</span></div>
+<label>Proyecto</label><div class="tk-field tk-sel"><span>buckhub</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg></div></div>
+<div class="acts" style="margin-top:auto"><button class="btn p" type="button">Enviar a Claude</button><button class="btn" type="button">Cancelar</button></div><div class="meta"><span>Lo recoge la sesión que esté escuchando.</span><span class="tk-mem"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="8" cy="4" rx="5.5" ry="2"/><path d="M2.5 4v8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2V4M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2"/></svg>Se guarda en engram</span></div></aside></div></div>
+<div class="mk-end"></div>
+<script>
+(function(){var d=document.documentElement,b=document.body,q=new URLSearchParams(location.search);
+if(q.get('v'))b.dataset.view=q.get('v');if(q.get('theme')==='dark')d.dataset.theme='dark';
+function sync(){document.querySelectorAll('[data-show]').forEach(function(t){t.setAttribute('aria-pressed',String(t.dataset.show===b.dataset.view))});
+document.querySelector('[data-theme-toggle]').setAttribute('aria-pressed',String(d.dataset.theme==='dark'))}
+document.querySelectorAll('[data-show]').forEach(function(t){t.addEventListener('click',function(){b.dataset.view=t.dataset.show;sync()})});
+document.querySelector('[data-theme-toggle]').addEventListener('click',function(){d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';sync()});
+sync()})();
+</script>
+<script src="vendor/motion-14.3.1.js"></script><script src="mesa-motion.js"></script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js?token=4927661c-6daf-407e-a188-081ff1f0b489"></script>
+<!-- impeccable-live-end -->
+</body></html>

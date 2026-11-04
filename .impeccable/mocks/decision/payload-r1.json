@@ -1,0 +1,72 @@
+{
+  "title": "Elige el mundo visual del board · mano 2, más atrevida",
+  "question": "Formas ajenas a pleno compromiso. El sorteo puso al frente el Espécimen variable.",
+  "options": [
+    {
+      "id": "lead-specimen",
+      "kind": "challenger",
+      "catalogId": "variable-font-specimen",
+      "label": "Espécimen variable",
+      "kicker": "THE ROLL",
+      "lineage": "especímenes de fuentes variables de fundición",
+      "thesis": "El peso de la letra es la urgencia: cuanto más te espera algo, más negro se escribe.",
+      "palette": ["#111111", "#f4f2ec", "#ff4f1f", "#8a8780"],
+      "materials": ["papel blanco y tinta negra", "un acento de fundición", "lecturas mono diminutas"],
+      "viewport": "Riel con Hoy, Tablero, Tickets y Salidas. Al centro, la lista de lo que te espera con títulos en fuente variable cuyo peso va de fino (recién llegado) a negro (lleva horas). A la derecha, el detalle con un lector mono de origen, edad y destino.",
+      "risk": "Si el peso no se lee como urgencia en el primer vistazo, queda como ejercicio tipográfico.",
+      "raised": [
+        {"from": "emigre-bitmap-specimen", "raise": "Lo que todavía es borrador (un mensaje sin aprobar) se dibuja distinto de lo enviado, como un estado honesto."},
+        {"from": "pop-culture-shelf-character-goods-catalog", "raise": "Cada fuente (GitHub, Basecamp, Slack, Claude) tiene una placa fija y siempre en el mismo lugar."},
+        {"from": "crouwel-grid-specimen", "raise": "La grilla es visible y estructural: columnas exactas que no se mueven entre vistas."}
+      ],
+      "html": ".impeccable/mocks/decision/lead-specimen.html"
+    },
+    {
+      "id": "ch-transit",
+      "kind": "challenger",
+      "catalogId": "wayfinding-cartography-signage-midnight-transit-diagram",
+      "label": "Mapa de metro",
+      "verdict": "wins",
+      "lineage": "diagramas de metro esmaltados",
+      "thesis": "Tu tablero es una red: cada fuente es una línea de color y cada estado una estación.",
+      "palette": ["#0d1b3d", "#f5f3ee", "#e2382f", "#2f6fe0", "#f2a71b", "#2fa35b"],
+      "materials": ["esmalte azul medianoche", "estaciones de porcelana", "líneas a 45 y 90 grados"],
+      "viewport": "Arriba, la línea del día: Inbox, Todo, En curso, Esperando y Hecho como estaciones, con los ítems como paradas. Debajo, la lista de la estación elegida. El color de línea es la fuente: rojo GitHub, azul Slack, verde Basecamp y ámbar Claude.",
+      "case": "Gana en los dos ejes: el kanban ya es un recorrido y la fuente como color de línea se lee sola.",
+      "risk": "Si el diagrama crece con 30 ítems, puede volverse un mapa que hay que estudiar.",
+      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-midnight-transit-diagram-hero.webp",
+      "html": ".impeccable/mocks/decision/ch-transit.html"
+    },
+    {
+      "id": "ch-saville",
+      "kind": "challenger",
+      "catalogId": "brand-identity-canon-saville-catalog-sleeve",
+      "label": "Catálogo Factory",
+      "verdict": "competitive",
+      "lineage": "identidad de catálogo de Peter Saville",
+      "thesis": "Todo es una entrada numerada de catálogo, sobre negro mate, con códigos de color en vez de etiquetas.",
+      "palette": ["#0b0b0b", "#efefef", "#e94e1b", "#3a7bd5", "#f4c20d", "#36a852"],
+      "materials": ["negro mate", "trazos blancos finos", "tiras de color como código"],
+      "viewport": "Índice de entradas (b14, #212, BC-88) en orden estricto, cada una con una tira de color de su fuente. La entrada activa se decodifica a texto completo a la derecha.",
+      "case": "Tiene mucha identidad, pero los códigos de color en lugar de palabras le restan claridad.",
+      "risk": "Decodificar colores cansa cuando hay que decidir rápido.",
+      "hero": "https://impeccable.style/worlds/cards/brand-identity-canon-saville-catalog-sleeve-hero.webp",
+      "html": ".impeccable/mocks/decision/ch-saville.html"
+    },
+    {"id": "ch-emigre", "kind": "challenger", "catalogId": "emigre-bitmap-specimen", "label": "Bitmap Emigre", "verdict": "declined", "lineage": "especímenes bitmap de Emigre", "thesis": "Tipo de píxel a escala póster.", "palette": ["#f4f1ea", "#111111", "#00a3ff"], "materials": ["píxel", "semitono"], "viewport": "Titulares de píxel sobre columnas densas.", "risk": "Cansa como herramienta diaria.", "case": "El píxel no aporta claridad a una lista de decisiones.", "kept": "Borrador y enviado como dos renderizados honestos."},
+    {"id": "ch-character", "kind": "challenger", "catalogId": "pop-culture-shelf-character-goods-catalog", "label": "Catálogo de personajes", "verdict": "declined", "lineage": "catálogos de mascotas", "thesis": "Cada fuente como personaje.", "palette": ["#fde6ef", "#e0f1ff", "#ff5c8a"], "materials": ["pastel", "keyline blanco"], "viewport": "Grilla de personajes ranqueados.", "risk": "Infantiliza el trabajo con clientes.", "case": "No identifica a un ingeniero frente a clientes.", "kept": "Placa fija por fuente, siempre en el mismo sitio."},
+    {"id": "ch-crouwel", "kind": "challenger", "catalogId": "crouwel-grid-specimen", "label": "Grilla Crouwel", "verdict": "declined", "lineage": "Wim Crouwel", "thesis": "La grilla de construcción como diseño.", "palette": ["#ffffff", "#1a1a1a", "#1f4bff"], "materials": ["papel milimetrado", "letras de celda"], "viewport": "Letras monumentales construidas por celdas.", "risk": "Póster antes que herramienta.", "case": "Lee como cartel y no como producto.", "kept": "Grilla visible y estructural."}
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "canon": true,
+  "canonCard": {
+    "label": "El estándar de la categoría",
+    "thesis": "Un kanban oscuro tipo Linear, con sidebar e issues en lista, ejecutado impecable.",
+    "palette": ["#0f1011", "#1c1d1f", "#e6e6e6", "#5e6ad2"],
+    "materials": ["grilla limpia", "hairlines", "un acento violeta"],
+    "viewport": "Sidebar, lista de ítems agrupada por estado y panel de detalle.",
+    "risk": "Indistinguible de cualquier herramienta, que es justo lo que pediste evitar.",
+    "html": ".impeccable/mocks/decision/canon-r1.html"
+  },
+  "steer": true
+}

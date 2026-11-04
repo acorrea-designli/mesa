@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="es" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=1440">
+<title>Mesa · Tablero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mesa mockup: tablero. Generated from the shared shell; tokens copied from screens/hoy.html. Sample data. -->
+<style>
+:root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--ink:#1c1d21;--dim:#6f717a;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c}
+:root{--mute:#5d5f68;--ink2:#3e4047;--need:#2c2e33;--rule2:#dcd8cf;--edge:#c3beb2;--gh-ink:#b8000e;--sl-ink:#00777b;--cl-ink:#8a5300;--bc-ink:#006b4d;--gh-tint:#fbe6e5;--sl-tint:#e6f6f5;--cl-tint:#fdf0dc;--bc-tint:#e2f5ed;--shade:rgba(28,29,33,.10)}
+[data-theme="dark"]{--gnd:#17191d;--deep:#111316;--raise:#20232a;--rule:#2b2f37;--ink:#f1efe9;--dim:#8e939c;--gh:#ff5d52;--sl:#2ec5c2;--cl:#ffb428;--bc:#3cc983;--mute:#9a9fa8;--ink2:#c7cbd2;--need:#dadde2;--rule2:#23262d;--edge:#3d424b;--gh-ink:#ff8f86;--sl-ink:#74dcd9;--cl-ink:#ffc965;--bc-ink:#7fdca4;--gh-tint:#3a1f1e;--sl-tint:#123130;--cl-tint:#3a2d14;--bc-tint:#15301f;--shade:rgba(0,0,0,.40)}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--deep);color-scheme:light}
+[data-theme="dark"]{color-scheme:dark}
+body{width:1440px;background:var(--deep);color:var(--ink);font:500 14px/1.3 "Hanken Grotesk",sans-serif;font-variant-numeric:tabular-nums;caret-color:var(--ink)}
+::selection{background:var(--ink);color:var(--gnd)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+textarea,input{font:inherit;color:var(--ink);caret-color:var(--ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+a{color:inherit;text-decoration:none;text-underline-offset:3px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--edge);border-radius:5px;border:2px solid var(--gnd)}::-webkit-scrollbar-track{background:transparent}
+
+/* mock chrome (not part of the product) */
+.mk-bar{height:56px;display:flex;align-items:center;gap:18px;padding:0 28px;border-bottom:1px solid var(--rule);background:var(--deep)}
+.mk-bar strong{font-size:15px;font-weight:700}
+.mk-bar .mk-sub{color:var(--mute);font-size:12.5px}
+.mk-seg{display:flex;border:1px solid var(--edge);border-radius:6px;overflow:hidden}
+.mk-seg button{height:30px;padding:0 12px;font-size:13px;font-weight:600;color:var(--ink2);border-right:1px solid var(--edge)}
+.mk-seg button:last-child{border-right:0}
+.mk-seg button[aria-pressed="true"]{background:var(--ink);color:var(--gnd)}
+.mk-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--mute)}
+.mk-cap{margin:44px 28px 14px;display:flex;align-items:baseline;gap:14px}
+.mk-cap b{font-size:16px;font-weight:700}
+.mk-cap span{color:var(--mute);font-size:13px}
+.mk-frame{margin:0 0 0 0;border-bottom:1px solid var(--rule)}
+.mk-grid{display:flex;flex-wrap:wrap;gap:24px;padding:0 28px 8px;align-items:flex-start}
+.mk-panel{background:var(--gnd);border:1px solid var(--rule);border-radius:8px;overflow:hidden;position:relative}
+.mk-panel>.mk-tag{z-index:3;position:absolute;right:12px;top:10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.mk-end{height:56px}
+
+/* app frame */
+.app{width:1440px;height:900px;background:var(--gnd);display:grid;grid-template-columns:184px 1fr;overflow:hidden;position:relative}
+
+/* rail, verbatim anatomy from hoy.html */
+.rail{grid-row:1/-1;background:var(--deep);border-right:1px solid var(--rule);padding:22px 14px;display:flex;flex-direction:column;gap:3px}
+.brand{display:flex;align-items:center;gap:10px;font:700 20px/1.3 "Hanken Grotesk";letter-spacing:.02em;margin:0 6px 4px}
+.brand svg{flex:none}
+.who{color:var(--mute);font-size:12px;margin:0 6px 22px 38px}
+.nav{display:flex;justify-content:space-between;align-items:center;height:38px;padding:0 10px;border-radius:6px;color:var(--ink2);font-weight:600;border-left:3px solid transparent}
+.nav b{font-weight:600;font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+.nav.on{background:var(--raise);color:var(--ink);border-left-color:var(--ink)}
+.nav.on b{color:var(--ink)}
+.nav.foot{margin-top:auto;color:var(--mute)}
+
+/* shared pieces from hoy.html */
+.tabs{display:flex;gap:6px;align-items:center}
+.tab{height:30px;padding:0 12px;display:flex;align-items:center;gap:7px;border:1px solid var(--rule);border-radius:6px;color:var(--ink2);font-weight:600;font-size:13px;white-space:nowrap;flex:none}
+.tab.on{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.tab u{width:8px;height:8px;border-radius:50%}
+.sort{margin-left:auto;color:var(--mute);font-size:12px}
+.src{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+.src i{width:10px;height:10px;border-radius:50%;flex:none}
+.subj{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subj small{display:block;font-weight:400;font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.need{font-size:13px;font-weight:600;color:var(--need)}
+.st{justify-self:start;height:24px;padding:0 9px;border-radius:4px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.st.you{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.st.ok{border-color:var(--bc);color:var(--bc-ink)}
+.st.cl{border-color:var(--cl);color:var(--cl-ink)}
+.st.off{border-style:dashed;color:var(--mute)}
+.cols,.tk-cols,.sa-cols{padding-bottom:4px}
+.row,.tk-row,.sa-row,.ph-row,.setup-row{padding-block:6px}
+.grp{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;height:34px;display:flex;align-items:flex-end;padding-bottom:6px}
+.k{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase;margin-top:16px}
+.k:first-child{margin-top:0}
+.kind{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--mute);letter-spacing:0;text-transform:none}
+.kind i{width:10px;height:10px;border-radius:50%;background:var(--sl)}
+.dest{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--sl);border-radius:4px;padding:4px 9px;font-weight:600;font-size:13px;background:var(--sl-tint);display:inline-flex;align-items:center;gap:6px}
+.chip.gh{border-color:var(--gh);background:var(--gh-tint)}
+.chip.bc{border-color:var(--bc);background:var(--bc-tint)}
+.chip.cl{border-color:var(--cl);background:var(--cl-tint)}
+.chip.plain{border-color:var(--edge);background:var(--raise)}
+.ctx{margin-top:8px;font-size:13.5px;line-height:1.5;color:var(--ink2);border-left:2px solid var(--rule);padding-left:12px}
+/* exact text: the source line runs into the block from the top (no side-tab) */
+.msg{margin-top:10px;background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:16px 16px 14px;font-size:16px;line-height:1.5;position:relative}
+.msg::before{content:"";position:absolute;left:15px;top:-4px;width:30px;height:7px;border-radius:4px;background:var(--sl)}
+.msg.gh::before{background:var(--gh)}.msg.bc::before{background:var(--bc)}.msg.cl::before{background:var(--cl)}
+.acts{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.btn{height:40px;padding:0 16px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;line-height:1.35;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.btn:hover{background:var(--raise)}
+.btn.p{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.btn.p:hover{background:var(--ink2);border-color:var(--ink2)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn[disabled],.btn.is-off{opacity:.45;cursor:not-allowed}
+.btn svg{flex:none}
+.meta{margin-top:18px;padding-top:12px;border-top:1px solid var(--rule);font-size:12px;color:var(--mute);display:flex;justify-content:space-between;gap:12px}
+.ln{display:inline-block;width:22px;height:5px;border-radius:3px;background:var(--ink);flex:none}
+.ln.gh{background:var(--gh)}.ln.sl{background:var(--sl)}.ln.cl{background:var(--cl)}.ln.bc{background:var(--bc)}
+.ring{display:inline-block;width:11px;height:11px;border-radius:50%;border:2.5px solid var(--ink);background:var(--raise);flex:none;margin:0 -2px}
+.mark{display:inline-flex;align-items:center}
+.sample{font-size:12px;color:var(--mute)}
+.alert{display:flex;align-items:center;gap:14px;background:var(--raise);border:1px solid var(--ink);border-radius:6px;padding:10px 12px 10px 14px;font-size:13.5px;line-height:1.4;box-shadow:0 2px 8px var(--shade)}
+.alert p{flex:1}
+.alert p b{font-weight:700}
+.alert .acts{margin:0;flex-wrap:nowrap}
+.alert svg.brk{flex:none}
+
+/* SVG line language, themed through tokens */
+.sv-ln{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.s-gh{stroke:var(--gh)}.s-sl{stroke:var(--sl)}.s-cl{stroke:var(--cl)}.s-bc{stroke:var(--bc)}.s-ink{stroke:var(--ink)}
+.f-gh{fill:var(--gh)}.f-sl{fill:var(--sl)}.f-cl{fill:var(--cl)}.f-bc{fill:var(--bc)}
+.sv-cap{fill:var(--gnd);stroke:var(--ink);stroke-width:2.5}
+.sv-cap.on{fill:var(--raise);stroke-width:3.5}
+.sv-tick{stroke:var(--ink);stroke-width:1.6}
+.sv-ring{fill:var(--gnd);stroke:var(--ink);stroke-width:3}
+.sv-ring.on{fill:var(--raise)}
+.sv-ring.cl{stroke:var(--cl)}
+.sv-txt{fill:var(--ink)}
+.sv-mute{fill:var(--mute)}
+.sv-dash{stroke-dasharray:1 11}
+@keyframes mk-travel{0%{transform:translateX(0)}100%{transform:translateX(26px)}}
+.travel{animation:mk-travel 1.6s cubic-bezier(.16,1,.3,1) infinite}
+@media (prefers-reduced-motion:reduce){.travel{animation:none}}
+
+[data-variant]{display:none}
+body[data-view="a"] [data-variant="a"]{display:block}
+body[data-view="b"] [data-variant="b"]{display:block}
+
+.f-ink{fill:var(--ink)}
+.tb-main{display:flex;flex-direction:column;min-width:0}
+.tb-head{display:flex;align-items:center;gap:14px;padding:20px 28px 0;height:62px}
+.tb-head h1{font:700 20px/1.3 "Hanken Grotesk"}
+.tb-head h1 span{font-weight:500;font-size:13px;color:var(--mute);margin-left:12px}
+.tb-head .btn{margin-left:auto}
+.tb-tools{display:flex;align-items:center;gap:6px;padding:12px 28px 0}
+.tb-search{margin-left:12px;width:240px;height:30px;border:1px solid var(--rule);border-radius:6px;background:var(--raise);display:flex;align-items:center;gap:8px;padding:0 10px;color:var(--mute);font-size:13px}
+.tb-sync{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute);font-weight:500}
+.tb-sync svg{flex:none}
+.tb-sync b{color:var(--ink);font-weight:600}
+.tb-lines{padding:18px 28px 0}
+.tb-lines svg{display:block}
+.tb-cols{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:8px 28px 0;align-items:start}
+.tb-col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.tb-card{background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:10px 12px 11px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.tb-card:hover{border-color:var(--edge);box-shadow:0 2px 8px var(--shade)}
+.tb-card .top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);font-weight:600;height:16px}
+.tb-card .top time{margin-left:auto;font-variant-numeric:tabular-nums}
+.tb-card .tb-t{font-size:14px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tb-card p{font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-card .foot{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px}
+.tb-card .st{height:22px;font-size:12px}
+.lk{height:22px;padding:0 7px;border:1px solid var(--edge);border-radius:4px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--ink);background:var(--raise);white-space:nowrap}
+.lk.gh{border-color:var(--gh);background:var(--gh-tint)}.lk.sl{border-color:var(--sl);background:var(--sl-tint)}.lk.bc{border-color:var(--bc);background:var(--bc-tint)}.lk.cl{border-color:var(--cl);background:var(--cl-tint)}
+.tb-card.done{background:transparent;padding:8px 12px}
+.tb-card.done h3{font-size:13px;color:var(--ink2);-webkit-line-clamp:1}
+.tb-more{height:32px;border:1px dashed var(--edge);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.tb-empty{border:1.5px dashed var(--edge);border-radius:6px;padding:22px 14px;text-align:center;color:var(--mute);font-size:13px;line-height:1.45}
+.tb-empty b{display:block;color:var(--ink);font-size:14px;margin-bottom:4px}
+/* variant B: lanes by source */
+.ln-grid{display:grid;grid-template-columns:128px repeat(5,minmax(0,1fr));column-gap:12px;padding:16px 28px 0}
+.ln-st{height:44px;padding-bottom:6px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule)}
+.ln-st .cap{height:26px;padding:0 12px;border:2.5px solid var(--ink);border-radius:13px;display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;background:var(--gnd)}
+.ln-st .cap b{font-weight:600;color:var(--mute)}
+.ln-lane{display:contents}
+.ln-lab{padding:14px 0 10px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid var(--rule2);position:relative}
+.ln-lab .src{font-size:14px}
+.ln-lab small{font-size:12px;color:var(--mute);padding-left:18px}
+.ln-cell{padding:10px 0 12px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--rule2);position:relative;min-height:168px;min-width:0}
+.ln-cell::before{content:"";position:absolute;left:-12px;right:0;top:27px;height:5px;background:var(--lane);opacity:.38;z-index:0}
+.ln-cell>*{position:relative;z-index:1}
+.ln-cell .tb-card{padding:8px 10px 9px}
+.ln-cell .tb-card .tb-t{font-size:13.5px;-webkit-line-clamp:2}
+.ln-done{align-self:flex-start;margin-top:14px;height:26px;padding:0 10px;border-radius:13px;border:2px solid var(--ink);background:var(--gnd);display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700}
+.ln-gap{margin-top:16px;font-size:12px;color:var(--mute);background:var(--gnd);align-self:flex-start;padding:0 6px 0 0}
+/* states */
+.tb-crop{width:1256px}
+.tb-crop .tb-head .btn{margin-left:auto}
+.tb-alert{margin:12px 28px 0}
+.tb-col.solo{width:232px;padding:0 0 18px}
+.tb-wait{display:flex;align-items:center;gap:6px}
+
+</style></head><body data-view="b">
+<header class="mk-bar"><strong>Mesa · Tablero</strong><span class="mk-sub">maqueta</span><div class="mk-seg" role="group" aria-label="Variante"><button type="button" data-show="a" aria-pressed="false">A · Columnas</button><button type="button" data-show="b" aria-pressed="false">B · Carriles por fuente</button></div>
+<div class="mk-right"><span>Datos de muestra.</span><div class="mk-seg"><button type="button" data-theme-toggle aria-pressed="false">Grafito (oscuro)</button></div></div></header>
+<section data-variant="a"><div class="app"><aside class="rail"><div class="brand"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" class="s-sl"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg>Mesa</div><div class="who">Designli · Andrés</div><a class="nav" href="#">Hoy <b>9</b></a><a class="nav on" href="#">Tablero <b>22</b></a><a class="nav" href="#">Tickets <b>4</b></a><a class="nav" href="#">Salidas <b>3</b></a><a class="nav foot" href="#">Hecho hoy <b>11</b></a></aside><main class="tb-main"><div class="tb-head"><h1>Tablero<span>GitHub Project privado · acorrea-designli / Mesa</span></h1><a class="btn sm" href="#">Abrir en GitHub <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div><div class="tb-tools"><span class="tab on">Todas 33</span><span class="tab"><u style="background:var(--gh)"></u>GitHub 9</span><span class="tab"><u style="background:var(--bc)"></u>Basecamp 9</span><span class="tab"><u style="background:var(--sl)"></u>Slack 7</span><span class="tab"><u style="background:var(--cl)"></u>Claude 8</span><label class="tb-search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg><span>Buscar en el tablero</span></label><span class="tb-sync"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg><span>Sincronizado con GitHub Project · <b>hace 2 min</b></span></span></div><div class="tb-lines"><svg width="1200" height="88" viewBox="0 0 1200 88" font-family="Hanken Grotesk" role="img" aria-label="Estaciones del tablero">
+<text x="0" y="18" font-size="15" font-weight="700" class="sv-txt">Inbox<tspan dx="8" font-weight="600" class="sv-mute">9</tspan></text><text x="242.4" y="18" font-size="15" font-weight="700" class="sv-txt">Todo<tspan dx="8" font-weight="600" class="sv-mute">6</tspan></text><text x="484.8" y="18" font-size="15" font-weight="700" class="sv-txt">En curso<tspan dx="8" font-weight="600" class="sv-mute">4</tspan></text><text x="727.2" y="18" font-size="15" font-weight="700" class="sv-txt">Esperando<tspan dx="8" font-weight="600" class="sv-mute">3</tspan></text><text x="969.6" y="18" font-size="15" font-weight="700" class="sv-txt">Hecho<tspan dx="8" font-weight="600" class="sv-mute">11</tspan></text>
+<g class="sv-ln" style="stroke-width:4">
+<path d="M4 42H1196" class="s-gh"/><path d="M4 50H1196" class="s-sl"/><path d="M4 58H1196" class="s-cl"/><path d="M4 66H556l8 8H1196" class="s-bc"/>
+</g><rect x="0" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="242.4" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="484.8" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="727.2" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="969.6" y="32" width="22" height="52" rx="11" class="sv-cap"/></svg></div>
+<div class="tb-cols"><div class="tb-col"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>freightmate</span><time>08:15</time></div><h2 class="tb-t">Cambio en tarifa por milla</h2><p>"¿Pueden tenerlo para el viernes? El cliente lo pidió ayer"</p><div class="foot"><span class="lk bc">Basecamp · Freightmate</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="mark"><span class="ln gh" style="width:14px"></span><span class="ring"></span><span class="ln bc" style="width:14px"></span></span><span>prospec-admin</span><time>09:02</time></div><h2 class="tb-t">#212 feat: bulk export</h2><p>Review solicitado · +418 −36 · monitor: 2 hallazgos</p><div class="foot"><span class="lk gh">PR #212</span><span class="lk bc">Basecamp · Prospec</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln sl"></span><span>scout</span><time>09:31</time></div><h2 class="tb-t">Hilo de deploy: confirmar env var</h2><p>Matt: "andres can you confirm the env var before 2pm?"</p><div class="foot"><span class="lk sl">Slack #scout-dev</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln cl"></span><span>bseen</span><time>10:05</time></div><h2 class="tb-t">¿Cierro el to-do de Bseen o espero QA?</h2><p>Claude pregunta · ticket b14</p><div class="foot"><span class="lk cl">Ticket b14</span><span class="st you">Te espera</span></div></div><a class="tb-more" href="#">5 más en Inbox</a></div><div class="tb-col"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>scout</span><time>lun</time></div><h2 class="tb-t">Exportar reporte semanal a PDF</h2><p>"The client wants it in the Monday email"</p><div class="foot"><span class="lk bc">Basecamp · Scout</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln gh"></span><span>freightmate-api</span><time>09:48</time></div><h2 class="tb-t">#341 chore: bump prisma to 6.2</h2><p>Review solicitado · +88 −71</p><div class="foot"><span class="lk gh">PR #341</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln sl"></span><span>bseen</span><time>ayer</time></div><h2 class="tb-t">Suavizar el copy del onboarding</h2><p>Cliente: "can we soften the second screen?"</p><div class="foot"><span class="lk sl">Slack #bseen-client</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln cl"></span><span>buckhub</span><time>09:12</time></div><h2 class="tb-t">Resumir los hilos de Buckhub de la semana</h2><p>Pediste · ticket a19</p><div class="foot"><span class="lk cl">Ticket a19</span><span class="st cl">Espera a Claude</span></div></div><a class="tb-more" href="#">2 más en Todo</a></div><div class="tb-col"><div class="tb-card"><div class="top"><span class="ln gh"></span><span>prospec-admin</span><time>ayer</time></div><h2 class="tb-t">#208 feat: filtros guardados</h2><p>Pediste cambios · 3 hilos abiertos</p><div class="foot"><span class="lk gh">PR #208</span><span class="st ">Espera al autor</span></div></div><div class="tb-card"><div class="top"><span class="ln cl"></span><span>freightmate</span><time>10:38</time></div><h2 class="tb-t">Borrador de respuesta a Freightmate</h2><p>Claude redacta · saldrá a tu firma</p><div class="foot"><span class="lk cl">Ticket a17</span><span class="st cl">Espera a Claude</span></div></div><div class="tb-card"><div class="top"><span class="ln bc"></span><span>bseen</span><time>jue</time></div><h2 class="tb-t">Ajustar onboarding, paso 2</h2><p>To-do asignado · vence el jueves</p><div class="foot"><span class="lk bc">Basecamp · Bseen</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln sl"></span><span>freightmate</span><time>08:40</time></div><h2 class="tb-t">Script de migración de tarifas</h2><p>Matt: "ping me when the script is ready"</p><div class="foot"><span class="lk sl">Slack #freightmate-dev</span><span class="st you">Te espera</span></div></div></div><div class="tb-col"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>freightmate</span><time>ayer</time></div><h2 class="tb-t">Aprobar maqueta de facturas</h2><p>Enviado al cliente ayer, 17:20</p><div class="foot"><span class="lk bc">Basecamp · Freightmate</span><span class="st ">Espera al cliente</span></div></div><div class="tb-card"><div class="top"><span class="mark"><span class="ln gh" style="width:14px"></span><span class="ring"></span><span class="ln sl" style="width:14px"></span></span><span>scout</span><time>09:10</time></div><h2 class="tb-t">#57 fix: zona horaria en reportes</h2><p>Aprobado · falta el deploy de Matt</p><div class="foot"><span class="lk gh">PR #57</span><span class="lk sl">Slack #scout-dev</span><span class="st ">Espera a Matt</span></div></div><div class="tb-card"><div class="top"><span class="ln cl"></span><span>buckhub</span><time>08:50</time></div><h2 class="tb-t">Investigar el 502 en buckhub staging</h2><p>Claude revisa los logs</p><div class="foot"><span class="lk cl">Ticket a21</span><span class="st cl">Espera a Claude</span></div></div></div><div class="tb-col"><div class="tb-card done"><div class="top"><span class="ln gh"></span><span>scout</span><time>10:12</time></div><h2 class="tb-t">#55 feat: CSV de visitas</h2></div><div class="tb-card done"><div class="top"><span class="ln bc"></span><span>bseen</span><time>09:58</time></div><h2 class="tb-t">Confirmar fecha de demo</h2></div><div class="tb-card done"><div class="top"><span class="ln sl"></span><span>buckhub</span><time>09:20</time></div><h2 class="tb-t">Respuesta a Matt sobre staging</h2></div><div class="tb-card done"><div class="top"><span class="ln cl"></span><span>freightmate</span><time>08:31</time></div><h2 class="tb-t">Ticket a16: revisar tarifas</h2></div><a class="tb-more" href="#">7 más hechas hoy</a></div></div></main></div></section><section data-variant="b"><div class="app"><aside class="rail"><div class="brand"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" class="s-sl"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg>Mesa</div><div class="who">Designli · Andrés</div><a class="nav" href="#">Hoy <b>9</b></a><a class="nav on" href="#">Tablero <b>22</b></a><a class="nav" href="#">Tickets <b>4</b></a><a class="nav" href="#">Salidas <b>3</b></a><a class="nav foot" href="#">Hecho hoy <b>11</b></a></aside><main class="tb-main"><div class="tb-head"><h1>Tablero<span>GitHub Project privado · acorrea-designli / Mesa</span></h1><a class="btn sm" href="#">Abrir en GitHub <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div><div class="tb-tools"><span class="tab on">Todas 33</span><span class="tab"><u style="background:var(--gh)"></u>GitHub 9</span><span class="tab"><u style="background:var(--bc)"></u>Basecamp 9</span><span class="tab"><u style="background:var(--sl)"></u>Slack 7</span><span class="tab"><u style="background:var(--cl)"></u>Claude 8</span><label class="tb-search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg><span>Buscar en el tablero</span></label><span class="tb-sync"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg><span>Sincronizado con GitHub Project · <b>hace 2 min</b></span></span></div>
+<div class="ln-grid"><div class="ln-st"></div><div class="ln-st"><span class="cap">Inbox<b>9</b></span></div><div class="ln-st"><span class="cap">Todo<b>6</b></span></div><div class="ln-st"><span class="cap">En curso<b>4</b></span></div><div class="ln-st"><span class="cap">Esperando<b>3</b></span></div><div class="ln-st"><span class="cap">Hecho<b>11</b></span></div><div class="ln-lane" style="--lane:var(--gh)"><div class="ln-lab"><span class="src"><i style="background:var(--gh)"></i>GitHub 9</span><small>PRs para ti</small></div>
+<div class="ln-cell"><div class="tb-card"><div class="top"><span class="mark"><span class="ln gh" style="width:14px"></span><span class="ring"></span><span class="ln bc" style="width:14px"></span></span><span>prospec-admin</span><time>09:02</time></div><h2 class="tb-t">#212 feat: bulk export</h2><div class="foot"><span class="lk gh">PR #212</span><span class="lk bc">Basecamp · Prospec</span><span class="st you">Te espera</span></div></div><div class="tb-card"><div class="top"><span class="ln gh"></span><span>buckhub</span><time>10:20</time></div><h2 class="tb-t">#88 fix: token refresh</h2><div class="foot"><span class="lk gh">PR #88</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln gh"></span><span>freightmate-api</span><time>09:48</time></div><h2 class="tb-t">#341 chore: bump prisma to 6.2</h2><div class="foot"><span class="lk gh">PR #341</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln gh"></span><span>prospec-admin</span><time>ayer</time></div><h2 class="tb-t">#208 feat: filtros guardados</h2><div class="foot"><span class="lk gh">PR #208</span><span class="st ">Espera al autor</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="mark"><span class="ln gh" style="width:14px"></span><span class="ring"></span><span class="ln sl" style="width:14px"></span></span><span>scout</span><time>09:10</time></div><h2 class="tb-t">#57 fix: zona horaria en reportes</h2><div class="foot"><span class="lk gh">PR #57</span><span class="lk sl">Slack #scout-dev</span><span class="st ">Espera a Matt</span></div></div></div><div class="ln-cell"><span class="ln-done"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>4 hoy</span></div></div><div class="ln-lane" style="--lane:var(--bc)"><div class="ln-lab"><span class="src"><i style="background:var(--bc)"></i>Basecamp 9</span><small>Clientes y to-dos</small></div>
+<div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>freightmate</span><time>08:15</time></div><h2 class="tb-t">Cambio en tarifa por milla</h2><div class="foot"><span class="lk bc">Basecamp · Freightmate</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>scout</span><time>lun</time></div><h2 class="tb-t">Exportar reporte semanal a PDF</h2><div class="foot"><span class="lk bc">Basecamp · Scout</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>bseen</span><time>jue</time></div><h2 class="tb-t">Ajustar onboarding, paso 2</h2><div class="foot"><span class="lk bc">Basecamp · Bseen</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln bc"></span><span>freightmate</span><time>ayer</time></div><h2 class="tb-t">Aprobar maqueta de facturas</h2><div class="foot"><span class="lk bc">Basecamp · Freightmate</span><span class="st ">Espera al cliente</span></div></div></div><div class="ln-cell"><span class="ln-done"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>3 hoy</span></div></div><div class="ln-lane" style="--lane:var(--sl)"><div class="ln-lab"><span class="src"><i style="background:var(--sl)"></i>Slack 7</span><small>Esperan respuesta</small></div>
+<div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln sl"></span><span>scout</span><time>09:31</time></div><h2 class="tb-t">Hilo de deploy: confirmar env var</h2><div class="foot"><span class="lk sl">Slack #scout-dev</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln sl"></span><span>bseen</span><time>ayer</time></div><h2 class="tb-t">Suavizar el copy del onboarding</h2><div class="foot"><span class="lk sl">Slack #bseen-client</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln sl"></span><span>freightmate</span><time>08:40</time></div><h2 class="tb-t">Script de migración de tarifas</h2><div class="foot"><span class="lk sl">Slack #freightmate-dev</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><span class="ln-gap">Nada aquí</span></div><div class="ln-cell"><span class="ln-done"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>2 hoy</span></div></div><div class="ln-lane" style="--lane:var(--cl)"><div class="ln-lab"><span class="src"><i style="background:var(--cl)"></i>Claude 8</span><small>Tickets</small></div>
+<div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln cl"></span><span>bseen</span><time>10:05</time></div><h2 class="tb-t">¿Cierro el to-do de Bseen o espero QA?</h2><div class="foot"><span class="lk cl">Ticket b14</span><span class="st you">Te espera</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln cl"></span><span>buckhub</span><time>09:12</time></div><h2 class="tb-t">Resumir los hilos de Buckhub de la semana</h2><div class="foot"><span class="lk cl">Ticket a19</span><span class="st cl">Espera a Claude</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln cl"></span><span>freightmate</span><time>10:38</time></div><h2 class="tb-t">Borrador de respuesta a Freightmate</h2><div class="foot"><span class="lk cl">Ticket a17</span><span class="st cl">Espera a Claude</span></div></div></div><div class="ln-cell"><div class="tb-card"><div class="top"><span class="ln cl"></span><span>buckhub</span><time>08:50</time></div><h2 class="tb-t">Investigar el 502 en buckhub staging</h2><div class="foot"><span class="lk cl">Ticket a21</span><span class="st cl">Espera a Claude</span></div></div></div><div class="ln-cell"><span class="ln-done"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>2 hoy</span></div></div></div></main></div></section>
+<div class="mk-cap"><b>Estados</b><span>Sobre la variante A. Recortes a tamaño real.</span></div>
+<div class="mk-grid"><div class="mk-panel tb-crop"><span class="mk-tag">Sincronizando</span><div class="tb-head"><h1>Tablero<span>GitHub Project privado · acorrea-designli / Mesa</span></h1><a class="btn sm" href="#">Abrir en GitHub <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div><div class="tb-tools"><span class="tab on">Todas 33</span><span class="tab"><u style="background:var(--gh)"></u>GitHub 9</span><span class="tab"><u style="background:var(--bc)"></u>Basecamp 9</span><span class="tab"><u style="background:var(--sl)"></u>Slack 7</span><span class="tab"><u style="background:var(--cl)"></u>Claude 8</span><label class="tb-search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg><span>Buscar en el tablero</span></label><span class="tb-sync"><svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true"><path d="M3 6H37" class="sv-ln s-ink" stroke-width="2" opacity=".25"/><circle cx="6" cy="6" r="4" class="f-ink travel"/></svg><span>Sincronizando con GitHub Project · <b>14 de 33</b></span></span></div><div class="tb-lines" style="padding-bottom:16px"><svg width="1200" height="88" viewBox="0 0 1200 88" font-family="Hanken Grotesk" role="img" aria-label="Estaciones del tablero">
+<text x="0" y="18" font-size="15" font-weight="700" class="sv-txt">Inbox<tspan dx="8" font-weight="600" class="sv-mute">9</tspan></text><text x="242.4" y="18" font-size="15" font-weight="700" class="sv-txt">Todo<tspan dx="8" font-weight="600" class="sv-mute">6</tspan></text><text x="484.8" y="18" font-size="15" font-weight="700" class="sv-txt">En curso<tspan dx="8" font-weight="600" class="sv-mute">4</tspan></text><text x="727.2" y="18" font-size="15" font-weight="700" class="sv-txt">Esperando<tspan dx="8" font-weight="600" class="sv-mute">3</tspan></text><text x="969.6" y="18" font-size="15" font-weight="700" class="sv-txt">Hecho<tspan dx="8" font-weight="600" class="sv-mute">11</tspan></text>
+<g class="sv-ln" style="stroke-width:4">
+<path d="M4 42H1196" class="s-gh"/><path d="M4 50H1196" class="s-sl"/><path d="M4 58H1196" class="s-cl"/><path d="M4 66H556l8 8H1196" class="s-bc"/>
+</g><rect x="0" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="242.4" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="484.8" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="727.2" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="969.6" y="32" width="22" height="52" rx="11" class="sv-cap"/></svg></div></div><div class="mk-panel tb-crop"><span class="mk-tag">Error de sincronización</span><div class="tb-head"><h1>Tablero<span>GitHub Project privado · acorrea-designli / Mesa</span></h1><a class="btn sm" href="#">Abrir en GitHub <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div><div class="tb-tools"><span class="tab on">Todas 33</span><span class="tab"><u style="background:var(--gh)"></u>GitHub 9</span><span class="tab"><u style="background:var(--bc)"></u>Basecamp 9</span><span class="tab"><u style="background:var(--sl)"></u>Slack 7</span><span class="tab"><u style="background:var(--cl)"></u>Claude 8</span><label class="tb-search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg><span>Buscar en el tablero</span></label><span class="tb-sync"><svg class="brk" width="32" height="14" viewBox="0 0 32 14" aria-hidden="true"><path d="M2 7H11" class="sv-ln s-ink" stroke-width="4"/><path d="M21 7H30" class="sv-ln s-ink" stroke-width="4"/><path d="M13 11L19 3" class="sv-ln s-ink" stroke-width="2"/></svg><span><b>Sin sincronizar</b> · último ok 10:12</span></span></div>
+<div class="tb-alert alert"><svg class="brk" width="32" height="14" viewBox="0 0 32 14" aria-hidden="true"><path d="M2 7H11" class="sv-ln s-ink" stroke-width="4"/><path d="M21 7H30" class="sv-ln s-ink" stroke-width="4"/><path d="M13 11L19 3" class="sv-ln s-ink" stroke-width="2"/></svg><p><b>No se pudo sincronizar con GitHub Project.</b> El token de gh venció (401). Tus 2 movimientos de las 10:31 quedaron guardados aquí y se envían al reconectar.</p><div class="acts"><button class="btn sm p" type="button"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8A5.5 5.5 0 113 5"/><path d="M3 1.8V5h3.2"/></svg>Reintentar</button><a class="btn sm" href="#">Cómo renovar el token</a></div></div>
+<div class="tb-lines" style="padding-bottom:16px"><svg width="1200" height="88" viewBox="0 0 1200 88" font-family="Hanken Grotesk" role="img" aria-label="Estaciones del tablero">
+<text x="0" y="18" font-size="15" font-weight="700" class="sv-txt">Inbox<tspan dx="8" font-weight="600" class="sv-mute">9</tspan></text><text x="242.4" y="18" font-size="15" font-weight="700" class="sv-txt">Todo<tspan dx="8" font-weight="600" class="sv-mute">6</tspan></text><text x="484.8" y="18" font-size="15" font-weight="700" class="sv-txt">En curso<tspan dx="8" font-weight="600" class="sv-mute">4</tspan></text><text x="727.2" y="18" font-size="15" font-weight="700" class="sv-txt">Esperando<tspan dx="8" font-weight="600" class="sv-mute">3</tspan></text><text x="969.6" y="18" font-size="15" font-weight="700" class="sv-txt">Hecho<tspan dx="8" font-weight="600" class="sv-mute">11</tspan></text>
+<g class="sv-ln" style="stroke-width:4">
+<path d="M4 42H1196" class="s-gh sv-dash"/><path d="M4 50H1196" class="s-sl sv-dash"/><path d="M4 58H1196" class="s-cl sv-dash"/><path d="M4 66H556l8 8H1196" class="s-bc sv-dash"/>
+</g><rect x="0" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="242.4" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="484.8" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="727.2" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="969.6" y="32" width="22" height="52" rx="11" class="sv-cap"/></svg></div></div><div class="mk-panel" style="padding:18px 20px 0"><span class="mk-tag">Columna vacía</span><div class="tb-col solo"><svg width="232" height="88" viewBox="0 0 232 88" font-family="Hanken Grotesk" aria-hidden="true"><text x="0" y="18" font-size="15" font-weight="700" class="sv-txt">Esperando<tspan dx="8" font-weight="600" class="sv-mute">0</tspan></text><g class="sv-ln" style="stroke-width:4" opacity=".38"><path d="M0 42H232" class="s-gh"/><path d="M0 50H232" class="s-sl"/><path d="M0 58H232" class="s-cl"/><path d="M0 74H232" class="s-bc"/></g><rect x="0" y="32" width="22" height="52" rx="11" class="sv-cap"/></svg><div class="tb-empty"><b>Nada esperando</b>Lo que mandes al cliente, a Matt o a Claude se queda en esta estación hasta que respondan.</div></div></div><div class="mk-panel tb-crop"><span class="mk-tag">Filtro GitHub: la línea arde</span><div class="tb-head"><h1>Tablero<span>GitHub Project privado · acorrea-designli / Mesa</span></h1><a class="btn sm" href="#">Abrir en GitHub <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg></a></div><div class="tb-tools"><span class="tab">Todas 33</span><span class="tab on"><u style="background:var(--gh)"></u>GitHub 9</span><span class="tab"><u style="background:var(--bc)"></u>Basecamp 9</span><span class="tab"><u style="background:var(--sl)"></u>Slack 7</span><span class="tab"><u style="background:var(--cl)"></u>Claude 8</span><label class="tb-search"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg><span>Buscar en el tablero</span></label><span class="tb-sync"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg><span>Sincronizado con GitHub Project · <b>hace 2 min</b></span></span></div><div class="tb-lines" style="padding-bottom:16px"><svg width="1200" height="88" viewBox="0 0 1200 88" font-family="Hanken Grotesk" role="img" aria-label="Estaciones del tablero">
+<text x="0" y="18" font-size="15" font-weight="700" class="sv-txt">Inbox<tspan dx="8" font-weight="600" class="sv-mute">9</tspan></text><text x="242.4" y="18" font-size="15" font-weight="700" class="sv-txt">Todo<tspan dx="8" font-weight="600" class="sv-mute">6</tspan></text><text x="484.8" y="18" font-size="15" font-weight="700" class="sv-txt">En curso<tspan dx="8" font-weight="600" class="sv-mute">4</tspan></text><text x="727.2" y="18" font-size="15" font-weight="700" class="sv-txt">Esperando<tspan dx="8" font-weight="600" class="sv-mute">3</tspan></text><text x="969.6" y="18" font-size="15" font-weight="700" class="sv-txt">Hecho<tspan dx="8" font-weight="600" class="sv-mute">11</tspan></text>
+<g class="sv-ln" style="stroke-width:4">
+<path d="M4 42H1196" class="s-gh"/><path d="M4 50H1196" class="s-sl" opacity=".35"/><path d="M4 58H1196" class="s-cl" opacity=".35"/><path d="M4 66H556l8 8H1196" class="s-bc" opacity=".35"/>
+</g><rect x="0" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="242.4" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="484.8" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="727.2" y="32" width="22" height="52" rx="11" class="sv-cap"/><rect x="969.6" y="32" width="22" height="52" rx="11" class="sv-cap"/></svg></div></div></div>
+<div class="mk-end"></div>
+<script>
+(function(){var d=document.documentElement,b=document.body,q=new URLSearchParams(location.search);
+if(q.get('v'))b.dataset.view=q.get('v');if(q.get('theme')==='dark')d.dataset.theme='dark';
+function sync(){document.querySelectorAll('[data-show]').forEach(function(t){t.setAttribute('aria-pressed',String(t.dataset.show===b.dataset.view))});
+document.querySelector('[data-theme-toggle]').setAttribute('aria-pressed',String(d.dataset.theme==='dark'))}
+document.querySelectorAll('[data-show]').forEach(function(t){t.addEventListener('click',function(){b.dataset.view=t.dataset.show;sync()})});
+document.querySelector('[data-theme-toggle]').addEventListener('click',function(){d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';sync()});
+sync()})();
+</script>
+<script src="vendor/motion-14.3.1.js"></script><script src="mesa-motion.js"></script>
+<!-- impeccable-live-start -->
+<script src="http://localhost:8400/live.js?token=4927661c-6daf-407e-a188-081ff1f0b489"></script>
+<!-- impeccable-live-end -->
+</body></html>

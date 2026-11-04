@@ -1,0 +1,1000 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-03T23:27:05+00:00",
+  "title": "Design System: Mesa",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Tokio Ground",
+        "canonical": "#eceae5",
+        "tonalRamp": [
+          "#0c0b08",
+          "#262521",
+          "#43423e",
+          "#63615d",
+          "#84827e",
+          "#a7a5a0",
+          "#cbc9c4",
+          "#f0eee9"
+        ],
+        "theme": "tokio"
+      },
+      "deep": {
+        "role": "neutral",
+        "displayName": "Tokio Deep",
+        "canonical": "#e2dfd8",
+        "tonalRamp": [
+          "#0d0b07",
+          "#272520",
+          "#44423c",
+          "#64615b",
+          "#85827c",
+          "#a8a59e",
+          "#ccc9c2",
+          "#f1eee7"
+        ],
+        "theme": "tokio"
+      },
+      "porcelain": {
+        "role": "neutral",
+        "displayName": "Porcelain",
+        "canonical": "#fbfaf7",
+        "tonalRamp": [
+          "#0c0b09",
+          "#262523",
+          "#434240",
+          "#62615f",
+          "#838280",
+          "#a6a5a2",
+          "#cac9c6",
+          "#efeeeb"
+        ],
+        "theme": "tokio"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#d3cfc5",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28251d",
+          "#454239",
+          "#646158",
+          "#868279",
+          "#a9a59b",
+          "#cdc9bf",
+          "#f2eee4"
+        ],
+        "theme": "tokio"
+      },
+      "rule-soft": {
+        "role": "neutral",
+        "displayName": "Rule Soft",
+        "canonical": "#dcd8cf",
+        "tonalRamp": [
+          "#0d0b06",
+          "#28251e",
+          "#45423a",
+          "#646159",
+          "#86827a",
+          "#a8a59c",
+          "#cdc9c0",
+          "#f2eee5"
+        ],
+        "theme": "tokio"
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Edge",
+        "canonical": "#c3beb2",
+        "tonalRamp": [
+          "#0e0b04",
+          "#29251b",
+          "#464238",
+          "#656156",
+          "#878277",
+          "#aaa599",
+          "#cec9bd",
+          "#f3eee2"
+        ],
+        "theme": "tokio"
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Station Ink",
+        "canonical": "#1c1d21",
+        "tonalRamp": [
+          "#0a0b0f",
+          "#242529",
+          "#414246",
+          "#606166",
+          "#818287",
+          "#a3a5aa",
+          "#c7c9ce",
+          "#edeef4"
+        ],
+        "theme": "tokio"
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Ink Soft",
+        "canonical": "#3e4047",
+        "tonalRamp": [
+          "#090b10",
+          "#23252b",
+          "#404249",
+          "#5f6168",
+          "#80828a",
+          "#a2a5ad",
+          "#c6c9d1",
+          "#eceef7"
+        ],
+        "theme": "tokio"
+      },
+      "need-ink": {
+        "role": "neutral",
+        "displayName": "Need Ink",
+        "canonical": "#2c2e33",
+        "tonalRamp": [
+          "#090b0f",
+          "#23252a",
+          "#404247",
+          "#5f6167",
+          "#808288",
+          "#a2a5ab",
+          "#c6c9cf",
+          "#eceef5"
+        ],
+        "theme": "tokio"
+      },
+      "mute": {
+        "role": "neutral",
+        "displayName": "Mute",
+        "canonical": "#5d5f68",
+        "tonalRamp": [
+          "#090b11",
+          "#23252c",
+          "#40414a",
+          "#5f616a",
+          "#80828b",
+          "#a2a4ae",
+          "#c6c9d3",
+          "#ebeef9"
+        ],
+        "theme": "tokio",
+        "note": "Text token for secondary copy."
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Dim (non-text)",
+        "canonical": "#6f717a",
+        "tonalRamp": [
+          "#090b11",
+          "#23252c",
+          "#40414a",
+          "#5f6169",
+          "#80828b",
+          "#a2a4ae",
+          "#c6c9d3",
+          "#eceef8"
+        ],
+        "theme": "tokio",
+        "note": "Fails AA as text (3.7:1 on deep, 4.0:1 on ground in Tokio). Non-text marks only; use mute for text."
+      },
+      "line-github": {
+        "role": "secondary",
+        "displayName": "Metro Red (GitHub)",
+        "canonical": "#e60012",
+        "tonalRamp": [
+          "#2d0000",
+          "#590000",
+          "#890000",
+          "#bb0002",
+          "#ef1e20",
+          "#ff6457",
+          "#ff9787",
+          "#ffc7b7"
+        ],
+        "theme": "tokio"
+      },
+      "line-slack": {
+        "role": "secondary",
+        "displayName": "Canal Teal (Slack)",
+        "canonical": "#00a3a8",
+        "tonalRamp": [
+          "#001114",
+          "#002e32",
+          "#004f52",
+          "#007176",
+          "#00969b",
+          "#4fb7bb",
+          "#86dadd",
+          "#b9fdff"
+        ],
+        "theme": "tokio"
+      },
+      "line-claude": {
+        "role": "secondary",
+        "displayName": "Signal Orange (Claude)",
+        "canonical": "#f39700",
+        "tonalRamp": [
+          "#200000",
+          "#441400",
+          "#6b2f00",
+          "#954b00",
+          "#c16900",
+          "#e0912c",
+          "#feb96d",
+          "#ffe2a4"
+        ],
+        "theme": "tokio"
+      },
+      "line-basecamp": {
+        "role": "secondary",
+        "displayName": "Platform Green (Basecamp)",
+        "canonical": "#00b07c",
+        "tonalRamp": [
+          "#001303",
+          "#003118",
+          "#005331",
+          "#00774c",
+          "#009c6a",
+          "#4bbd8f",
+          "#84dfb6",
+          "#b7ffde"
+        ],
+        "theme": "tokio"
+      },
+      "text-github": {
+        "role": "secondary",
+        "displayName": "Text Github",
+        "canonical": "#b8000e",
+        "tonalRamp": [
+          "#290000",
+          "#530000",
+          "#800409",
+          "#b02320",
+          "#e14038",
+          "#ff7366",
+          "#ffa193",
+          "#ffcec1"
+        ],
+        "theme": "tokio"
+      },
+      "text-slack": {
+        "role": "secondary",
+        "displayName": "Text Slack",
+        "canonical": "#00777b",
+        "tonalRamp": [
+          "#001012",
+          "#002d2f",
+          "#004c4f",
+          "#176e72",
+          "#339296",
+          "#67b4b7",
+          "#96d7d9",
+          "#c5fafc"
+        ],
+        "theme": "tokio"
+      },
+      "text-claude": {
+        "role": "secondary",
+        "displayName": "Text Claude",
+        "canonical": "#8a5300",
+        "tonalRamp": [
+          "#190500",
+          "#3b1d00",
+          "#5f3802",
+          "#85551a",
+          "#ad7432",
+          "#cd9963",
+          "#edbf91",
+          "#ffe7bf"
+        ],
+        "theme": "tokio"
+      },
+      "text-basecamp": {
+        "role": "secondary",
+        "displayName": "Text Basecamp",
+        "canonical": "#006b4d",
+        "tonalRamp": [
+          "#001106",
+          "#002e1e",
+          "#0b4e39",
+          "#257155",
+          "#409574",
+          "#6fb699",
+          "#9cd9be",
+          "#cafce5"
+        ],
+        "theme": "tokio"
+      },
+      "tint-github": {
+        "role": "secondary",
+        "displayName": "Tint Github",
+        "canonical": "#fbe6e5",
+        "tonalRamp": [
+          "#100909",
+          "#2c2222",
+          "#4b3e3e",
+          "#6c5d5c",
+          "#907d7c",
+          "#b1a0a0",
+          "#d4c5c4",
+          "#f8ebea"
+        ],
+        "theme": "tokio"
+      },
+      "tint-slack": {
+        "role": "secondary",
+        "displayName": "Tint Slack",
+        "canonical": "#e6f6f5",
+        "tonalRamp": [
+          "#040d0d",
+          "#1c2827",
+          "#384544",
+          "#576464",
+          "#778685",
+          "#9aa9a8",
+          "#bdcdcc",
+          "#e2f2f1"
+        ],
+        "theme": "tokio"
+      },
+      "tint-claude": {
+        "role": "secondary",
+        "displayName": "Tint Claude",
+        "canonical": "#fdf0dc",
+        "tonalRamp": [
+          "#0f0a05",
+          "#2a241b",
+          "#494135",
+          "#696051",
+          "#8c816f",
+          "#aea393",
+          "#d1c8b9",
+          "#f5ede1"
+        ],
+        "theme": "tokio"
+      },
+      "tint-basecamp": {
+        "role": "secondary",
+        "displayName": "Tint Basecamp",
+        "canonical": "#e2f5ed",
+        "tonalRamp": [
+          "#070d0a",
+          "#1e2724",
+          "#394540",
+          "#57655f",
+          "#768780",
+          "#9aa9a3",
+          "#bfcdc7",
+          "#e6f2ed"
+        ],
+        "theme": "tokio"
+      },
+      "grafito-ground": {
+        "role": "neutral",
+        "displayName": "Grafito Ground",
+        "canonical": "#17191d",
+        "tonalRamp": [
+          "#090b0f",
+          "#232529",
+          "#404247",
+          "#5f6166",
+          "#808288",
+          "#a2a5aa",
+          "#c6c9cf",
+          "#eceef4"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-deep": {
+        "role": "neutral",
+        "displayName": "Grafito Deep",
+        "canonical": "#111316",
+        "tonalRamp": [
+          "#090b0e",
+          "#232528",
+          "#404246",
+          "#5f6165",
+          "#808286",
+          "#a2a5a9",
+          "#c6c9ce",
+          "#eceff3"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-raise": {
+        "role": "neutral",
+        "displayName": "Grafito Raise",
+        "canonical": "#20232a",
+        "tonalRamp": [
+          "#090b11",
+          "#22252c",
+          "#3f424a",
+          "#5e6169",
+          "#7e828b",
+          "#a1a5ae",
+          "#c5c9d3",
+          "#eaeef8"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-rule": {
+        "role": "neutral",
+        "displayName": "Grafito Rule",
+        "canonical": "#2b2f37",
+        "tonalRamp": [
+          "#080b12",
+          "#21252d",
+          "#3e424b",
+          "#5d616a",
+          "#7e828c",
+          "#a0a5af",
+          "#c4c9d4",
+          "#e9eff9"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-rule-soft": {
+        "role": "neutral",
+        "displayName": "Grafito Rule Soft",
+        "canonical": "#23262d",
+        "tonalRamp": [
+          "#090b11",
+          "#22252c",
+          "#3f424a",
+          "#5e6169",
+          "#7f828b",
+          "#a1a5ae",
+          "#c5c9d2",
+          "#eaeef8"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-edge": {
+        "role": "neutral",
+        "displayName": "Grafito Edge",
+        "canonical": "#3d424b",
+        "tonalRamp": [
+          "#070b12",
+          "#21252d",
+          "#3d424b",
+          "#5c616b",
+          "#7d838d",
+          "#9fa5b0",
+          "#c3c9d4",
+          "#e8effa"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-ink": {
+        "role": "primary",
+        "displayName": "Grafito Station Ink",
+        "canonical": "#f1efe9",
+        "tonalRamp": [
+          "#0c0b07",
+          "#262521",
+          "#43423d",
+          "#63615c",
+          "#84827d",
+          "#a7a59f",
+          "#cbc9c3",
+          "#f0eee8"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-ink-soft": {
+        "role": "neutral",
+        "displayName": "Grafito Ink Soft",
+        "canonical": "#c7cbd2",
+        "tonalRamp": [
+          "#090b10",
+          "#22252a",
+          "#3f4248",
+          "#5e6167",
+          "#7f8289",
+          "#a1a5ac",
+          "#c5c9d0",
+          "#ebeff6"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-need-ink": {
+        "role": "neutral",
+        "displayName": "Grafito Need Ink",
+        "canonical": "#dadde2",
+        "tonalRamp": [
+          "#090b0e",
+          "#232529",
+          "#404246",
+          "#5f6166",
+          "#808287",
+          "#a2a5aa",
+          "#c6c9ce",
+          "#eceff4"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-mute": {
+        "role": "neutral",
+        "displayName": "Grafito Mute",
+        "canonical": "#9a9fa8",
+        "tonalRamp": [
+          "#080b11",
+          "#21252c",
+          "#3e424a",
+          "#5d616a",
+          "#7e838b",
+          "#a0a5ae",
+          "#c4c9d3",
+          "#e9eff8"
+        ],
+        "theme": "grafito",
+        "note": "Text token for secondary copy."
+      },
+      "grafito-dim": {
+        "role": "neutral",
+        "displayName": "Grafito Dim (non-text)",
+        "canonical": "#8e939c",
+        "tonalRamp": [
+          "#080b11",
+          "#21252c",
+          "#3e424a",
+          "#5d616a",
+          "#7e838b",
+          "#a0a5ae",
+          "#c4c9d3",
+          "#e9eff9"
+        ],
+        "theme": "grafito",
+        "note": "Fails AA as text (3.7:1 on deep, 4.0:1 on ground in Tokio). Non-text marks only; use mute for text."
+      },
+      "grafito-line-github": {
+        "role": "secondary",
+        "displayName": "Grafito Metro Red (GitHub)",
+        "canonical": "#ff5d52",
+        "tonalRamp": [
+          "#290000",
+          "#520000",
+          "#7f050a",
+          "#af2421",
+          "#e04139",
+          "#ff7367",
+          "#ffa194",
+          "#ffcfc1"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-line-slack": {
+        "role": "secondary",
+        "displayName": "Grafito Canal Teal (Slack)",
+        "canonical": "#2ec5c2",
+        "tonalRamp": [
+          "#001212",
+          "#002f2f",
+          "#00504f",
+          "#007371",
+          "#009896",
+          "#44b9b7",
+          "#80dcd9",
+          "#b4fffc"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-line-claude": {
+        "role": "secondary",
+        "displayName": "Grafito Signal Orange (Claude)",
+        "canonical": "#ffb428",
+        "tonalRamp": [
+          "#1d0300",
+          "#3f1a00",
+          "#653500",
+          "#8d5200",
+          "#b77100",
+          "#d69725",
+          "#f6be6a",
+          "#ffe6a1"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-line-basecamp": {
+        "role": "secondary",
+        "displayName": "Grafito Platform Green (Basecamp)",
+        "canonical": "#3cc983",
+        "tonalRamp": [
+          "#001300",
+          "#00320f",
+          "#005326",
+          "#00773f",
+          "#009d5b",
+          "#4dbe82",
+          "#85e0ab",
+          "#b8ffd5"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-text-github": {
+        "role": "secondary",
+        "displayName": "Grafito Text Github",
+        "canonical": "#ff8f86",
+        "tonalRamp": [
+          "#210000",
+          "#460d0d",
+          "#6f2724",
+          "#9a413c",
+          "#c75d57",
+          "#e6867e",
+          "#ffafa7",
+          "#ffd9d2"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-text-slack": {
+        "role": "secondary",
+        "displayName": "Grafito Text Slack",
+        "canonical": "#74dcd9",
+        "tonalRamp": [
+          "#001111",
+          "#002e2d",
+          "#004e4d",
+          "#00706f",
+          "#219492",
+          "#5fb6b3",
+          "#90d9d6",
+          "#c0fcf9"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-text-claude": {
+        "role": "secondary",
+        "displayName": "Grafito Text Claude",
+        "canonical": "#ffc965",
+        "tonalRamp": [
+          "#190600",
+          "#391e00",
+          "#5d3a00",
+          "#835800",
+          "#aa7800",
+          "#ca9d49",
+          "#eac37e",
+          "#ffeab0"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-text-basecamp": {
+        "role": "secondary",
+        "displayName": "Grafito Text Basecamp",
+        "canonical": "#7fdca4",
+        "tonalRamp": [
+          "#001202",
+          "#002f14",
+          "#01502d",
+          "#1e7347",
+          "#399764",
+          "#6bb98a",
+          "#99dbb1",
+          "#c7feda"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-tint-github": {
+        "role": "secondary",
+        "displayName": "Grafito Tint Github",
+        "canonical": "#3a1f1e",
+        "tonalRamp": [
+          "#130807",
+          "#31201f",
+          "#523b3a",
+          "#755957",
+          "#9a7977",
+          "#bb9d9b",
+          "#ddc2c0",
+          "#ffe8e6"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-tint-slack": {
+        "role": "secondary",
+        "displayName": "Grafito Tint Slack",
+        "canonical": "#123130",
+        "tonalRamp": [
+          "#030e0d",
+          "#172928",
+          "#314746",
+          "#4c6766",
+          "#698a88",
+          "#8facaa",
+          "#b6cfce",
+          "#def4f2"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-tint-claude": {
+        "role": "secondary",
+        "displayName": "Grafito Tint Claude",
+        "canonical": "#3a2d14",
+        "tonalRamp": [
+          "#100a03",
+          "#2c2415",
+          "#4b412e",
+          "#6c5f48",
+          "#8f8065",
+          "#b1a38b",
+          "#d4c8b2",
+          "#f7eddb"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-tint-basecamp": {
+        "role": "secondary",
+        "displayName": "Grafito Tint Basecamp",
+        "canonical": "#15301f",
+        "tonalRamp": [
+          "#040e07",
+          "#1a291f",
+          "#33483a",
+          "#4f6857",
+          "#6d8b76",
+          "#92ad9a",
+          "#b9d0bf",
+          "#e1f4e6"
+        ],
+        "theme": "grafito"
+      }
+    },
+    "themes": {
+      "tokio": {
+        "selector": ":root",
+        "default": true,
+        "colorScheme": "light"
+      },
+      "grafito": {
+        "selector": "[data-theme=\"dark\"]",
+        "colorScheme": "dark",
+        "note": "Same four hues brightened; Slack stays teal. Tokens with the grafito- prefix."
+      }
+    },
+    "cssVariables": {
+      "--gnd": "ground",
+      "--deep": "deep",
+      "--raise": "porcelain",
+      "--rule": "rule",
+      "--rule2": "rule-soft",
+      "--edge": "edge",
+      "--ink": "ink",
+      "--ink2": "ink-soft",
+      "--need": "need-ink",
+      "--mute": "mute",
+      "--dim": "dim",
+      "--gh": "line-github",
+      "--sl": "line-slack",
+      "--cl": "line-claude",
+      "--bc": "line-basecamp",
+      "--gh-ink": "text-github",
+      "--sl-ink": "text-slack",
+      "--cl-ink": "text-claude",
+      "--bc-ink": "text-basecamp",
+      "--gh-tint": "tint-github",
+      "--sl-tint": "tint-slack",
+      "--cl-tint": "tint-claude",
+      "--bc-tint": "tint-basecamp",
+      "--shade": "rgba(28,29,33,.10) in Tokio, rgba(0,0,0,.40) in Grafito"
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Selected item title in the detail pane; ticket question."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "View titles, with a mute date beside them."
+      },
+      "station": {
+        "displayName": "Station",
+        "purpose": "Station names on the line band."
+      },
+      "subject": {
+        "displayName": "Subject",
+        "purpose": "Row subject, one line, ellipsised."
+      },
+      "exact-text": {
+        "displayName": "Exact Text",
+        "purpose": "Outgoing message as it will be sent."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base UI text with tabular numerals."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Times, sources, counts, chips, tabs."
+      },
+      "excerpt": {
+        "displayName": "Excerpt",
+        "purpose": "Source excerpt under a subject, in mute."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase column, group and field labels, in mute."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float-low",
+        "value": "0 2px 8px var(--shade)",
+        "purpose": "Inline alerts; board card hover."
+      },
+      {
+        "name": "float-mid",
+        "value": "0 4px 18px var(--shade)",
+        "purpose": "Centred single-approval card."
+      },
+      {
+        "name": "toast",
+        "value": "0 6px 20px var(--shade)",
+        "purpose": "Undo toasts on the phone."
+      }
+    ],
+    "motion": [
+      {
+        "name": "tick-travel",
+        "value": "1.6s cubic-bezier(.16,1,.3,1)",
+        "purpose": "A tick or dot travelling along its line (status change, sync, Claude listening)."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none",
+        "purpose": "Under prefers-reduced-motion the tick jumps to its station."
+      }
+    ],
+    "lineLanguage": {
+      "stroke": "6px, round caps and joins",
+      "bends": "45 and 90 degrees only",
+      "dimmed": "about 35% opacity",
+      "capsule": "ground fill, 2.5px ink outline; selected: porcelain fill, 3.5px outline",
+      "tick": "r5, source fill, 1.6px ink stroke",
+      "interchange": "open ring r8.5, 3px ink stroke",
+      "outage": "stroke-dasharray 1 11 plus a 45 degree slash icon"
+    },
+    "breakpoints": [
+      {
+        "name": "phone",
+        "value": "390px"
+      },
+      {
+        "name": "desktop",
+        "value": "1440px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid ink action: Aprobar y enviar, Responder.",
+      "html": "<button class=\"ds-btn ds-btn-p\">Aprobar y enviar</button>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-btn{font-family:\"Hanken Grotesk\",sans-serif;height:40px;padding:0 16px;border-radius:6px;display:inline-flex;align-items:center;font-weight:600;font-size:14px;border:1px solid var(--edge);background:transparent;color:var(--ink);cursor:pointer} .ds-btn-p{background:var(--ink);color:var(--gnd);border-color:var(--ink)} .ds-btn-p:hover{background:var(--ink2);border-color:var(--ink2)} .ds-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outline action: Editar, Denegar.",
+      "html": "<button class=\"ds-btn2\">Editar</button>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-btn2{font-family:\"Hanken Grotesk\",sans-serif;height:40px;padding:0 16px;border-radius:6px;display:inline-flex;align-items:center;font-weight:600;font-size:14px;border:1px solid var(--edge);background:transparent;color:var(--ink);cursor:pointer} .ds-btn2:hover{background:var(--raise)} .ds-btn2:focus-visible{outline:2px solid var(--ink);outline-offset:2px}"
+    },
+    {
+      "name": "Source Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Source filter tabs; active is solid ink, others carry an 8px source dot.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab on\">Todo 9</button><button class=\"ds-tab\"><u style=\"background:var(--gh)\"></u>GitHub 4</button><button class=\"ds-tab\"><u style=\"background:var(--sl)\"></u>Slack 2</button></div>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-tabs{display:flex;gap:6px} .ds-tab{font-family:\"Hanken Grotesk\",sans-serif;height:30px;padding:0 12px;display:flex;align-items:center;gap:7px;border:1px solid var(--rule);border-radius:6px;background:transparent;color:var(--ink2);font-weight:600;font-size:13px;cursor:pointer;font-variant-numeric:tabular-nums} .ds-tab u{width:8px;height:8px;border-radius:50%} .ds-tab:hover{border-color:var(--edge)} .ds-tab.on{background:var(--ink);color:var(--gnd);border-color:var(--ink)} .ds-tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}"
+    },
+    {
+      "name": "Rail Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Left rail items with tabular counts; active item on porcelain.",
+      "html": "<nav class=\"ds-rail\"><a class=\"ds-nav on\" href=\"#\">Hoy <b>9</b></a><a class=\"ds-nav\" href=\"#\">Tablero <b>22</b></a><a class=\"ds-nav\" href=\"#\">Tickets <b>4</b></a><a class=\"ds-nav\" href=\"#\">Salidas <b>3</b></a></nav>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-rail{width:184px;background:var(--deep);padding:14px;display:flex;flex-direction:column;gap:3px} .ds-nav{font-family:\"Hanken Grotesk\",sans-serif;display:flex;justify-content:space-between;align-items:center;height:38px;padding:0 10px;border-radius:6px;color:var(--ink2);font-weight:600;font-size:14px;text-decoration:none} .ds-nav b{font-weight:600;font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums} .ds-nav:hover{color:var(--ink)} .ds-nav.on{background:var(--raise);color:var(--ink)} .ds-nav.on b{color:var(--ink)} .ds-nav:focus-visible{outline:2px solid var(--ink);outline-offset:2px}"
+    },
+    {
+      "name": "Status Tags",
+      "kind": "chip",
+      "refersTo": "status-tag",
+      "description": "Outline status tags; only Te espera / Por enviar is solid ink.",
+      "html": "<span class=\"ds-st you\">Te espera</span> <span class=\"ds-st ok\">Limpio</span> <span class=\"ds-st\">Espera al cliente</span>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-st{font-family:\"Hanken Grotesk\",sans-serif;height:24px;padding:0 9px;border-radius:4px;display:inline-flex;align-items:center;font-size:12px;font-weight:700;border:1px solid var(--edge);color:var(--ink)} .ds-st.you{background:var(--ink);color:var(--gnd);border-color:var(--ink)} .ds-st.ok{border-color:var(--bc);color:var(--bc-ink)}"
+    },
+    {
+      "name": "Destination Chips",
+      "kind": "chip",
+      "refersTo": "destination-chip-slack",
+      "description": "Exact destination chips in the source line ink over its tint.",
+      "html": "<div class=\"ds-dest\"><span class=\"ds-chip\">#scout-dev</span><span class=\"ds-chip\">Hilo 09:31 · Matt</span><span class=\"ds-chip gh\">PR #212</span></div>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-dest{display:flex;gap:6px;flex-wrap:wrap} .ds-chip{font-family:\"Hanken Grotesk\",sans-serif;border:1px solid var(--sl);border-radius:4px;padding:4px 9px;font-weight:600;font-size:13px;background:var(--sl-tint);color:var(--ink)} .ds-chip.gh{border-color:var(--gh);background:var(--gh-tint)}"
+    },
+    {
+      "name": "Exact-Text Block",
+      "kind": "custom",
+      "refersTo": "exact-text-block",
+      "description": "The outgoing message exactly as sent; the source line enters from the top as a stub.",
+      "html": "<div class=\"ds-msg\">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-msg{font-family:\"Hanken Grotesk\",sans-serif;position:relative;margin-top:10px;background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:16px 16px 14px;font-size:16px;line-height:1.5;font-weight:500;color:var(--ink)} .ds-msg::before{content:\"\";position:absolute;left:15px;top:-4px;width:30px;height:7px;border-radius:4px;background:var(--sl)}"
+    },
+    {
+      "name": "Board Card",
+      "kind": "card",
+      "refersTo": "board-card",
+      "description": "Kanban card: line stub, project, time, two-line title, excerpt, wait tag.",
+      "html": "<article class=\"ds-card\" tabindex=\"0\"><div class=\"top\"><span class=\"ln\"></span>prospec-admin<time>09:02</time></div><h3>feat: bulk export</h3><p>Review solicitado · +418 −36</p><span class=\"ds-st2\">Te espera</span></article>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-card{font-family:\"Hanken Grotesk\",sans-serif;width:220px;background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:10px 12px 11px;display:flex;flex-direction:column;gap:5px;color:var(--ink);transition:box-shadow .2s,border-color .2s} .ds-card:hover{border-color:var(--edge);box-shadow:0 2px 8px var(--shade)} .ds-card:focus-visible{outline:2px solid var(--ink);outline-offset:2px} .ds-card .top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);font-weight:600} .ds-card .top time{margin-left:auto;font-variant-numeric:tabular-nums} .ds-card .ln{width:22px;height:5px;border-radius:3px;background:var(--gh)} .ds-card h3{font-size:14px;font-weight:600;line-height:1.3;margin:0} .ds-card p{font-size:12.5px;color:var(--mute);margin:0} .ds-st2{align-self:flex-start;height:22px;padding:0 9px;border-radius:4px;display:inline-flex;align-items:center;font-size:12px;font-weight:700;background:var(--ink);color:var(--gnd)}"
+    },
+    {
+      "name": "Line Band",
+      "kind": "custom",
+      "refersTo": "line-band",
+      "description": "Signature: source lines through station capsules; selected station solid, the rest at about 35%.",
+      "html": "<svg class=\"ds-band\" width=\"420\" height=\"120\" viewBox=\"0 0 420 120\" aria-hidden=\"true\"><g fill=\"none\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\".35\"><path d=\"M20 40H220l20-20H400\" stroke=\"var(--gh)\"/><path d=\"M20 60H400\" stroke=\"var(--sl)\"/><path d=\"M20 80H400\" stroke=\"var(--cl)\"/></g><g fill=\"none\" stroke-width=\"6\" stroke-linecap=\"round\"><path d=\"M20 40H130\" stroke=\"var(--gh)\"/><path d=\"M20 60H130\" stroke=\"var(--sl)\"/><path d=\"M20 80H130\" stroke=\"var(--cl)\"/></g><rect x=\"110\" y=\"18\" width=\"34\" height=\"84\" rx=\"17\" fill=\"var(--raise)\" stroke=\"var(--ink)\" stroke-width=\"3.5\"/><rect x=\"300\" y=\"18\" width=\"34\" height=\"84\" rx=\"17\" fill=\"var(--gnd)\" stroke=\"var(--ink)\" stroke-width=\"2.5\" opacity=\".85\"/><circle cx=\"60\" cy=\"40\" r=\"5\" fill=\"var(--gh)\" stroke=\"var(--ink)\" stroke-width=\"1.6\"/><circle cx=\"80\" cy=\"60\" r=\"5\" fill=\"var(--sl)\" stroke=\"var(--ink)\" stroke-width=\"1.6\"/><circle cx=\"90\" cy=\"40\" r=\"8.5\" fill=\"var(--raise)\" stroke=\"var(--ink)\" stroke-width=\"3\"/></svg>",
+      "css": ":root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--rule2:#dcd8cf;--edge:#c3beb2;--ink:#1c1d21;--ink2:#3e4047;--mute:#5d5f68;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--bc-ink:#006b4d;--sl-tint:#e6f6f5;--gh-tint:#fbe6e5;--shade:rgba(28,29,33,.10)} .ds-band{display:block;background:var(--gnd)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Mapa de metro",
+    "overview": "The working day is a transit network. Each source is a coloured line (GitHub, Slack, Claude, Basecamp), each status is a station (Inbox, Todo, En curso, Esperando, Hecho), and each item is a tick riding its line. The signature is the line band across the top of the work area: picking a station or a source filter re-routes it, so the chosen line burns at full ink and the rest drop to about 35%. Everything below the band is a dense, calm operating surface: rows that read in one glance, a detail pane, and an approval that shows exact destination and exact text before anything is signed.\n\nThe material is signage, not software chrome. Grounds are warm paper greys in the light \"Tokio\" theme (the default) and graphite in the dark \"Grafito\" theme. Station capsules have a ground fill and an ink outline, interchanges are open rings, and lines bend only at 45 and 90 degrees. One humanist sans, Hanken Grotesk, carries everything at fixed sizes with tabular numerals, like a station board.\n\nColour is reserved for wayfinding. The four line inks identify a source and nothing else; state is carried by ink weight, fill, dashes and dotted lines, never by a semantic red or green.",
+    "keyCharacteristics": [
+      "Two themes from one token set: Tokio light on `:root`, Grafito dark on `[data-theme=\"dark\"]`.",
+      "Four line inks that mean source only; Slack is teal in both themes.",
+      "Station capsules, open interchange rings, 45/90 degree bends, 6px round-capped strokes.",
+      "One family, fixed sizes, tabular numerals for every count and time.",
+      "Flat surfaces separated by hairline rules and tonal grounds; shadow only for floating layers."
+    ],
+    "rules": [
+      {
+        "name": "The Lines Carry Source Rule",
+        "body": "A line ink identifies GitHub, Slack, Claude or Basecamp and nothing else. It is never an error, warning, success or diff colour; red is GitHub.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mute Is Text Rule",
+        "body": "Secondary copy uses `mute`. `dim` stays in the palette for non-text marks only, and station counts use `mute` rather than opacity.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Solid Tag Rule",
+        "body": "\"Te espera\" (and \"Por enviar\") is the only solid-ink status tag. Every other status is an outline.",
+        "section": "colors"
+      },
+      {
+        "name": "The Fixed Board Rule",
+        "body": "Sizes are fixed px, never fluid. Every time, count and ID uses tabular numerals.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Board Rule",
+        "body": "Rows, panes and cards rest flat on tonal grounds. A shadow means \"this floats\" or \"you are pointing at it\".",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** use the four line inks only to identify a source, at full strength on the chosen line and about 35% on the rest.",
+      "**Do** set secondary text in `mute`; keep `dim` for non-text marks.",
+      "**Do** show the exact destination and the exact text in the same view as Aprobar, and mark the text block with a top line stub in the destination's ink.",
+      "**Do** draw lines with 6px round-capped strokes that bend only at 45 or 90 degrees, with interchange rings for items linked to two sources.",
+      "**Do** express outages with dotted lines and a 45 degree slash, and show edits as strike (removed) and underline (added) without colour.",
+      "**Do** keep every view working in both Tokio and Grafito through the tokens; Slack stays teal in both."
+    ],
+    "donts": [
+      "**Don't** use red, green or orange as error, success or warning colours; red is GitHub, green is Basecamp, orange is Claude.",
+      "**Don't** make any status tag solid ink except \"Te espera\" / \"Por enviar\".",
+      "**Don't** split Claude-asks and Andrés-asks into separate column sets; direction is a line-into-ring marker on the row.",
+      "**Don't** put `dim` on text, and don't fade station counts with opacity.",
+      "**Don't** mark the exact-text block with a side border; the stub enters from the top."
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--y:#ffd200;--k:#111;--w:#fff;--g:#2a2a2a;--d:#9a9a9a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--k);color:var(--w);font:500 16px/1.35 'Hanken Grotesk',sans-serif}
+nav{display:flex;gap:4px;padding:14px 28px;border-bottom:1px solid #222}
+nav span{padding:8px 14px;border-radius:6px;font-weight:600;color:#ccc} nav .on{background:var(--g);color:var(--w)}
+.next{background:var(--y);color:var(--k);padding:30px 40px;display:grid;grid-template-columns:120px 1fr auto;gap:30px;align-items:center}
+.pict{width:120px;height:120px;background:var(--k);color:var(--w);display:grid;place-items:center;font:800 64px 'Hanken Grotesk';border-radius:6px}
+.next small{font:700 16px 'Hanken Grotesk';letter-spacing:.04em}
+.next h1{font:800 52px/1.05 'Hanken Grotesk';margin-top:6px}
+.next p{font:500 20px 'Hanken Grotesk';margin-top:10px}
+.big{text-align:right} .big b{display:block;font:800 120px/1 'Hanken Grotesk'} .big span{font:700 18px 'Hanken Grotesk'}
+.acts{display:flex;gap:10px;padding:18px 40px;background:#1a1a1a}
+.btn{padding:12px 20px;border-radius:6px;font:700 16px 'Hanken Grotesk';border:2px solid #444}
+.btn.p{background:var(--y);color:var(--k);border-color:var(--y)}
+.band{display:grid;grid-template-columns:64px 1fr 200px 120px;gap:20px;align-items:center;padding:18px 40px;border-bottom:1px solid #222}
+.band .ic{width:56px;height:56px;background:var(--g);display:grid;place-items:center;border-radius:6px;font:800 22px 'Hanken Grotesk'}
+.band h2{font:700 22px 'Hanken Grotesk'} .band small{color:var(--d);font-size:15px}
+.band .t{font:700 28px 'Hanken Grotesk';text-align:right}
+.band .need{font:600 15px 'Hanken Grotesk';color:#ddd}
+</style></head><body>
+<nav><span class="on">Próxima</span><span>Cola 9</span><span>Tablero</span><span>Tickets</span></nav>
+<section class="next">
+  <div class="pict">→</div>
+  <div><small>APROBAR SALIDA · SLACK</small><h1>Responder a Matt en #scout-dev</h1><p>"Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm."</p></div>
+  <div class="big"><b>3</b><span>decisiones en cola</span></div>
+</section>
+<div class="acts"><span class="btn p">Aprobar y enviar</span><span class="btn">Editar</span><span class="btn">Denegar</span><span class="btn">Saltar</span></div>
+<div class="band"><span class="ic">B</span><div><h2>Freightmate · tarifa por milla</h2><small>"¿Pueden tenerlo para el viernes?"</small></div><span class="need">Responder al cliente</span><span class="t">2 h</span></div>
+<div class="band"><span class="ic">G</span><div><h2>prospec-admin #212 · bulk export</h2><small>Monitor: 2 hallazgos</small></div><span class="need">Aprobar PR</span><span class="t">1 h</span></div>
+<div class="band"><span class="ic">C</span><div><h2>¿Cierro el to-do de Bseen o espero QA?</h2><small>Claude pregunta</small></div><span class="need">Decidir</span><span class="t">37 m</span></div>
+<div class="band"><span class="ic">G</span><div><h2>buckhub #88 · token refresh</h2><small>Sin hallazgos</small></div><span class="need">Aprobar PR</span><span class="t">22 m</span></div>
+</body></html>

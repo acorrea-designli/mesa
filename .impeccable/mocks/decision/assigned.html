@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--house:#0f1a2b;--board:#14181f;--flap:#232a35;--seam:#0b0e13;--ink:#f2efe6;--dim:#8d96a6;--you:#ffc629;--ok:#3fb37f;--bad:#e5533d;--out:#5aa2ff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--house);color:var(--ink);font:500 15px/1.35 Barlow,sans-serif;display:grid;grid-template-columns:208px 1fr 404px}
+.rail{background:var(--house);padding:22px 14px;border-right:1px solid #1d2a40;display:flex;flex-direction:column;gap:4px}
+.brand{font:700 22px Barlow Condensed;letter-spacing:.06em;margin:0 8px 22px}
+.brand small{display:block;font:500 12px Barlow;letter-spacing:.02em;color:var(--dim)}
+.nav{display:flex;justify-content:space-between;padding:9px 10px;border-radius:6px;color:#c9d0db;font-weight:600}
+.nav.on{background:#1c2a42;color:var(--ink)}
+.nav b{font:600 14px Barlow Condensed;color:var(--dim)} .nav.on b{color:var(--you)}
+.main{background:var(--board);padding:22px 26px;overflow:hidden}
+.head{display:flex;align-items:baseline;gap:18px;margin-bottom:16px}
+.head h1{font:700 34px Barlow Condensed;letter-spacing:.04em;text-transform:uppercase}
+.clock{font:600 34px Barlow Condensed;color:var(--you);font-variant-numeric:tabular-nums;margin-left:auto}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tab{padding:6px 12px;border:1px solid #2d3644;border-radius:6px;color:#c9d0db;font-weight:600;font-size:14px}
+.tab.on{background:var(--ink);color:var(--board);border-color:var(--ink)}
+.cols,.row{display:grid;grid-template-columns:64px 112px 1fr 150px 150px;gap:6px;align-items:center}
+.cols{font:600 12px Barlow Condensed;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;padding:0 0 6px}
+.row{padding:5px 0;border-top:1px solid #1b212b}
+.f{background:var(--flap);border-radius:3px;padding:7px 8px;font:600 19px Barlow Condensed;letter-spacing:.05em;text-transform:uppercase;position:relative;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.f::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--seam)}
+.subj{background:none;padding:2px 0;text-transform:none;letter-spacing:0;font:600 16px Barlow}
+.subj::after{display:none}
+.subj small{display:block;font:400 13px Barlow;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-you{background:var(--you);color:#1a1400}.st-ok{background:var(--ok);color:#06180f}.st-out{background:var(--out);color:#041327}.st-bad{background:var(--bad);color:#200602}
+.sel{outline:2px solid var(--ink);outline-offset:3px;border-radius:4px}
+.done .subj{text-decoration:line-through;color:var(--dim)}
+.section{font:700 14px Barlow Condensed;letter-spacing:.16em;color:var(--dim);margin:18px 0 6px;text-transform:uppercase}
+.detail{background:#10151d;border-left:1px solid #1d2a40;padding:22px 22px}
+.k{font:600 12px Barlow Condensed;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-top:16px}
+.detail h2{font:700 24px Barlow Condensed;letter-spacing:.03em;margin-top:6px}
+.dest{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--flap);border-radius:4px;padding:5px 8px;font:600 14px Barlow Condensed;letter-spacing:.06em}
+.msg{margin-top:8px;background:#1a202a;border-radius:6px;padding:14px;font:400 15px/1.5 Barlow;border-left:3px solid var(--out)}
+.ctx{margin-top:8px;font:400 14px/1.45 Barlow;color:#c9d0db;border-left:2px solid #2d3644;padding-left:10px}
+.acts{display:flex;gap:8px;margin-top:20px}
+.btn{padding:11px 16px;border-radius:6px;font:600 15px Barlow;border:1px solid #2d3644;color:var(--ink)}
+.btn.p{background:var(--you);color:#1a1400;border-color:var(--you)}
+.note{margin-top:16px;font:400 12px Barlow;color:var(--dim)}
+</style></head><body>
+<aside class="rail">
+  <div class="brand">MESA<small>Designli · Andrés</small></div>
+  <div class="nav on">Hoy <b>9</b></div>
+  <div class="nav">Tablero <b>23</b></div>
+  <div class="nav">Tickets <b>4</b></div>
+  <div class="nav">Salidas <b>3</b></div>
+  <div class="nav">Hecho hoy <b>11</b></div>
+</aside>
+<main class="main">
+  <div class="head"><h1>Llegadas · Hoy</h1><span style="color:var(--dim)">martes 3 nov</span><span class="clock">10:42</span></div>
+  <div class="tabs"><span class="tab on">Todo 9</span><span class="tab">GitHub 4</span><span class="tab">Basecamp 2</span><span class="tab">Slack 2</span><span class="tab">Claude 1</span></div>
+  <div class="cols"><span>Hora</span><span>Origen</span><span>Asunto</span><span>Necesita</span><span>Estado</span></div>
+  <div class="row sel"><span class="f">08:15</span><span class="f">BASECAMP</span><span class="f subj">Freightmate · cambio en tarifa por milla<small>"¿Pueden tenerlo para el viernes? El cliente lo pidió ayer"</small></span><span class="f">RESPUESTA</span><span class="f st-you">TE ESPERA</span></div>
+  <div class="row"><span class="f">09:02</span><span class="f">GITHUB</span><span class="f subj">prospec-admin #212 · feat: bulk export<small>Review solicitado · +418 −36 · monitor: 2 hallazgos</small></span><span class="f">APROBAR PR</span><span class="f st-you">TE ESPERA</span></div>
+  <div class="row"><span class="f">09:31</span><span class="f">SLACK</span><span class="f subj">#scout-dev · hilo de deploy<small>Matt: "andres can you confirm the env var before 2pm?"</small></span><span class="f">RESPUESTA</span><span class="f st-you">TE ESPERA</span></div>
+  <div class="row"><span class="f">10:05</span><span class="f">CLAUDE</span><span class="f subj">¿Cierro el to-do de Bseen o espero QA?<small>Ticket b14 · Claude pregunta</small></span><span class="f">DECISIÓN</span><span class="f st-you">TE ESPERA</span></div>
+  <div class="row"><span class="f">10:20</span><span class="f">GITHUB</span><span class="f subj">buckhub #88 · fix: token refresh<small>Monitor: sin hallazgos · listo para aprobar</small></span><span class="f">APROBAR PR</span><span class="f st-ok">LIMPIO</span></div>
+  <div class="section">Salidas · esperan tu firma</div>
+  <div class="row"><span class="f">10:38</span><span class="f">SLACK</span><span class="f subj">→ #scout-dev · hilo de deploy<small>"Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm."</small></span><span class="f">APROBAR</span><span class="f st-out">EMBARCANDO</span></div>
+  <div class="row"><span class="f">10:40</span><span class="f">BASECAMP</span><span class="f subj">→ Freightmate · tarifa por milla<small>"Sí, lo tenemos para el viernes. Mañana subo una vista previa."</small></span><span class="f">APROBAR</span><span class="f st-out">EMBARCANDO</span></div>
+  <div class="row done"><span class="f">07:50</span><span class="f">GITHUB</span><span class="f subj">scout #301 · chore: bump deps<small>Aprobado 07:58</small></span><span class="f">—</span><span class="f st-ok">DESPEGÓ</span></div>
+</main>
+<aside class="detail">
+  <div class="k">Salida · Slack</div>
+  <h2>Respuesta en hilo de deploy</h2>
+  <div class="k">Destino exacto</div>
+  <div class="dest"><span class="chip">#SCOUT-DEV</span><span class="chip">HILO 09:31 · MATT</span></div>
+  <div class="k">Contexto</div>
+  <div class="ctx">Matt: andres can you confirm the env var before 2pm? we are holding the prod deploy</div>
+  <div class="k">Texto que se enviará</div>
+  <div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div>
+  <div class="acts"><span class="btn p">Aprobar y enviar</span><span class="btn">Editar</span><span class="btn">Denegar</span></div>
+  <div class="note">Datos de muestra.</div>
+</aside>
+</body></html>

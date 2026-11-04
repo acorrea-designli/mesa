@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Mesa · Catálogo Factory</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=Familjen+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0b0b;--ink:#efefef;--dim:#8a8a8a;--hair:#2a2a2a;--gh:#e94e1b;--sl:#3a7bd5;--cl:#f4c20d;--bc:#36a852}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--bg);color:var(--ink);font:400 15px/1.35 "Familjen Grotesk",sans-serif;display:grid;grid-template-columns:196px 1fr 470px}
+.cap{font:600 10.5px Archivo;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+.rail{border-right:1px solid var(--hair);padding:28px 0 24px;display:flex;flex-direction:column}
+.brand{padding:0 24px 40px}
+.brand b{font:800 15px Archivo;letter-spacing:.34em}
+.brand .cap{display:block;margin-top:8px;letter-spacing:.16em}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:11px 24px;color:#bdbdbd;font-weight:500;border-left:2px solid transparent}
+.nav i{font:600 12px Archivo;font-style:normal;color:var(--dim);letter-spacing:.08em}
+.nav.on{color:var(--ink);border-left-color:var(--ink);background:#121212}.nav.on i{color:var(--ink)}
+.rail .foot{margin-top:auto;padding:0 24px}
+.main{padding:28px 32px 0;overflow:hidden}
+.top{display:flex;align-items:baseline;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--ink)}
+.top h1{font:600 12px Archivo;letter-spacing:.3em;text-transform:uppercase}
+.top span{color:var(--dim)}.top .t{margin-left:auto;font:500 13px Archivo;letter-spacing:.14em;color:var(--ink)}
+.filt{display:flex;gap:22px;padding:13px 0;border-bottom:1px solid var(--hair)}
+.filt .cap.on{color:var(--ink);border-bottom:1px solid var(--ink);padding-bottom:3px}
+.grp{padding:20px 0 7px;display:flex;justify-content:space-between}
+.row{display:grid;grid-template-columns:70px 98px 1fr 118px;gap:14px;align-items:center;padding:0 12px 0 0;height:56px;border-top:1px solid var(--hair);opacity:.92}
+.strip{display:flex;gap:2px;padding-left:2px}
+.strip s{display:block;width:14px;height:30px;background:#262626}
+.row .n{font:800 22px Archivo;letter-spacing:-.01em;white-space:nowrap}
+.row .n small{font:600 10px Archivo;letter-spacing:.2em;color:var(--dim);display:block;margin-bottom:1px}
+.t1{font-weight:600;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t2{color:var(--dim);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.need{font:600 10.5px Archivo;letter-spacing:.16em;text-transform:uppercase;text-align:right}
+.need em{display:block;font-style:normal;color:var(--dim);margin-top:3px;letter-spacing:.2em}
+.row .strip s:first-child{opacity:.5}
+.gh s:first-child{background:var(--gh)}.sl s:first-child{background:var(--sl)}.cl s:first-child{background:var(--cl)}.bc s:first-child{background:var(--bc)}
+.w2 s:nth-child(2){background:#efefef}.ok s:nth-child(3){background:var(--bc)}.out s:nth-child(3){background:var(--sl)}.out s:nth-child(2){background:#efefef}
+.done{opacity:.4}
+.act{background:#141414;border-top-color:var(--ink);opacity:1;position:relative;box-shadow:inset 3px 0 0 var(--ink)}
+.act .strip{padding-left:14px}.act .strip s:first-child{opacity:1}
+.act .n{padding-left:0}
+.row.act{grid-template-columns:84px 98px 1fr 118px;margin-left:-32px;padding-left:32px;margin-right:-0px}
+.row.act .strip{padding-left:0}
+.detail{border-left:1px solid var(--hair);background:#0e0e0e;padding:28px 34px 0;position:relative}
+.pulse{display:block;margin:12px 0 4px}
+.dh{display:flex;justify-content:space-between}
+.big{font:800 92px/.9 Archivo;letter-spacing:-.04em;margin-top:22px}
+.bigstrip{display:flex;gap:3px;margin-top:20px}
+.bigstrip div{flex:1}
+.bigstrip s{display:block;height:34px;margin-bottom:8px}
+.bigstrip .cap{font-size:9.5px;letter-spacing:.16em}.bigstrip p{font-weight:600;font-size:14px;margin-top:2px}
+h2{font:600 21px/1.25 "Familjen Grotesk";margin-top:26px}
+.f{margin-top:20px}
+.f .cap{display:block;margin-bottom:7px}
+.dest{display:flex;gap:10px;align-items:center;font:600 15px Archivo;letter-spacing:.04em}
+.dest span{border:1px solid var(--ink);padding:5px 9px}
+.dest span+span{border-color:var(--hair);color:#cfcfcf;font-weight:500}
+.ctx{color:#bdbdbd;border-left:1px solid var(--hair);padding-left:12px;font-size:14.5px;line-height:1.45}
+.msg{border:1px solid var(--ink);border-left:6px solid var(--sl);padding:16px 18px;font-size:18px;line-height:1.4;font-weight:500}
+.btns{display:flex;gap:10px;margin-top:26px}
+.btn{font:600 12px Archivo;letter-spacing:.14em;text-transform:uppercase;padding:15px 20px;border:1px solid var(--ink);color:var(--ink)}
+.btn.p{background:var(--ink);color:#0b0b0b;flex:1;text-align:center}
+.btn.d{border-color:var(--hair);color:var(--dim)}
+.note{position:absolute;left:34px;bottom:18px;font-size:11.5px;color:#6d6d6d}
+</style></head><body>
+<aside class="rail">
+  <div class="brand"><b>MESA</b><span class="cap">Designli · Andrés</span></div>
+  <div class="nav on">Hoy <i>9</i></div><div class="nav">Tablero <i>23</i></div><div class="nav">Tickets <i>4</i></div><div class="nav">Salidas <i>3</i></div><div class="nav">Hecho hoy <i>11</i></div>
+  <div class="foot cap" style="line-height:2">Origen<br><span style="color:var(--gh)">■</span> GitHub &nbsp;<span style="color:var(--bc)">■</span> Basecamp<br><span style="color:var(--sl)">■</span> Slack &nbsp;&nbsp;<span style="color:var(--cl)">■</span> Claude</div>
+</aside>
+<main class="main">
+  <div class="top"><h1>Hoy</h1><span>martes 3 nov</span><span class="t">10:42</span></div>
+  <div class="filt"><span class="cap on">Todo 9</span><span class="cap">GitHub 4</span><span class="cap">Basecamp 2</span><span class="cap">Slack 2</span><span class="cap">Claude 1</span></div>
+  <div class="grp cap"><span>Entradas · en orden de llegada</span><span>Origen / Necesita / Estado</span></div>
+  <div class="row bc w2"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>Basecamp</small>BC 88</div><div><div class="t1">Freightmate · cambio en tarifa por milla</div><div class="t2">"¿Pueden tenerlo para el viernes? El cliente lo pidió ayer"</div></div><div class="need">Responder<em>08:15</em></div></div>
+  <div class="row gh w2"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>GitHub</small>PR 212</div><div><div class="t1">prospec-admin · feat: bulk export</div><div class="t2">Review solicitado · +418 −36 · monitor: 2 hallazgos</div></div><div class="need">Aprobar PR<em>09:02</em></div></div>
+  <div class="row sl w2"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>Slack</small>SL 31</div><div><div class="t1">#scout-dev · hilo de deploy</div><div class="t2">Matt: "andres can you confirm the env var before 2pm?"</div></div><div class="need">Responder<em>09:31</em></div></div>
+  <div class="row cl w2"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>Claude</small>B14</div><div><div class="t1">¿Cierro el to-do de Bseen o espero QA?</div><div class="t2">Ticket B14 · Claude pregunta</div></div><div class="need">Decidir<em>10:05</em></div></div>
+  <div class="row gh ok"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>GitHub</small>PR 88</div><div><div class="t1">buckhub · fix: token refresh</div><div class="t2">Monitor: sin hallazgos · listo para aprobar</div></div><div class="need">Aprobar PR<em>Limpio · 10:20</em></div></div>
+  <div class="grp cap"><span style="color:var(--ink)">Salidas · esperan tu firma</span><span>2</span></div>
+  <div class="row sl out act"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>Salida · Slack</small>SL 32</div><div><div class="t1">→ #scout-dev · hilo de deploy</div><div class="t2">"Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm."</div></div><div class="need">Firmar<em>10:38</em></div></div>
+  <div class="row bc out"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>Salida · Basecamp</small>BC 89</div><div><div class="t1">→ Freightmate · tarifa por milla</div><div class="t2">"Sí, lo tenemos para el viernes. Mañana subo una vista previa."</div></div><div class="need">Firmar<em>10:40</em></div></div>
+  <div class="row gh done"><div class="strip"><s></s><s></s><s></s></div><div class="n"><small>GitHub</small>PR 301</div><div><div class="t1">scout · chore: bump deps</div><div class="t2">Aprobado 07:58</div></div><div class="need">Hecho<em>07:50</em></div></div>
+</main>
+<aside class="detail">
+  <div class="dh"><span class="cap">Actividad de hoy · por hora</span><span class="cap" style="color:var(--ink)">10:42</span></div>
+  <svg class="pulse" width="402" height="92" viewBox="0 0 402 92" fill="none" stroke="#efefef" stroke-width="1" stroke-linejoin="round">
+    <defs><path id="a" d="M0 0H60L68-4 74 3 82-9 90 2 110 0 130-3 138-18 146 0 190-2 206-6 212 0H250L262-22 270 0 300 0 312-12 320 0H402V40H0Z"/><path id="b" d="M0 0H44L54-8 60 2 74-14 82 0H150L160-5 170 0 214-3 222-26 230 0H300L310-6 322 0H402V40H0Z"/></defs>
+    <g fill="#0e0e0e"><use href="#b" y="20" opacity=".35"/><use href="#a" y="30" opacity=".4"/><use href="#b" y="40" opacity=".5"/><use href="#a" y="50" opacity=".6"/><use href="#b" y="60" opacity=".75"/><use href="#a" y="70" opacity=".9"/><use href="#b" y="80" stroke-opacity:1/></g>
+  </svg>
+  <div class="cap" style="display:flex;justify-content:space-between;font-size:9px"><span>06</span><span>09</span><span>12</span><span>15</span><span>18</span></div>
+  <div class="big">SL 32</div>
+  <div class="bigstrip">
+    <div><s style="background:var(--sl)"></s><span class="cap">Origen</span><p>Slack</p></div>
+    <div><s style="background:var(--ink)"></s><span class="cap">Necesita</span><p>Tu firma</p></div>
+    <div><s style="background:var(--sl);opacity:.55"></s><span class="cap">Estado</span><p>Redactado</p></div>
+    <div><s style="background:var(--cl)"></s><span class="cap">Autor</span><p>Claude</p></div>
+  </div>
+  <h2>Respuesta en hilo de deploy</h2>
+  <div class="f"><span class="cap">Destino exacto</span><div class="dest"><span>#scout-dev</span><span>Hilo de Matt · 09:31</span></div></div>
+  <div class="f"><span class="cap">Contexto</span><div class="ctx">Matt: "andres can you confirm the env var before 2pm? we are holding the prod deploy"</div></div>
+  <div class="f"><span class="cap">Texto que se enviará</span><div class="msg">Confirmed, SCOUT_API_URL is set on staging. Prod after 2pm.</div></div>
+  <div class="btns"><span class="btn p">Aprobar y enviar</span><span class="btn">Editar</span><span class="btn d">Denegar</span></div>
+  <div class="note">Datos de muestra.</div>
+</aside>
+</body></html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Kalam:wght@400&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bay:#2b2f33;--bay2:#24272b;--card:#e9e2cf;--ink:#1d1f22;--you:#7fb0d9;--claude:#e79aa3;--send:#f0c45a;--dim:#9aa1a8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:#1b1d20;color:#ecebe6;font:500 14px/1.35 Archivo,sans-serif;display:grid;grid-template-rows:64px 1fr}
+header{display:flex;align-items:center;gap:22px;padding:0 24px;border-bottom:1px solid #33373c}
+header h1{font:700 22px Archivo Narrow;letter-spacing:.08em}
+header nav{display:flex;gap:6px}
+header nav span{padding:7px 12px;border-radius:6px;color:#c8cbd0;font-weight:600}
+header nav .on{background:#33373c;color:#fff}
+.legend{margin-left:auto;display:flex;gap:14px;color:var(--dim);font-size:13px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.bays{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:16px 20px}
+.bay{background:var(--bay);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.bay h2{font:700 13px Archivo Narrow;letter-spacing:.16em;text-transform:uppercase;color:#c8cbd0;display:flex;justify-content:space-between;padding:2px 4px 6px}
+.strip{display:grid;grid-template-columns:14px 1fr;border-radius:4px;overflow:hidden;background:var(--card);color:var(--ink);box-shadow:0 1px 0 #0006}
+.strip .h{background:var(--you)} .strip.c .h{background:var(--claude)} .strip.s .h{background:var(--send)}
+.strip .b{padding:8px 10px}
+.top{display:flex;justify-content:space-between;font:700 12px Archivo Narrow;letter-spacing:.1em;color:#5b5e63}
+.strip p{font:600 14px Archivo;margin-top:3px}
+.strip em{display:block;font:400 15px Kalam;color:#3c5b88;margin-top:4px;font-style:normal}
+.strip.sel{outline:2px solid #fff;outline-offset:2px}
+.done p{text-decoration:line-through;color:#7a7d80}
+</style></head><body>
+<header><h1>BAHÍA</h1><nav><span class="on">Tablero</span><span>Hoy</span><span>Tickets</span><span>Salidas</span></nav>
+<div class="legend"><span><i style="background:var(--you)"></i>de fuentes</span><span><i style="background:var(--claude)"></i>Claude pregunta</span><span><i style="background:var(--send)"></i>por enviar</span></div></header>
+<section class="bays">
+ <div class="bay"><h2>Inbox <span>5</span></h2>
+  <div class="strip sel"><span class="h"></span><div class="b"><div class="top"><span>BASECAMP</span><span>08:15</span></div><p>Freightmate · tarifa por milla</p><em>¿para el viernes?</em></div></div>
+  <div class="strip"><span class="h"></span><div class="b"><div class="top"><span>GITHUB</span><span>09:02</span></div><p>prospec-admin #212 bulk export</p><em>2 hallazgos</em></div></div>
+  <div class="strip"><span class="h"></span><div class="b"><div class="top"><span>SLACK</span><span>09:31</span></div><p>#scout-dev · env var antes de 2pm</p></div></div>
+  <div class="strip c"><span class="h"></span><div class="b"><div class="top"><span>CLAUDE</span><span>10:05</span></div><p>¿Cierro el to-do de Bseen?</p></div></div>
+ </div>
+ <div class="bay"><h2>Todo <span>6</span></h2>
+  <div class="strip"><span class="h"></span><div class="b"><div class="top"><span>GITHUB</span><span>AYER</span></div><p>buckhub #88 token refresh</p><em>limpio</em></div></div>
+  <div class="strip"><span class="h"></span><div class="b"><div class="top"><span>BASECAMP</span><span>LUN</span></div><p>Bseen · revisar copy onboarding</p></div></div>
+ </div>
+ <div class="bay"><h2>En curso <span>2</span></h2>
+  <div class="strip"><span class="h"></span><div class="b"><div class="top"><span>GITHUB</span><span>10:12</span></div><p>scout #305 review</p><em>leyendo diff</em></div></div>
+ </div>
+ <div class="bay"><h2>Esperando <span>3</span></h2>
+  <div class="strip s"><span class="h"></span><div class="b"><div class="top"><span>→ SLACK</span><span>10:38</span></div><p>#scout-dev · "Confirmed, set on staging"</p><em>firma pendiente</em></div></div>
+  <div class="strip s"><span class="h"></span><div class="b"><div class="top"><span>→ BASECAMP</span><span>10:40</span></div><p>Freightmate · "Sí, para el viernes"</p></div></div>
+ </div>
+ <div class="bay"><h2>Hecho <span>11</span></h2>
+  <div class="strip done"><span class="h"></span><div class="b"><div class="top"><span>GITHUB</span><span>07:58</span></div><p>scout #301 bump deps</p></div></div>
+ </div>
+</section>
+</body></html>
