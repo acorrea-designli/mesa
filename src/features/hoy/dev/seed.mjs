@@ -158,7 +158,7 @@ async function main() {
     await seedApproval();
   }
   const now = new Date().toISOString();
-  for (const s of ["github", "slack", "basecamp"]) await api("PATCH", `/api/sources/${s}`, { health: "ok", lastCheckedAt: now, lastNewAt: today("10:20") });
+  for (const s of ["github", "slack", "basecamp"]) await api("PATCH", `/api/sources/${s}`, { health: "ok", lastChecked: now, lastNewAt: today("10:20") });
   if (SCENARIO === "slack-down") await api("PATCH", "/api/sources/slack", { health: "down", note: "MCP sin respuesta" });
   if (SCENARIO === "github-paused") {
     const until = new Date(Date.now() + 20 * 60_000).toISOString();

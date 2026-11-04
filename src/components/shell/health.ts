@@ -33,7 +33,7 @@ const RAIL: HealthSource[] = ["github", "slack", "basecamp"];
 
 export function mapHealth(s: SourceState): SourceHealth {
   const name = NAME[s.source];
-  const last = s.lastNewAt ?? s.lastCheckedAt;
+  const last = s.lastNewAt ?? s.lastChecked;
   const since = last ? clock(last) : null;
   const source = (s.source === "engram" ? "claude" : s.source) as SourceHealth["source"];
   if (s.health === "down") {
