@@ -34,9 +34,14 @@ export async function mesaCall(path, { method, body, fetchImpl = fetch, base = m
   return data ?? {};
 }
 
+// The sweeper is the one role without a ticket: sweeper-<n>, one at a time, respawned as n+1.
+export const SWEEPER_RE = /^sweeper-\d+$/;
+
 export function parseName(name) {
-  const m = NAME_RE.exec(String(name ?? ""));
-  return m ? { name: m[0], role: m[1], ticketRef: m[2] } : { name: String(name ?? ""), role: null, ticketRef: null };
+  const s = String(name ?? "");
+  if (SWEEPER_RE.test(s)) return { name: s, role: "sweeper", ticketRef: null };
+  const m = NAME_RE.exec(s);
+  return m ? { name: m[0], role: m[1], ticketRef: m[2] } : { name: s, role: null, ticketRef: null };
 }
 
 const readJson = (p) => {
@@ -91,7 +96,7 @@ export function resolveAgent(input) {
     if (meta?.name) return parseName(meta.name);
   }
   const fromId = /^a([a-z][a-z0-9-]*?)-[0-9a-f]{16}$/.exec(String(agentId ?? ""));
-  if (fromId && NAME_RE.test(fromId[1])) return parseName(fromId[1]);
+  if (fromId && (NAME_RE.test(fromId[1]) || SWEEPER_RE.test(fromId[1]))) return parseName(fromId[1]);
   const said = /You are `([a-z0-9-]+)`/.exec(firstUserText(tp));
   if (said) return parseName(said[1]);
   if (fromId) return parseName(fromId[1]);

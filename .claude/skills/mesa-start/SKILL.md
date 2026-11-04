@@ -50,10 +50,17 @@ node G:/WorkSpace/designli/ops/bin/mesa team list --status live
   yet: leave it, the watcher will deliver `salida.released`.
 - An answered ticket nobody acted on (`waiting_claude`): it gets an owner in step 4.
 
-## 4. Resume live tickets
+## 4. Resume live tickets and start the sweeper
 
 Agents from an earlier session are gone; Mesa still lists them as live. For each live agent:
-`MESA team retire <name> --reason session-ended`. Then for each open ticket that needs work, spawn ONLY its owner
+`MESA team retire <name> --reason session-ended`.
+
+Then the sweeper, the Slack and Basecamp ingest (`mesa-sweep` § 0): spawn `sweeper-<n>` (next free number in
+`MESA team list --status retired`) with `subagent_type: sweeper`, `run_in_background: true`, prompt
+``You are `sweeper-<n>`. Read .claude/mesa/spawn-preamble.md, then start your loop.``. It runs on its own and speaks
+only when done or blocked. On `DONE sweeper-<n>`, retire it and spawn `sweeper-<n+1>` while it is still work hours.
+
+Owners: for each open ticket that needs work, spawn ONLY its owner
 (`docs/TEAM.md` § 2) with the next free name (`tl-t14` was live, so the new one is `tl-t14-2`). The owner boots
 from the brief and the handoffs and asks for its teammates again with NEED. Do not respawn teammates yourself.
 

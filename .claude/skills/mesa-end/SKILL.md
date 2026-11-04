@@ -21,7 +21,8 @@ scheduled salidas stay; the sweeper releases scheduled ones and the next session
 
 ## 2. Retire
 
-For each agent: `MESA team retire <name> --reason session-end`, then `TaskStop` on it. Retired names are never
+For each agent, the sweeper included (it needs no handoff: its watermarks live in Mesa):
+`MESA team retire <name> --reason session-end`, then `TaskStop` on it. Retired names are never
 reused or messaged (hook G2); the next session spawns `<role>-<ref>-<k+1>`.
 
 Worktrees: for each `G:/WorkSpace/designli-wt/<name>` whose PR is merged or closed (`gh api repos/<repo>/pulls/<n>

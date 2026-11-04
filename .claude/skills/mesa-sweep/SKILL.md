@@ -1,21 +1,37 @@
 ---
 name: mesa-sweep
-description: On-demand sweep of everything waiting on Andrés - GitHub review requests (the pr-monitor gate), Basecamp assignments, mentions and client comments without his reply, and Slack messages that expect his answer (the slack-triage logic) - fed into Mesa with mesa item upsert. Read-only toward the sources. Use when Andrés says "barre", "sweep", "qué hay pendiente", "actualiza mesa", "revisa GitHub/Basecamp/Slack", or when the Mesa poller or a push integration is down. Lead only.
+description: Ingest of everything waiting on Andrés into Mesa with mesa item upsert - Slack messages that expect his answer (slack-triage logic) and Basecamp assignments, mentions and client comments without his reply, plus GitHub review requests (pr-monitor gate) on demand. Read-only toward every source. Covers the periodic two-stage sweep the sweeper agent runs every ~60 s and the full on-demand pass. Use when Andrés says "barre", "barrer ahora", "sweep", "qué hay pendiente", "actualiza mesa", "revisa Slack/Basecamp/GitHub", or when the sweeper is down.
 ---
 
-# Mesa sweep (lead, read-only toward every source)
+# Mesa sweep (read-only toward every source)
 
-The Mesa server polls GitHub on its own; Slack and Basecamp push come later. This skill is the fallback and the
-on-demand pass. It never writes to GitHub, Basecamp or Slack: no comments, no reactions, no mark-as-read. Its only
-writes are `mesa item upsert` (idempotent by `source` + `externalId`, so a re-sweep never duplicates).
+Slack and Basecamp are read only by Claude sessions through MCP (Andrés, 2026-11-03: no Slack app, no Basecamp
+OAuth), so this skill is their only ingest path. GitHub is polled by the Mesa server; § 1 is the on-demand
+fallback. Nothing here writes to a source: no comments, no reactions, no mark-as-read. The only writes are
+`mesa item upsert` (idempotent by `source` + `externalId`, the dedupe key, so a re-sweep never duplicates) and the
+watermarks.
 
 `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa` (Bash tool, bare). Item JSON is the server's ItemInput:
 `{source, externalId, kind, title, excerpt?, project?, url?, need?, station?, waitOn?, meta?, receivedAt?}` with
 `waitOn` one of `you | client | claude | none | person:<name>`. Upsert one item per call:
-`MESA item upsert --json -` with the JSON on stdin (heredoc).
+`MESA item upsert --json -` with the JSON on stdin (heredoc). Private content stays in Mesa.
 
-Window: since the last sweep (`mem_search session/mesa-lead` gives it; default: since 18:00 yesterday, local time).
-Say one line per source with counts. Private content stays in Mesa; never copy it elsewhere.
+## 0. Two ways it runs
+
+**Periodic (the sweeper agent, `.claude/agents/sweeper.md`, haiku).** During work hours, a two-stage tick:
+
+1. *Probe*: one MCP call per source since its watermark (Slack: `(to:me OR <@U06E2UBDC73>)` search by timestamp;
+   Basecamp: `get_my_notifications`). Nothing new: `sweep-tick.mjs report <source> --new 0` and silence.
+2. *Triage*: only for what the probe found, § 2 or § 3 below, then upserts and `report --new N --watermark W`.
+
+The clock is `scripts/sweep-tick.mjs`; every number (60 s active, 5 min after 30 quiet minutes, exponential
+backoff to 30 min on errors, work hours, probe limit) is in `config/sweep.json`. It snaps back to 60 s on any new
+item or when Andrés interacts with Mesa, and "Barrer ahora" in Mesa (`sweep.requested` to the session `sweeper`)
+forces an immediate probe. A 429 or an MCP error backs that source off and marks it degraded in Mesa (Estados B).
+
+**On demand (the lead).** "Barre" from Andrés: if the sweeper is alive, nothing to do but tell him the button does
+it; for a wider window ("qué hay desde el viernes") or with the sweeper down, run § 1-3 over the window yourself
+(default: since 18:00 yesterday, local time) and report one line per source with counts.
 
 ## 1. GitHub: review requests (gate from pr-monitor step 2)
 
@@ -53,6 +69,9 @@ Read tools only: `mcp__basecamp__get_my_assignments`, `get_my_notifications`, `g
 
 `externalId` = the recording id (comments: `<recording>#<comment>`), `url` = the app URL, `project` = the project name.
 
+In the periodic triage the input is only the new notifications from the probe: read each one's recording or
+comment (`get_by_url`) and apply the three rules above; the watermark advances to the newest notification seen.
+
 ## 3. Slack: who is waiting on him (slack-triage logic)
 
 Source of truth: `C:/Users/z4yross/.claude-work/commands/slack-triage.md` (read it; never edit it). His user id is
@@ -68,7 +87,13 @@ write in that conversation afterwards; in a group DM it must be addressed to him
 `{"source":"slack","externalId":"<channel>:<ts>","kind":"message","title":"<person> · <one-line ask>","url":"<permalink>","waitOn":"you"}`.
 **Ya respondiste** and **Ruido** are not upserted; give their counts in the summary line only. Names, never user ids.
 
-## 4. Close
+In the periodic triage the input is only the new messages from the probe (ts above the watermark): group them by
+conversation and apply the same rule; checking "he wrote afterwards" uses `slack_read_thread` or the conversation's
+latest messages, not the three full searches. The `externalId` is `<channelId>:<ts>`, so a message seen again
+upserts the same item. The watermark advances to the newest ts seen, noise included.
 
-`mem_save` topic `session/mesa-sweep` (upsert): the time of this sweep and the counts per source. One line to Andrés:
-`GitHub N · Basecamp N · Slack N nuevos (te esperan M)`.
+## 4. Close (on-demand pass only)
+
+Advance the watermarks you covered (`node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs report <source> --new N
+--watermark W`) so the sweeper does not triage the same window again. One line to Andrés:
+`GitHub N · Basecamp N · Slack N nuevos (te esperan M)`. The periodic sweep says nothing.

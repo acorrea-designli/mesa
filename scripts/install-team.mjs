@@ -48,6 +48,7 @@ export const ALLOW = [
   `Bash(${MESA_CLI} *)`,
   `PowerShell(${MESA_CLI} *)`,
   "Bash(node G:/WorkSpace/designli/ops/.claude/skills/mesa-write/assets/render.mjs *)",
+  "Bash(node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs *)",
   "Bash(gh api user -q .login)",
   "Bash(gh api repos/*)",
   "Bash(gh search prs *)",

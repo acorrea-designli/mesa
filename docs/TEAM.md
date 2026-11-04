@@ -22,13 +22,15 @@ compaction or new session.
 | **devops** | sonnet (opus on `complexity: high`) | one ticket's infra change, until PASS | brief, handoffs, `lesson/*` | handoff (branch, sha, PR, plan summary) | `apply`, state writes, secrets in output |
 | **researcher** | opus | one investigation, until Andrés closes it | brief, handoffs, past investigations in engram | handoff; `lesson/<slug>` for a cause found | writes to any source, re-runs CI or deploys |
 | **writer** | opus | one message or document, until sent or denied | brief, the destination thread, `client/<slug>` | handoff; `client/<slug>` upsert | sends, changes a Mantener phrase, invents facts |
+| **sweeper** | haiku | one work session or `maxTicksPerInstance` ticks, one at a time | `config/sweep.json`, the per-source watermarks in Mesa | nothing: each tick reports its watermark to Mesa as it goes | writes to Slack or Basecamp, ends its turn between ticks, speaks when nothing is new |
 
 Tools, the exact command sheet and the loop of each role are in `.claude/agents/<role>.md`. The lead has no
 definition file: it is Andrés's session, driven by the `mesa-*` skills.
 
 **Why these models.** tl, reviewer, researcher and writer make the judgment calls Andrés relies on (scope, defects,
 causes, what a client reads), so they run on Opus. dev and devops implement a brief that an Opus tl wrote and an
-Opus reviewer checks, so Sonnet is enough; the tl marks a NEED `complexity: high` when it is not.
+Opus reviewer checks, so Sonnet is enough; the tl marks a NEED `complexity: high` when it is not. The sweeper runs
+every minute all day, mostly to learn that nothing changed, so it is Haiku; it only classifies what is new.
 
 **Why no qa.** Mesa's work is reviews, small client infra and config changes, investigations and messages. The tl
 already checks every acceptance criterion against the PR, the reviewer checks the code, and nothing is deployed by
@@ -38,7 +40,8 @@ its own. Add it when a ticket type ships UI or a deploy the team itself verifies
 ## 2. Names, spawn and retire
 
 **Names** are `<role>-<ref>[-k]`: `tl-t14`, `reviewer-t12`, `reviewer-t12-2` for the second PR or the second pass.
-Names are never reused. The ticket ref is in the name, which is how the hooks find an agent's ticket.
+Names are never reused. The ticket ref is in the name, which is how the hooks find an agent's ticket. The sweeper
+has no ticket and is named `sweeper-<n>`.
 
 **Spawn** (lead only; teammates cannot spawn and ask with `NEED`):
 
@@ -107,7 +110,7 @@ the salida → Andrés approves → lead sends → tl writes `mesa/<ref>`, `DONE
 | a reusable review rule for a repo | engram, reviewer | `review/<owner>/<repo>/<slug>` |
 | a measured gotcha (tooling, infra, a failure cause) | engram | `lesson/<slug>` |
 | the lead's session summary and open items | engram | `session/mesa-lead` |
-| the last sweep | engram | `session/mesa-sweep` |
+| per-source sweep state: watermark, last checked, last new, health, backoff | Mesa sources | `slack`, `basecamp` |
 
 Engram is in English, never holds a secret or a client's private content verbatim, and is written with a
 `topic_key` so a second save upserts. Only the lead answers `judgment_required` (`mem_judge`). Every session's cwd
@@ -144,9 +147,14 @@ piping hook JSON into it; tests: `node --test "scripts/**/*.test.mjs"` (mise nod
 
 | Event | Script | Rules |
 |---|---|---|
-| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G9** one-line commits, no trailer · **G10** nobody approves, schedules, denies or undoes through the raw API |
+| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** nobody approves, schedules, denies or undoes through the raw API |
 | PermissionRequest (all tools) | `mesa-approval.mjs` | § 6 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
+
+**Global guard (outside this repo).** `C:/Users/z4yross/.claude/hooks/commit-guard.mjs` runs for every session on
+this PC: a `git commit` must be one `-m "type(scope): subject"` (lowercase, no trailing period, at most 72
+characters) with no attribution, and `gh pr` / `gh issue` bodies carry no AI attribution. The Mesa hooks do not
+duplicate it (G9 was retired for that reason).
 
 The hooks identify the caller from the hook input: no `agent_id` is the lead; otherwise the name comes from the
 subagent's `.meta.json`, its agent id (`a<name>-<hex>`) or the spawn prompt's first line.
@@ -213,3 +221,35 @@ registered with the node that ran the installer. Re-run after every pull. Restar
     also matches writes with `-f`; hook G4 blocks those for everyone.
 14. **Lead question guard.** medix's Stop hook that refuses a lead turn ending in a question with no ticket is not
     included; the lead talks to Andrés in his own terminal. Add it if questions keep getting lost in chat.
+15. **Sources API.** `sweep-tick.mjs` expects `GET /api/sources` (`{sources: {slack, basecamp}, lastInteractionAt}`),
+    `PATCH /api/sources/:name` (watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError), a
+    `lastInteractionAt` that Mesa updates on any UI action, the "Barrer ahora" button emitting `sweep.requested` to
+    the session `sweeper`, and the rail reading `health`. Until they exist the state lives in a local file
+    (`%TEMP%/mesa-team/sources.json`, every output says `"store": "local"`), so the cadence works but there is no
+    button, no interaction snap-back and no health in the UI.
+16. **Slack probe query.** The probe uses one search, `(to:me OR <@U06E2UBDC73>)`. If Slack search does not honour
+    `OR` with `to:`, the probe becomes two calls (`to:me`, then the mention) and stays under the same limit.
+17. **Sweeper approvals.** The sweeper has no ticket, so a permission card it raises has `ticketRef: null` and
+    must show on Hoy. With `--allow`, its command sheet is fully allowed and it should never raise one.
+
+## 11. Ingest: the sweep
+
+Slack and Basecamp reach Mesa only through Claude's MCP connectors (Andrés, 2026-11-03: no Slack app, no Basecamp
+OAuth). GitHub is polled by the Mesa server. The sweeper agent is the periodic ingest; `mesa-sweep` is its
+procedure and the lead's on-demand pass.
+
+- **Two stages per tick.** The probe is one MCP call per source since its watermark (Slack: `(to:me OR
+  <@U06E2UBDC73>)` by timestamp; Basecamp: `get_my_notifications`). Only when it finds something new does the
+  triage run (the slack-triage classification, the Basecamp rules), followed by `mesa item upsert` with the dedupe
+  key as `externalId` and the watermark advance. A quiet tick writes only `lastChecked` and says nothing.
+- **Cadence in config, not prose**: `config/sweep.json` holds work hours, the active interval (60 s), the idle
+  interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit and the
+  ticks per instance. `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
+  records a tick's outcome. Any new item or any interaction by Andrés snaps the cadence back to 60 s.
+- **Barrer ahora** in Mesa emits `sweep.requested` to the Mesa session `sweeper`; `sweep-tick.mjs wait` long-polls
+  that session and returns at once with every source not in backoff, even outside work hours.
+- **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and marks it `degraded` in
+  Mesa, which shows it in the rail (Estados B). The next good probe resets it.
+- **Context.** The sweeper waits in the foreground, so its turn never ends between ticks: no idle notifications
+  reach the lead and no tick costs the lead any context. After `maxTicksPerInstance` ticks it sends `DONE` and the
+  lead spawns the next one; the watermarks carry over in Mesa.

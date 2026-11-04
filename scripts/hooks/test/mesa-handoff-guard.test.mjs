@@ -72,3 +72,10 @@ test("the name resolves from the spawn prompt as a last resort", async () => {
   const r = await check(input, { fetchImpl: handoffs([]), now });
   assert.match(r.reason, /researcher-t8/);
 });
+
+test("the sweeper has no ticket and is never asked for a handoff", async () => {
+  const { input } = fakeAgent({ name: "sweeper-3" });
+  assert.equal(await check(input, { fetchImpl: unreachable, now }), null);
+  const byId = fakeAgent({ agentId: "asweeper-4-0123456789abcdef" });
+  assert.equal(await check(byId.input, { fetchImpl: unreachable, now }), null);
+});
