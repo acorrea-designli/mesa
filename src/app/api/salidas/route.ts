@@ -1,4 +1,5 @@
 import { body, json, query, route } from "@/lib/api/http";
+import { withDestinationUrl } from "@/features/salidas/read";
 import { salidaInput } from "@/lib/api/schemas";
 import type { SalidaStatus } from "@/lib/domain/types";
 
@@ -11,4 +12,4 @@ export const GET = route((req, r) => {
 });
 
 /** POST /api/salidas SalidaInput -> SalidaDetail (201) with v1 */
-export const POST = route(async (req, r) => json(r.salidas.create(await body(req, salidaInput)), { status: 201 }));
+export const POST = route(async (req, r) => json(withDestinationUrl(r.salidas.create(await body(req, salidaInput))), { status: 201 }));

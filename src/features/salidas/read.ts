@@ -75,7 +75,7 @@ export function destinationConfig(env: Record<string, string | undefined> = proc
   return { slackDomain: env.MESA_SLACK_DOMAIN, basecampAccount: env.MESA_BASECAMP_ACCOUNT };
 }
 
-/** A salida detail with its destinationUrl: what GET /api/salidas/:id and the transition answer carry. */
+/** A salida detail with its destinationUrl: every route under /api/salidas that answers with a SalidaDetail returns it through here. */
 export function withDestinationUrl<T extends SalidaDetail>(s: T, cfg: DestinationConfig = destinationConfig()): T & { destinationUrl: string | null } {
   return { ...s, destinationUrl: destinationUrl(s, cfg) };
 }
