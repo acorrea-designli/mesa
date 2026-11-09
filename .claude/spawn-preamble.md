@@ -77,8 +77,12 @@ no `&&`, no pipes), so it matches the allow rule.
     was wrong). Before you draft, answer, summarize or plan from a Slack or Basecamp message: (a) read the source
     message in detailed mode (`slack_read_thread` or `slack_read_channel` with `response_format: "detailed"`; search
     output omits files) plus the 3-5 messages before it; (b) open every file it lists: Slack
-    `slack_read_file <file id>`; Basecamp `get_upload` for an upload record, `download_file` for the content of a
-    `<bc-attachment>` or upload found with `get_by_url`; (c) a short message that says "aquí", "esto", "esta", "this"
-    or "here" points at an attachment or a link, so open it; (d) a file you cannot open (no tool, an error, a type
-    you cannot read): send `BLOCKED <ticket> cannot read <name> (<why>)` to your owner instead of guessing. Say in
+    `slack_read_file <file id>`; Basecamp `download_file <url>`, where the URL is the `href` of the `<bc-attachment>`
+    in the rich text (`get_by_url`) or the `download_url` from `get_upload(upload_id)` or from a record's attachments.
+    It returns text files as text and images as an image; a PDF or any other type comes back as a description with a
+    `web_url`, and a file over 10 MB as a description only; (c) a short message that says "aquí", "esto", "esta",
+    "this" or "here" points at an attachment or a link, so open it; (d) a file you cannot open (no tool, an error, a
+    type you cannot read, a description instead of content): send
+    `BLOCKED <ticket> cannot read <name> (<why>) <web_url>` to your owner instead of guessing, with the `web_url`
+    (Basecamp) so Andrés can open it himself. Say in
     your draft or reply what you read from each file.

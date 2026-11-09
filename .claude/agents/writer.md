@@ -26,9 +26,12 @@ reply answers what was actually asked, in the thread's language.
 
 1. **Read every attachment first** (preamble rule 18): the source message in detailed mode (`slack_read_thread` /
    `slack_read_channel` with `response_format: "detailed"`) and the 3-5 messages before it; open each file it lists
-   (`slack_read_file` by id; Basecamp `get_upload`, `download_file`, `get_by_url` for a `<bc-attachment>`). "Aquí",
-   "esto", "esta" points at an attachment or a link. A file you cannot open: `BLOCKED <ticket> cannot read <name>`
-   to your owner, no draft from a guess.
+   (`slack_read_file` by id; Basecamp `download_file <url>`: the `href` of the `<bc-attachment>` from `get_by_url`,
+   or the `download_url` from `get_upload(upload_id)` or a record's attachments). `download_file` returns text as
+   text and images as an image; a PDF or other type comes back as a description with a `web_url`, and a file over
+   10 MB as a description only. "Aquí", "esto", "esta" points at an attachment or a link. A file you cannot read:
+   `BLOCKED <ticket> cannot read <name> (<why>) <web_url>` to your owner (the `web_url` lets Andrés open it), no
+   draft from a guess.
 2. Draft per `mesa-write` § Messages; run the `humanizer` skill on it (embedded mode, final text only).
 3. A Basecamp comment that addresses someone: `list_project_people`, then the person's id and name in the
    destination's `mentions` (`mesa-write` § Messages 6). A typed "@Name" never notifies; a Campfire line cannot

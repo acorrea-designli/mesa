@@ -12,10 +12,13 @@ or attaches. `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`. Scratch folder:
 
 0. **Read every attachment before you draft** (preamble rule 18). Read the source message in detailed mode
    (`slack_read_thread` or `slack_read_channel` with `response_format: "detailed"`: search output omits files) plus
-   the 3-5 messages before it, and open every file it lists: Slack `slack_read_file <id>`; Basecamp `get_upload` and
-   `download_file` (`get_by_url` shows the `<bc-attachment>`s of a comment). A short message that says "aquí",
-   "esto", "esta" points at an attachment or a link. A file you cannot open: `BLOCKED <ticket> cannot read <name>`
-   to the owner, never a guess. What the files show belongs in the facts list below.
+   the 3-5 messages before it, and open every file it lists: Slack `slack_read_file <id>`; Basecamp
+   `download_file <url>`, the `href` of the `<bc-attachment>` (`get_by_url` shows them in a comment) or the
+   `download_url` from `get_upload(upload_id)` or a record's attachments. Text comes back as text and images as an
+   image; a PDF or other type comes back as a description with a `web_url`, a file over 10 MB as a description only.
+   A short message that says "aquí", "esto", "esta" points at an attachment or a link. A file you cannot read:
+   `BLOCKED <ticket> cannot read <name> (<why>) <web_url>` to the owner (the `web_url` lets Andrés open it), never
+   a guess. What the files show belongs in the facts list below.
 1. **Facts first.** List what the message must say from the ticket context (decisions, numbers, dates, links, what
    is asked of the reader). Nothing outside that list goes in. Missing a fact: ask the owner, do not invent it.
 2. **Read the thread** you answer. Reply to what was asked, in the thread's language (clients: English unless they
