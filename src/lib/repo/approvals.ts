@@ -2,6 +2,7 @@
 // Allow comes only from an explicit "allow" decision before expires_at. Every other
 // outcome (deny, read_config, expiry) is a deny for the agent.
 import type { Db } from "../db/sqlite";
+import { tx } from "../db/sqlite";
 import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError } from "../db/util";
 import type { Approval, ApprovalDecision } from "../domain/types";
 import { signal, waitSignal } from "../wake/wake";
@@ -74,15 +75,19 @@ export function approvalsRepo(db: Db) {
     },
 
     /** Refused after expires_at or once decided: a late "allow" can never reach an agent that was told no. */
-    decide(id: string, d: { decision: ApprovalDecision; actor: string; note?: string }, now = new Date()): Approval {
+    decide(id: string, d: { decision: ApprovalDecision; actor: string; note?: string }, now = new Date(), opts: { seed?: boolean } = {}): Approval {
       repo.expire(now);
       const a = raw(id);
       if (a.status === "expired") throw new TransitionError("this approval expired; the agent was already denied");
       if (a.status === "decided") throw new TransitionError(`already decided: ${a.decision}`);
-      db.prepare(
-        "UPDATE approvals SET status = 'decided', decision = ?, note = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
-      ).run(d.decision, d.note ?? "", d.actor, nowIso(now), id);
-      if (d.actor === "andres") touchInteraction(db, now);
+      tx(db, () => {
+        db.prepare(
+          "UPDATE approvals SET status = 'decided', decision = ?, note = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
+        ).run(d.decision, d.note ?? "", d.actor, nowIso(now), id);
+        if (d.actor === "andres") touchInteraction(db, now);
+        // His press takes his turn on the ticket (the seed builds sample states and is not a press).
+        if (d.actor === "andres" && !opts.seed) tickets.andresActed(a.ticketId, now);
+      });
       signal(`approval:${id}`);
       return raw(id);
     },

@@ -5,6 +5,7 @@
 //   waiting_claude  Andrés asked or answered; the owner session wakes  ("Espera a Claude")
 //   working         Claude took it and is doing the work                ("Claude trabaja")
 //   closed          done                                                ("Cerrado" · Reabrir)
+// A press of Andrés on the ticket's review, salida or permission card is his turn taken (`andres_acted`).
 
 import type { TicketDirection, TicketStatus, WakeKind } from "./types";
 
@@ -14,6 +15,7 @@ export type TicketEvent =
   | { type: "claude_plan"; needsOk: boolean } // Claude posts "Claude va a hacer"
   | { type: "approve_plan"; planned: boolean } // Andrés OKs the plan (wakes the owner); planned = some action is still "planned"
   | { type: "permission_request" } // "Pídeme permiso": the agent must file an approval card (wakes the owner)
+  | { type: "andres_acted" } // Andrés pressed a button on the ticket (review action, salida, permission): his turn is taken
   | { type: "claim" } // a session takes the ticket and starts work
   | { type: "close"; by: "andres" | "claude" }
   | { type: "reopen"; by?: "andres" | "claude" }; // by defaults to Andrés (the UI); Claude's reopen is not his interaction
@@ -31,6 +33,10 @@ export function initialTicketStatus(direction: TicketDirection): TicketStatus {
 const fail = (error: string): TicketTransition => ({ ok: false, error });
 
 export function transitionTicket(status: TicketStatus, ev: TicketEvent): TicketTransition {
+  // A press is his turn taken: Te espera becomes Espera a Claude. Anything else stays as it is (a closed ticket
+  // included, never an error) and it never wakes: the press's own wake already reached the owner.
+  if (ev.type === "andres_acted") return { ok: true, status: status === "waiting_andres" ? "waiting_claude" : status };
+
   if (status === "closed" && ev.type !== "reopen") return fail("ticket is closed; reopen it first");
 
   switch (ev.type) {

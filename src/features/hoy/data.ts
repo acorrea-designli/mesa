@@ -49,9 +49,10 @@ export function loadHoy(now: Date = new Date()): HoyData {
   });
   const needs = loadTicketNeeds(r, linkedDetails, now);
   const needsOfRef = new Map(linkedDetails.map((t) => [t.ref, needs.get(t.id) ?? []]));
+  const statusOfRef = new Map(linkedDetails.map((t) => [t.ref, t.status]));
   for (const [n, i] of items.entries()) {
     const ref = ticketRefOf(i);
-    if (ref) rows[n] = withTicketNeed(rows[n]!, needsOfRef.get(ref));
+    if (ref) rows[n] = withTicketNeed(rows[n]!, needsOfRef.get(ref), statusOfRef.get(ref));
   }
 
   const details: Record<string, ItemDetail> = {};

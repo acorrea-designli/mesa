@@ -110,5 +110,8 @@ describe("Hoy rows of an item linked to a ticket that needs Andrés", () => {
     const after = loadHoy().rows.find((x) => x.id === linked.id)!;
     expect(after.need).not.toBe("Aprobar plan");
     expect(after.need).toBe("Respuesta"); // the item's own need again
+    // the ticket is Claude's turn now: its status tag, not the item's own "Te espera"
+    expect(after.tag).toEqual({ tone: "cl", label: "Claude trabaja" });
+    expect(after.phoneTag).toEqual({ tone: "cl", label: "Claude trabaja" });
   });
 });

@@ -34,6 +34,13 @@ describe("ticket machine", () => {
     expect(transitionTicket("waiting_claude", { type: "claude_plan", needsOk: false })).toMatchObject({ status: "working" });
   });
 
+  it("a press of Andrés hands Te espera to Claude and changes nothing else, closed included, without a wake", () => {
+    expect(transitionTicket("waiting_andres", { type: "andres_acted" })).toEqual({ ok: true, status: "waiting_claude" });
+    for (const status of ["waiting_claude", "working", "closed"] as const) {
+      expect(transitionTicket(status, { type: "andres_acted" })).toEqual({ ok: true, status });
+    }
+  });
+
   it("approving a plan needs a planned step, whatever the status", () => {
     const ok = { ok: true, status: "working", wake: "ticket.plan_approved" };
     for (const status of ["waiting_andres", "waiting_claude", "working"] as const) {
