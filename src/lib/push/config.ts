@@ -15,9 +15,10 @@ export type PushOff = "no_keys" | "sandbox";
 
 export type PushStatus = { enabled: true; publicKey: string } | { enabled: false; reason: PushOff };
 
+type Env = Readonly<Record<string, string | undefined>>;
 const B64URL = /^[A-Za-z0-9_-]+$/;
 
-export function vapidConfig(env: NodeJS.ProcessEnv = process.env): VapidConfig | null {
+export function vapidConfig(env: Env = process.env): VapidConfig | null {
   const publicKey = env.MESA_VAPID_PUBLIC_KEY?.trim() ?? "";
   const privateKey = env.MESA_VAPID_PRIVATE_KEY?.trim() ?? "";
   const subject = env.MESA_VAPID_SUBJECT?.trim() ?? "";
@@ -26,8 +27,8 @@ export function vapidConfig(env: NodeJS.ProcessEnv = process.env): VapidConfig |
   return { publicKey, privateKey, subject };
 }
 
-export function pushStatus(env: NodeJS.ProcessEnv = process.env): PushStatus {
-  if (isSandbox(env)) return { enabled: false, reason: "sandbox" };
+export function pushStatus(env: Env = process.env): PushStatus {
+  if (isSandbox(env as NodeJS.ProcessEnv)) return { enabled: false, reason: "sandbox" };
   const cfg = vapidConfig(env);
   return cfg ? { enabled: true, publicKey: cfg.publicKey } : { enabled: false, reason: "no_keys" };
 }

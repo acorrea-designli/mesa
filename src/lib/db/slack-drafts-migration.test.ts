@@ -38,7 +38,7 @@ describe("0900_slack_drafts migration", () => {
     expect(() =>
       db.prepare("INSERT INTO salidas (id, status, source, destination, created_at, updated_at) VALUES ('sa_0', 'draft_created', 'slack', '{}', 'x', 'x')").run(),
     ).toThrow(/CHECK/);
-    expect(migrate(db)).toEqual([MIGRATION]);
+    expect(migrate(db)[0]).toBe(MIGRATION); // later migrations may follow
 
     insert(db, "sa_2", "draft_created", "draft");
     insert(db, "sa_3", "sending", "send");
