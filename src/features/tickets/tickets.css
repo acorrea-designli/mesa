@@ -144,6 +144,16 @@
 .tk-row.sel .id {
   color: var(--ink);
 }
+/* Unread (never the open one): the whole row takes the Claude tint, bleeding to the gutters like .sel. The "new" tag stays as the non-colour cue. */
+.tk-row.unread {
+  background: var(--cl-tint);
+  margin: 0 -28px;
+  padding: 0 28px;
+}
+/* 4% keeps mute text AA on the hover tint in both themes (14% drops it to 3.7:1 in Grafito). */
+.tk-row.unread:hover {
+  background: color-mix(in srgb, var(--cl) 4%, var(--cl-tint));
+}
 .tk-row.closed .subj,
 .tk-row.closed .tk-dir {
   color: var(--mute);
@@ -1067,6 +1077,12 @@
     font-size: 13px;
     color: var(--ink2);
   }
+  .tk-rail-item.unread {
+    background: var(--cl-tint);
+  }
+  .tk-rail-item.unread:hover {
+    background: color-mix(in srgb, var(--cl) 4%, var(--cl-tint));
+  }
   .tk-rail-item.sel {
     background: var(--raise);
     box-shadow: inset 3px 0 0 var(--cl);
@@ -1192,7 +1208,8 @@
   .tk-row .subj small {
     font-size: 13px;
   }
-  .tk-row.sel {
+  .tk-row.sel,
+  .tk-row.unread {
     margin: 0 -16px;
     padding: 6px 16px;
   }

@@ -179,7 +179,7 @@ function Row({ t, sel, tab }: { t: TicketRow; sel: boolean; tab?: string }) {
     <Link
       role="listitem"
       href={href({ tab, t: t.ref })}
-      className={["tk-row", sel && "sel", t.status === "closed" && "closed"].filter(Boolean).join(" ")}
+      className={["tk-row", sel && "sel", t.unread && !sel && "unread", t.status === "closed" && "closed"].filter(Boolean).join(" ")}
       aria-current={sel ? "true" : undefined}
       scroll={false}
     >
@@ -214,7 +214,7 @@ function Rail({ rows, sel, tab, onExpand }: { rows: TicketRow[]; sel?: string; t
           <Link
             key={t.id}
             href={href({ tab, t: t.ref })}
-            className={["tk-rail-item", isSel && "sel", t.status === "closed" && "closed"].filter(Boolean).join(" ")}
+            className={["tk-rail-item", isSel && "sel", flag && "unread", t.status === "closed" && "closed"].filter(Boolean).join(" ")}
             aria-label={`${t.ref} · ${t.title} · ${need ? `Te espera · ${need.label}` : statusLabel(t.status)}${flag ? " · nuevo" : ""}`}
             aria-current={isSel ? "true" : undefined}
             title={t.title}
