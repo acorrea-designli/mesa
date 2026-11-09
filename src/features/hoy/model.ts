@@ -1,7 +1,8 @@
 // Hoy view model: pure mapping from domain rows to what the screen renders.
 // Client safe (no server imports); unit tested in model.test.ts.
 import type { StatusTone } from "@/components/ui/primitives";
-import type { Approval, Destination, Item, Salida, Source, Station, WaitOn } from "@/lib/domain/types";
+import type { Approval, Destination, Item, Salida, Source, Station, TicketStatus, WaitOn } from "@/lib/domain/types";
+import { TICKET_STATUS_LABEL } from "@/lib/domain/ticket-machine";
 import { STATION_LABEL } from "@/lib/domain/types";
 import { chipOfMeta, type FilesChip } from "@/lib/domain/files";
 import type { SourceHealth } from "@/components/shell/health";
@@ -201,13 +202,22 @@ export function itemRow(i: Item, time: string, health?: SourceHealth): HoyRow {
 
 /**
  * A row whose item hangs on an open ticket that needs Andrés names the first need in the Necesita column
- * and reads "Te espera" (the one solid tag), whatever the item's own wait says. Other rows pass unchanged.
+ * and reads "Te espera" (the one solid tag), whatever the item's own wait says. A ticket that needs nothing
+ * from him (his press took his turn) shows its own status tag instead of the item's "Te espera". Other rows
+ * pass unchanged.
  */
-export function withTicketNeed(row: HoyRow, needs: readonly { label: string }[] | undefined): HoyRow {
+export function withTicketNeed(row: HoyRow, needs: readonly { label: string }[] | undefined, status?: TicketStatus): HoyRow {
+  if (row.kind !== "item" || row.station === "done") return row;
   const first = needs?.[0];
-  if (!first || row.kind !== "item" || row.station === "done") return row;
-  const tag: Tag = { tone: "you", label: "Te espera" };
-  return { ...row, need: first.label, tag, phoneTag: tag, waitsOnYou: true };
+  if (first) {
+    const tag: Tag = { tone: "you", label: "Te espera" };
+    return { ...row, need: first.label, tag, phoneTag: tag, waitsOnYou: true };
+  }
+  if (needs && row.waitsOnYou && (status === "waiting_claude" || status === "working")) {
+    const tag: Tag = { tone: "cl", label: TICKET_STATUS_LABEL[status] };
+    return { ...row, tag, phoneTag: tag, waitsOnYou: false };
+  }
+  return row;
 }
 
 export function salidaRow(s: Salida, body: string, time: string): HoyRow {

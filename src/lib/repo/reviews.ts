@@ -327,6 +327,9 @@ export function reviewsRepo(db: Db) {
           }
         }
 
+        // Any press is his turn taken: the ticket leaves Te espera (never a second wake: review.action wakes the owner).
+        tickets.andresActed(r.ticketId, now);
+
         emitWake(
           db,
           {

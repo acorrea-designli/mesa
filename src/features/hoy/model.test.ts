@@ -149,6 +149,22 @@ describe("withTicketNeed", () => {
     expect(row.waitsOnYou).toBe(true);
   });
 
+  it("a ticket with no needs shows its own status tag instead of the item's Te espera", () => {
+    const waitsOnYou = itemRow({ ...base, waitOn: "you", station: "waiting" }, "09:02");
+    expect(waitsOnYou.tag.label).toBe("Te espera");
+    const claude = withTicketNeed(waitsOnYou, [], "waiting_claude");
+    expect(claude.tag).toEqual({ tone: "cl", label: "Espera a Claude" });
+    expect(claude.phoneTag).toEqual({ tone: "cl", label: "Espera a Claude" });
+    expect(claude.waitsOnYou).toBe(false);
+    expect(withTicketNeed(waitsOnYou, [], "working").tag).toEqual({ tone: "cl", label: "Claude trabaja" });
+    // rows with needs are unchanged by the status; a row that does not read Te espera keeps its tag
+    expect(withTicketNeed(waitsOnYou, need, "waiting_claude").tag.label).toBe("Te espera");
+    const clWaits = itemRow(claudeWaits, "09:02");
+    expect(withTicketNeed(clWaits, [], "working")).toBe(clWaits);
+    // no ticket detail: unchanged
+    expect(withTicketNeed(waitsOnYou, undefined, "waiting_claude")).toBe(waitsOnYou);
+  });
+
   it("leaves rows without needs, done rows and salidas unchanged", () => {
     const row = itemRow(claudeWaits, "09:02");
     expect(withTicketNeed(row, [])).toBe(row);

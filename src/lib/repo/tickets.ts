@@ -367,6 +367,20 @@ export function ticketsRepo(db: Db) {
       });
     },
 
+    /**
+     * Andrés pressed a button on one of the ticket's cards (a review action, a salida, a permission): his turn is
+     * taken, so Te espera becomes Espera a Claude. Joins the caller's transaction. Never wakes (the press's own
+     * wake already did), never errors, and touches nothing unless the ticket is waiting_andres. What he still owes
+     * (another salida, permission, question, planned step) keeps showing as Te espera through ticketNeeds.
+     */
+    andresActed(id: string | null | undefined, now = new Date()): void {
+      if (!id) return;
+      tx(db, () => {
+        const t = get(id);
+        if (t.status === "waiting_andres") apply(t, { type: "andres_acted" }, now, {}, true);
+      });
+    },
+
     /** Claude posts (or replaces) its plan. needs_ok actions put the ticket on Andrés. */
     plan(id: string, list: ActionInput[], session?: string, now = new Date()): TicketDetail {
       return tx(db, () => {

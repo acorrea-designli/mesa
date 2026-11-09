@@ -1017,7 +1017,7 @@ function seedApprovals(repos: Repos, now: Date, tk: SampleTickets): string[] {
     note: string,
   ) => {
     const a = A.create({ ...i, expiresAt: iso(now, min + 9) }, at(now, min));
-    A.decide(a.id, { decision, actor: "andres", note }, at(now, min + 1));
+    A.decide(a.id, { decision, actor: "andres", note }, at(now, min + 1), { seed: true });
     ids.push(a.id);
   };
   decided(

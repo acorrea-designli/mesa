@@ -31,6 +31,7 @@ import type {
 import { emitWake } from "../wake/wake";
 import { chipsRepo } from "./chips";
 import { touchInteraction } from "./interaction";
+import { ticketsRepo } from "./tickets";
 import { ensureSession } from "./sessions";
 
 /** Events only Andrés triggers from the UI; they count as interaction for the sweeper. */
@@ -46,6 +47,9 @@ const ANDRES_EVENTS = new Set<SalidaEvent["type"]>([
   "request_restore",
   "confirm_sent", // "Ya lo envié"
 ]);
+
+/** Andrés's presses that take his turn on the salida's ticket (an undo gives it back through the salida's own need). */
+const TURN_TAKING_EVENTS = new Set<SalidaEvent["type"]>(["approve", "schedule", "deny", "confirm_sent", "unqueue"]);
 
 /** Events only the sending session reports; refused for sample salidas. */
 const SEND_EVENTS = new Set<SalidaEvent["type"]>(["sent", "drafted", "failed", "hold", "bounce", "deleted", "restored"]);
@@ -86,6 +90,7 @@ export interface TurnInput {
 }
 
 export function salidasRepo(db: Db) {
+  const tickets = ticketsRepo(db);
   const get = (id: string): Salida => {
     const row = db.prepare("SELECT * FROM salidas WHERE id = ?").get(id);
     if (!row) throw new NotFoundError("salida", id);
@@ -289,6 +294,8 @@ export function salidasRepo(db: Db) {
         if (!r.ok) throw new TransitionError(r.error);
         patch(id, r.patch, nowIso(now));
         if (ANDRES_EVENTS.has(ev.type)) touchInteraction(db, now);
+        // The seed builds sample states and is not a press.
+        if (TURN_TAKING_EVENTS.has(ev.type) && !opts.seed) tickets.andresActed(s.ticketId, now);
         if (r.wake) {
           const next = get(id);
           emitWake(
