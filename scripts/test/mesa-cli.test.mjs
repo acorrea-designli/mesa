@@ -57,3 +57,22 @@ test("sandbox needs a push command and a ref", async () => {
   assert.equal((await run(["sandbox", "pull", "t6"])).code, 2);
   assert.equal((await run(["sandbox", "push"])).code, 2);
 });
+
+test("ticket fold posts the folded refs and the reason to the primary", async () => {
+  const { code, calls } = await run(["ticket", "fold", "t24", "t25", "t26", "--why", "mismo pedido de Matt"]);
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [{ method: "POST", url: "/api/tickets/t24/fold", body: { from: ["t25", "t26"], why: "mismo pedido de Matt", session: "dev-test" } }]);
+});
+
+test("ticket fold needs a primary, at least one ref and --why", async () => {
+  assert.equal((await run(["ticket", "fold", "t24", "t25"])).code, 2);
+  assert.equal((await run(["ticket", "fold", "t24", "--why", "x"])).code, 2);
+  assert.equal((await run(["ticket", "fold"])).code, 2);
+});
+
+test("ticket unfold posts the ticket to split out of the primary", async () => {
+  const { code, calls } = await run(["ticket", "unfold", "t24", "t25"]);
+  assert.equal(code, 0);
+  assert.deepEqual(calls, [{ method: "POST", url: "/api/tickets/t24/unfold", body: { ticket: "t25" } }]);
+  assert.equal((await run(["ticket", "unfold", "t24"])).code, 2);
+});

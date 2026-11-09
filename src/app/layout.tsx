@@ -9,6 +9,7 @@ import { readSandboxCopy } from "@/lib/sandbox/copy";
 import "@/styles/tokens.css";
 import "@/styles/base.css";
 import "@/styles/components.css";
+import "@/styles/batch-bar.css";
 import "@/styles/shell.css";
 
 const hanken = Hanken_Grotesk({

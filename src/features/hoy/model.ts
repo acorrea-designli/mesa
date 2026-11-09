@@ -224,3 +224,6 @@ export function sourceCounts(rows: HoyRow[], station: Station): Record<Source | 
 /** Nothing waits on Andrés: empty Inbox, no salidas to sign, no permissions. */
 export const isCalm = (d: Pick<HoyData, "stations" | "rows" | "approvals">) =>
   d.stations.inbox === 0 && !d.rows.some((r) => r.kind === "salida") && d.approvals.length === 0;
+
+/** "1 seleccionado" / "3 seleccionados": the batch bar's count (item rows only; salidas are never selected). */
+export const selectedLabel = (n: number) => `${n} ${n === 1 ? "seleccionado" : "seleccionados"}`;

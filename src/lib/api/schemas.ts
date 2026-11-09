@@ -62,6 +62,8 @@ const taskIds = z.array(z.string().min(1)).min(1).max(200);
 export const taskBatch = z.discriminatedUnion("action", [
   z.object({ action: z.literal("move"), ids: taskIds, station }),
   z.object({ action: z.literal("dispatch"), ids: taskIds, kind: z.enum(["review", "request", "investigation", "reply"]).optional() }),
+  /** Hoy "Abrir tarea y pasar a Claude": each item's card (made when it has none), dispatched as one batch. */
+  z.object({ action: z.literal("dispatch_items"), itemIds: taskIds, kind: z.enum(["review", "request", "investigation", "reply"]).optional() }),
   /** Deshacer of a batch move: each card back to its own previous station. */
   z.object({ action: z.literal("restore"), moves: z.array(z.object({ id: z.string().min(1), station })).min(1).max(200) }),
 ]);
@@ -115,6 +117,14 @@ export const ticketTransition = z.object({
   reason: z.string().optional(),
   session: z.string().optional(),
 });
+/** The lead groups same-topic tickets of a ticket.batch (mesa ticket fold <primary> <ref>... --why W). */
+export const ticketFold = z.object({
+  from: z.array(z.string().min(1)).min(1).max(50),
+  why: z.string().trim().min(1),
+  session: z.string().optional(),
+});
+/** Andrés splits a folded ticket out again (mesa ticket unfold <primary> <ref>). */
+export const ticketUnfold = z.object({ ticket: z.string().min(1) });
 export const actionState = z.object({
   state: z.enum(["planned", "approved", "rejected", "running", "done", "failed"]),
 });

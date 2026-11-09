@@ -9,6 +9,7 @@ import {
   nowIso,
   TransitionError,
 } from "../db/util";
+import { inferKind } from "../domain/dispatch-kind";
 import { initialTicketStatus, transitionTicket, type TicketEvent } from "../domain/ticket-machine";
 import { matchOptionKey, openOptions } from "../domain/ticket-options";
 import type {
@@ -33,6 +34,9 @@ import { emitWake } from "../wake/wake";
 import { ensureSession } from "./sessions";
 import { tasksRepo } from "./tasks";
 import { touchInteraction } from "./interaction";
+
+/** Label of the ticket ref a folded ticket keeps to its primary: how unfold knows it was folded there. */
+export const FOLDED_REF_LABEL = "Agrupado en";
 
 /** Body of the "Pídeme permiso" message (the thread and the agent's context show it as written). */
 export const PERMISSION_REQUEST_BODY = "Pídeme permiso";
@@ -74,6 +78,8 @@ export interface TicketInput {
   taskId?: string;
   /** Triage hint carried on the ticket.created wake (docs/TEAM.md § 4). */
   kind?: string;
+  /** Internal, never on the API: skip the ticket.created wake (a batch dispatch sends one ticket.batch instead). */
+  quiet?: boolean;
   isSample?: boolean;
   /** First message. Its author follows the direction. */
   body?: string;
@@ -157,8 +163,17 @@ export function ticketsRepo(db: Db) {
     return id;
   };
 
-  /** Apply a machine event, persist the status, and wake the owner if the machine says so. */
-  const apply = (t: Ticket, ev: TicketEvent, now: Date, payload: Record<string, unknown> = {}): TicketStatus => {
+  /**
+   * The cards that follow a ticket: every card whose tasks.ticket_id is the ticket, plus the ticket's own card
+   * (tickets.task_id) while that card has no ticket yet or points back at it.
+   */
+  const cardsOf = (t: Ticket): { id: string; station: Station }[] =>
+    db
+      .prepare("SELECT id, station FROM tasks WHERE ticket_id = ? OR (id = ? AND (ticket_id IS NULL OR ticket_id = ?)) ORDER BY created_at, id")
+      .all(t.id, t.taskId ?? "", t.id) as { id: string; station: Station }[];
+
+  /** Apply a machine event, persist the status, and wake the owner if the machine says so (`quiet`: never wake). */
+  const apply = (t: Ticket, ev: TicketEvent, now: Date, payload: Record<string, unknown> = {}, quiet = false): TicketStatus => {
     const r = transitionTicket(t.status, ev);
     if (!r.ok) throw new TransitionError(r.error);
     const ts = nowIso(now);
@@ -167,15 +182,15 @@ export function ticketsRepo(db: Db) {
          closed_at = CASE WHEN ? = 'closed' THEN ? ELSE NULL END,
          woke_at = CASE WHEN ? THEN ? ELSE woke_at END
        WHERE id = ?`,
-    ).run(r.status, ts, r.status, ts, r.wake ? 1 : 0, ts, t.id);
-    // The card follows the ticket, in the same transaction and through tasks.move (so the Project sync fires).
-    // Only a status change moves it, and only when the card is elsewhere: a manual move stands until the next change.
-    if (t.taskId && r.status !== t.status) {
-      const card = db.prepare("SELECT station FROM tasks WHERE id = ?").get(t.taskId) as { station: Station } | undefined;
+    ).run(r.status, ts, r.status, ts, r.wake && !quiet ? 1 : 0, ts, t.id);
+    // The cards follow the ticket, in the same transaction and through tasks.move (so the Project sync fires).
+    // Only a status change moves them, and only the ones that are elsewhere: a manual move stands until the next change.
+    // A primary ticket moves every card grouped into it; a folded ticket moves none (its card points at the primary).
+    if (r.status !== t.status) {
       const target = TASK_STATION_OF[r.status];
-      if (card && card.station !== target) tasks.move(t.taskId, target, undefined, now, { system: true });
+      for (const card of cardsOf(t)) if (card.station !== target) tasks.move(card.id, target, undefined, now, { system: true });
     }
-    if (r.wake) {
+    if (r.wake && !quiet) {
       emitWake(db, { sessionId: t.ownerSession, kind: r.wake, entityType: "ticket", entityId: t.id, payload: { ref: t.ref, ...payload } }, now);
     }
     return r.status;
@@ -291,7 +306,7 @@ export function ticketsRepo(db: Db) {
           },
           ts,
         );
-        if (input.direction === "andres_asks") {
+        if (input.direction === "andres_asks" && !input.quiet) {
           // A new request goes to its owner if one was named, otherwise to any session.
           // Payload: { ref, ticketRef, taskId, kind? } (ref is kept for older handlers).
           const payload: Record<string, unknown> = { ref, ticketRef: ref, taskId: input.taskId ?? null };
@@ -443,6 +458,110 @@ export function ticketsRepo(db: Db) {
         const t = get(id);
         apply(t, { type: "reopen" }, now, payload);
         return this.detail(t.id);
+      });
+    },
+
+    /**
+     * The lead groups same-topic tickets of a ticket.batch: the `from` tickets fold into `primary`, one owner for all.
+     * One transaction. Their cards point at the primary and join its card's station; their refs are copied to the
+     * primary (deduped by target) plus a ticket ref to each; the primary gets ONE informational message
+     * "Agrupé: t25 «título», … porque <why>" (no status change); each folded ticket gets "Agrupado en tN: <why>" and
+     * closes without a wake and without moving any card. 409 when the primary or a folded ticket is closed, a sample
+     * or not an andres_asks request, or when `from` contains the primary. Idempotent for the lead: a ticket that is
+     * already closed (folded) is refused, so run it only on the tickets still open.
+     */
+    fold(primaryId: string, o: { from: string[]; why: string; session?: string }, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        let p = get(primaryId);
+        const froms = [...new Map(o.from.map((x) => get(x)).map((x) => [x.id, x])).values()];
+        if (!froms.length) throw new TransitionError("nothing to fold: name at least one ticket");
+        if (froms.some((f) => f.id === p.id)) throw new TransitionError(`${p.ref} cannot be folded into itself`);
+        for (const t of [p, ...froms]) {
+          if (t.status === "closed") throw new TransitionError(`${t.ref} is closed`);
+          if (t.isSample) throw new TransitionError(`${t.ref} is a sample ticket`);
+          if (t.direction !== "andres_asks") throw new TransitionError(`${t.ref} is not an Andrés request`);
+        }
+        const why = o.why.trim();
+        const ts = nowIso(now);
+        if (o.session && !p.ownerSession) {
+          ensureSession(db, o.session, now);
+          db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(o.session, p.id);
+          p = get(p.id);
+        }
+        // Cards: those of the folded tickets join the primary and its card's station.
+        const own = p.taskId ? (db.prepare("SELECT station FROM tasks WHERE id = ?").get(p.taskId) as { station: Station } | undefined) : undefined;
+        const station = own?.station ?? TASK_STATION_OF[p.status];
+        const moved: string[] = [];
+        for (const f of froms) {
+          const ids = db.prepare("SELECT id FROM tasks WHERE ticket_id = ? OR (id = ? AND ticket_id IS NULL)").all(f.id, f.taskId ?? "") as { id: string }[];
+          for (const c of ids) {
+            db.prepare("UPDATE tasks SET ticket_id = ?, wait_on = 'claude', updated_at = ? WHERE id = ?").run(p.id, ts, c.id);
+            moved.push(c.id);
+          }
+        }
+        for (const id of moved) {
+          const c = db.prepare("SELECT station FROM tasks WHERE id = ?").get(id) as { station: Station };
+          if (c.station !== station) tasks.move(id, station, undefined, now, { system: true });
+        }
+        // Refs: theirs come over once, and the primary points at each folded ticket.
+        const have = new Set((db.prepare("SELECT ref_type, target FROM ticket_refs WHERE ticket_id = ?").all(p.id) as { ref_type: string; target: string }[]).map((r) => `${r.ref_type}|${r.target}`));
+        const add: RefInput[] = [];
+        const queue = (r: RefInput) => {
+          const key = `${r.refType}|${r.target}`;
+          if (have.has(key)) return;
+          have.add(key);
+          add.push(r);
+        };
+        for (const f of froms) {
+          const theirs = db.prepare("SELECT ref_type, target, label FROM ticket_refs WHERE ticket_id = ? ORDER BY created_at, rowid").all(f.id) as { ref_type: RefType; target: string; label: string }[];
+          for (const r of theirs) {
+            if (r.ref_type === "ticket" && [p.id, p.ref].includes(r.target)) continue;
+            queue({ refType: r.ref_type, target: r.target, label: r.label });
+          }
+          queue({ refType: "ticket", target: f.ref, label: f.title });
+        }
+        insertRefs(p.id, null, add, ts);
+        // Words: the primary hears it as information; each folded ticket explains where it went and closes quietly.
+        insertMessage(p.id, { author: "claude", body: `Agrupé: ${froms.map((f) => `${f.ref} «${f.title}»`).join(", ")} porque ${why}` }, ts);
+        for (const f of froms) {
+          insertMessage(f.id, { author: "claude", body: `Agrupado en ${p.ref}: ${why}` }, ts);
+          insertRefs(f.id, null, [{ refType: "ticket", target: p.ref, label: FOLDED_REF_LABEL }], ts);
+          apply(get(f.id), { type: "close", by: "claude" }, now, {}, true);
+        }
+        db.prepare("UPDATE tickets SET updated_at = ? WHERE id = ?").run(ts, p.id);
+        return this.detail(p.id);
+      });
+    },
+
+    /**
+     * Andrés splits a folded ticket out again (the lead runs it when he replies "separa t25"). The ticket reopens
+     * unclaimed, its original card points back at it, both tickets say so, and the lead gets ticket.created
+     * { ref, ticketRef, taskId, kind?, splitFrom } so the normal routing spawns its owner. 409 when `ticketId`
+     * was not folded into `primaryId`.
+     */
+    unfold(primaryId: string, ticketId: string, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const p = get(primaryId);
+        const f = get(ticketId);
+        const mark = db
+          .prepare("SELECT id FROM ticket_refs WHERE ticket_id = ? AND ref_type = 'ticket' AND target = ? AND label = ?")
+          .get(f.id, p.ref, FOLDED_REF_LABEL) as { id: string } | undefined;
+        if (f.status !== "closed" || !mark) throw new TransitionError(`${f.ref} was not folded into ${p.ref}`);
+        const ts = nowIso(now);
+        db.prepare("DELETE FROM ticket_refs WHERE id = ?").run(mark.id);
+        db.prepare("DELETE FROM ticket_refs WHERE ticket_id = ? AND ref_type = 'ticket' AND target = ?").run(p.id, f.ref);
+        // Its original card comes back only if it still sits with the primary.
+        if (f.taskId) db.prepare("UPDATE tasks SET ticket_id = ?, updated_at = ? WHERE id = ? AND ticket_id = ?").run(f.id, ts, f.taskId, p.id);
+        insertMessage(p.id, { author: "claude", body: `Separé ${f.ref} de este ticket` }, ts);
+        insertMessage(f.id, { author: "claude", body: `Separado de ${p.ref}` }, ts);
+        apply(f, { type: "reopen", by: "claude" }, now, {}, true);
+        db.prepare("UPDATE tickets SET updated_at = ? WHERE id = ?").run(ts, p.id);
+        const card = f.taskId ? (db.prepare("SELECT id FROM tasks WHERE id = ?").get(f.taskId) as { id: string } | undefined) : undefined;
+        const kind = card ? inferKind(tasks.get(card.id).items ?? []) : undefined;
+        const payload: Record<string, unknown> = { ref: f.ref, ticketRef: f.ref, taskId: card?.id ?? null, splitFrom: p.ref };
+        if (kind) payload.kind = kind;
+        emitWake(db, { sessionId: f.ownerSession, kind: "ticket.created", entityType: "ticket", entityId: f.id, payload }, now);
+        return this.detail(f.id);
       });
     },
 

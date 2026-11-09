@@ -87,7 +87,7 @@ The lead classifies each new ticket (or item worth a ticket) and spawns its owne
 
 **Tasks go straight to an agent.** Every card Andrés creates in Mesa (Tablero "+ Tarea", Nuevo pedido, `mesa task create`)
 and every "Dárselo a Claude" (one card or a batch, ingested PR/Basecamp/Slack cards included) becomes an `andres_asks`
-ticket linked to its card, owned by `lead`, and one `ticket.created` wake `{ ref, ticketRef, taskId, kind? }`. Only
+ticket linked to its card, owned by `lead`, and one `ticket.created` wake `{ ref, ticketRef, taskId, kind? }` (2+ new tickets in one call wake once with `ticket.batch`, see Batches below). Only
 "Solo anotar (sin agente)" / `--note-only` skips it; ingested items never dispatch on their own and sample cards never
 dispatch. On the wake the lead, idempotently (delivery is at least once):
 
@@ -100,6 +100,27 @@ dispatch. On the wake the lead, idempotently (delivery is at least once):
    The card's owner chip switches from "Claude · por asignar" to "<name> · En curso" live.
 
 Dispatching never sends anything outward: every Slack, Basecamp or GitHub write is still a salida.
+
+**Batches.** Andrés selects several Hoy items ("Abrir tarea y pasar a Claude") or Tablero cards ("Dárselas a Claude") and
+hands them over together. Each card still gets its own `andres_asks` ticket (already open, owned by `lead`), but the lead is
+woken ONCE: `ticket.batch { batchId, origin: hoy|tablero|cli, tickets: [{ ticketRef, taskId, title, kind?, urls }] }`, and
+there is no `ticket.created` for them. One new ticket is the plain `ticket.created`; nothing new wakes nobody. On `ticket.batch`
+the lead, idempotently (a ticket that is closed, i.e. folded, or has a live owner is skipped):
+
+1. Reads every ticket of the batch and its links (`mesa ticket show <ref>`, the `urls`, the card's items).
+2. Groups the tickets of the same topic, across sources (Matt's Basecamp ask and Sebas's PR that resolves it are one job)
+   into ONE ticket with all the links and one owner: pick the primary (the ticket that names the work: the request over its
+   PR) and run `mesa ticket fold <primary> <other>... --why "<one line>"`. The primary gets "Agrupé: t25 «título», … porque
+   <why>"; each folded ticket closes with "Agrupado en <primary>: <why>" and no wake; the cards and refs move to the primary.
+3. Every ticket that stays alone: `mesa ticket claim <ref>`, then `mesa ticket reply <ref> --body "Agrupé: solo este ítem
+   del lote <batchId> porque <why>"` (claim first: a reply on an unclaimed request already turns it into work).
+4. Triages each remaining ticket exactly as for `ticket.created` (kind, claim, brief, team, spawn) and spawns ONE owner per
+   ticket, in parallel in one message, without waiting for OK. Never ask "¿agrupo?": Andrés corrects afterwards.
+
+Andrés splits by replying in the ticket ("separa t25"): on that `ticket.answered` the lead runs
+`mesa ticket unfold <primary> <ref>`; the ticket reopens unclaimed, its card comes back, and the lead gets
+`ticket.created { …, splitFrom }` and routes it like any other (a new owner). Grouping is Mesa's bookkeeping only: it
+never sends anything outward.
 
 **The card follows the ticket; nobody moves it by hand.** Mesa moves the Tablero card of a ticket with a `taskId` in the
 same transaction as every ticket status change (through `tasks.move`, so the Project sync fires): `working` and

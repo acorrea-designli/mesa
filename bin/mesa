@@ -32,6 +32,11 @@ Tickets
   mesa ticket claim <id|ref>      take an Andrés request and start work
   mesa ticket close <id|ref>
   mesa ticket reopen <id|ref> [--reason R]       closed -> waiting_claude (the owner wakes with ticket.reopened)
+  mesa ticket fold <primary> <ref>... --why W   (lead, on ticket.batch) group same-topic tickets under one owner: their cards and
+                  refs move to <primary>, which gets "Agrupé: … porque W"; each folded ticket closes with "Agrupado en <primary>: W"
+                  and no wake. 409 on a closed, sample or Claude-asked ticket, or when <ref> is <primary>
+  mesa ticket unfold <primary> <ref>              (lead, when Andrés says "separa tN") split a folded ticket out again: it reopens
+                  unclaimed, its card comes back, and the lead gets ticket.created with splitFrom. 409 if it was not folded there
   mesa ticket action <actionId> --state running|done|failed
   mesa ticket show <id|ref>
   mesa ticket context <ref> [--messages N]     resume payload: brief, plan, last messages, team, handoffs, approvals, findings
@@ -357,6 +362,15 @@ async function main() {
           return out(
             await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "reopen", by: "claude", reason: typeof opt.reason === "string" ? opt.reason : undefined }),
           );
+        case "fold": {
+          const from = pos.slice(3).map(String);
+          if (!from.length) usage("fold needs at least one <ref> to fold into <primary>");
+          return out(
+            await call("POST", `/api/tickets/${enc(need(id, "<primary>"))}/fold`, { from, why: text(opt.why, "--why"), session }),
+          );
+        }
+        case "unfold":
+          return out(await call("POST", `/api/tickets/${enc(need(id, "<primary>"))}/unfold`, { ticket: need(pos[3], "<ref>") }));
         case "action":
           return out(await call("PATCH", `/api/actions/${enc(need(id, "<actionId>"))}`, { state: need(opt.state, "--state") }));
         case "show":

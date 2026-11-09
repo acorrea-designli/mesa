@@ -359,7 +359,8 @@ export interface Session {
 }
 
 export type WakeKind =
-  | "ticket.created" // Andrés opened a request or handed a card to Claude: { ref, ticketRef, taskId, kind? }
+  | "ticket.created" // Andrés opened a request or handed a card to Claude: { ref, ticketRef, taskId, kind? } (a split ticket also carries splitFrom)
+  | "ticket.batch" // Andrés handed 2+ cards to Claude at once: { batchId, origin, tickets: [{ ticketRef, taskId, title, kind?, urls }] }; replaces the N ticket.created
   | "ticket.answered" // Andrés replied or chose an option
   | "ticket.plan_approved"
   | "ticket.closed"

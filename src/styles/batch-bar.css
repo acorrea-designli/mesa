@@ -1,0 +1,95 @@
+/* The batch bar: docked at the bottom of the work area while rows or cards are selected. Shared by Tablero
+   (src/features/tablero/BatchBar.tsx) and Hoy (src/features/hoy/BatchBar.tsx). Ink and neutrals only. */
+
+.tb-batch {
+  position: fixed;
+  z-index: 39;
+  left: var(--rail-w);
+  right: 0;
+  bottom: 24px;
+  margin: 0 auto;
+  width: max-content;
+  max-width: calc(100vw - var(--rail-w) - 56px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  background: var(--raise);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-panel);
+  box-shadow: var(--float-toast);
+}
+.tb-batch-n {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.tb-batch-acts {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.tb-batch-acts .btn {
+  white-space: nowrap;
+}
+.tb-batch-acts .btn:last-child {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  line-height: 30px;
+}
+.tb-batch-x {
+  border-color: transparent;
+}
+.tb-batch-short {
+  display: none;
+}
+body:has(.tb-batch) .toasts {
+  bottom: 88px;
+}
+
+@media (max-width: 720px) {
+  .tb-batch {
+    left: 10px;
+    right: 10px;
+    bottom: calc(var(--phone-tabs-h) + 10px);
+    width: auto;
+    max-width: none;
+    flex-wrap: wrap;
+    padding: 10px 10px 10px 14px;
+  }
+  .tb-batch-n {
+    flex: 1;
+  }
+  .tb-batch-acts {
+    order: 3;
+    flex-basis: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1fr;
+  }
+  .tb-batch-acts .btn {
+    height: 44px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+  .tb-batch-acts .btn:last-child {
+    line-height: 44px;
+    max-width: none;
+  }
+  .tb-batch-full {
+    display: none;
+  }
+  .tb-batch-short {
+    display: inline;
+  }
+  body:has(.tb-batch) .toasts {
+    bottom: calc(var(--phone-tabs-h) + 130px);
+  }
+  /* One action (Hoy): it takes the whole row. */
+  .tb-batch.solo .tb-batch-acts {
+    grid-template-columns: 1fr;
+  }
+}

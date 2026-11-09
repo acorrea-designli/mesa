@@ -121,7 +121,7 @@ describe("sandbox", () => {
     expect(r.db.prepare("SELECT COUNT(*) AS n FROM wake_events WHERE kind = 'sweep.requested'").get()).toEqual({ n: 0 });
   });
 
-  it("dispatches cards to Claude as on the live board (a ticket and a wake, nothing outward)", async () => {
+  it("dispatches cards to Claude as on the live board (a ticket per card, one batch wake, nothing outward)", async () => {
     const a = r.tasks.create({ title: "Revisar backups", source: "claude" });
     const b = r.tasks.create({ title: "Responder a Matt", source: "claude" });
     const res = await BATCH(req("POST", "/api/tasks/batch", { action: "dispatch", ids: [a.id, b.id] }), ctx());
@@ -129,10 +129,8 @@ describe("sandbox", () => {
     const out = (await res.json()) as { results: { created: boolean; ticket: { id: string } }[] };
     expect(out.results.map((x) => x.created)).toEqual([true, true]);
     const wakes = r.db.prepare("SELECT session_id, kind FROM wake_events ORDER BY id").all();
-    expect(wakes).toEqual([
-      { session_id: "lead", kind: "ticket.created" },
-      { session_id: "lead", kind: "ticket.created" },
-    ]);
+    // Two new tickets in one call wake the lead once, with ticket.batch.
+    expect(wakes).toEqual([{ session_id: "lead", kind: "ticket.batch" }]);
     expect(r.tasks.get(a.id).ticketId).toBe(out.results[0]!.ticket.id);
   });
 

@@ -63,6 +63,8 @@ describe("mesa CLI", () => {
       "mesa ticket plan",
       "mesa ticket context",
       "mesa ticket brief",
+      "mesa ticket fold",
+      "mesa ticket unfold",
       "mesa salida propose",
       "--wait-release",
       "mesa salida sent",

@@ -30,6 +30,11 @@ export function loadHoy(now: Date = new Date()): HoyData {
   const items = all.filter((i) => i.station !== "done" || isToday(i.updatedAt, now));
   const rows: HoyRow[] = items.map((i) => ({ ...itemRow(i, when(i.receivedAt, now), i.source === "claude" ? undefined : health[i.source]), ignore: ignoreTarget(i) }));
 
+  // "Ticket tN" comes from the item's card: the open ticket it hangs on (after a fold, the primary), else the item's own meta.
+  const openTicketOfCard = new Map(
+    (r.db.prepare("SELECT t.id AS taskId, k.ref AS ref FROM tasks t JOIN tickets k ON k.id = t.ticket_id WHERE k.status <> 'closed'").all() as { taskId: string; ref: string }[]).map((x) => [x.taskId, x.ref]),
+  );
+
   const details: Record<string, ItemDetail> = {};
   for (const i of items) {
     details[i.id] = {
@@ -43,7 +48,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
       linkLabel: openLabel(i.source),
       station: i.station,
       taskId: i.taskId,
-      ticketRef: typeof i.meta.ticketRef === "string" ? i.meta.ticketRef : null,
+      ticketRef: (i.taskId ? openTicketOfCard.get(i.taskId) : undefined) ?? (typeof i.meta.ticketRef === "string" ? i.meta.ticketRef : null),
       received: `${when(i.receivedAt, now)}${isToday(i.receivedAt, now) ? "" : ` ${clock(i.receivedAt)}`}`,
       isSample: i.isSample,
       ignore: ignoreTarget(i),

@@ -708,3 +708,136 @@
 .hy-rw:hover .hy-row:not(.sel) {
   background: color-mix(in srgb, var(--raise) 55%, transparent);
 }
+
+/* ---------- selection: item rows and the batch bar ----------
+   Ink and neutrals only (line colours mean source), like Tablero: the selection is carried by an ink outline. The
+   checkbox takes the source dot's place while you point at the row or while anything is selected. The input stays in
+   the tab order (opacity, not display) so the keyboard reaches it. The bar itself is src/styles/batch-bar.css. */
+.hy-pick {
+  position: absolute;
+  left: 61px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  opacity: 0;
+  z-index: 2;
+}
+.hy-pick input {
+  position: absolute;
+  inset: -4px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.hy-box {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-tag);
+  background: var(--raise);
+  position: relative;
+  pointer-events: none;
+}
+.hy-pick input:checked + .hy-box {
+  background: var(--ink);
+}
+.hy-pick input:checked + .hy-box::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--gnd);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.hy-pick input:focus-visible + .hy-box {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.hy-rw.pick:hover .hy-pick,
+.hy-rw.pick:focus-within .hy-pick,
+.hy.is-selecting .hy-pick {
+  opacity: 1;
+}
+.hy-rw.pick:hover .src .dot,
+.hy-rw.pick:focus-within .src .dot,
+.hy.is-selecting .hy-rw.pick .src .dot {
+  visibility: hidden;
+}
+.hy-row.is-sel {
+  background: var(--raise);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  margin: 0 -10px;
+  padding-inline: 10px;
+  width: calc(100% + 20px);
+}
+.hy-row.sel.is-sel {
+  box-shadow: inset 3px 0 0 var(--c), inset 0 0 0 1.5px var(--ink);
+  margin: 0 -28px;
+  padding-inline: 28px;
+  width: calc(100% + 56px);
+}
+.hy.is-selecting .hy-main {
+  padding-bottom: 84px;
+}
+.hy-go {
+  white-space: nowrap;
+}
+/* The bar sits over the list, not over the detail pane. */
+@media (min-width: 721px) {
+  .tb-batch.hy-batch {
+    right: var(--detail-w);
+    max-width: calc(100vw - var(--rail-w) - var(--detail-w) - 56px);
+  }
+}
+@media (max-width: 720px) {
+  .hy-row {
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .hy.is-selecting .hy-row {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+  }
+  .hy-pick {
+    left: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: -9px;
+  }
+  .hy-box {
+    width: 18px;
+    height: 18px;
+  }
+  .hy-pick input:checked + .hy-box::after {
+    left: 5.5px;
+    top: 2px;
+  }
+  /* No hover on a phone (a tap leaves it stuck): the box shows only in selection mode. */
+  .hy:not(.is-selecting) .hy-rw.pick:hover .hy-pick,
+  .hy:not(.is-selecting) .hy-rw.pick:focus-within .hy-pick {
+    opacity: 0;
+  }
+  .hy:not(.is-selecting) .hy-rw.pick:hover .src .dot,
+  .hy:not(.is-selecting) .hy-rw.pick:focus-within .src .dot {
+    visibility: visible;
+  }
+  .hy-row.sel.is-sel {
+    margin: 0 -18px;
+    padding-inline: 18px;
+    width: calc(100% + 36px);
+    box-shadow: inset 0 0 0 1.5px var(--ink);
+  }
+  .hy.is-selecting .hy-main {
+    padding-bottom: 150px;
+  }
+  .hy-detail .hy-acts > .hy-go {
+    grid-column: 1 / -1;
+  }
+}

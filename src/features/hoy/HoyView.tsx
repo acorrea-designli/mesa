@@ -2,7 +2,8 @@
 // Hoy: the line band, source tabs, the rows of the selected station, and the detail pane.
 // Phone (<= 720px): corridor band, scrolling station tabs, 66px rows, full-screen detail.
 import Link from "next/link";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BrandMark, BrokenLine, SourceDot } from "@/components/line/Line";
 import { Btn } from "@/components/ui/primitives";
 import { Tabs, useToast } from "@/components/ui/interactive";
@@ -10,7 +11,9 @@ import { STATION_LABEL, STATIONS, type Source, type Station } from "@/lib/domain
 import { useArrive, usePress } from "@/lib/motion";
 import { Corridor } from "../band/Corridor";
 import { LineBand } from "../band/LineBand";
+import { BatchBar } from "./BatchBar";
 import { DonePane, FirstRunPane, ItemDetailPane, SetupList } from "./HoyDetail";
+import { hoyApi } from "./api";
 import { isCalm, sourceCounts, visibleRows, type HoyData, type HoyRow } from "./model";
 import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { SalidaApproval } from "@/features/salidas/SalidaApproval";
@@ -21,9 +24,13 @@ import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu
 import { IgnoredLink } from "../ignore/IgnoredSheet";
 import { ignoreLabel } from "../ignore/model";
 import { useIgnore } from "../ignore/useIgnore";
+import { dispatchToast } from "../tablero/api";
+import { rangeIds, toggleId } from "../tablero/model";
 import "../ignore/ignore.css";
 import "../band/band.css";
 import "./hoy.css";
+
+const LONG_PRESS_MS = 450;
 
 const LEGEND: Source[] = ["github", "slack", "claude", "basecamp"];
 const TAB_ORDER: Source[] = ["github", "basecamp", "slack", "claude"];
@@ -62,15 +69,39 @@ interface RowMenu {
   onContext: React.MouseEventHandler<HTMLElement>;
 }
 
-function Row({ r, selected, onPick, menu }: { r: HoyRow; selected: boolean; onPick: () => void; menu?: RowMenu }) {
+/** Click modifiers the selection reads (a row click, the checkbox). */
+type Mods = { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean };
+
+/** What an item row needs to be selectable (salidas never get it). */
+interface RowPick {
+  on: boolean;
+  onToggle: (e: Mods) => void;
+  press: {
+    onPointerDown: (e: ReactPointerEvent) => void;
+    onPointerMove: (e: ReactPointerEvent) => void;
+    onPointerUp: () => void;
+    onPointerCancel: () => void;
+    onContextMenu: (e: ReactMouseEvent<HTMLElement>) => void;
+  };
+}
+
+function Row({ r, selected, onOpen, menu, pick }: { r: HoyRow; selected: boolean; onOpen: (e: ReactMouseEvent) => void; menu?: RowMenu; pick?: RowPick }) {
   const row = (
     <button
       type="button"
-      className={["hy-row", selected && "sel", r.stale && "stale", `src-${r.source}`].filter(Boolean).join(" ")}
+      className={["hy-row", selected && "sel", pick?.on && "is-sel", r.stale && "stale", `src-${r.source}`].filter(Boolean).join(" ")}
       aria-current={selected ? "true" : undefined}
       data-row={r.key}
-      onClick={onPick}
-      onContextMenu={menu?.onContext}
+      onClick={onOpen}
+      onMouseDown={(e) => {
+        // Shift+click selects a range: do not start a text selection.
+        if (e.shiftKey) e.preventDefault();
+      }}
+      onContextMenu={pick?.press.onContextMenu ?? menu?.onContext}
+      onPointerDown={pick?.press.onPointerDown}
+      onPointerMove={pick?.press.onPointerMove}
+      onPointerUp={pick?.press.onPointerUp}
+      onPointerCancel={pick?.press.onPointerCancel}
     >
       <span className="t">{r.time}</span>
       <span className="src">
@@ -86,13 +117,18 @@ function Row({ r, selected, onPick, menu }: { r: HoyRow; selected: boolean; onPi
       <span className={`st ${r.phoneTag.tone === "plain" ? "" : r.phoneTag.tone} phone-only`}>{r.phoneTag.label}</span>
     </button>
   );
-  if (!menu) return row;
-  // The overflow trigger sits over the time column (shown on hover / focus, like the
-  // Tablero card's Mover), outside the row button so buttons never nest.
+  if (!pick) return row;
+  // The checkbox takes the source dot's place while you point at the row or while anything is selected. It sits
+  // outside the row button (buttons never nest) and stays in the tab order; so does the overflow trigger, which
+  // sits over the time column (shown on hover / focus, like the Tablero card's Mover).
   return (
-    <div className="hy-rw">
+    <div className="hy-rw pick">
       {row}
-      <MoreButton className="hy-more" label={`Más acciones: ${r.subject}`} onOpen={menu.onMore} />
+      <span className="hy-pick">
+        <input type="checkbox" checked={pick.on} aria-label={`Seleccionar «${r.subject}»`} onChange={() => undefined} onClick={(e) => pick.onToggle(e)} />
+        <span className="hy-box" aria-hidden="true" />
+      </span>
+      {menu ? <MoreButton className="hy-more" label={`Más acciones: ${r.subject}`} onOpen={menu.onMore} /> : null}
     </div>
   );
 }
@@ -103,6 +139,11 @@ export function HoyView({ data }: { data: HoyData }) {
   const [source, setSource] = useState<Source | "all">("all");
   const [selKey, setSelKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const toast = useToast();
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const anchor = useRef<string | null>(null);
 
   const { items, salidas } = useMemo(() => visibleRows(data.rows, station, source), [data.rows, station, source]);
   const counts = useMemo(() => sourceCounts(data.rows, station), [data.rows, station]);
@@ -115,11 +156,128 @@ export function HoyView({ data }: { data: HoyData }) {
   const pressRef = usePress<HTMLDivElement>(".hy-row", true);
   const menu = useActionMenu();
   const { ignore } = useIgnore();
-  const rowMenu = (r: HoyRow): RowMenu | undefined => {
+
+  // ---------- selection (item rows only) ----------
+  const picked = useMemo(() => items.filter((r) => sel.has(r.id)), [items, sel]);
+  const selecting = picked.length > 0;
+  const clear = useCallback(() => {
+    setSel(new Set());
+    anchor.current = null;
+  }, []);
+
+  /** Shift: range from the anchor in the list's order; otherwise toggle one row. */
+  const toggleRow = (e: Mods, r: HoyRow) => {
+    if (e.shiftKey && anchor.current) {
+      const ids = rangeIds(items, anchor.current, r.id);
+      setSel((s) => new Set([...s, ...ids]));
+      return;
+    }
+    setSel((s) => toggleId(s, r.id));
+    anchor.current = r.id;
+  };
+
+  // The selection belongs to the rows on screen: a new station or source starts clean.
+  const goStation = (s: Station) => {
+    clear();
+    setStation(s);
+  };
+  const goSource = (s: Source | "all") => {
+    clear();
+    setSource(s);
+  };
+
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || menu.open) return;
+      clear();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selecting, menu.open, clear]);
+
+  // Phone: a long press on an item row starts a selection.
+  const press = useRef<{ id: string; timer: ReturnType<typeof setTimeout> | null; fired: boolean; x: number; y: number } | null>(null);
+  const touchLast = useRef(false);
+  const pressHandlers = (r: HoyRow, onMenu?: React.MouseEventHandler<HTMLElement>): RowPick["press"] => ({
+    onPointerDown: (e) => {
+      touchLast.current = e.pointerType !== "mouse";
+      if (e.pointerType === "mouse") return;
+      if (press.current?.timer) clearTimeout(press.current.timer);
+      const p = { id: r.id, fired: false, x: e.clientX, y: e.clientY, timer: null as ReturnType<typeof setTimeout> | null };
+      p.timer = setTimeout(() => {
+        p.fired = true;
+        p.timer = null;
+        if (typeof navigator !== "undefined") navigator.vibrate?.(12);
+        setSel((s) => new Set(s).add(r.id));
+        anchor.current = r.id;
+      }, LONG_PRESS_MS);
+      press.current = p;
+    },
+    onPointerMove: (e) => {
+      const p = press.current;
+      if (p?.timer && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) {
+        clearTimeout(p.timer);
+        p.timer = null;
+      }
+    },
+    onPointerUp: () => {
+      if (press.current?.timer) clearTimeout(press.current.timer);
+      if (press.current) press.current.timer = null;
+    },
+    onPointerCancel: () => {
+      if (press.current?.timer) clearTimeout(press.current.timer);
+      press.current = null;
+    },
+    onContextMenu: (e) => {
+      // A long press is selection on the phone; the menu stays for a right click.
+      if (touchLast.current || selecting) {
+        e.preventDefault();
+        return;
+      }
+      onMenu?.(e);
+    },
+  });
+
+  const rowMenu = (r: HoyRow): RowMenu => {
     const t = r.kind === "item" ? r.ignore : null;
-    if (!t) return undefined;
-    const actions: MenuAction[] = [{ label: ignoreLabel(t), detail: "Sale de Hoy y del tablero; Claude deja de barrerlo", onSelect: () => void ignore(t) }];
+    const actions: MenuAction[] = [
+      {
+        label: sel.has(r.id) ? "Quitar de la selección" : "Seleccionar",
+        detail: "Shift+clic elige un rango · Ctrl/Cmd+clic suma",
+        onSelect: () => toggleRow({ shiftKey: false, ctrlKey: true, metaKey: false }, r),
+      },
+      ...(t ? [{ label: ignoreLabel(t), detail: "Sale de Hoy y del tablero; Claude deja de barrerlo", onSelect: () => void ignore(t) }] : []),
+    ];
     return { actions, onMore: (el) => menu.openFrom(el, `Acciones de ${r.subject}`, actions), onContext: menu.onContext(`Acciones de ${r.subject}`, actions) };
+  };
+  const itemRow = (r: HoyRow) => {
+    const m = rowMenu(r);
+    const pick: RowPick = { on: sel.has(r.id), onToggle: (e) => toggleRow(e, r), press: pressHandlers(r, m.onContext) };
+    const onOpen = (e: ReactMouseEvent) => {
+      const p = press.current;
+      if (p?.fired && p.id === r.id) {
+        press.current = null; // the long press already selected it
+        return;
+      }
+      if (e.shiftKey || e.ctrlKey || e.metaKey || selecting) toggleRow(e, r);
+      else openRow(r);
+    };
+    return <Row key={r.key} r={r} selected={selected?.key === r.key} onOpen={onOpen} menu={m} pick={pick} />;
+  };
+
+  const dispatchSel = async () => {
+    setBusy(true);
+    try {
+      const out = await hoyApi.dispatchItems(picked.map((r) => r.id));
+      clear();
+      toast({ text: dispatchToast(out.results, out.skipped.length), duration: 6000 });
+      router.refresh();
+    } catch (e) {
+      toast({ text: e instanceof Error ? e.message : "No se pudieron pasar a Claude" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Close the phone detail if its row went away (sent, moved).
@@ -130,7 +288,7 @@ export function HoyView({ data }: { data: HoyData }) {
     }
   }, [open, selected]);
 
-  const pick = (r: HoyRow) => {
+  const openRow = (r: HoyRow) => {
     setSelKey(r.key);
     setOpen(true);
   };
@@ -181,7 +339,7 @@ export function HoyView({ data }: { data: HoyData }) {
   }
 
   return (
-    <div className={["hy", open && selected ? "is-open" : "", live.offline ? "is-offline" : ""].join(" ")}>
+    <div className={["hy", open && selected ? "is-open" : "", live.offline ? "is-offline" : "", selecting ? "is-selecting" : ""].join(" ")}>
       <section className="hy-band" aria-label="Línea del día">
         <div className="hy-bandhead">
           <h1>
@@ -205,7 +363,7 @@ export function HoyView({ data }: { data: HoyData }) {
             })}
           </div>
         </div>
-        <LineBand items={data.band} counts={data.stations} station={station} source={source} down={down} onStation={setStation} stale={live.offline} />
+        <LineBand items={data.band} counts={data.stations} station={station} source={source} down={down} onStation={goStation} stale={live.offline} />
       </section>
 
       <header className="hy-ph-top">
@@ -220,7 +378,7 @@ export function HoyView({ data }: { data: HoyData }) {
       <div className={live.offline ? "hy-body is-offline" : "hy-body"}>
         <Corridor items={data.band} counts={data.stations} station={station} waitingOnYou={waiting} down={down} stale={live.offline} />
         <div className="hy-phsts">
-          <Tabs items={stationTabs} value={station} onChange={setStation} label="Estaciones" />
+          <Tabs items={stationTabs} value={station} onChange={goStation} label="Estaciones" />
         </div>
 
         <div className="hy-main" ref={pressRef}>
@@ -238,7 +396,7 @@ export function HoyView({ data }: { data: HoyData }) {
           ) : null}
 
           <div className="hy-tabs">
-            <Tabs items={tabs} value={source} onChange={setSource} label="Fuentes" trailing={
+            <Tabs items={tabs} value={source} onChange={goSource} label="Fuentes" trailing={
                 <>
                   <IgnoredLink rows={data.ignored} className="hy-ign" />
                   <span className="sort">Estación: {STATION_LABEL[station]} · por hora</span>
@@ -279,9 +437,7 @@ export function HoyView({ data }: { data: HoyData }) {
                 <span>Necesita</span>
                 <span>Estado</span>
               </div>
-              {items.map((r) => (
-                <Row key={r.key} r={r} selected={selected?.key === r.key} onPick={() => pick(r)} menu={rowMenu(r)} />
-              ))}
+              {items.map(itemRow)}
               {!items.length && !salidas.length ? (
                 <p className="hy-empty">
                   Nada en {STATION_LABEL[station]}
@@ -290,7 +446,7 @@ export function HoyView({ data }: { data: HoyData }) {
               ) : null}
               {salidas.length ? <div className="grp">Salidas · esperan tu firma</div> : null}
               {salidas.map((r) => (
-                <Row key={r.key} r={r} selected={selected?.key === r.key} onPick={() => pick(r)} />
+                <Row key={r.key} r={r} selected={selected?.key === r.key} onOpen={() => openRow(r)} />
               ))}
               {live.offline ? <p className="hy-ro">Firmar y responder vuelven con la conexión: nada sale sin la PC.</p> : null}
             </div>
@@ -318,6 +474,7 @@ export function HoyView({ data }: { data: HoyData }) {
           {detail}
         </fieldset>
       </aside>
+      {selecting ? <BatchBar count={picked.length} busy={busy || live.offline} onDispatch={() => void dispatchSel()} onCancel={clear} /> : null}
       {menu.node}
     </div>
   );

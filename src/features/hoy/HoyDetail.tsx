@@ -12,6 +12,8 @@ import type { DoneRow, ItemDetail, SetupRow } from "./model";
 import { LineStub } from "@/components/line/Line";
 import { ignoreLabel } from "../ignore/model";
 import { useIgnore } from "../ignore/useIgnore";
+import { dispatchToast } from "../tablero/api";
+import { hoyApi } from "./api";
 
 async function call(url: string, method: string, body?: unknown) {
   const res = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -52,6 +54,20 @@ export function ItemDetailPane({ d, health }: { d: ItemDetail; health?: SourceHe
       () => call("/api/tasks", "POST", { title: d.title, source: d.source, project: d.project, excerpt: d.excerpt, station: d.station, itemIds: [d.id] }),
       "Tarea creada en el tablero",
     );
+
+  // "Abrir tarea y pasar a Claude" over this one item: its card is reused or made, and a ticket opens for the lead.
+  const handToClaude = async () => {
+    setBusy(true);
+    try {
+      const out = await hoyApi.dispatchItems([d.id]);
+      toast({ text: dispatchToast(out.results, out.skipped.length) });
+      router.refresh();
+    } catch (e) {
+      toast({ text: e instanceof Error ? e.message : "No se pudo pasar a Claude" });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const stale = health && health.state !== "ok";
   const primaryHref = d.ticketRef ? `/tickets?ref=${encodeURIComponent(d.ticketRef)}` : d.url;
@@ -117,6 +133,11 @@ export function ItemDetailPane({ d, health }: { d: ItemDetail; health?: SourceHe
             Crear tarea
           </Btn>
         )}
+        {!d.ticketRef && !d.isSample ? (
+          <Btn className="hy-go" disabled={busy} onClick={() => void handToClaude()}>
+            Abrir tarea y pasar a Claude
+          </Btn>
+        ) : null}
       </div>
       <div className="hy-meta">
         <span>Llegó {d.received}</span>
