@@ -150,6 +150,8 @@ const basecampDest = z.object({
   projectId: z.string().optional(),
   recordingId: z.string().optional(),
   recordingTitle: z.string().optional(),
+  /** basecamp_comment only (refined on salidaInput): Basecamp person ids, with the name shown on the card. */
+  mentions: z.array(z.object({ id: z.string().trim().min(1), name: z.string().trim().min(1) })).max(20).optional(),
   postAs: z.string().min(1),
 });
 const githubDest = z.object({
@@ -192,6 +194,13 @@ export const salidaInput = z
     draft: z.boolean().optional(),
   })
   .refine((s) => s.destination.kind.startsWith(s.source), "destination kind must match source")
+  .refine(
+    (s) => {
+      const d = s.destination;
+      return !("mentions" in d && d.mentions?.length) || d.kind === "basecamp_comment";
+    },
+    "mentions are only for a basecamp_comment: a Campfire line is plain text (nobody is pinged) and a message-board post has no mentions param; drop mentions or send a comment",
+  )
   .refine(
     (s) =>
       s.body.trim().length > 0 ||

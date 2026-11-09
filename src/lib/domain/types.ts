@@ -227,6 +227,12 @@ export type Destination =
       projectId?: string;
       recordingId?: string;
       recordingTitle?: string;
+      /**
+       * basecamp_comment only: the people the comment pings (Basecamp person ids from list_project_people, as
+       * strings). The lead passes the ids to create_comment as `mentions`; a typed "@Name" notifies nobody.
+       * Campfire lines and message-board posts cannot mention through the MCP, so they never carry this.
+       */
+      mentions?: BasecampMention[];
       postAs: string;
     }
   | {
@@ -245,6 +251,11 @@ export type Destination =
       comments?: GithubReviewComment[];
       postAs: string;
     };
+
+export interface BasecampMention {
+  id: string;
+  name: string;
+}
 
 export interface GithubReviewComment {
   path?: string;

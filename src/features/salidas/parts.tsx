@@ -8,7 +8,7 @@ import { isSimulated } from "@/lib/domain/sandbox";
 import { Chip, srcClass } from "@/components/ui/primitives";
 import { confirmPick, rise, travel } from "@/lib/motion";
 import { IcCheck, IcClock, IcCopy, IcExternal, IcStar, IcUndo } from "./icons";
-import { age, comparedWith, destinationLinkLabel, destShort, hhmm, routeStops, scheduleChoices, secondsElapsed, secondsLeft, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
+import { age, comparedWith, destinationLinkLabel, destShort, hhmm, mentionCount, routeStops, scheduleChoices, secondsElapsed, secondsLeft, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -245,8 +245,8 @@ export function DiffLine({ s }: { s: SalidaDetail }) {
 
 // ---------- facts ----------
 
-export function Facts({ text }: { text: string }) {
-  const mentions = (text.match(/(^|\s)@\w|<@\w+>/g) ?? []).length;
+export function Facts({ text, destination }: { text: string; destination: Destination }) {
+  const mentions = mentionCount(destination, text);
   return (
     <div className="sa-facts">
       <span>{text.length} caracteres</span>

@@ -10,6 +10,9 @@
 //                pr-gh.mjs, `mesa salida sent`. Only the lead sends, and only after approval.
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
 //                the text being sent; its pr-gh.mjs writes need a released github salida for that repo and PR.
+//                A Basecamp create_comment also needs its `mentions` ids to equal the salida's destination.mentions
+//                (same set; none = none). slack_send_message is refused for everyone: the connector appends
+//                "Sent using @Claude" and cannot be told not to (no Claude attribution in Slack text).
 //                Mesa unreachable = blocked (nothing goes out unseen).
 //   G10 (rule 3) Nobody approves, schedules, denies or undoes a salida, approves a plan or decides a permission
 //                card through the raw API: those are Andrés's clicks.
@@ -32,8 +35,12 @@ const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
 const SLACK_SEND = /^mcp__claude_ai_Slack__slack_(send_message|send_message_draft|schedule_message|create_canvas|update_canvas|add_reaction)$/;
 const BASECAMP_WRITE =
   /^mcp__basecamp__(create|update|trash|delete|destroy|complete|uncomplete|move|archive|unarchive|pin|unpin|enable|disable|remove|reposition|reorder|subscribe|unsubscribe|watch|unwatch|toggle|pause|resume|copy|prioritize|deprioritize|set|mark|restore)_/;
-// Sends whose text the lead may only post from a released salida.
-const LEAD_TEXT_SENDS = /^(mcp__claude_ai_Slack__slack_send_message|mcp__basecamp__create_(comment|campfire_line|message|ping)|mcp__basecamp__update_(comment|message))$/;
+// Sends whose text the lead may only post from a released salida. (slack_send_message is refused outright below.)
+const LEAD_TEXT_SENDS = /^(mcp__basecamp__create_(comment|campfire_line|message|ping)|mcp__basecamp__update_(comment|message))$/;
+const SLACK_SEND_MESSAGE = "mcp__claude_ai_Slack__slack_send_message";
+const SLACK_SEND_REFUSAL =
+  "slack_send_message appends \"Sent using @Claude\" to the message and has no param to turn it off; Andrés wants no Claude attribution in any Slack text, so it is never used, not even for a released salida. " +
+  "Slack salidas do not go out through the connector: hold the salida (`mesa salida hold <id>`) and tell Andrés it waits for his Slack path (a draft he sends himself, decision pending on t32).";
 
 const nonEmptyLines = (s) => s.split(/\r?\n/).filter((l) => l.trim()).length;
 
@@ -80,12 +87,35 @@ function approvedBody(s) {
   return v?.body ?? null;
 }
 
+// The Basecamp person ids a salida's destination pings, sorted, as strings ([] = nobody).
+function destinationMentionIds(s) {
+  let d = s.destination ?? {};
+  if (typeof d === "string") {
+    try {
+      d = JSON.parse(d);
+    } catch {
+      d = {};
+    }
+  }
+  return (d.mentions ?? []).map((m) => String(m?.id ?? m)).sort();
+}
+
+// The ids create_comment is about to ping (`mentions`: person ids), sorted, as strings.
+const sentMentionIds = (ti) => (Array.isArray(ti.mentions) ? ti.mentions.map(String).sort() : []);
+
+const sameIds = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+// Returns { match, mismatch }: match is the released salida with exactly this text (and, for create_comment, exactly
+// these mentions); mismatch is set when a salida has the text but other mentions.
 async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
   const source = tool.includes("Slack") ? "slack" : "basecamp";
   const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
   // Sample salidas ("Datos de muestra.") never match: they can never be sent.
   const list = (data.salidas ?? data ?? []).filter((s) => s.source === source && (s.releasedAt ?? s.released_at) && !s.isSample);
   const want = tokens(sentText(ti)).join(" ");
+  const checkMentions = tool === "mcp__basecamp__create_comment";
+  const got = sentMentionIds(ti);
+  let mismatch = null;
   for (const item of list) {
     let s = item;
     if (approvedBody(s) === null) {
@@ -93,9 +123,13 @@ async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
       s = full.salida ?? full;
     }
     const body = approvedBody(s);
-    if (body !== null && tokens(body).join(" ") === want) return s;
+    if (body === null || tokens(body).join(" ") !== want) continue;
+    if (!checkMentions) return { match: s, mismatch };
+    const expected = destinationMentionIds(s);
+    if (sameIds(expected, got)) return { match: s, mismatch };
+    mismatch = { expected, got };
   }
-  return null;
+  return { match: null, mismatch };
 }
 
 // A released GitHub salida for this repo and PR (approve, review and reply all go out as github salidas).
@@ -178,19 +212,29 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     return block("G4", `rule 3: ${agent.name} cannot write to Slack or Basecamp. Propose a salida (\`mesa salida propose ...\`) or a planned action and let the lead send it after Andrés approves.`);
   }
 
+  // The claude.ai Slack connector appends "Sent using @Claude" to every slack_send_message and has no param to turn it
+  // off, so no Slack text goes out through it, released salida or not (no Claude attribution in Slack text).
+  if (tool === SLACK_SEND_MESSAGE) {
+    return block("G5", SLACK_SEND_REFUSAL);
+  }
+
   if (!teammate && LEAD_TEXT_SENDS.test(tool)) {
-    let match;
+    let found;
     try {
-      match = await releasedSalidaMatches(tool, ti, { fetchImpl, base });
+      found = await releasedSalidaMatches(tool, ti, { fetchImpl, base });
     } catch (err) {
       return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this send cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and send on salida.released.`);
     }
-    if (!match) {
+    if (!found.match && found.mismatch) {
+      const show = (ids) => (ids.length ? ids.join(", ") : "none");
+      return block("G5", `rule 3: the text matches a released salida but its mentions do not. The salida's destination.mentions are [${show(found.mismatch.expected)}] and this create_comment passes [${show(found.mismatch.got)}]: pass exactly the destination's person ids (numbers) as \`mentions\`, no more and no fewer, or fix the salida's destination first.`);
+    }
+    if (!found.match) {
       return block("G5", "rule 3: no released salida in Mesa has exactly this text. Send only on `salida.released`, with the approved version's text unchanged (the 20 s undo window must be over).");
     }
   }
   if (tool === "mcp__claude_ai_Slack__slack_schedule_message") {
-    return block("G5", "rule 3: Mesa schedules sends (Programar). Send with slack_send_message when Mesa emits salida.released.");
+    return block("G5", "rule 3: Mesa schedules sends (Programar); never schedule through the connector. At salida.released follow mesa-salida § Send (Slack never goes out through slack_send_message either).");
   }
 
   if (tool === "Bash" || tool === "PowerShell") {

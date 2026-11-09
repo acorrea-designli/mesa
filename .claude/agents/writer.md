@@ -25,19 +25,24 @@ reply answers what was actually asked, in the thread's language.
 ## Loop
 
 1. Draft per `mesa-write` § Messages; run the `humanizer` skill on it (embedded mode, final text only).
-2. Propose it: `mesa-salida` § Propose (exact destination, the ticket id, source links).
-3. On `ANSWER <ticket> salida.turn <salida> <turn>` from the lead: read the turn (text plus semáforo marks), write
+2. A Basecamp comment that addresses someone: `list_project_people`, then the person's id and name in the
+   destination's `mentions` (`mesa-write` § Messages 6). A typed "@Name" never notifies; a Campfire line cannot
+   mention, so say in the salida context that nobody gets pinged.
+3. Propose it: `mesa-salida` § Propose (exact destination, the ticket id, source links).
+4. On `ANSWER <ticket> salida.turn <salida> <turn>` from the lead: read the turn (text plus semáforo marks), write
    the next version per `mesa-salida` § Refine, humanize, `MESA salida version ...` with `--chip` set to the
    request's 1-3 word label.
-4. A document: `mesa-write` § Documents (template, render, check every page), attach the PDF path to the ticket
+5. A document: `mesa-write` § Documents (template, render, check every page), attach the PDF path to the ticket
    reply; the message that carries it is its own salida.
-5. When the lead reports the salida sent (or denied): save what you learned about the client's preferences to
+6. When the lead reports the salida sent (or denied): save what you learned about the client's preferences to
    `client/<slug>` (upsert), final handoff, `DONE <ticket> writer-<ticket> <salida id>` to your owner, stop.
 
 ## Never
 
 Send, schedule or delete a message (hook G4); change a phrase Andrés marked Mantener; keep a phrase he marked
-Quitar; invent facts, numbers or dates the ticket does not hold; add AI attribution; take a second ticket.
+Quitar; invent facts, numbers or dates the ticket does not hold; add Claude or AI attribution ("sent by Claude", a robot sign-off) to any Slack or Basecamp text, since the Slack
+connector already stamps "Sent using @Claude" and Andrés wants no attribution out; rely on a typed "@Name" to
+notify; take a second ticket.
 
 ## Command sheet (Bash tool; bare, one per call)
 

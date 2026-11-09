@@ -167,6 +167,17 @@ const isSlack = (d: Destination): d is Extract<Destination, { workspace: string 
 const isBasecamp = (d: Destination): d is Extract<Destination, { project: string }> =>
   d.kind === "basecamp_comment" || d.kind === "basecamp_campfire" || d.kind === "basecamp_message";
 
+/** Who a Basecamp comment pings (destination.mentions); empty for every other destination. */
+export function mentionNames(d: Destination): string[] {
+  return d.kind === "basecamp_comment" ? (d.mentions ?? []).map((m) => m.name) : [];
+}
+
+/** The mention count the Facts line shows: Basecamp counts the destination's person ids (a typed "@x" pings nobody), the rest count "@x" in the text. */
+export function mentionCount(d: Destination, text: string): number {
+  if (isBasecamp(d)) return mentionNames(d).length;
+  return (text.match(/(^|\s)@\w|<@\w+>/g) ?? []).length;
+}
+
 /** The exact destination drawn as a route of stops in the source colour. */
 export function routeStops(d: Destination): RouteStop[] {
   if (isSlack(d)) {
@@ -185,11 +196,14 @@ export function routeStops(d: Destination): RouteStop[] {
         { label: "Campfire", value: d.recordingTitle ?? `Campfire · ${d.project}` },
         { label: "Como", value: "Línea de chat, sin hilo", note: d.postAs },
       ];
-    return [
+    const stops: RouteStop[] = [
       { label: "Proyecto", value: d.project },
       { label: d.kind === "basecamp_message" ? "Message Board" : "Mensaje", value: d.recordingTitle ? `«${d.recordingTitle}»` : (d.recordingId ?? "") },
       { label: "Como", value: d.kind === "basecamp_message" ? "Mensaje nuevo" : "Comentario", note: d.postAs },
     ];
+    const names = mentionNames(d);
+    if (names.length) stops.push({ label: "Menciona a", value: names.join(", ") });
+    return stops;
   }
   const stops: RouteStop[] = [
     { label: "Repositorio", value: d.repo },

@@ -56,7 +56,6 @@ test("G5: the lead sends only the text of a released salida", async () => {
   });
   assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { content: "<p>Hi Matt, the <strong>bucket</strong> is ready: <a href='https://x.y/z'>https://x.y/z</a></p>" }, salidas.fetchImpl)), null);
   assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { content: "<p>Hi Matt, the bucket is almost ready</p>" }, salidas.fetchImpl)), "G5");
-  assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "Hi Matt, the bucket is ready" }, salidas.fetchImpl)), "G5");
   assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { content: "hi" })), "G5");
   assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_schedule_message", { channel_id: "C1", message: "x" })), "G5");
 });
@@ -72,10 +71,79 @@ test("G5: a released sample salida never authorises a send", async () => {
 
 test("G5: a list without bodies is resolved through salida show", async () => {
   const mesa = fakeMesa({
-    "GET /api/salidas?status=sending": { salidas: [{ id: "s2", source: "slack", releasedAt: "2026-11-03T20:00:00Z" }] },
+    "GET /api/salidas?status=sending": { salidas: [{ id: "s2", source: "basecamp", releasedAt: "2026-11-03T20:00:00Z" }] },
     "GET /api/salidas/s2": { salida: { id: "s2", approvedBody: "Listo, ya quedó." } },
   });
-  assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "Listo, ya quedó." }, mesa.fetchImpl)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { content: "Listo, ya quedó." }, mesa.fetchImpl)), null);
+});
+
+const commentSalida = (mentions, extra = {}) => ({
+  id: "c1",
+  source: "basecamp",
+  releasedAt: "2026-11-03T20:00:00Z",
+  approvedVersion: 1,
+  versions: [{ n: 1, body: "Hi Matt, the bucket is ready" }],
+  destination: { kind: "basecamp_comment", project: "Scout", postAs: "A", ...(mentions ? { mentions } : {}) },
+  ...extra,
+});
+const sendComment = (mesa, mentions) => run(lead, "mcp__basecamp__create_comment", { content: "<p>Hi Matt, the bucket is ready</p>", ...(mentions ? { mentions } : {}) }, mesa.fetchImpl);
+
+test("G5: a create_comment passes only with the mentions of the released salida's destination", async () => {
+  const withMentions = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [commentSalida([{ id: "9001", name: "Matt Myers" }, { id: "9002", name: "Ana Ruiz" }])] } });
+  // match: same set, numbers against string ids, any order
+  assert.equal(await rule(sendComment(withMentions, [9002, 9001])), null);
+  // mismatch: fewer, more, different, none
+  for (const got of [[9001], [9001, 9002, 9003], [9001, 9999], undefined]) {
+    const r = await sendComment(withMentions, got);
+    assert.equal(r?.rule, "G5", JSON.stringify(got));
+    assert.match(r.reason, /mentions do not/);
+    assert.match(r.reason, /9001, 9002/);
+  }
+});
+
+test("G5: a salida with no mentions allows only a create_comment with none", async () => {
+  for (const salida of [commentSalida(undefined), commentSalida([])]) {
+    const mesa = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [salida] } });
+    assert.equal(await rule(sendComment(mesa, undefined)), null);
+    assert.equal(await rule(sendComment(mesa, [])), null);
+    const r = await sendComment(mesa, [9001]);
+    assert.equal(r?.rule, "G5");
+    assert.match(r.reason, /\[none\]/);
+  }
+});
+
+test("G5: the mentions check reads the destination from salida show when the list has no bodies, and a stringified destination", async () => {
+  const listed = { id: "c1", source: "basecamp", releasedAt: "2026-11-03T20:00:00Z" };
+  const full = fakeMesa({
+    "GET /api/salidas?status=sending": { salidas: [listed] },
+    "GET /api/salidas/c1": { salida: commentSalida([{ id: "9001", name: "Matt" }]) },
+  });
+  assert.equal(await rule(sendComment(full, [9001])), null);
+  assert.equal((await sendComment(full, undefined))?.rule, "G5");
+  const text = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [commentSalida(undefined, { destination: JSON.stringify({ kind: "basecamp_comment", mentions: [{ id: "7", name: "X" }] }) })] } });
+  assert.equal(await rule(sendComment(text, [7])), null);
+  assert.equal((await sendComment(text, [8]))?.rule, "G5");
+});
+
+test("G5: a second released salida with the same text and the right mentions is the match", async () => {
+  const mesa = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [commentSalida([{ id: "1", name: "A" }], { id: "c1" }), commentSalida(undefined, { id: "c2" })] } });
+  assert.equal(await rule(sendComment(mesa, undefined)), null);
+  assert.equal(await rule(sendComment(mesa, [1])), null);
+  assert.equal((await sendComment(mesa, [2]))?.rule, "G5");
+});
+
+test("G5: slack_send_message is refused for the lead even with a released salida, naming the way out", async () => {
+  const mesa = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [{ id: "s1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, versions: [{ n: 1, body: "Hi Matt" }] }] } });
+  for (const fetchImpl of [mesa.fetchImpl, unreachable]) {
+    const r = await run(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "Hi Matt" }, fetchImpl);
+    assert.equal(r?.rule, "G5");
+    assert.match(r.reason, /Sent using @Claude/);
+    assert.match(r.reason, /mesa salida hold <id>/);
+  }
+  // Threads and broadcasts are the same tool.
+  assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", thread_ts: "1.2", message: "x", reply_broadcast: true }, mesa.fetchImpl)), "G5");
+  // A teammate still gets G4.
+  assert.equal(await rule(run(mate(), "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "Hi Matt" }, mesa.fetchImpl)), "G4");
 });
 
 test("tokens ignore markup, entities and URLs", () => {
@@ -225,7 +293,7 @@ test("G11: live mode is unaffected", async () => {
       ],
     },
   });
-  assert.equal(await rule(live(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola Ana" }, salidas.fetchImpl)), null);
+  assert.equal(await rule(live(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola Ana" }, salidas.fetchImpl)), "G5");
   assert.equal(await rule(live(lead, "PowerShell", { command: "node C:/Users/z4yross/.claude-work/pr-gh.mjs approve a/b 1 abc" }, salidas.fetchImpl)), null);
   assert.equal(await rule(live(mate(), "Bash", { command: 'gh pr create --draft --title "feat(x): y" --body-file b.md' })), null);
   assert.equal(await rule(live(mate(), "Bash", { command: "git push -u origin feat/x" })), null);

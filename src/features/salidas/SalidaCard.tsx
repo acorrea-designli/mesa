@@ -138,7 +138,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
           <ExactBlock s={s} text={text} marks={marks} setMarks={canMark ? setMarks : undefined} highlight={hl} />
           {!marks.length && s.status === "pending" ? <DiffLine s={s} /> : null}
           {outcome && s.status === "pending" ? <MarkOutcome o={outcome} /> : null}
-          {s.status !== "pending" && text ? <Facts text={text} /> : null}
+          {s.status !== "pending" && text ? <Facts text={text} destination={s.destination} /> : null}
         </>
       )}
 

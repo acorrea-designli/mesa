@@ -74,3 +74,25 @@ describe("POST /api/salidas with a ticket", () => {
     expect((await propose()).status).toBe(201);
   });
 });
+
+describe("POST /api/salidas with Basecamp mentions", () => {
+  const mentions = [{ id: "9001", name: "Matt Myers" }];
+  const propose = (kind: string, withMentions = true) =>
+    SALIDA(post("/api/salidas", { source: "basecamp", destination: { kind, project: "Scout", postAs: "Andrés", ...(withMentions ? { mentions } : {}) }, body: "hola" }), ctx());
+
+  it("a comment stores its mentions in the destination", async () => {
+    const res = await propose("basecamp_comment");
+    expect(res.status).toBe(201);
+    expect(((await res.json()) as { destination: { mentions: unknown } }).destination.mentions).toEqual(mentions);
+  });
+
+  it("a campfire line or a message post with mentions is a 400 and stores nothing", async () => {
+    for (const kind of ["basecamp_campfire", "basecamp_message"]) {
+      const res = await propose(kind);
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(await res.json())).toMatch(/mentions are only for a basecamp_comment/);
+    }
+    expect(r.salidas.list({})).toHaveLength(0);
+    expect((await propose("basecamp_campfire", false)).status).toBe(201);
+  });
+});
