@@ -2,7 +2,7 @@
 // Ticket composer: Markdown text, files by drag, paste and clip (removable chips
 // with size), "@" opens a ticket picker (open tickets and this week's, with their
 // direction line) and inserts ink-bordered ref chips, "/" opens actions.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { rise } from "@/lib/motion";
 import { IcClip, IcFile, IcImage, IcX } from "@/features/salidas/icons";
 import type { PickTicket } from "./read";
@@ -21,8 +21,11 @@ export interface ComposerState {
 
 export function useComposer(initial = "") {
   const [state, setState] = useState<ComposerState>({ text: initial, files: [], refs: [] });
+  // A stored draft coming back (drafts.ts): text and @refs only, files are never kept.
+  const restore = useCallback((d: { text: string; refs: RefChip[] }) => setState((s) => ({ ...s, text: d.text, refs: d.refs })), []);
   return {
     state,
+    restore,
     setText: (text: string) => setState((s) => ({ ...s, text })),
     addFiles: (files: File[]) => setState((s) => ({ ...s, files: [...s.files, ...files.filter((f) => !s.files.some((x) => x.name === f.name && x.size === f.size))] })),
     removeFile: (i: number) => setState((s) => ({ ...s, files: s.files.filter((_, j) => j !== i) })),

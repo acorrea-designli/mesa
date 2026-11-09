@@ -2,7 +2,7 @@
 // Tickets A: one stream (never split by direction) + the thread pane.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/interactive";
 import { useArrive, usePress } from "@/lib/motion";
 import { IcBack, IcEngram, IcPlus } from "@/features/salidas/icons";
@@ -11,7 +11,9 @@ import { ticketApi } from "./api";
 import { Dir, hm, LivePill, statusLabel, TicketStatus } from "./bits";
 import { ComposerBox, useComposer, type SlashAction } from "./Composer";
 import type { TicketRow, TicketsData } from "./read";
+import { clearRequest, loadRequest, saveRequest, type RequestDraft } from "./drafts";
 import { Thread } from "./Thread";
+import { useDraft } from "./useDraft";
 
 const href = (q: Record<string, string | undefined>) => {
   const p = new URLSearchParams();
@@ -284,6 +286,19 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [noteOnly, setNoteOnly] = useState(false);
+  // The form is kept in the browser until the request is created or noted (drafts.ts): a reload, a
+  // board restart or another screen does not lose what he was writing.
+  const draft = useMemo(() => ({ text: c.state.text, refs: c.state.refs, link, project }), [c.state.text, c.state.refs, link, project]);
+  const restoreDraft = useCallback(
+    (d: RequestDraft) => {
+      c.restore(d);
+      setLink(d.link);
+      setProject(d.project);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [c.restore],
+  );
+  useDraft(loadRequest, saveRequest, restoreDraft, draft);
   const fileIn = useRef<HTMLInputElement>(null);
   const verbs: SlashAction[] = [
     { key: "archivo", label: "Adjuntar archivo", run: () => fileIn.current?.click() },
@@ -296,11 +311,13 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
       if (noteOnly) {
         // "Solo anotar (sin agente)": only the card on the Tablero, no ticket and no wake.
         await ticketApi.note({ text: c.state.text, project, link });
+        clearRequest();
         toast({ text: "Anotado en el Tablero · sin agente" });
         router.push("/tablero");
         return;
       }
       const t = await ticketApi.create({ text: c.state.text, project, link, owner: data.listening.owner, state: c.state });
+      clearRequest();
       toast({ text: data.listening.listening ? "Pedido enviado · Claude prepara el plan" : "Pedido guardado · lo recoge la próxima sesión" });
       router.push(href({ tab, t: t.ref }));
     } catch (e) {

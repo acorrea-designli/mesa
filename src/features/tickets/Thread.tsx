@@ -3,7 +3,7 @@
 // client's words, sources, Claude's plan, permission approvals, reviews, the
 // messages, the agents on the ticket and the reply composer.
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Attachment, PlannedAction, TicketMessage, TicketRef } from "@/lib/domain/types";
 import { Alert, Chip, srcClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/interactive";
@@ -16,6 +16,8 @@ import { DirLine, dirLabel, hm } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { isNearBottom, onNewMessage, type ScrollBox } from "./follow";
 import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
+import { clearReply, loadReply, saveReply, type ReplyDraft } from "./drafts";
+import { useDraft } from "./useDraft";
 import type { PickTicket, ThreadData } from "./read";
 
 interface Props {
@@ -32,6 +34,13 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
   const { ticket: t } = data;
   const toast = useToast();
   const c = useComposer();
+  // The unsent reply lives in the browser per ticket: a remount (tab or screen change, reload, a
+  // board restart under the open tab) brings it back, and it is composing again (the rail below).
+  const draftId = t.id;
+  const loadDraft = useCallback(() => loadReply(draftId), [draftId]);
+  const saveDraft = useCallback((d: ReplyDraft) => saveReply(draftId, d), [draftId]);
+  const draft = useMemo(() => ({ text: c.state.text, refs: c.state.refs }), [c.state.text, c.state.refs]);
+  useDraft(loadDraft, saveDraft, c.restore, draft);
   const [focused, setFocused] = useState(false);
   // A closed ticket has no composer (an unmounted textarea never reports its blur).
   const composing = t.status !== "closed" && (focused || c.state.text !== "");
@@ -143,6 +152,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
     try {
       const state = chosenKey && !c.state.text.trim() ? { ...c.state, text: optionText(from ?? openMsg, chosenKey) } : c.state;
       await ticketApi.reply(t.id, state, chosenKey);
+      clearReply(t.id); // sent: the draft must not come back (a failed send keeps it)
       c.reset();
       toast({ text: listening ? "Respuesta enviada · Claude despierta" : "Respuesta guardada · la lee la próxima sesión" });
       onChanged();
