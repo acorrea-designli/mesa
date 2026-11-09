@@ -56,25 +56,37 @@ const nonEmptyLines = (s) => s.split(/\r?\n/).filter((l) => l.trim()).length;
 // here-string, here-string piped into `--body -`, or a quoted `--body "..."` / `--body '...'`). `reply` is false when the
 // command is not a ticket reply; `body` is null when it is one but the text does not show the body: fed to `--body -` by
 // a pipe or a `<` file, taken from a variable, `$(...)` or a backtick expression, or not quoted at all.
+// The reply is looked for on any line of the command, so a variable or a pipe set up on an earlier line does not hide
+// it. A heredoc with an unquoted delimiter and a PowerShell @"..."@ here-string expand $(...), $VAR and backticks, so
+// their text is not the body that will be sent when it has a $ or a backtick.
+const EXPANDS = /[$`]/;
 export function ticketReplyShape(cmd) {
   const text = String(cmd ?? "");
   const lines = text.split(/\r?\n/);
-  const first = lines.find((l) => l.trim()) ?? "";
   const piped = /^\s*@(['"])\r?\n([\s\S]*?)\r?\n\1@\s*\|\s*(.*)$/m.exec(text);
-  if (piped && /\bmesa\b[^\n|;&]*\bticket\s+reply\b[^\n]*--body[\s=]+-(\s|$)/.test(piped[3])) return { reply: true, body: piped[2] };
-  if (!/\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(first)) return { reply: false, body: null };
-  const here = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(first);
-  if (here) {
-    const rest = lines.slice(lines.indexOf(first) + 1);
-    const end = rest.findIndex((l) => l.trim() === here[2]);
-    return { reply: true, body: (end < 0 ? rest : rest.slice(0, end)).join("\n") };
+  if (piped && /\bmesa\b[^\n|;&]*\bticket\s+reply\b[^\n]*--body[\s=]+-(\s|$)/.test(piped[3])) {
+    return { reply: true, body: piped[1] === '"' && EXPANDS.test(piped[2]) ? null : piped[2] };
   }
-  const hs = /--body[\s=]+(?:-\s+)?@(['"])\r?\n([\s\S]*?)\r?\n\s*\1@/.exec(text);
-  if (hs) return { reply: true, body: hs[2] };
-  const q = /--body[\s=]+(?:"((?:[^"\\]|\\[\s\S])*)"|'([^']*)')/.exec(text);
+  const at = lines.findIndex((l) => /\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(l));
+  if (at < 0) return { reply: false, body: null };
+  // The statement is the reply line plus its continuation lines (a trailing backslash, or a backtick in PowerShell).
+  let end = at;
+  while (end < lines.length - 1 && /[\\`]\s*$/.test(lines[end] ?? "")) end++;
+  const statement = lines.slice(at, end + 1).join(" ");
+  const tail = lines.slice(at).join("\n");
+  const here = /(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(statement);
+  if (here) {
+    const rest = lines.slice(end + 1);
+    const stop = rest.findIndex((l) => l.trim() === here[2]);
+    const body = (stop < 0 ? rest : rest.slice(0, stop)).join("\n");
+    return { reply: true, body: here[1] === "" && EXPANDS.test(body) ? null : body };
+  }
+  const hs = /--body[\s=]+(?:-\s+)?@(['"])\r?\n([\s\S]*?)\r?\n\s*\1@/.exec(tail);
+  if (hs) return { reply: true, body: hs[1] === '"' && EXPANDS.test(hs[2]) ? null : hs[2] };
+  const q = /--body[\s=]+(?:"((?:[^"\\]|\\[\s\S])*)"|'([^']*)')/.exec(tail);
   if (q) {
     // Inside double quotes a $ or a backtick is an expansion, so the text is not the body that will be sent.
-    if (q[1] !== undefined && /[$`]/.test(q[1])) return { reply: true, body: null };
+    if (q[1] !== undefined && EXPANDS.test(q[1])) return { reply: true, body: null };
     return { reply: true, body: q[1] ?? q[2] ?? "" };
   }
   return { reply: true, body: null };

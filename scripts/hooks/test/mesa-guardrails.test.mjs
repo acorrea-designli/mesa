@@ -117,6 +117,41 @@ test("G12: a here-string piped into --body - is read, so a one-line one passes",
   assert.equal(await rule(run(r, "PowerShell", { command: `@'\n1 blocker: src/x.ts:12 mal.\n'@ | ${MESA_REPLY} --body -` })), "G12");
 });
 
+test("G12: an expanding heredoc or @\"...\"@ here-string with a $ or a backtick is unreadable", async () => {
+  const r = reviewer();
+  const ps = (command) => run(r, "PowerShell", { command });
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - <<EOF\n$(cat C:/tmp/reply.md)\nEOF`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - <<EOF\n$BODY\nEOF`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - <<EOF\n\`cat C:/tmp/reply.md\`\nEOF`)), "G12");
+  assert.equal(await rule(ps(`${MESA_REPLY} --body @"\n$(Get-Content C:/tmp/reply.md -Raw)\n"@`)), "G12");
+  assert.equal(await rule(ps(`@"\n$(Get-Content C:/tmp/reply.md -Raw)\n"@ | ${MESA_REPLY} --body -`)), "G12");
+  // Still readable: a quoted heredoc or @'...'@ is literal, and an expanding one with no $ or backtick is plain text.
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - <<'EOF'\ncuesta $5 y $(no se ejecuta).\nEOF`)), null);
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - <<"EOF"\ncuesta $5 y $(no se ejecuta).\nEOF`)), null);
+  assert.equal(await rule(ps(`${MESA_REPLY} --body @'\ncuesta $5 y $(no se ejecuta).\n'@`)), null);
+  assert.equal(await rule(ps(`@'\n$(literal) 1 nit.\n'@ | ${MESA_REPLY} --body -`)), null);
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - <<EOF\n1 blocker, 2 nits: falta el permiso.\nEOF`)), null);
+  assert.equal(await rule(ps(`${MESA_REPLY} --body @"\n1 blocker, 2 nits: falta el permiso.\n"@`)), null);
+});
+
+test("G12: the reply is found on any line of a multi-line command", async () => {
+  const r = reviewer();
+  const ps = (command) => run(r, "PowerShell", { command });
+  assert.equal(await rule(sh(r, `B=$(cat C:/tmp/reply.md)\n${MESA_REPLY} --body "$B"`)), "G12");
+  assert.equal(await rule(sh(r, `true\ncat C:/tmp/reply.md | ${MESA_REPLY} --body -`)), "G12");
+  assert.equal(await rule(sh(r, `cd C:/tmp\n${MESA_REPLY} --body - < reply.md`)), "G12");
+  assert.equal(await rule(ps(`$b = Get-Content C:/tmp/reply.md -Raw\n${MESA_REPLY} --body $b`)), "G12");
+  assert.equal(await rule(ps(`$b = Get-Content C:/tmp/reply.md -Raw\n${MESA_REPLY} --body "$b"`)), "G12");
+  assert.equal(await rule(sh(r, `echo hi\n${MESA_REPLY} --body - <<EOF\n$(cat C:/tmp/reply.md)\nEOF`)), "G12");
+  assert.equal(await rule(sh(r, `echo hi\n${heredoc("uno\ndos\ntres")}`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} \\\n  --body - <<EOF\n$(cat C:/tmp/reply.md)\nEOF`)), "G12");
+  // A later-line reply with a readable one-line body still passes.
+  assert.equal(await rule(sh(r, `echo hi\n${heredoc("1 blocker, 2 nits: falta el permiso.")}`)), null);
+  assert.equal(await rule(sh(r, `cd C:/tmp\n${MESA_REPLY} --body 'sin hallazgos, Approve.'`)), null);
+  assert.equal(await rule(sh(r, `${MESA_REPLY} \\\n  --body - <<'EOF'\n1 blocker, 2 nits: falta el permiso.\nEOF`)), null);
+  assert.equal(await rule(sh(r, "echo no es una respuesta\nls")), null);
+});
+
 test("G12: a single-quoted body is literal, so a $ in it is allowed", async () => {
   const r = reviewer();
   assert.equal(await rule(sh(r, `${MESA_REPLY} --body 'cuesta $5, 1 nit.'`)), null);
