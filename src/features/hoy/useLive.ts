@@ -4,7 +4,7 @@
 // /api/health ping tells the phone when the tunnel to the PC is down ("Sin conexión con tu PC").
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLive as useLiveStream } from "@/lib/live/useLive";
+import { refreshIfUp, useLive as useLiveStream } from "@/lib/live/useLive";
 
 const HEALTH_MS = 15_000;
 const DEBOUNCE_MS = 250;
@@ -35,10 +35,14 @@ export function useLive(onChange?: () => void): Connection {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refresh = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      if (cb.current) cb.current();
-      else router.refresh();
-    }, DEBOUNCE_MS);
+    timer.current = setTimeout(
+      () =>
+        refreshIfUp(() => {
+          if (cb.current) cb.current();
+          else router.refresh();
+        }),
+      DEBOUNCE_MS,
+    );
   }, [router]);
   useEffect(
     () => () => {

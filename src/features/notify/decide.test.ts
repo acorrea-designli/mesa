@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Destination } from "@/lib/domain/types";
 import {
   SEEN_MAX,
+  LAST_SCAN_FRESH_MS,
   SEEN_TTL_MS,
   approvalWaiting,
   decide,
   newKeys,
   salidaWaiting,
+  shouldBaseline,
   ticketWaiting,
   type Seen,
   type Waiting,
@@ -159,5 +161,33 @@ describe("pruning", () => {
     const seen = decide({ seen: {}, waiting: [ticket("1"), salida("s1")], now: NOW }).seen;
     const d = decide({ seen, waiting: [salida("s1")], now: NOW + 1 });
     expect(Object.keys(d.seen)).toEqual(["salida:s1:v1"]);
+  });
+});
+
+describe("first scan after a load (last scan record)", () => {
+  it("a recent record means a normal scan: what entered waiting meanwhile notifies", () => {
+    expect(shouldBaseline(NOW - 30_000, NOW)).toBe(false);
+    expect(shouldBaseline(NOW - LAST_SCAN_FRESH_MS, NOW)).toBe(false);
+    const seen = decide({ seen: {}, waiting: [ticket("1")], now: NOW - 30_000, baseline: true }).seen;
+    const d = decide({ seen, waiting: [ticket("1"), ticket("2")], now: NOW, baseline: shouldBaseline(NOW - 30_000, NOW) });
+    expect(d.show.map((x) => x.url)).toEqual(["/tickets?t=t2"]);
+  });
+
+  it("a stale record means a silent baseline", () => {
+    expect(shouldBaseline(NOW - LAST_SCAN_FRESH_MS - 1, NOW)).toBe(true);
+    const d = decide({ seen: {}, waiting: [ticket("1")], now: NOW, baseline: shouldBaseline(NOW - 3 * 3600_000, NOW) });
+    expect(d.show).toEqual([]);
+    expect(Object.keys(d.seen)).toEqual(["ticket:1"]);
+  });
+
+  it("no record (first enable) or an unreadable one means a silent baseline", () => {
+    expect(shouldBaseline(null, NOW)).toBe(true);
+    expect(shouldBaseline(Number.NaN, NOW)).toBe(true);
+  });
+
+  it("a key already seen stays silent even on a normal first scan", () => {
+    const seen = decide({ seen: {}, waiting: [ticket("1")], now: NOW - 1000, baseline: true }).seen;
+    const d = decide({ seen, waiting: [ticket("1")], now: NOW, baseline: shouldBaseline(NOW - 1000, NOW) });
+    expect(d.show).toEqual([]);
   });
 });

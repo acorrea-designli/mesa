@@ -3,7 +3,7 @@
 // /api/stream), which falls back to polling when the stream cannot be opened.
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLive as useLiveStream, type LiveChange } from "@/lib/live/useLive";
+import { refreshIfUp, useLive as useLiveStream, type LiveChange } from "@/lib/live/useLive";
 
 export type LiveEvent = LiveChange;
 
@@ -24,7 +24,7 @@ export function useLiveRefresh(): () => void {
   );
   const later = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => router.refresh(), 250);
+    timer.current = setTimeout(() => refreshIfUp(() => router.refresh()), 250);
   }, [router]);
   useLiveStream(later);
   return router.refresh;

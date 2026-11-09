@@ -1,20 +1,26 @@
 "use client";
 // The notifier of one Mesa tab: reads the waiting set, asks decide() what is new, shows it.
 //
-// Several tabs may be open, so three things are shared through the browser:
-//   - `seen` (localStorage): the keys already handled; read, decided and written under a lock.
-//   - leadership: only one tab notifies (navigator.locks; without it a localStorage heartbeat).
+// Several tabs may be open, so these are shared through the browser (localStorage):
+//   - `seen`: the keys already handled; read, decided and written under a lock, so every tab
+//     may scan on its own pokes (a tab whose stream is down still gets the news from the others)
+//     and each entry is still shown once.
+//   - the time of the last successful scan by any tab: a load shortly after it (a reload, a Mesa
+//     restart that hard-reloads the tab) starts with a normal scan, so what entered waiting in
+//     between is shown; an older or missing record means a first enable or a long-closed
+//     browser, and the first scan is a silent baseline. A running tab keeps the record fresh.
 //   - "someone is looking": a visible, focused tab beats in localStorage; while it does (or this
 //     tab is itself visible and focused) new entries are remembered but not shown, because the
 //     screen updates live.
+import { chime, primeAudio } from "./chime";
 import { fetchWaiting } from "./collect";
-import { decide, type Seen, type Shown } from "./decide";
+import { decide, shouldBaseline, type Seen, type Shown } from "./decide";
+import { soundOn } from "./prefs";
 
 const SEEN_KEY = "mesa.notify.seen";
-const LEADER_KEY = "mesa.notify.leader";
 const LOOKING_KEY = "mesa.notify.looking";
+const SCAN_KEY = "mesa.notify.lastScan";
 const SEEN_LOCK = "mesa-notify-seen";
-const LEADER_LOCK = "mesa-notifier";
 const DEBOUNCE_MS = 400;
 const BEAT_MS = 2000;
 const STALE_MS = 6000;
@@ -62,24 +68,29 @@ function withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
 }
 
 export interface Engine {
-  /** A change arrived (SSE frame or poll tick): rescan soon. */
+  /** A change arrived (SSE frame, reconnect or poll tick): rescan soon. */
   poke(): void;
   stop(): void;
 }
 
 export function startNotifier(navigate: (url: string) => void): Engine {
   let stopped = false;
-  let leader = false;
   let running = false;
   let again = false;
+  let healthy = false; // the last scan read the lists (and there has been one)
   let timer: ReturnType<typeof setTimeout> | null = null;
   let memorySeen: Seen = {}; // when localStorage is unavailable
   const sandbox = document.documentElement.dataset.env === "sandbox";
 
+  // Until one scan succeeds the mode stays what the load decided: a failed baseline is retried as a baseline.
+  const record = store.get(SCAN_KEY);
+  let mode: "baseline" | "normal" = shouldBaseline(record === null ? null : Number(record), Date.now()) ? "baseline" : "normal";
+
+  const canShow = () => !stopped && typeof window.Notification !== "undefined" && window.Notification.permission === "granted";
   const show = (s: Shown) => {
-    if (stopped || typeof window.Notification === "undefined" || window.Notification.permission !== "granted") return;
+    if (!canShow()) return;
     try {
-      const n = new window.Notification(s.title, { body: s.body, tag: s.key });
+      const n = new window.Notification(s.title, { body: s.body, tag: s.key, requireInteraction: true });
       n.onclick = () => {
         window.focus();
         navigate(s.url);
@@ -95,7 +106,7 @@ export function startNotifier(navigate: (url: string) => void): Engine {
     return Boolean(id) && Date.now() - Number(ts) < STALE_MS;
   };
 
-  const scan = async (mode: "baseline" | "normal") => {
+  const scan = async () => {
     try {
       await withLock(SEEN_LOCK, async () => {
         const seen = loadSeen(memorySeen);
@@ -104,10 +115,16 @@ export function startNotifier(navigate: (url: string) => void): Engine {
         const d = decide({ seen, waiting, now: Date.now(), baseline: mode === "baseline", quiet: looking() || othersLooking(), sandbox });
         memorySeen = d.seen;
         store.set(SEEN_KEY, JSON.stringify(d.seen));
+        store.set(SCAN_KEY, String(Date.now()));
+        mode = "normal";
+        healthy = true;
         d.show.forEach(show);
+        // One chime per batch, from the tab that showed it (every tab scans; the seen lock lets one show each entry).
+        if (d.show.length > 0 && !stopped && soundOn() && canShow()) chime();
       });
     } catch {
       /* a list could not be read: keep what we had, the next change retries */
+      healthy = false;
     }
   };
 
@@ -120,64 +137,34 @@ export function startNotifier(navigate: (url: string) => void): Engine {
     try {
       do {
         again = false;
-        if (!stopped && leader) await scan("normal");
+        if (!stopped) await scan();
       } while (again && !stopped);
     } finally {
       running = false;
     }
   };
 
-  // ----- who is looking -----
+  // ----- who is looking, and the scan record -----
   const beat = () => {
     if (looking()) store.set(LOOKING_KEY, `${tabId}:${Date.now()}`);
     else if ((store.get(LOOKING_KEY) ?? "").startsWith(`${tabId}:`)) store.del(LOOKING_KEY);
+    // A tab that is up to date keeps the record fresh: nothing entered waiting that it did not see
+    // (every change pokes it), so a reload within minutes still scans normally.
+    if (healthy) store.set(SCAN_KEY, String(Date.now()));
   };
   const beatTimer = setInterval(beat, BEAT_MS);
   window.addEventListener("focus", beat);
   window.addEventListener("blur", beat);
   document.addEventListener("visibilitychange", beat);
   beat();
+  const unprime = primeAudio();
 
-  // ----- leadership -----
-  const becomeLeader = () => {
-    if (stopped || leader) return;
-    leader = true;
-    void run();
-  };
-  let releaseLock: (() => void) | null = null;
-  const abort = new AbortController();
-  let leaderTimer: ReturnType<typeof setInterval> | null = null;
-  const claim = () => {
-    const [id, ts] = (store.get(LEADER_KEY) ?? "").split(":");
-    if (!id || id === tabId || Date.now() - Number(ts) > STALE_MS) {
-      store.set(LEADER_KEY, `${tabId}:${Date.now()}`);
-      becomeLeader();
-    } else leader = false;
-  };
-  const startLeadership = () => {
-    if (navigator.locks) {
-      navigator.locks
-        .request(LEADER_LOCK, { signal: abort.signal }, () => {
-          becomeLeader();
-          return new Promise<void>((resolve) => {
-            releaseLock = resolve;
-          });
-        })
-        .catch(() => undefined);
-    } else {
-      claim();
-      leaderTimer = setInterval(claim, BEAT_MS);
-    }
-  };
-
-  // Baseline first (what already waits is not news), then take part in the leader election.
-  void scan("baseline").then(() => {
-    if (!stopped) startLeadership();
-  });
+  // The first scan: a baseline (what already waits is not news) or, after a reload, a normal one.
+  void run();
 
   return {
     poke() {
-      if (stopped || !leader) return;
+      if (stopped) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => void run(), DEBOUNCE_MS);
     },
@@ -185,15 +172,12 @@ export function startNotifier(navigate: (url: string) => void): Engine {
       stopped = true;
       if (timer) clearTimeout(timer);
       clearInterval(beatTimer);
-      if (leaderTimer) clearInterval(leaderTimer);
+      unprime();
       window.removeEventListener("focus", beat);
       window.removeEventListener("blur", beat);
       document.removeEventListener("visibilitychange", beat);
-      abort.abort();
-      releaseLock?.();
-      if ((store.get(LEADER_KEY) ?? "").startsWith(`${tabId}:`)) store.del(LEADER_KEY);
+      store.del(SCAN_KEY); // switched off: enabling again later is a first enable, a silent baseline
       if ((store.get(LOOKING_KEY) ?? "").startsWith(`${tabId}:`)) store.del(LOOKING_KEY);
-      leader = false;
     },
   };
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Counts } from "@/lib/domain/types";
 import { BrandMark, BrokenLine, LineStub } from "../line/Line";
-import { NotifyToggle } from "@/features/notify/NotifyToggle";
+import { NotifyToggle, SoundToggle } from "@/features/notify/NotifyToggle";
 import { ThemeToggle } from "../ui/interactive";
 import { usePress } from "@/lib/motion";
 import type { SourceHealth } from "./health";
@@ -65,6 +65,7 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
           Teléfono
         </Link>
         <NotifyToggle className="nav theme" />
+        <SoundToggle className="nav theme" />
         <ThemeToggle className="theme" />
       </div>
     </aside>

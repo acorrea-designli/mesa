@@ -45,6 +45,20 @@ export const SEEN_MAX = 300;
 
 const isEpisodic = (key: string) => key.startsWith("ticket:");
 
+/** A scan by any tab this recent means the browser was watching: the first scan of a new load is a normal one. */
+export const LAST_SCAN_FRESH_MS = 10 * 60_000;
+
+/**
+ * Should the first scan of a tab be a silent baseline? `lastScan` is the time (epoch ms) of the
+ * last successful scan by any tab, or null when there is no record. A recent one means a reload
+ * or a restart (what entered waiting meanwhile is news); an older or missing one means a first
+ * enable or a long-closed browser (what waits is not news).
+ */
+export function shouldBaseline(lastScan: number | null, now: number): boolean {
+  if (lastScan === null || !Number.isFinite(lastScan)) return true;
+  return now - lastScan > LAST_SCAN_FRESH_MS;
+}
+
 // ---------- entries ----------
 
 export const ticketKey = (t: Pick<Ticket, "id">) => `ticket:${t.id}`;
