@@ -3,7 +3,21 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyReport, dueSources, inWorkHours, intervalSec, loadConfig, makeStore, report, wait, writeForce } from "../sweep-tick.mjs";
+import {
+  DEFAULT_FULL_SCAN_EVERY_TICKS,
+  applyReport,
+  dueSources,
+  fullScanEveryTicks,
+  inWorkHours,
+  intervalSec,
+  joinMark,
+  loadConfig,
+  makeStore,
+  report,
+  splitMark,
+  wait,
+  writeForce,
+} from "../sweep-tick.mjs";
 
 const config = loadConfig();
 const at = (s) => new Date(s).getTime(); // local time, like the config
@@ -191,4 +205,61 @@ test("Barrer ahora: wait returns on sweep.requested for the sweeper session", as
   assert.equal(r.forced, true);
   assert.deepEqual(r.sources, ["basecamp"]);
   assert.ok(seen.includes("POST /api/sessions") && seen.includes("POST /api/wait/ack"));
+});
+
+test("fullScanEveryTicks comes from config, and falls back to the default when absent or invalid", () => {
+  assert.equal(config.sources.basecamp.fullScanEveryTicks, 10);
+  assert.equal(fullScanEveryTicks(config), 10);
+  assert.equal(fullScanEveryTicks({ ...config, sources: { ...config.sources, basecamp: { enabled: true, fullScanEveryTicks: 5 } } }), 5);
+  assert.equal(fullScanEveryTicks({ sources: { basecamp: { enabled: true } } }), DEFAULT_FULL_SCAN_EVERY_TICKS);
+  assert.equal(fullScanEveryTicks({ sources: {} }), DEFAULT_FULL_SCAN_EVERY_TICKS);
+  assert.equal(fullScanEveryTicks({ sources: { basecamp: { fullScanEveryTicks: 0 } } }), DEFAULT_FULL_SCAN_EVERY_TICKS);
+  assert.equal(fullScanEveryTicks({ sources: { basecamp: { fullScanEveryTicks: "x" } } }), DEFAULT_FULL_SCAN_EVERY_TICKS);
+});
+
+test("compound watermark: probe and catch-up window are kept apart", () => {
+  assert.deepEqual(splitMark("2026-11-09T10:00:00Z|2026-11-09T09:00:00Z"), { probe: "2026-11-09T10:00:00Z", scan: "2026-11-09T09:00:00Z" });
+  assert.deepEqual(splitMark("1762180000.000100"), { probe: "1762180000.000100", scan: null });
+  assert.deepEqual(splitMark(null), { probe: null, scan: null });
+  assert.equal(joinMark("p", null), "p");
+  assert.equal(joinMark(null, null), null);
+  assert.deepEqual(splitMark(joinMark(null, "s")), { probe: null, scan: "s" });
+
+  let s = applyReport(config, {}, { new: 1, watermark: "P1" }, tue10);
+  assert.equal(s.watermark, "P1"); // Slack-style: unchanged shape
+  s = applyReport(config, s, { new: 0, watermark: "P2", scanSince: "S1" }, tue10);
+  assert.equal(s.watermark, "P2|S1");
+  s = applyReport(config, s, { new: 0, watermark: "P3" }, tue10); // the probe moves, the catch-up window stays
+  assert.equal(s.watermark, "P3|S1");
+  s = applyReport(config, s, { new: 0 }, tue10); // a quiet report touches neither
+  assert.equal(s.watermark, "P3|S1");
+  s = applyReport(config, s, { new: 0, scanSince: "S2" }, tue10); // the catch-up moves, the probe stays
+  assert.equal(s.watermark, "P3|S2");
+  s = applyReport(config, s, { error: "boom" }, tue10); // an error keeps both
+  assert.equal(s.watermark, "P3|S2");
+});
+
+test("wait carries fullScanEveryTicks and the catch-up window for Basecamp, and the probe watermark apart", async () => {
+  const state = { sources: { slack: { lastChecked: iso(tue10), watermark: "w1" }, basecamp: { lastChecked: iso(tue10 - 120_000), watermark: "P|S" } }, lastInteractionAt: iso(tue10) };
+  const r = await wait(config, memStore(state), { now: () => tue10 });
+  assert.deepEqual(r.sources, ["basecamp"]);
+  assert.equal(r.watermarks.basecamp, "P");
+  assert.equal(r.fullScanEveryTicks, 10);
+  assert.deepEqual(r.scanSince, { basecamp: "S" });
+
+  const fresh = await wait(config, memStore({ sources: {}, lastInteractionAt: iso(tue10) }), { now: () => tue10 });
+  assert.deepEqual(fresh.scanSince, { basecamp: null }); // never scanned: the instance's first tick reads everything
+  assert.equal(fresh.watermarks.basecamp, null);
+
+  const slackOnly = await wait(config, memStore({ sources: { slack: { lastChecked: iso(tue10 - 120_000) }, basecamp: { lastChecked: iso(tue10) } }, lastInteractionAt: iso(tue10) }), { now: () => tue10 });
+  assert.deepEqual(slackOnly.sources, ["slack"]);
+  assert.equal("scanSince" in slackOnly, false);
+});
+
+test("report writes the catch-up window to Mesa and keeps it across a probe-only report", async () => {
+  const store = memStore({ sources: { basecamp: { watermark: "P0" } } });
+  await report(config, store, "basecamp", { new: 2, watermark: "P1", scanSince: "S1" }, { now: () => tue10 });
+  assert.equal(store.saved.basecamp.watermark, "P1|S1");
+  await report(config, store, "basecamp", { new: 0, watermark: "P2" }, { now: () => tue10 + 60_000 });
+  assert.equal(store.saved.basecamp.watermark, "P2|S1");
 });

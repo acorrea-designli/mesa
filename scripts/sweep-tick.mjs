@@ -3,14 +3,17 @@
 // never ends while it waits (no idle notifications to the lead) and no tick touches the lead's context.
 //
 //   node scripts/sweep-tick.mjs wait                      block until a source is due or "Barrer ahora" is pressed
-//   node scripts/sweep-tick.mjs report <source> --new N [--watermark W]
+//   node scripts/sweep-tick.mjs report <source> --new N [--watermark W] [--scan-since S]
 //   node scripts/sweep-tick.mjs report <source> --error "msg" [--rate-limited]
 //   node scripts/sweep-tick.mjs status
 //   node scripts/sweep-tick.mjs force [--source slack|basecamp]...   the lead, on sweep.requested ("Barrer ahora")
 //
 // Every number lives in config/sweep.json. State per source lives in Mesa (`GET /api/sources`,
 // `PATCH /api/sources/:name`: watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError, cadenceS;
-// plus `lastInteractionAt`, stamped only by Andrés's UI actions). Mesa unreachable or erroring = `wait` reports
+// plus `lastInteractionAt`, stamped only by Andrés's UI actions). Basecamp's `watermark` is compound,
+// `<probe>|<scan>` (see splitMark): `--watermark` moves the probe part, `--scan-since` the full-notifications
+// catch-up's own "since"; `wait`/`status` print them apart, with `fullScanEveryTicks` (config sources.basecamp,
+// default 10). Mesa unreachable or erroring = `wait` reports
 // `mesa_down` and `report` fails; there is no local fallback. Health (ok | degraded | down, down after downAfterErrors consecutive
 // failures that are not rate limits) rides on the same PATCH and feeds the rail (Estados B); leaving "down" resumes
 // salidas held for that source. "Barrer ahora" emits `sweep.requested` to the session "sweeper", which `wait`
@@ -89,6 +92,28 @@ export function dueSources(config, state, now, { forced = false } = {}) {
   return Object.keys(t).filter((n) => t[n] <= now);
 }
 
+// ---------- compound watermark ----------
+// `source_state.watermark` holds `<probe>` or `<probe>|<scan>`. The probe part is the stage 1 watermark every source
+// uses. The scan part is the Basecamp catch-up's own "since" (the newest notification the last full
+// get_my_notifications read saw); it must not move with the probe, or the probe would hide the very comments the
+// catch-up exists for. Slack and Basecamp ISO timestamps never contain `|`, so the split is unambiguous.
+export const DEFAULT_FULL_SCAN_EVERY_TICKS = 10;
+
+export function splitMark(w) {
+  const [probe = "", scan = ""] = String(w ?? "").split("|");
+  return { probe: probe || null, scan: scan || null };
+}
+
+export function joinMark(probe, scan) {
+  return scan ? `${probe ?? ""}|${scan}` : probe ?? null;
+}
+
+// How many Basecamp ticks pass between two full notification reads (config/sweep.json, sources.basecamp).
+export function fullScanEveryTicks(config) {
+  const n = Number(config.sources?.basecamp?.fullScanEveryTicks);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_FULL_SCAN_EVERY_TICKS;
+}
+
 export function applyReport(config, s = {}, report, now) {
   const iso = new Date(now).toISOString();
   if (report.error) {
@@ -105,6 +130,8 @@ export function applyReport(config, s = {}, report, now) {
     };
   }
   const n = Number(report.new ?? 0);
+  const prev = splitMark(s.watermark);
+  const watermark = joinMark(report.watermark ? String(report.watermark) : prev.probe, report.scanSince ? String(report.scanSince) : prev.scan);
   return {
     ...s,
     lastChecked: iso,
@@ -113,7 +140,7 @@ export function applyReport(config, s = {}, report, now) {
     lastError: null,
     backoffUntil: null,
     ...(n > 0 ? { lastNewAt: iso } : {}),
-    ...(report.watermark ? { watermark: String(report.watermark) } : {}),
+    ...(report.watermark || report.scanSince ? { watermark } : {}),
   };
 }
 
@@ -208,7 +235,7 @@ export async function wait(config, store, { now = Date.now, maxSec = config.wait
       return { due: false, reason: "mesa_down", error: err.message, store: store.kind };
     }
     const due = dueSources(config, state, now());
-    if (due.length) return { due: true, forced: false, sources: due, intervalSec: intervalSec(config, state, now()), store: store.kind, watermarks: marks(state, due) };
+    if (due.length) return { due: true, forced: false, sources: due, intervalSec: intervalSec(config, state, now()), store: store.kind, watermarks: marks(state, due), ...scanInfo(config, state, due) };
     const left = until - now();
     if (left <= 0) return { due: false, reason: "timeout", store: store.kind };
     const next = Math.min(...Object.values(dueTimes(config, state, now())), until);
@@ -217,12 +244,17 @@ export async function wait(config, store, { now = Date.now, maxSec = config.wait
     if (f) {
       const st = await store.load();
       const forced = dueSources(config, st, now(), { forced: true }).filter((n) => !f.sources || f.sources.includes(n));
-      return { due: forced.length > 0, forced: true, sources: forced, intervalSec: config.activeIntervalSec, store: store.kind, watermarks: marks(st, forced) };
+      return { due: forced.length > 0, forced: true, sources: forced, intervalSec: config.activeIntervalSec, store: store.kind, watermarks: marks(st, forced), ...scanInfo(config, st, forced) };
     }
   }
 }
 
-const marks = (state, names) => Object.fromEntries(names.map((n) => [n, state.sources?.[n]?.watermark ?? null]));
+const marks = (state, names) => Object.fromEntries(names.map((n) => [n, splitMark(state.sources?.[n]?.watermark).probe]));
+
+// Basecamp catch-up info for the sweeper: how often to run it and the "since" of the previous one (null = never).
+// Only when Basecamp is among `names`.
+const scanInfo = (config, state, names) =>
+  names.includes("basecamp") ? { fullScanEveryTicks: fullScanEveryTicks(config), scanSince: { basecamp: splitMark(state.sources?.basecamp?.watermark).scan } } : {};
 
 export async function report(config, store, name, rep, { now = Date.now } = {}) {
   if (!config.sources[name]) throw new Error(`unknown source ${name}`);
@@ -254,13 +286,13 @@ async function main() {
   let out;
   if (pos[0] === "wait") out = await wait(config, store);
   else if (pos[0] === "report") {
-    out = await report(config, store, pos[1], { new: opt.new, watermark: opt.watermark, error: opt.error === true ? "error" : opt.error, rateLimited: !!opt["rate-limited"] });
+    out = await report(config, store, pos[1], { new: opt.new, watermark: opt.watermark, scanSince: opt["scan-since"], error: opt.error === true ? "error" : opt.error, rateLimited: !!opt["rate-limited"] });
   } else if (pos[0] === "force") {
     out = writeForce([].concat(opt.source ?? []).filter((x) => x !== true));
   } else if (pos[0] === "status") {
     const state = await store.load();
-    out = { state, intervalSec: intervalSec(config, state, Date.now()), due: dueTimes(config, state, Date.now()), inWorkHours: inWorkHours(config, Date.now()), store: store.kind };
-  } else throw new Error("usage: sweep-tick.mjs wait | report <source> --new N [--watermark W] | report <source> --error MSG [--rate-limited] | status | force [--source S]");
+    out = { state, intervalSec: intervalSec(config, state, Date.now()), due: dueTimes(config, state, Date.now()), inWorkHours: inWorkHours(config, Date.now()), store: store.kind, ...scanInfo(config, state, ["basecamp"]) };
+  } else throw new Error("usage: sweep-tick.mjs wait | report <source> --new N [--watermark W] [--scan-since S] | report <source> --error MSG [--rate-limited] | status | force [--source S]");
   process.stdout.write(`${JSON.stringify(out)}\n`);
 }
 
