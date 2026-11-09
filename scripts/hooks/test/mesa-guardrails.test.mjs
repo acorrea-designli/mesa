@@ -172,6 +172,21 @@ test("G12: another command's heredoc or here-string body that mentions the reply
   assert.equal(await rule(ps(`$h = @'\n${text}\n'@\n${MESA_REPLY} --body $h`)), "G12");
 });
 
+test("G12: code after a here-string closer, a heredoc opener or a not-bare terminator is still scanned", async () => {
+  const r = reviewer();
+  const ps = (command) => run(r, "PowerShell", { command });
+  const MESA = "node G:/WorkSpace/designli/ops/bin/mesa";
+  // PowerShell runs what follows the closer on the same line.
+  assert.equal(await rule(ps(`$h = @'\nbody\n'@; ${MESA_REPLY} --body $h`)), "G12");
+  assert.equal(await rule(ps(`$h = @"\nbody\n"@; ${MESA_REPLY} --body $h`)), "G12");
+  assert.equal(await rule(ps(`$h = @'\nbody\n'@; ${MESA} handoff t66 --agent reviewer-t66 --status done --body $h`)), null);
+  // Bash: only a bare delimiter closes a heredoc, so `EOF; mesa ...` is still body text (data).
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<'EOF'\nbody\nEOF; ${MESA_REPLY} --body "$B"\nmore\nEOF`)), null);
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<'EOF'\nbody\nEOF\n${MESA_REPLY} --body "$B"`)), "G12");
+  // Code on the opener line, after the delimiter, runs.
+  assert.equal(await rule(sh(r, `cat <<'X' >f; ${MESA_REPLY} --body "$(cat f)"\nbody\nX`)), "G12");
+});
+
 test("G12: a single-quoted body is literal, so a $ in it is allowed", async () => {
   const r = reviewer();
   assert.equal(await rule(sh(r, `${MESA_REPLY} --body 'cuesta $5, 1 nit.'`)), null);

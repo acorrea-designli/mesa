@@ -80,7 +80,8 @@ function findReplyLine(lines) {
       const close = new RegExp("^\\s*" + hs[1] + "@");
       let j = i + 1;
       while (j < lines.length && !close.test(lines[j] ?? "")) j++;
-      i = j;
+      // PowerShell runs code after the closer on the same line (`'@; mesa ticket reply ...`), so scan the closer line.
+      i = j - 1;
     }
   }
   return -1;
@@ -99,7 +100,9 @@ export function ticketReplyShape(cmd) {
   while (end < lines.length - 1 && /[\\`]\s*$/.test(lines[end] ?? "")) end++;
   const statement = lines.slice(at, end + 1).join(" ");
   const tail = lines.slice(at).join("\n");
-  const here = /(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(statement);
+  // Only a heredoc opened by the reply itself feeds its body: `cat <<'X' >f; mesa ticket reply ... "$(cat f)"` opens it for cat.
+  const replyAt = statement.search(/\bmesa\b[^\n|;&]*\bticket\s+reply\b/);
+  const here = /(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(statement.slice(Math.max(replyAt, 0)));
   if (here) {
     const rest = lines.slice(end + 1);
     const stop = rest.findIndex((l) => l.trim() === here[2]);
