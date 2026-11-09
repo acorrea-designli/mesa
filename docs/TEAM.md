@@ -298,7 +298,7 @@ registered with the node that ran the installer. Re-run after every pull. Restar
     `MESA_TOKEN` cookie, which the phone gets by scanning the one-time QR on `/telefono` or typing its 8-character code.
     The token is never typed, shown or put in a URL. Mesa never listens beyond `127.0.0.1` unless `MESA_HOST` says so, and
     :8790 is never exposed directly. `pnpm tunnel status` probes the public URL without credentials and must see
-    Cloudflare Access answer; if Mesa answers directly it exits 3 and `up` refuses. mesa-start checks it (`node
+    Cloudflare Access answer; if Mesa answers directly it exits 3 and `up` refuses. `pnpm start` brings the tunnel up by itself as a child of the board (after the server listens; reuses a running one; stops if Mesa answers without Access; ends with the board; cloudflared missing is one log line, not a failed start), so after a PC restart `pnpm start` is the only step; `MESA_TUNNEL=off` disables it and `MESA_TUNNEL=on` enables it in `pnpm dev`. mesa-start checks it (`node
     scripts/tunnel.mjs status --json`; exit 3 is a stop). Installing cloudflared, logging in to Cloudflare, creating the
     tunnel, the DNS route and the Windows service, creating the Access app (before the DNS route goes live), and writing
     `.env.local` are `needs_ok` steps done with Andrés; no Cloudflare API token ever lives in the repo. See ARCHITECTURE § 11.

@@ -4,6 +4,7 @@ import { Notifier } from "@/features/notify/Notifier";
 import { InstallPrompt } from "@/features/phone/InstallPrompt";
 import { PwaBoot } from "@/features/phone/PwaBoot";
 import { TunnelStatus } from "@/features/phone/TunnelStatus";
+import { VersionBanner } from "@/features/version/VersionBanner";
 import { getSourceHealth } from "@/lib/integrations/health";
 import type { SourceHealth } from "./health";
 import { PhoneTabs } from "./PhoneTabs";
@@ -31,16 +32,18 @@ export function AppShell({
   sandbox?: { copy: SandboxCopy | null };
   children: ReactNode;
 }) {
+  const sources = health ?? getSourceHealth();
   return (
     <div className="app">
       {sandbox ? <SandboxBand copy={sandbox.copy} /> : null}
-      <Rail counts={counts} health={health ?? getSourceHealth()} />
+      <Rail counts={counts} health={sources} />
       <TunnelStatus />
       <main className="work" id="main">
         {children}
       </main>
-      <PhoneTabs counts={counts} />
+      <PhoneTabs counts={counts} health={sources} />
       <InstallPrompt />
+      <VersionBanner />
       <PwaBoot />
       <Notifier />
     </div>

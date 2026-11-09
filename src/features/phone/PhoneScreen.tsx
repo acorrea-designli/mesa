@@ -5,32 +5,73 @@
 import { useEffect, useState } from "react";
 import { LineStub } from "@/components/line/Line";
 import { Btn } from "@/components/ui/primitives";
-import { ShareGlyph } from "./InstallPrompt";
+import { guidesFor, installDiagnostics, installStatus, type InstallStatus } from "./install";
 import { timeLeft } from "./pairing";
 import { QrCode } from "./QrCode";
-import { promptInstall, useInstall } from "./useInstall";
+import { formatVersion } from "@/features/version/version";
+import { useVersion } from "@/features/version/useVersion";
+import { promptInstall, refreshSw, resetInstallDismiss, useInstall } from "./useInstall";
 
 type Pairing = { url: string; code: string; expiresAt: string };
 
+const STATUS_COPY: Record<InstallStatus, string> = {
+  installed: "Mesa ya está instalada en este dispositivo.",
+  prompt: "Este navegador puede instalarla ahora.",
+  dismissed: "Ocultaste el aviso de instalar. Puedes volver a mostrarlo o seguir los pasos de abajo.",
+  ios: "En iPhone no hay aviso automático: se instala con los pasos de abajo.",
+  manual: "Este navegador no mandó el aviso de instalar. Sigue los pasos de abajo.",
+  waiting: "Esperando el aviso de instalar del navegador…",
+  wide: "Abre esta pantalla en el teléfono para ver el estado de su instalación.",
+};
+
 function InstallEntry() {
-  const { ready, standalone, hasPrompt, platform } = useInstall();
-  if (!ready) return null;
-  if (standalone) return <p className="tel-note">Mesa ya está instalada en este dispositivo.</p>;
-  if (hasPrompt) {
-    return (
-      <Btn size="sm" onClick={() => void promptInstall()}>
-        Instalar
-      </Btn>
-    );
-  }
-  if (platform === "ios") {
-    return (
-      <p className="tel-note">
-        Toca <ShareGlyph /> <b>Compartir</b> y luego <b>Agregar a inicio</b>.
+  const s = useInstall();
+  if (!s.ready) return null;
+  const status = installStatus(s);
+  const guides = guidesFor(s.platform, s.browser, s.phoneSized);
+  return (
+    <>
+      <p className="tel-note" role="status">
+        {STATUS_COPY[status]}
       </p>
-    );
-  }
-  return <p className="tel-note">Este navegador no ofrece instalar. En Chrome del Android o en Safari del iPhone sí aparece.</p>;
+      {status === "prompt" ? (
+        <Btn size="sm" onClick={() => void promptInstall()}>
+          Instalar
+        </Btn>
+      ) : null}
+      {status === "dismissed" ? (
+        <Btn size="sm" onClick={resetInstallDismiss}>
+          Mostrar el aviso otra vez
+        </Btn>
+      ) : null}
+      <ul className="tel-guides" aria-label="Pasos para instalar">
+        {guides.map((g) => (
+          <li key={g.who}>
+            <b>{g.who}</b>
+            <span>{g.text}</span>
+          </li>
+        ))}
+      </ul>
+      <InstallReadout />
+    </>
+  );
+}
+
+/** What this device reports about installing, so "no me sale" can be read off the screen. No secrets. */
+function InstallReadout() {
+  const s = useInstall();
+  useEffect(() => void refreshSw(), []);
+  const rows = installDiagnostics(s);
+  return (
+    <dl className="tel-diag" aria-label="Estado de la instalación">
+      {rows.map((r) => (
+        <div key={r.key}>
+          <dt>{r.label}</dt>
+          <dd>{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function Pair({ publicUrl }: { publicUrl: string | null }) {
@@ -129,6 +170,17 @@ function Pair({ publicUrl }: { publicUrl: string | null }) {
   );
 }
 
+function VersionLine() {
+  const { loaded, newer } = useVersion();
+  if (!loaded) return null;
+  return (
+    <p className="tel-note tel-version">
+      Versión {formatVersion(loaded)}
+      {newer ? " · hay una nueva, recarga la página" : ""}
+    </p>
+  );
+}
+
 export function PhoneScreen({ local, publicUrl }: { local: boolean; publicUrl: string | null }) {
   return (
     <>
@@ -146,10 +198,11 @@ export function PhoneScreen({ local, publicUrl }: { local: boolean; publicUrl: s
           </section>
         )}
         <section className="tel-card tel-install" aria-labelledby="tel-install">
-          <h2 id="tel-install">Instalar</h2>
+          <h2 id="tel-install">Instalar en el teléfono</h2>
           <p>Primero vincula este teléfono, luego instala: Mesa se abre desde la pantalla de inicio, sin la barra del navegador. Si ya la instalaste, escribe el código corto dentro de la app.</p>
           <InstallEntry />
         </section>
+        <VersionLine />
       </div>
     </>
   );

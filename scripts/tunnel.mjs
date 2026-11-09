@@ -11,11 +11,12 @@
 //           directly it stops the tunnel again and exits 3; if it already did before starting, it refuses (3).
 //   down    stops the service or the background process `up` started.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { WINDOWS_SERVICE, buildConfig, classifyProbe, describe, hostFromPublicUrl, parseServiceState, parseTunnelList, statusExitCode, tunnelName } from "./lib/tunnel.mjs";
+import { pidAlive as pidAliveAt, probePublic, runCloudflared, serviceState as serviceStateOf, stopRunningTunnel } from "./lib/cloudflared.mjs";
+import { WINDOWS_SERVICE, buildConfig, describe, hostFromPublicUrl, parseTunnelList, statusExitCode, tunnelName } from "./lib/tunnel.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -38,49 +39,13 @@ const tunnel = tunnelName(process.env);
 const CF_DIR = join(homedir(), ".cloudflared");
 const CONFIG = join(CF_DIR, `${tunnel}-mesa.yml`);
 const PIDFILE = join(CF_DIR, `${tunnel}-mesa.pid`);
-const IS_WIN = process.platform === "win32";
 
-const CANDIDATES = ["cloudflared", "C:\\Program Files (x86)\\cloudflared\\cloudflared.exe", "C:\\Program Files\\cloudflared\\cloudflared.exe", "/usr/local/bin/cloudflared", "/opt/homebrew/bin/cloudflared"];
+const cf = (argv) => runCloudflared(argv);
 
-function cf(argv) {
-  for (const file of CANDIDATES) {
-    if (file !== "cloudflared" && !existsSync(file)) continue;
-    const r = spawnSync(file, argv, { encoding: "utf8", timeout: 20000, windowsHide: true });
-    if (r.error && r.error.code === "ENOENT") continue;
-    return { found: true, file, code: r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
-  }
-  return { found: false, file: null, code: 127, stdout: "", stderr: "" };
-}
+const serviceState = () => serviceStateOf(WINDOWS_SERVICE);
+const pidAlive = () => pidAliveAt(PIDFILE);
 
-function serviceState() {
-  if (!IS_WIN) return "absent";
-  const r = spawnSync("sc", ["query", WINDOWS_SERVICE], { encoding: "utf8", timeout: 10000, windowsHide: true });
-  return parseServiceState(r.stdout ?? "", r.status ?? 1);
-}
-
-const pidAlive = () => {
-  try {
-    const pid = Number(readFileSync(PIDFILE, "utf8"));
-    if (!pid) return false;
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-/** GET https://<host>/ with no cookie and no token, redirects not followed. */
-async function probe() {
-  if (!hostname) return "skipped";
-  try {
-    const res = await fetch(`https://${hostname}/`, { redirect: "manual", signal: AbortSignal.timeout(8000), headers: { "user-agent": "mesa-tunnel-probe", accept: "text/html" } });
-    const headers = Object.fromEntries([...res.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]));
-    await res.body?.cancel();
-    return classifyProbe({ status: res.status, headers, location: headers.location });
-  } catch {
-    return classifyProbe({ error: true });
-  }
-}
+const probe = () => probePublic(hostname);
 
 function lookupTunnel(found) {
   if (!found) return null;
@@ -100,23 +65,7 @@ function report(s) {
   else for (const line of describe(s)) console.log(line);
 }
 
-function stopTunnel() {
-  let stopped = false;
-  if (serviceState() === "running") {
-    spawnSync("sc", ["stop", WINDOWS_SERVICE], { encoding: "utf8", windowsHide: true });
-    stopped = true;
-  }
-  if (pidAlive()) {
-    try {
-      process.kill(Number(readFileSync(PIDFILE, "utf8")));
-      stopped = true;
-    } catch {
-      /* already gone */
-    }
-  }
-  rmSync(PIDFILE, { force: true });
-  return stopped;
-}
+const stopTunnel = () => stopRunningTunnel(PIDFILE, WINDOWS_SERVICE);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

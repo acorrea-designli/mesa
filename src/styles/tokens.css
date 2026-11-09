@@ -65,7 +65,7 @@
   --rail-w: 184px;
   --detail-w: 392px;
   --thread-w: 520px;
-  --phone-tabs-h: 82px;
+  --phone-tabs-h: calc(54px + env(safe-area-inset-bottom, 0px)); /* the thin tab bar: 54px of content plus the home-indicator inset */
   --sbx-h: 0px; /* height of the SANDBOX tab sitting on the phone tab bar (sandbox.css); 0 on the live board */
 
   /* Shadows: only for floating layers */

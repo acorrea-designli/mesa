@@ -2,11 +2,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Counts } from "@/lib/domain/types";
-import { BrandMark, BrokenLine, LineStub } from "../line/Line";
+import { BrandMark } from "../line/Line";
 import { NotifyToggle, SoundToggle } from "@/features/notify/NotifyToggle";
 import { ThemeToggle } from "../ui/interactive";
 import { usePress } from "@/lib/motion";
 import type { SourceHealth } from "./health";
+import { SourceHealthList } from "./SourceHealthList";
 
 export type { SourceHealth } from "./health";
 
@@ -43,21 +44,7 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
         ) : null}
       </nav>
       <div className="rail-foot">
-        {health.length ? (
-          <div className="rl-health" role="status" aria-label="Fuentes">
-            <div className="k">Fuentes</div>
-            {health.map((h) => {
-              const line = h.source === "github_project" ? "github" : h.source;
-              return (
-                <div key={h.source} className={h.state === "ok" ? "rl-src" : "rl-src bad"}>
-                  {h.state === "ok" ? <LineStub source={line} width={16} /> : <BrokenLine source={line} width={24} title={`${h.name} ${h.note}`} />}
-                  {h.name}
-                  <small>{h.note}</small>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
+        <SourceHealthList health={health} />
         <span className="nav foot">
           Hecho hoy <b>{counts.doneToday}</b>
         </span>

@@ -215,3 +215,81 @@ html[data-link="login"] .work .btn.p:not(.alert .btn) {
     height: 56px;
   }
 }
+
+/* ---------- /telefono: install guides and the state readout ---------- */
+.tel-guides {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tel-guides li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink2);
+}
+.tel-guides b {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tel-diag {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.tel-diag > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tel-diag dt {
+  color: var(--mute);
+}
+.tel-diag dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  color: var(--ink);
+}
+
+/* ---------- "Hay una versión nueva" (desktop and phone) ---------- */
+.ver {
+  position: fixed;
+  z-index: 60;
+  top: 16px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 8px 14px;
+  background: var(--raise);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-panel);
+  box-shadow: var(--float-mid);
+}
+.ver-copy {
+  margin-right: 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+@media (max-width: 720px) {
+  .ver {
+    top: calc(env(safe-area-inset-top) + 8px);
+    left: 12px;
+    right: 12px;
+  }
+  .ver-copy {
+    flex: 1;
+  }
+}

@@ -1,8 +1,11 @@
 "use client";
-// "Instalar Mesa" banner. Android/Chrome: the native prompt behind a primary button. iOS Safari (no
-// beforeinstallprompt): a two-step written guide. Hidden when installed (standalone) and for 14 days after a dismiss.
+// "Instalar Mesa" banner. Browsers with beforeinstallprompt (Chrome, Edge): the native prompt behind a primary button.
+// iOS Safari: a written guide. Phone browsers where the event does not arrive within ~3 s (Opera, Samsung Internet,
+// Chrome before its own checks): written steps for the detected browser, and the button replaces them if the event
+// arrives later. Hidden when installed (standalone) and for 14 days after a dismiss.
 import { BrandMark } from "@/components/line/Line";
 import { Btn } from "@/components/ui/primitives";
+import { guidesFor } from "./install";
 import { dismissInstall, promptInstall, useInstall } from "./useInstall";
 
 export function ShareGlyph() {
@@ -15,8 +18,9 @@ export function ShareGlyph() {
 }
 
 export function InstallPrompt() {
-  const { offer } = useInstall();
+  const { offer, platform, browser, phoneSized } = useInstall();
   if (!offer) return null;
+  const manual = offer === "manual" ? guidesFor(platform, browser, phoneSized)[0] : null;
   return (
     <aside className="ins" role="region" aria-label="Instalar Mesa">
       <div className="ins-head">
@@ -25,10 +29,12 @@ export function InstallPrompt() {
           <b>Instalar Mesa</b>
           {offer === "prompt" ? (
             <p>Ábrela desde tu pantalla de inicio, a pantalla completa y sin la barra del navegador.</p>
-          ) : (
+          ) : offer === "ios" ? (
             <p>
               Toca <ShareGlyph /> <b>Compartir</b> y luego <b>Agregar a inicio</b>.
             </p>
+          ) : (
+            <p>{manual?.text}</p>
           )}
         </div>
       </div>

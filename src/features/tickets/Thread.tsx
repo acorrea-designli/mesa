@@ -12,7 +12,7 @@ import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { ReviewCard } from "@/features/reviews/ReviewCard";
 import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/features/salidas/icons";
 import { ticketApi } from "./api";
-import { DirLine, dirLabel, hm } from "./bits";
+import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { isNearBottom, onNewMessage, type ScrollBox } from "./follow";
 import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
@@ -184,10 +184,16 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
 
   return (
     <aside className="tk-pane tk-thread" ref={ref} aria-label={`Ticket ${t.ref}`}>
-      <Link className="tk-back" href="/tickets">
-        <IcBack />
-        Tickets
-      </Link>
+      <header className="tk-phead">
+        <Link className="tk-back" href="/tickets" aria-label="Volver a Tickets">
+          <IcBack />
+          <span className="tk-back-l">Tickets</span>
+        </Link>
+        <div className="tk-pt">
+          <b>{t.title}</b>
+          <small>{statusLabel(t.status)}</small>
+        </div>
+      </header>
       <div className="tk-scrollwrap">
         <div
           className="tk-scroll"
