@@ -2,6 +2,7 @@
 import type { Repos } from "@/lib/repo";
 import { isSimulated } from "@/lib/domain/sandbox";
 import { needLine, needRank, type TicketNeed } from "@/lib/domain/ticket-needs";
+import { related, type RelItem, type RelTicket, type Related } from "@/lib/domain/related";
 import { loadTicketNeeds } from "./needs";
 import type { Approval, Brief, Handoff, Item, PlannedAction, Review, Salida, TeamAgent, Ticket, TicketDetail } from "@/lib/domain/types";
 
@@ -32,6 +33,10 @@ export interface ThreadData {
   item: Pick<Item, "id" | "source" | "title" | "excerpt" | "url" | "project" | "meta"> | null;
   salidas: (Pick<Salida, "id" | "status" | "source" | "title"> & { simulated?: boolean })[];
   refTitles: Record<string, string>;
+  /** Refs of every ticket that exists: only these become links in the thread text. */
+  knownRefs: string[];
+  /** "Relacionado": what Mesa detects around this ticket (src/lib/domain/related.ts). Empty: no block. */
+  related: Related[];
 }
 
 export interface TicketsData {
@@ -94,7 +99,54 @@ const hm = (iso: string) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-export function threadData(r: Repos, idOrRef: string): ThreadData {
+const RELATED_DAYS = 7;
+
+const relTicket = (r: Repos, t: Ticket, reviews: Map<string, { repo: string; pr: number }[]>): RelTicket => {
+  const d = r.tickets.detail(t.id);
+  return {
+    id: d.id,
+    ref: d.ref,
+    title: d.title,
+    itemId: d.itemId,
+    texts: d.messages.flatMap((m) => [m.body, m.recommendation ?? "", ...(m.options ?? []).flatMap((o) => [o.label, o.detail ?? ""])]),
+    refUrls: d.refs.filter((x) => x.refType === "url").map((x) => x.target),
+    reviews: reviews.get(d.id) ?? [],
+  };
+};
+
+/**
+ * The "Relacionado" block. Candidates are bounded so opening a thread stays cheap: tickets still open or
+ * touched in the last week, items not done or touched in the last week, plus the items on the ticket's card.
+ */
+function relatedFor(r: Repos, ticket: TicketDetail, item: ThreadData["item"], now: Date): Related[] {
+  const since = new Date(now.getTime() - RELATED_DAYS * 86400_000).toISOString();
+  const reviews = new Map<string, { repo: string; pr: number }[]>();
+  for (const rv of r.reviews.list()) if (rv.ticketId) reviews.set(rv.ticketId, [...(reviews.get(rv.ticketId) ?? []), { repo: rv.repo, pr: rv.pr }]);
+  const items: RelItem[] = r.items
+    .list()
+    .filter((i) => i.station !== "done" || i.updatedAt >= since || (ticket.taskId !== null && i.taskId === ticket.taskId))
+    .map((i) => ({ id: i.id, source: i.source, title: i.title, excerpt: i.excerpt, url: i.url, taskId: i.taskId, meta: i.meta }));
+  const tickets = r.tickets
+    .list()
+    .filter((t) => t.id !== ticket.id && (t.status !== "closed" || (t.closedAt ?? t.updatedAt) >= since))
+    .map((t) => relTicket(r, t, reviews));
+  const own = relTicket(r, ticket, reviews);
+  // What "Fuente" shows (Thread.tsx Sources): the item's address and the refs of the first message.
+  const first = ticket.messages[0];
+  const fuente = ticket.refs.filter((x) => !x.messageId || x.messageId === first?.id);
+  return related({
+    ticket: { ...own, taskId: ticket.taskId },
+    item: item ? (items.find((i) => i.id === item.id) ?? { id: item.id, source: item.source, title: item.title, excerpt: item.excerpt, url: item.url, taskId: null, meta: item.meta }) : null,
+    items,
+    tickets,
+    shown: {
+      urls: [...(item?.url ? [item.url] : []), ...fuente.filter((x) => x.refType === "url").map((x) => x.target)],
+      tickets: fuente.filter((x) => x.refType === "ticket").map((x) => x.target),
+    },
+  });
+}
+
+export function threadData(r: Repos, idOrRef: string, now = new Date()): ThreadData {
   const ticket = r.tickets.detail(idOrRef);
   const approvals = r.approvals.list({ ticket: ticket.id });
   const item = ticket.itemId
@@ -128,6 +180,8 @@ export function threadData(r: Repos, idOrRef: string): ThreadData {
       .filter((s) => s.ticketId === ticket.id)
       .map((s) => ({ id: s.id, status: s.status, source: s.source, title: s.title, simulated: isSimulated(s) })),
     refTitles,
+    knownRefs: r.tickets.list().map((t) => t.ref),
+    related: relatedFor(r, ticket, item, now),
   };
 }
 
@@ -174,7 +228,7 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
   let selected: ThreadData | null = null;
   for (const id of selectionOrder(opts, rows)) {
     try {
-      selected = threadData(r, id);
+      selected = threadData(r, id, now);
       break;
     } catch {
       selected = null;

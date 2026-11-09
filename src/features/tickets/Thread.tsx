@@ -13,14 +13,17 @@ import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { ReviewCard } from "@/features/reviews/ReviewCard";
 import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/features/salidas/icons";
 import { ApiError } from "@/features/salidas/api";
+import { classify, normalizeUrl } from "@/lib/domain/links";
 import { ticketApi } from "./api";
 import { DirLine, dirLabel, hm, statusLabel } from "./bits";
+import { KnownTickets, Linked } from "./Linkified";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
 import { clearReply, loadReply, saveReply, type ReplyDraft } from "./drafts";
 import { useDraft } from "./useDraft";
 import type { PickTicket, ThreadData } from "./read";
+import type { Related } from "@/lib/domain/related";
 
 interface Props {
   data: ThreadData;
@@ -270,7 +273,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     ...verbs.map((v) => ({ key: v.toLowerCase().replace(/\s+/g, "-"), label: v, hint: "pídeselo a Claude", run: () => c.setText(`${c.state.text}${c.state.text && !c.state.text.endsWith(" ") ? " " : ""}${v}: `) })),
   ];
 
+  const known = useMemo(() => new Set(data.knownRefs), [data.knownRefs]);
   return (
+    <KnownTickets.Provider value={known}>
     <aside className="tk-pane tk-thread" ref={ref} aria-label={`Ticket ${t.ref}`}>
       <header className="tk-phead">
         <Link className="tk-back" href="/tickets" aria-label="Volver a Tickets">
@@ -298,7 +303,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
             <FilesBadge chip={chipOfMeta(data.item?.meta)} />
           </div>
           <h2>{t.title}</h2>
-          {first?.body && first.body !== t.title ? <div className="ctx">{first.body}</div> : null}
+          {first?.body && first.body !== t.title ? <div className="ctx"><Linked text={first.body} /></div> : null}
 
           {first?.options?.length ? (
             <>
@@ -310,11 +315,11 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           {data.item ? (
             <>
               <div className="k">Lo que pidió el cliente</div>
-              <div className="ctx">{data.item.excerpt || data.item.title}</div>
+              <div className="ctx"><Linked text={data.item.excerpt || data.item.title} /></div>
             </>
           ) : null}
 
-          <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} />
+          <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} related={data.related} />
 
           {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
 
@@ -446,6 +451,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
         {t.isSample ? <div className="sample">Datos de muestra.</div> : null}
       </div>
     </aside>
+    </KnownTickets.Provider>
   );
 }
 
@@ -483,8 +489,8 @@ function Options({ m, state, disabled, onPick }: { m: TicketMessage; state?: Opt
           >
             <b>{o.key}</b>
             <span>
-              {o.label}
-              {o.detail ? <small>{o.detail}</small> : null}
+              <Linked text={o.label} inButton />
+              {o.detail ? <small><Linked text={o.detail} inButton /></small> : null}
             </span>
           </button>
         ))}
@@ -493,7 +499,7 @@ function Options({ m, state, disabled, onPick }: { m: TicketMessage; state?: Opt
         <div className="tk-rec">
           <span className="ln src-claude" style={{ background: "var(--c)" }} />
           <span>
-            <b>Claude recomienda {m.recommended}:</b> {m.recommendation}
+            <b>Claude recomienda {m.recommended}:</b> <Linked text={m.recommendation ?? ""} />
           </span>
         </div>
       ) : null}
@@ -501,8 +507,8 @@ function Options({ m, state, disabled, onPick }: { m: TicketMessage; state?: Opt
   );
 }
 
-function Sources({ refs, titles, owner, item }: { refs: TicketRef[]; titles: Record<string, string>; owner: string | null; item: ThreadData["item"] }) {
-  if (!refs.length && !owner && !item) return null;
+function Sources({ refs, titles, owner, item, related }: { refs: TicketRef[]; titles: Record<string, string>; owner: string | null; item: ThreadData["item"]; related: Related[] }) {
+  if (!refs.length && !owner && !item && !related.length) return null;
   return (
     <>
       <div className="k">Fuente</div>
@@ -517,8 +523,8 @@ function Sources({ refs, titles, owner, item }: { refs: TicketRef[]; titles: Rec
             <Link key={r.id} className="chip ref" href={`/tickets?t=${r.target}`}>
               <b>@{r.target}</b> {titles[r.target] ?? r.label}
             </Link>
-          ) : r.refType === "url" ? (
-            <Chip key={r.id} source={sourceOfUrl(r.target)} href={r.target}>
+          ) : r.refType === "url" && normalizeUrl(r.target) ? (
+            <Chip key={r.id} source={classify(r.target)?.source} href={normalizeUrl(r.target) ?? undefined}>
               {r.label || r.target} <IcExternal />
             </Chip>
           ) : (
@@ -529,11 +535,28 @@ function Sources({ refs, titles, owner, item }: { refs: TicketRef[]; titles: Rec
         )}
         {owner ? <Chip source="claude">Sesión de Claude · {owner}</Chip> : null}
       </div>
+      {related.length ? (
+        <>
+          <div className="k">Relacionado</div>
+          <div className="dest" aria-label="Relacionado">
+            {related.map((x) =>
+              x.internal ? (
+                <Link key={x.key} className="chip ref" href={x.href}>
+                  <b>{x.label}</b> {x.detail}
+                </Link>
+              ) : (
+                <Chip key={x.key} source={x.source} href={x.href} className="tk-rel">
+                  {x.label} <IcExternal />
+                </Chip>
+              ),
+            )}
+          </div>
+        </>
+      ) : null}
     </>
   );
 }
 
-const sourceOfUrl = (u: string) => (/github\.com/.test(u) ? "github" : /slack\.com/.test(u) ? "slack" : /basecamp/.test(u) ? "basecamp" : undefined);
 
 function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   if (!atts.length) return null;
@@ -559,14 +582,24 @@ function Message({ m, options, disabled, onPick, atts, refs, ticketId, titles }:
         {m.chosen ? <span className="tk-chose">eligió {m.chosen}</span> : null}
         {m.kind === "permission_request" ? <span className="tk-chose">pedido de permiso</span> : null}
       </div>
-      {m.body ? <p>{m.body}</p> : null}
+      {m.body ? <p><Linked text={m.body} /></p> : null}
       {m.options?.length ? <Options m={m} state={options} disabled={disabled} onPick={onPick} /> : null}
       {refs.length ? (
         <div className="tk-files">
           {refs.map((r) => (
-            <Link key={r.id} className="tk-att ref" href={r.refType === "ticket" ? `/tickets?t=${r.target}` : r.target}>
-              <span className="at">@{r.target}</span> <span className="tk-att-t">{titles[r.target] ?? r.label}</span>
-            </Link>
+            r.refType === "ticket" ? (
+              <Link key={r.id} className="tk-att ref" href={`/tickets?t=${r.target}`}>
+                <span className="at">@{r.target}</span> <span className="tk-att-t">{titles[r.target] ?? r.label}</span>
+              </Link>
+            ) : r.refType === "url" && normalizeUrl(r.target) ? (
+              <a key={r.id} className="tk-att ref" href={normalizeUrl(r.target) ?? undefined} target="_blank" rel="noopener noreferrer" title={r.target}>
+                <span className="at">{classify(r.target)?.label ?? "enlace"}</span> <span className="tk-att-t">{r.label || r.target}</span>
+              </a>
+            ) : (
+              <span key={r.id} className="tk-att ref">
+                <span className="at">{r.refType === "url" ? "enlace" : "@"}</span> <span className="tk-att-t">{r.label || r.target}</span>
+              </span>
+            )
           ))}
         </div>
       ) : null}
@@ -714,19 +747,19 @@ function Agents({ data }: { data: ThreadData }) {
           {brief.goal ? (
             <>
               <dt>Objetivo</dt>
-              <dd>{brief.goal}</dd>
+              <dd><Linked text={brief.goal} /></dd>
             </>
           ) : null}
           {brief.planStep ? (
             <>
               <dt>Paso</dt>
-              <dd>{brief.planStep}</dd>
+              <dd><Linked text={brief.planStep} /></dd>
             </>
           ) : null}
           {brief.nextAction ? (
             <>
               <dt>Siguiente</dt>
-              <dd>{brief.nextAction}</dd>
+              <dd><Linked text={brief.nextAction} /></dd>
             </>
           ) : null}
           {brief.openQuestions.length ? (
@@ -735,7 +768,7 @@ function Agents({ data }: { data: ThreadData }) {
               <dd>
                 <ul>
                   {brief.openQuestions.map((q) => (
-                    <li key={q}>{q}</li>
+                    <li key={q}><Linked text={q} /></li>
                   ))}
                 </ul>
               </dd>
@@ -761,8 +794,8 @@ function Agents({ data }: { data: ThreadData }) {
               <span className="t">{hm(h.createdAt)}</span>
               <span>
                 <b>{h.agent}</b> · {h.status === "done" ? "terminó" : h.status === "paused" ? "pausó" : "bloqueado"}
-                {h.body ? `: ${h.body}` : ""}
-                {h.remaining ? <small>Falta: {h.remaining}</small> : null}
+                {h.body ? <>: <Linked text={h.body} /></> : ""}
+                {h.remaining ? <small>Falta: <Linked text={h.remaining} /></small> : null}
               </span>
             </li>
           ))}

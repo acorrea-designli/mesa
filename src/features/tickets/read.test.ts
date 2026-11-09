@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "@/lib/db/sqlite";
 import { createRepos, type Repos } from "@/lib/repo";
-import { loadTickets, selectionOrder } from "./read";
+import { loadTickets, selectionOrder, threadData } from "./read";
 
 let r: Repos;
 const T0 = new Date("2026-11-03T10:00:00.000Z");
@@ -179,5 +179,37 @@ describe("loadTickets needs", () => {
     const d = loadTickets(r, { tab: "you" }, now);
     expect(d.rows.map((x) => x.ref)).toEqual([withNeed.ref]);
     expect(d.counts).toMatchObject({ open: 2, you: 1 });
+  });
+});
+
+describe("threadData related (Relacionado)", () => {
+  const PR = "https://github.com/7-Arrow/dre-backend/pull/474";
+  it("t44 (PR 474 review) and t46 (Slack, names the PR) list each other, plus the PR and its CI", () => {
+    const t44 = r.tickets.create({ direction: "claude_asks", title: "PR 474", body: "Revisar PR", ownerSession: "lead" }, at(1000));
+    r.reviews.open(t44.ref, { repo: "7-Arrow/dre-backend", pr: 474, sha: "abc1234" }, at(1100));
+    const slackItem = r.items.create({ source: "slack", externalId: "S1", kind: "message", title: "Slack hilo", url: "https://designli.slack.com/archives/C1/p1" }, at(1200));
+    const t46 = r.tickets.create({ direction: "andres_asks", title: "Hilo Slack", body: "Mira github.com/7-Arrow/dre-backend/pull/474", itemId: slackItem.id, ownerSession: "lead" }, at(1300));
+
+    const a = threadData(r, t44.ref, now);
+    expect(a.knownRefs).toEqual(expect.arrayContaining([t44.ref, t46.ref]));
+    expect(a.related.map((x) => [x.label, x.why])).toEqual([
+      ["dre-backend#474", "pr"],
+      ["CI", "ci"],
+      [`@${t46.ref}`, "mention"],
+    ]);
+
+    const b = threadData(r, t46.ref, now);
+    expect(b.related.find((x) => x.why === "mention")).toMatchObject({ href: `/tickets?t=${t44.ref}`, internal: true });
+    // the Slack item is Fuente of t46: not repeated
+    expect(b.related.some((x) => x.href.includes("slack.com"))).toBe(false);
+  });
+
+  it("a ticket with nothing around it has an empty list, and a closed old ticket is not searched", () => {
+    const lone = r.tickets.create({ direction: "claude_asks", title: "Solo", body: "nada", ownerSession: "lead" }, at(1000));
+    expect(threadData(r, lone.ref, now).related).toEqual([]);
+    const old = r.tickets.create({ direction: "claude_asks", title: "Vieja", body: PR, ownerSession: "lead" }, new Date("2026-10-01T10:00:00Z"));
+    r.tickets.transition(old.ref, { type: "close", by: "claude" }, undefined, new Date("2026-10-01T11:00:00Z"));
+    const t = r.tickets.create({ direction: "claude_asks", title: "PR", body: PR, ownerSession: "lead" }, at(2000));
+    expect(threadData(r, t.ref, now).related.some((x) => x.label === `@${old.ref}`)).toBe(false);
   });
 });
