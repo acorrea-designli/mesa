@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ALLOW, ENV, hookEntries, install, mergeSettings, SANDBOX_ENV } from "../install-team.mjs";
+import { ALLOW, ENV, hookEntries, install, mergeSettings, SANDBOX_ENV, statusLineEntry } from "../install-team.mjs";
 
 const hooks = hookEntries("G:/WorkSpace/designli/ops", "C:/node.exe");
 
@@ -100,4 +100,69 @@ test("--env sandbox overrides a live MESA_URL and never installs into the live f
   assert.throws(() => install({ target: "G:/WorkSpace/designli", env: "sandbox", dryRun: true, log: () => {} }), /never installs into the live folder/);
   // Live installs keep their hook commands unchanged.
   assert.doesNotMatch(hookEntries("G:/WorkSpace/designli/ops", "C:/node.exe").Stop[0].hooks[0].command, /--env/);
+});
+
+// ---------- statusLine (t45): plan usage in the terminal and in Mesa ----------
+
+test("merge adds the Mesa statusLine when the file has none", () => {
+  const sl = statusLineEntry("G:/WorkSpace/designli/ops", "C:/node.exe");
+  assert.deepEqual(sl, { type: "command", command: '"C:/node.exe" "G:/WorkSpace/designli/ops/scripts/statusline.mjs" --url http://127.0.0.1:8790' });
+  const { settings, added } = mergeSettings({ theme: "dark" }, { hooks: {}, env: ENV, allow: [], statusLine: sl });
+  assert.deepEqual(settings.statusLine, sl);
+  assert.ok(added.includes("statusLine: scripts/statusline.mjs"));
+  assert.equal(settings.theme, "dark");
+  assert.deepEqual(mergeSettings(settings, { hooks: {}, env: ENV, allow: [], statusLine: sl }).added, []);
+});
+
+test("merge never overwrites a statusLine that is already there", () => {
+  const mine = { type: "command", command: "node my-statusline.js", padding: 2 };
+  const sl = statusLineEntry("G:/WorkSpace/designli/ops", "C:/node.exe");
+  for (const current of [{ statusLine: mine }, { statusLine: { type: "command", command: "node scripts/statusline.mjs --url http://elsewhere" } }, { statusLine: null }]) {
+    const { settings, added } = mergeSettings(current, { hooks: {}, env: ENV, allow: [], statusLine: sl, forceEnv: true });
+    assert.deepEqual(settings.statusLine, current.statusLine);
+    assert.ok(!added.some((a) => a.startsWith("statusLine")));
+  }
+});
+
+test("merge without a statusLine option touches no statusLine", () => {
+  assert.equal("statusLine" in mergeSettings({}, { hooks: {}, env: ENV, allow: [] }).settings, false);
+});
+
+test("install writes the live statusLine, keeps an existing one, and is idempotent", () => {
+  const live = mkdtempSync(join(tmpdir(), "mesa-install-"));
+  mkdirSync(join(live, ".claude"));
+  writeFileSync(join(live, ".claude", "settings.json"), "{}");
+  install({ target: live, node: "C:/node.exe", log: () => {} });
+  const s = JSON.parse(readFileSync(join(live, ".claude", "settings.json"), "utf8"));
+  assert.equal(s.statusLine.type, "command");
+  assert.match(s.statusLine.command, /scripts\/statusline\.mjs" --url http:\/\/127\.0\.0\.1:8790$/);
+  const again = [];
+  install({ target: live, node: "C:/node.exe", log: (l) => again.push(l) });
+  assert.ok(again.every((l) => l.startsWith("ok")), again.join("\n"));
+
+  const mine = mkdtempSync(join(tmpdir(), "mesa-install-"));
+  mkdirSync(join(mine, ".claude"));
+  writeFileSync(join(mine, ".claude", "settings.json"), JSON.stringify({ statusLine: { type: "command", command: "echo hi" } }));
+  const log = [];
+  install({ target: mine, node: "C:/node.exe", log: (l) => log.push(l) });
+  assert.deepEqual(JSON.parse(readFileSync(join(mine, ".claude", "settings.json"), "utf8")).statusLine, { type: "command", command: "echo hi" });
+  assert.ok(!log.some((l) => l.includes("statusLine")));
+});
+
+test("--env sandbox points the statusLine at the sandbox board, not live", () => {
+  const target = join(mkdtempSync(join(tmpdir(), "mesa-install-")), "designli-sandbox");
+  install({ target, node: "C:/node.exe", env: "sandbox", log: () => {} });
+  const s = JSON.parse(readFileSync(join(target, ".claude", "settings.json"), "utf8"));
+  assert.match(s.statusLine.command, /scripts\/statusline\.mjs" --url http:\/\/127\.0\.0\.1:8796$/);
+  assert.doesNotMatch(s.statusLine.command, /8790/);
+});
+
+test("--dry-run plans the statusLine and writes nothing", () => {
+  const target = mkdtempSync(join(tmpdir(), "mesa-install-"));
+  mkdirSync(join(target, ".claude"));
+  writeFileSync(join(target, ".claude", "settings.json"), "{}");
+  const log = [];
+  install({ target, node: "C:/node.exe", dryRun: true, log: (l) => log.push(l) });
+  assert.ok(log.some((l) => l === "merge   statusLine: scripts/statusline.mjs"));
+  assert.equal(readFileSync(join(target, ".claude", "settings.json"), "utf8"), "{}");
 });

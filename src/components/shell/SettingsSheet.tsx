@@ -1,6 +1,6 @@
 "use client";
 // "Ajustes" on the phone (opened by "Más" in the tab bar): every control the desktop rail keeps in its foot, because
-// the rail is hidden at <= 720px. It reuses the rail's own components (Teléfono link, ThemeToggle, Hecho hoy, Fuentes),
+// the rail is hidden at <= 720px. It reuses the rail's own components (Teléfono link, ThemeToggle, Hecho hoy, Uso, Fuentes),
 // except the notification toggle: here it is the phone's Web Push row (PushRow). The theme persists exactly as on
 // desktop (localStorage "mesa-theme").
 // Closes with Esc, a tap outside (Sheet), or the phone's back gesture/button (one history entry while open).
@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import type { Counts } from "@/lib/domain/types";
 import { PushRow } from "@/features/push/PushControl";
+import { UsageLine } from "@/features/usage/UsageLine";
 import { Sheet, ThemeToggle } from "../ui/interactive";
 import type { SourceHealth } from "./health";
 import { SourceHealthList } from "./SourceHealthList";
@@ -83,6 +84,7 @@ export function SettingsSheet({ open, onClose, counts, health }: { open: boolean
           Hecho hoy <b>{counts.doneToday}</b>
         </Link>
       </div>
+      <UsageLine onDetail={(href) => closeThen(() => router.push(href))} />
       <SourceHealthList health={health} />
     </Sheet>
   );

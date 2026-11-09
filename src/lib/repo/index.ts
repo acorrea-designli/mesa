@@ -17,6 +17,7 @@ import { reviewsRepo } from "./reviews";
 import { salidasRepo } from "./salidas";
 import { sessionsRepo } from "./sessions";
 import { tasksRepo } from "./tasks";
+import { usageRepo } from "./usage";
 import { weekRepo } from "./week";
 import { ticketsRepo } from "./tickets";
 
@@ -40,6 +41,7 @@ export function createRepos(db: Db) {
     pairing: pairingRepo(db),
     push: pushRepo(db),
     week: weekRepo(db),
+    usage: usageRepo(db),
     counts: () => counts(db),
     /** Time-driven transitions: salida undo windows, schedules, expiry; approval expiry. */
     sweep: (now = new Date()) => {

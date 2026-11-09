@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SemanaView } from "@/features/semana/SemanaView";
 import { loadSemana } from "@/features/semana/read";
 import { weekQuery } from "@/lib/api/schemas";
+import { tokenSummary } from "@/lib/integrations/transcripts";
 import { repos } from "@/lib/repo";
 import "@/features/semana/semana.css";
 
@@ -16,5 +17,7 @@ export default async function SemanaPage({ searchParams }: { searchParams: Promi
   const parsed = weekQuery.safeParse({ semana: first(raw.semana), proyecto: first(raw.proyecto) });
   const r = repos();
   r.sweep();
-  return <SemanaView data={loadSemana(r, parsed.success ? parsed.data : {})} />;
+  const data = loadSemana(r, parsed.success ? parsed.data : {});
+  // Tokens spent are today's and this week's, so the detail only belongs on the current week.
+  return <SemanaView data={data} usage={data.week.current ? { tokens: tokenSummary(r.db) } : undefined} />;
 }

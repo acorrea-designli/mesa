@@ -16,7 +16,9 @@
 //   <target>/.claude/mesa           -> junction to <repo>/.claude (spawn-preamble.md for every teammate)
 //   <target>/.claude/settings.json  -> merges the Mesa hook entries and env; never removes or rewrites existing
 //                                      keys, and backs the file up first. --allow also merges the read-only allow
-//                                      rules from the role command sheets.
+//                                      rules from the role command sheets. It adds the Mesa statusLine
+//                                      (scripts/statusline.mjs: plan usage in the terminal and in Mesa's rail) only when
+//                                      the file has no statusLine at all: one you already have is never replaced.
 // It never touches anything else in <target> (that folder holds secrets) and never follows into it.
 // --force replaces a differing agent file or a junction that points somewhere else. --dry-run prints the plan.
 import { copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -46,6 +48,15 @@ export function hookEntries(repo, node, env = "live") {
     Stop: [{ hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.guard), timeout: 15 }] }],
     SubagentStop: [{ hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.guard), timeout: 15 }] }],
   };
+}
+
+/**
+ * The statusLine that saves Claude's plan usage to Mesa (t45). The URL is explicit so a sandbox session posts to the
+ * sandbox board and a live one to the live board, whatever the environment says.
+ */
+export function statusLineEntry(repo, node, env = "live") {
+  const url = (env === "sandbox" ? SANDBOX_ENV : ENV).MESA_URL;
+  return { type: "command", command: `"${fwd(node)}" "${fwd(join(repo, "scripts/statusline.mjs"))}" --url ${url}` };
 }
 
 export const ENV = { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead" };
@@ -96,7 +107,7 @@ export const ALLOW = [
 
 // Pure merge: adds what is missing, keeps everything that is there. A hook entry counts as present when any
 // existing entry of that event already runs the same script.
-export function mergeSettings(current, { hooks, env, allow, forceEnv = false }) {
+export function mergeSettings(current, { hooks, env, allow, forceEnv = false, statusLine }) {
   const s = structuredClone(current ?? {});
   const added = [];
   s.hooks ??= {};
@@ -131,6 +142,11 @@ export function mergeSettings(current, { hooks, env, allow, forceEnv = false }) 
         added.push(`permissions.allow: ${r}`);
       }
     }
+  }
+  // Never replaces a statusLine the file already has (any value, even a different command): it is Andrés's.
+  if (statusLine && !("statusLine" in s)) {
+    s.statusLine = statusLine;
+    added.push("statusLine: scripts/statusline.mjs");
   }
   return { settings: s, added };
 }
@@ -215,6 +231,7 @@ export function install({ target, allow = false, dryRun = false, force = false, 
     env: sandbox ? SANDBOX_ENV : ENV,
     allow: allow ? ALLOW : [],
     forceEnv: sandbox,
+    statusLine: statusLineEntry(repo, node, env),
   });
   if (!added.length) {
     log(`ok      ${fwd(file)} already has every Mesa entry`);

@@ -372,3 +372,18 @@ export const weekQuery = z.object({
   semana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").optional(),
   proyecto: z.string().trim().min(1).max(120).optional(),
 });
+
+const rateWindow = z.object({
+  /** Percent used, as Claude Code reports it. */
+  usedPercentage: z.number().min(0).max(1000),
+  /** Epoch seconds. */
+  resetsAt: z.number().int().min(0),
+});
+/** POST /api/usage: what scripts/statusline.mjs saves each time Claude Code refreshes its status line. */
+export const usageInput = z.object({
+  sessionId: z.string().max(200).default(""),
+  model: z.object({ id: z.string().max(200).default(""), displayName: z.string().max(200).default("") }).default({ id: "", displayName: "" }),
+  capturedAt: isoDate.optional(),
+  fiveHour: rateWindow.nullable().optional(),
+  sevenDay: rateWindow.nullable().optional(),
+});
