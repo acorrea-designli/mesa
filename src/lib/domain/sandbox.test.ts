@@ -20,6 +20,13 @@ describe("gateSalidaEvent", () => {
     });
   });
 
+  it("drafted follows the same rule as sent: simulated only in sandbox, with a fake permalink", () => {
+    expect(gateSalidaEvent(false, s, { type: "drafted" })).toEqual({ ok: true, event: { type: "drafted" } });
+    expect(gateSalidaEvent(false, s, { type: "drafted", simulated: true })).toMatchObject({ ok: false, code: "not_sandbox" });
+    expect(gateSalidaEvent(true, s, { type: "drafted" })).toMatchObject({ ok: false, code: "sandbox" });
+    expect(gateSalidaEvent(true, s, { type: "drafted", simulated: true })).toEqual({ ok: true, event: { type: "drafted", permalink: "sandbox://slack/sa_1" } });
+  });
+
   it("sandbox: delete and restore only for simulated sends; live is unaffected", () => {
     const real = { ...s, permalink: "https://basecamp.com/1" };
     const fake = { ...s, permalink: simulatedPermalink(s) };

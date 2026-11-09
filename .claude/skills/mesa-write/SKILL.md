@@ -26,9 +26,9 @@ or attaches. `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`. Scratch folder:
    mentions param, so for those say in the salida `--context` that nobody gets pinged, and address the person by
    first name in the text. Several people with the same name: ask the owner, never guess an id.
 7. **No attribution.** No Claude or AI attribution in any Slack or Basecamp text: no "sent by Claude", no "written
-   with Claude", no robot sign-off, unless Andrés asks for that exact line on purpose. Why: the Slack connector
-   already stamps "Sent using @Claude" on what it sends, so Mesa never sends Slack through it (`mesa-salida` § Send),
-   and a second tag from the text itself is what Andrés does not want out.
+   with Claude", no robot sign-off, unless Andrés asks for that exact line on purpose. Why: Slack text goes out as a
+   draft Andrés sends himself (no footer) unless he picks "Aprobar y que Claude lo envíe", where the connector stamps
+   "Sent using @Claude" (`mesa-salida` § Send); a second tag from the text itself is what Andrés does not want out.
 8. **Propose** it (`mesa-salida` § Propose). Each change request is a new version (`mesa-salida` § Refine).
 9. After it is sent or denied, upsert `client/<slug>` with what you learned (preferred length, phrasings he kept,
    phrasings he removed). English, no private content verbatim.

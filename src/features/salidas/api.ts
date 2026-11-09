@@ -1,6 +1,6 @@
 // Client calls for Salidas. Every call returns the fresh SalidaDetail (or throws
 // with the API's English error message, which the UI turns into a toast).
-import type { Mark, SalidaDetail } from "@/lib/domain/types";
+import type { Mark, SalidaDetail, SalidaSendMode } from "@/lib/domain/types";
 import type { EngramSearch } from "./types";
 
 export class ApiError extends Error {
@@ -30,7 +30,10 @@ const S = (id: string) => `/api/salidas/${encodeURIComponent(id)}`;
 
 export const salidaApi = {
   get: (id: string) => call<SalidaDetail>(S(id)),
-  approve: (id: string, version: number) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "approve", version } }),
+  /** `mode` is Slack only: omitted = draft (Aprobar); "send" = "Aprobar y que Claude lo envíe". */
+  approve: (id: string, version: number, mode?: SalidaSendMode) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "approve", version, ...(mode ? { mode } : {}) } }),
+  /** "Ya lo envié": Andrés sent the Slack draft himself. */
+  confirmSent: (id: string) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "confirm_sent" } }),
   undo: (id: string) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "undo" } }),
   deny: (id: string) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "deny" } }),
   schedule: (id: string, at: string, version: number) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "schedule", at, version } }),

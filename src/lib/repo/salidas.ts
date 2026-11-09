@@ -44,10 +44,11 @@ const ANDRES_EVENTS = new Set<SalidaEvent["type"]>([
   "retry",
   "request_delete",
   "request_restore",
+  "confirm_sent", // "Ya lo envié"
 ]);
 
 /** Events only the sending session reports; refused for sample salidas. */
-const SEND_EVENTS = new Set<SalidaEvent["type"]>(["sent", "failed", "hold", "bounce", "deleted", "restored"]);
+const SEND_EVENTS = new Set<SalidaEvent["type"]>(["sent", "drafted", "failed", "hold", "bounce", "deleted", "restored"]);
 
 const S_SPEC = { json: ["destination", "links"], bool: ["is_sample"] };
 const V_SPEC = { bool: ["starred"] };
@@ -300,6 +301,8 @@ export function salidasRepo(db: Db) {
               payload: {
                 version: next.approvedVersion,
                 status: next.status,
+                // Slack only: "draft" = leave a Slack draft Andrés sends himself, "send" = send through the connector (null elsewhere).
+                mode: next.sendMode,
                 // A salida that waited for its source must re-read the thread before sending.
                 recheckThread: ev.type === "resume",
               },

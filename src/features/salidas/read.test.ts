@@ -21,9 +21,25 @@ describe("salida view carries the destination URL", () => {
     return { r, slack, gh };
   };
 
-  it("reads MESA_SLACK_DOMAIN and MESA_BASECAMP_ACCOUNT", () => {
-    expect(destinationConfig({ MESA_SLACK_DOMAIN: "designli", MESA_BASECAMP_ACCOUNT: "42" })).toEqual({ slackDomain: "designli", basecampAccount: "42" });
-    expect(destinationConfig({})).toEqual({ slackDomain: undefined, basecampAccount: undefined });
+  it("reads MESA_SLACK_DOMAIN, MESA_BASECAMP_ACCOUNT and MESA_SLACK_TEAM_ID", () => {
+    expect(destinationConfig({ MESA_SLACK_DOMAIN: "designli", MESA_BASECAMP_ACCOUNT: "42", MESA_SLACK_TEAM_ID: "T0ABC123" })).toEqual({ slackDomain: "designli", basecampAccount: "42", slackTeamId: "T0ABC123" });
+    expect(destinationConfig({})).toEqual({ slackDomain: undefined, basecampAccount: undefined, slackTeamId: undefined });
+  });
+
+  it("carries the Abrir conversación links for Slack only, and keeps a draft_created salida in the open list", () => {
+    const { r, slack, gh } = setup();
+    expect(salidaView(r, slack.id, { slackDomain: "designli", slackTeamId: "T0ABC123" }).conversation).toEqual({
+      app: "slack://channel?team=T0ABC123&id=C0SCOUT01&message=1730640660.118000",
+      web: "https://designli.slack.com/archives/C0SCOUT01/p1730640660118000",
+    });
+    expect(salidaView(r, slack.id, {}).conversation).toEqual({ app: null, web: null });
+    expect(salidaView(r, gh.id, { slackDomain: "designli", slackTeamId: "T0ABC123" }).conversation).toBeNull();
+
+    r.salidas.transition(slack.id, { type: "approve", version: 1, mode: "draft" }, T0);
+    r.salidas.transition(slack.id, { type: "release" }, new Date(T0.getTime() + 25_000));
+    r.salidas.transition(slack.id, { type: "drafted" }, new Date(T0.getTime() + 26_000));
+    const items = loadSalidas(r, new Date(T0.getTime() + 27_000)).items;
+    expect(items.find((s) => s.id === slack.id)).toMatchObject({ status: "draft_created", sendMode: "draft" });
   });
 
   it("links with the config and shows no link without it", () => {

@@ -26,6 +26,8 @@ function stripStatus(s: SalidaView, now: number): string {
       return undoOpen(s, now) ? "Enviando…" : "Saliendo…";
     case "queued_until_back":
       return `Al volver ${sourceLabel(s.source)}`;
+    case "draft_created":
+      return "Borrador en Slack · envíalo tú";
     case "sent":
       return isSimulated(s) ? "Simulado · no salió" : `Enviada ${hhmm(s.sentAt)}`;
     case "deleted":
@@ -69,6 +71,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
     pending: items.filter(isUndecided).length,
     scheduled: items.filter((s) => s.status === "scheduled").length,
     queued: items.filter((s) => s.status === "queued_until_back").length,
+    drafted: items.filter((s) => s.status === "draft_created").length,
   };
 
   const select = useCallback((id: string) => {
@@ -140,6 +143,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
     `${counts.pending} ${counts.pending === 1 ? "pendiente" : "pendientes"}`,
     counts.scheduled ? `${counts.scheduled} ${counts.scheduled === 1 ? "programada" : "programadas"}` : "",
     counts.queued ? `${counts.queued} al volver` : "",
+    counts.drafted ? `${counts.drafted} ${counts.drafted === 1 ? "borrador en Slack" : "borradores en Slack"}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -229,7 +233,7 @@ function QueueItem({ s, now, current, denied, onOpen, onSwipe }: { s: SalidaView
       ref={ref}
       type="button"
       role="listitem"
-      className={cx("sa-qi", decided && "done", s.status === "scheduled" && "sched", s.status === "sending" && "going", s.status === "queued_until_back" && "queued")}
+      className={cx("sa-qi", decided && "done", s.status === "scheduled" && "sched", s.status === "sending" && "going", s.status === "queued_until_back" && "queued", s.status === "draft_created" && "drafted")}
       style={{ ["--c" as string]: color }}
       aria-current={current ? "true" : undefined}
       onClick={onOpen}

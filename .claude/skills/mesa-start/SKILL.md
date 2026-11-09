@@ -137,7 +137,7 @@ the whole pass, and one reviewer never takes a second PR.
 | `ticket.permission_requested` | payload `{ ticketRef, messageId }` ("Pídeme permiso" on the ticket): `ANSWER <ref> permission_requested <messageId>` to the live owner, who relays it to the blocked teammate (`docs/TEAM.md` § 6). Nothing live: leave it, it shows in `ticket context`. Never edit a settings file yourself; for your own prompts use `mesa lead focus <ref>` |
 | `ticket.closed` / `ticket.reopened` | `CLOSED <ref>` / `REOPENED <ref>` to the owner (spawn one if needed) |
 | `salida.turn` | `ANSWER <ref> salida.turn <salida> <turn>` to the ticket's writer (spawn one if none) |
-| `salida.released` | send it now: `mesa-salida` § Send (github salidas: `mesa-review` § Lead writes) |
+| `salida.released` | send it now: `mesa-salida` § Send (Slack: by the payload's `mode`, a draft or a direct send; github salidas: `mesa-review` § Lead writes) |
 | `salida.undone` / `salida.denied` | tell the writer; denied: the writer wraps up |
 | `salida.delete_requested` / `salida.restore_requested` | `mesa-salida` § Delete |
 | `salida.queued` | nothing: approved while its source is down; it comes back as `salida.released` with `recheckThread` |

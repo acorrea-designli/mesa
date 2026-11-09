@@ -27,9 +27,11 @@ export interface SplitApproveProps {
   up?: boolean;
   label?: string;
   kbd?: string;
+  /** A Slack salida: Aprobar leaves a draft Andrés sends himself, so the menu says that instead of "Enviar en 20 s". */
+  slack?: boolean;
 }
 
-export function SplitApprove({ version, onSend, onSchedule, disabled, phone, up, label = "Aprobar y enviar", kbd }: SplitApproveProps) {
+export function SplitApprove({ version, onSend, onSchedule, disabled, phone, up, label = "Aprobar y enviar", kbd, slack }: SplitApproveProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLSpanElement>(null);
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -73,12 +75,12 @@ export function SplitApprove({ version, onSend, onSchedule, disabled, phone, up,
       {open ? (
         <span ref={menuRef} className="ap-menu" role="menu" id={menuId}>
           <button type="button" role="menuitemradio" aria-checked="true" onClick={() => (setOpen(false), onSend())}>
-            <b>Enviar en 20 s</b>
-            <small>Con Deshacer, como siempre</small>
+            <b>{slack ? "Borrador en Slack" : "Enviar en 20 s"}</b>
+            <small>{slack ? "Queda en tu Slack; tú le das enviar" : "Con Deshacer, como siempre"}</small>
           </button>
           <button type="button" role="menuitemradio" aria-checked="false" onClick={() => (setOpen(false), onSchedule())}>
             <b>Programar…</b>
-            <small>Elige día y hora de salida</small>
+            <small>{slack ? "Elige día y hora; sale como borrador" : "Elige día y hora de salida"}</small>
           </button>
         </span>
       ) : null}

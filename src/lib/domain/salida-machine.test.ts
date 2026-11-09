@@ -16,6 +16,7 @@ const base = (over: Partial<Salida> = {}): S => ({
   expiresAt: null,
   currentVersion: 1,
   approvedVersion: null,
+  sendMode: null,
   deleteRequestedAt: null,
   ...over,
 });
@@ -149,5 +150,82 @@ describe("salida machine: source outages", () => {
     expect(run(q, { type: "deny" }).status).toBe("denied");
     const b = run(q, { type: "bounce", reason: "new messages in the thread" });
     expect(b).toMatchObject({ status: "pending", approvedVersion: null, error: "new messages in the thread" });
+  });
+});
+
+describe("salida machine: Slack send modes", () => {
+  const released = (mode?: "draft" | "send", dest: Destination = slack) =>
+    run(run(base({ destination: dest }), { type: "approve", version: 1, mode }), { type: "release" }, at(UNDO_WINDOW_MS));
+
+  it("a Slack approval records the mode (default draft) and keeps it through release", () => {
+    expect(run(base(), { type: "approve", version: 1 }).sendMode).toBe("draft");
+    expect(run(base(), { type: "approve", version: 1, mode: "send" }).sendMode).toBe("send");
+    expect(released("send").sendMode).toBe("send");
+    expect(released().sendMode).toBe("draft");
+  });
+
+  it("the mode also survives approve while the source is down, hold and resume", () => {
+    const queued = run(base(), { type: "approve", version: 1, mode: "send" }, T0, { ...g, sourceDown: true });
+    expect(queued).toMatchObject({ status: "queued_until_back", sendMode: "send" });
+    expect(run(queued, { type: "resume" }, at(1_000))).toMatchObject({ status: "sending", sendMode: "send" });
+    const held = run(released("send"), { type: "hold", reason: "ya hay un borrador en ese canal" });
+    expect(held.sendMode).toBe("send");
+  });
+
+  it("an undo clears the mode; so do unqueue, bounce, retry, deny and unschedule", () => {
+    const sending = run(base(), { type: "approve", version: 1, mode: "send" });
+    expect(run(sending, { type: "undo" }, at(1_000)).sendMode).toBeNull();
+    const q = run(base(), { type: "approve", version: 1, mode: "send" }, T0, { ...g, sourceDown: true });
+    expect(run(q, { type: "unqueue" }).sendMode).toBeNull();
+    expect(run(q, { type: "deny" }).sendMode).toBeNull();
+    expect(run(released("send"), { type: "bounce", reason: "new messages" }).sendMode).toBeNull();
+    expect(run(run(released("send"), { type: "failed", error: "x" }), { type: "retry" }).sendMode).toBeNull();
+    const scheduled = run(base(), { type: "schedule", at: at(3_600_000).toISOString(), version: 1, mode: "send" });
+    expect(run(scheduled, { type: "unschedule" }).sendMode).toBeNull();
+  });
+
+  it("Programar records a mode too (default draft) and the release keeps it", () => {
+    const when = at(3_600_000).toISOString();
+    expect(run(base(), { type: "schedule", at: when, version: 1 }).sendMode).toBe("draft");
+    const scheduled = run(base(), { type: "schedule", at: when, version: 1, mode: "send" });
+    expect(scheduled.sendMode).toBe("send");
+    const r = transitionSalida(scheduled, { type: "release" }, at(3_600_000), g);
+    expect(r).toMatchObject({ ok: true, wake: "salida.released" });
+    expect(run(scheduled, { type: "release" }, at(3_600_000)).sendMode).toBe("send");
+  });
+
+  it("non-Slack salidas have no mode and refuse one", () => {
+    expect(run(base({ destination: bcComment }), { type: "approve", version: 1 }).sendMode).toBeNull();
+    expect(run(base({ destination: campfire }), { type: "schedule", at: at(3_600_000).toISOString(), version: 1 }).sendMode).toBeNull();
+    expect(transitionSalida(base({ destination: bcComment }), { type: "approve", version: 1, mode: "draft" }, T0, g)).toMatchObject({ ok: false });
+    expect(transitionSalida(base({ destination: campfire }), { type: "schedule", at: at(3_600_000).toISOString(), version: 1, mode: "send" }, T0, g)).toMatchObject({ ok: false });
+  });
+
+  it("drafted needs a released draft-mode Slack salida and moves it to draft_created", () => {
+    const sending = run(base(), { type: "approve", version: 1 });
+    expect(transitionSalida(sending, { type: "drafted" }, at(1_000), g)).toMatchObject({ ok: false }); // undo window open
+    const d = run(released("draft"), { type: "drafted" }, at(UNDO_WINDOW_MS + 500));
+    expect(d).toMatchObject({ status: "draft_created", draftedAt: at(UNDO_WINDOW_MS + 500).toISOString(), sendMode: "draft" });
+    // never for a salida approved as "Claude lo envía", a pending one, or another source
+    expect(transitionSalida(released("send"), { type: "drafted" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: false });
+    expect(transitionSalida(base(), { type: "drafted" }, T0, g)).toMatchObject({ ok: false });
+    expect(transitionSalida(released(undefined, bcComment), { type: "drafted" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: false });
+  });
+
+  it("draft_created is not sent, never re-releases and cannot be undone, retried or denied", () => {
+    const d = run(released("draft"), { type: "drafted" }, at(UNDO_WINDOW_MS));
+    for (const ev of [{ type: "release" }, { type: "sent" }, { type: "undo" }, { type: "retry" }, { type: "deny" }, { type: "approve", version: 1 }, { type: "drafted" }, { type: "hold", reason: "x" }, { type: "request_delete" }] as SalidaEvent[]) {
+      expect(transitionSalida(d, ev, at(UNDO_WINDOW_MS * 3), g), ev.type).toMatchObject({ ok: false });
+    }
+    expect(dueEvent(d, at(UNDO_WINDOW_MS * 3))).toBeNull();
+  });
+
+  it("\"Ya lo envié\" closes a draft_created salida as sent, and only that", () => {
+    const d = run(released("draft"), { type: "drafted" }, at(UNDO_WINDOW_MS));
+    const sent = run(d, { type: "confirm_sent" }, at(UNDO_WINDOW_MS + 60_000));
+    expect(sent).toMatchObject({ status: "sent", sentAt: at(UNDO_WINDOW_MS + 60_000).toISOString() });
+    expect(transitionSalida(released("send"), { type: "confirm_sent" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: false });
+    expect(transitionSalida(base(), { type: "confirm_sent" }, T0, g)).toMatchObject({ ok: false });
+    expect(transitionSalida(sent, { type: "confirm_sent" }, at(UNDO_WINDOW_MS * 4), g)).toMatchObject({ ok: false });
   });
 });

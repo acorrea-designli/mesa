@@ -1,11 +1,11 @@
 // Server read model for Salidas B: the queue with every detail the card needs,
 // the ticket it came from and that ticket's history as a line of stations.
 import type { Repos } from "@/lib/repo";
-import type { SalidaDetail, SalidaStatus } from "@/lib/domain/types";
-import { destinationUrl, type DestinationConfig } from "./model";
+import type { ConversationLinks, SalidaDetail, SalidaStatus } from "@/lib/domain/types";
+import { conversationLinks, destinationUrl, type DestinationConfig } from "./model";
 import type { HistoryEvent, SalidaView, SalidasData, TicketBrief } from "./types";
 
-const OPEN: SalidaStatus[] = ["pending", "scheduled", "queued_until_back", "sending", "failed"];
+const OPEN: SalidaStatus[] = ["pending", "scheduled", "queued_until_back", "sending", "draft_created", "failed"];
 const DECIDED: SalidaStatus[] = ["sent", "denied", "expired", "deleted"];
 
 const clip = (s: string, n = 120) => {
@@ -70,14 +70,14 @@ export function ticketBrief(r: Repos, ticketId: string | null): TicketBrief | nu
   }
 }
 
-/** Slack domain and Basecamp account id for "Abrir destino": MESA_SLACK_DOMAIN and MESA_BASECAMP_ACCOUNT (.env.example). */
+/** Slack domain, Basecamp account id and Slack team id for "Abrir destino" and "Abrir conversación": MESA_SLACK_DOMAIN, MESA_BASECAMP_ACCOUNT and MESA_SLACK_TEAM_ID (.env.example). */
 export function destinationConfig(env: Record<string, string | undefined> = process.env): DestinationConfig {
-  return { slackDomain: env.MESA_SLACK_DOMAIN, basecampAccount: env.MESA_BASECAMP_ACCOUNT };
+  return { slackDomain: env.MESA_SLACK_DOMAIN, basecampAccount: env.MESA_BASECAMP_ACCOUNT, slackTeamId: env.MESA_SLACK_TEAM_ID };
 }
 
-/** A salida detail with its destinationUrl: every route under /api/salidas that answers with a SalidaDetail returns it through here. */
-export function withDestinationUrl<T extends SalidaDetail>(s: T, cfg: DestinationConfig = destinationConfig()): T & { destinationUrl: string | null } {
-  return { ...s, destinationUrl: destinationUrl(s, cfg) };
+/** A salida detail with its destinationUrl and Slack conversation links: every route under /api/salidas that answers with a SalidaDetail returns it through here. */
+export function withDestinationUrl<T extends SalidaDetail>(s: T, cfg: DestinationConfig = destinationConfig()): T & { destinationUrl: string | null; conversation: ConversationLinks | null } {
+  return { ...s, destinationUrl: destinationUrl(s, cfg), conversation: conversationLinks(s, cfg) };
 }
 
 export function salidaView(r: Repos, id: string, cfg: DestinationConfig = destinationConfig()): SalidaView {

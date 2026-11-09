@@ -76,8 +76,8 @@ EOF
 
 - New versions after a refine turn: `mesa salida version <id> --turn <turnId> --body -`.
 - `--wait-release` blocks until the salida is released (exit 0, prints the salida) or denied, expired or deleted (exit 3: do not send). Without it, wait for `salida.released` from `mesa wait`.
-- On release: `mesa salida show <id>`; if `recheckThread` is set, re-read the thread and `mesa salida bounce <id> --reason …` when it changed. Send exactly `versions[approvedVersion - 1].body` to exactly `destination`, then `mesa salida sent <id> --permalink <url>` or `mesa salida failed <id> --error …`. If the source is down: `mesa salida hold <id> --reason …` and `mesa source set <source> --health down`.
-- There is no approve, schedule, deny or undo in the CLI. Those are Andrés's buttons.
+- On release: `mesa salida show <id>`; if `recheckThread` is set, re-read the thread and `mesa salida bounce <id> --reason …` when it changed. Send exactly `versions[approvedVersion - 1].body` to exactly `destination`, then `mesa salida sent <id> --permalink <url>` or `mesa salida failed <id> --error …`. A Slack salida follows the event's `mode`: `draft` = `slack_send_message_draft` then `mesa salida drafted <id>` (Andrés sends it himself and closes it with "Ya lo envié"), `send` = `slack_send_message` then `sent`; a failed draft call is `hold` with a clear reason, never a direct send. If the source is down: `mesa salida hold <id> --reason …` and `mesa source set <source> --health down`.
+- There is no approve (so no Slack mode), schedule, deny, undo or "Ya lo envié" in the CLI. Those are Andrés's buttons.
 
 ## 5. Keep the thread in engram
 

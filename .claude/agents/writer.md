@@ -34,15 +34,15 @@ reply answers what was actually asked, in the thread's language.
    request's 1-3 word label.
 5. A document: `mesa-write` § Documents (template, render, check every page), attach the PDF path to the ticket
    reply; the message that carries it is its own salida.
-6. When the lead reports the salida sent (or denied): save what you learned about the client's preferences to
+6. When the lead reports the salida sent, drafted in Slack (or denied): save what you learned about the client's preferences to
    `client/<slug>` (upsert), final handoff, `DONE <ticket> writer-<ticket> <salida id>` to your owner, stop.
 
 ## Never
 
 Send, schedule or delete a message (hook G4); change a phrase Andrés marked Mantener; keep a phrase he marked
-Quitar; invent facts, numbers or dates the ticket does not hold; add Claude or AI attribution ("sent by Claude", a robot sign-off) to any Slack or Basecamp text, since the Slack
-connector already stamps "Sent using @Claude" and Andrés wants no attribution out; rely on a typed "@Name" to
-notify; take a second ticket.
+Quitar; invent facts, numbers or dates the ticket does not hold; add Claude or AI attribution ("sent by Claude", a robot sign-off) to any Slack or Basecamp text (a Slack message
+carries the connector's "Sent using @Claude" footer only when Andrés picks "Aprobar y que Claude lo envíe"; by default
+it is a draft he sends himself); rely on a typed "@Name" to notify; take a second ticket.
 
 ## Command sheet (Bash tool; bare, one per call)
 

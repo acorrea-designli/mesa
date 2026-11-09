@@ -10,13 +10,14 @@ import { usePress } from "@/lib/motion";
 import { useSalidaController, type SalidaController } from "./controller";
 import { IcCopy, IcEngram, IcPencil, IcRetry } from "./icons";
 import { carryKeeps, markOutcome } from "./marks";
-import { hhmm, sourceLabel, undoOpen, whenLabel } from "./model";
+import { hhmm, SLACK_QUICK_STATUSES, sourceLabel, undoOpen, whenLabel } from "./model";
 import {
   Banner,
   cx,
   DestLink,
   Diff,
   DiffLine,
+  DraftBlock,
   Facts,
   PhoneRoute,
   Route,
@@ -24,6 +25,8 @@ import {
   SchedulePicker,
   SendingBanner,
   SentBlock,
+  SlackModes,
+  SlackQuick,
   VersionList,
   VersionStepper,
 } from "./parts";
@@ -77,6 +80,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
   const isGithubBatch = s.destination.kind === "github_review" && Boolean(s.destination.comments?.length);
   const canMark = s.status === "pending" && !c.rewritePending && Boolean(text) && !isGithubBatch && c.mode === "view";
   const sendLabel = s.status === "pending";
+  const isSlack = s.source === "slack";
   const outcome = answeringTurn?.marks.length ? markOutcome(answeringTurn.marks, text) : null;
 
   const sendTurn = async (body: string, chip?: string) => {
@@ -86,15 +90,17 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
   const textLabel =
     s.status === "scheduled" && s.sendAt
       ? `Texto programado · sale ${whenLabel(s.sendAt, new Date(now))}`
-      : s.status === "sent" || s.status === "deleted"
-        ? "Texto enviado"
-        : s.status === "denied"
-          ? "Texto que no saldrá"
-          : s.status === "expired"
-            ? `Borrador de las ${hhmm(s.createdAt)}`
-            : s.status === "sending"
-              ? "Texto exacto"
-              : "Texto que se enviará";
+      : s.status === "draft_created"
+        ? "Texto del borrador en Slack"
+        : s.status === "sent" || s.status === "deleted"
+          ? "Texto enviado"
+          : s.status === "denied"
+            ? "Texto que no saldrá"
+            : s.status === "expired"
+              ? `Borrador de las ${hhmm(s.createdAt)}`
+              : s.status === "sending"
+                ? "Texto exacto"
+                : "Texto que se enviará";
 
   const left = (
     <div className="sa-left">
@@ -136,6 +142,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
             />
           ) : null}
           <ExactBlock s={s} text={text} marks={marks} setMarks={canMark ? setMarks : undefined} highlight={hl} />
+          {isSlack && SLACK_QUICK_STATUSES.has(s.status) ? <SlackQuick s={s} /> : null}
           {!marks.length && s.status === "pending" ? <DiffLine s={s} /> : null}
           {outcome && s.status === "pending" ? <MarkOutcome o={outcome} /> : null}
           {s.status !== "pending" && text ? <Facts text={text} destination={s.destination} /> : null}
@@ -146,7 +153,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
 
       {c.mode === "view" && sendLabel ? (
         <div className="acts sa-desk-acts">
-          <SplitApprove version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button className="btn" type="button" disabled={c.locked || c.busy || isGithubBatch} onClick={() => c.setMode("edit")}>
             <IcPencil />
             Editar
@@ -159,6 +166,11 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
               Saltar por ahora
             </button>
           ) : null}
+        </div>
+      ) : null}
+      {c.mode === "view" && sendLabel && isSlack ? (
+        <div className="sa-desk-only">
+          <SlackModes disabled={c.locked || c.busy} onDirect={() => c.approve("send")} />
         </div>
       ) : null}
       {c.mode === "view" && sendLabel ? (
@@ -228,7 +240,8 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
             placeholder={c.openTurnId ? `Espera a v${pendingN} o cancela el cambio` : "Pídele un cambio a Claude…"}
             onSend={sendTurn}
           />
-          <SplitApprove phone up version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove phone up slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          {isSlack ? <SlackModes phone disabled={c.locked || c.busy} onDirect={() => c.approve("send")} /> : null}
         </div>
       ) : null}
     </article>
@@ -300,6 +313,7 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
     ref.current?.focus();
   }, []);
   const changed = draft.trim() !== text.trim() && draft.trim().length > 0;
+  const isSlack = c.s.source === "slack";
   return (
     <>
       <div className="k">Tu versión</div>
@@ -319,7 +333,12 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
         </div>
       ) : null}
       <div className="acts">
-        <SplitApprove version={c.s.versions.length + 1} label="Aprobar y enviar mi versión" disabled={!changed || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
+        <SplitApprove slack={isSlack} version={c.s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : "Aprobar y enviar mi versión"} disabled={!changed || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
+        {isSlack ? (
+          <button className="btn" type="button" disabled={!changed || c.busy} onClick={() => c.approveText(draft, "send")}>
+            Aprobar y que Claude lo envíe
+          </button>
+        ) : null}
         <button className="btn" type="button" disabled={!changed || c.busy} onClick={() => c.saveText(draft)}>
           Guardar sin enviar
         </button>
@@ -327,7 +346,7 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
           Descartar cambios
         </button>
       </div>
-      <div className="sa-legend">Edición manual sobre v{c.s.currentVersion} · se envía tu versión</div>
+      <div className="sa-legend">Edición manual sobre v{c.s.currentVersion} · se envía tu versión{isSlack ? " · «Aprobar y que Claude lo envíe» sale con «Sent using @Claude»" : ""}</div>
     </>
   );
 }
@@ -360,9 +379,13 @@ export function StateBlocks({
     case "sending":
       return undoOpen(s, now) ? (
         <SendingBanner s={s} now={now} onUndo={() => c.undo()} />
+      ) : s.source === "slack" && s.sendMode !== "send" ? (
+        <Banner tone="send" title="Dejando el borrador en tu Slack…" text="La sesión de Claude lo crea ahora; aquí verás cuándo esté listo para que lo envíes." />
       ) : (
         <Banner tone="send" title="Enviando…" text="La sesión de Claude lo publica ahora; aquí verás el enlace cuando confirme." />
       );
+    case "draft_created":
+      return <DraftBlock s={s} busy={c.busy} onSent={() => c.confirmSent()} />;
     case "scheduled":
       return <ScheduledBanner s={s} now={now} onChange={() => c.reschedule()} onCancel={() => c.unschedule()} />;
     case "queued_until_back":

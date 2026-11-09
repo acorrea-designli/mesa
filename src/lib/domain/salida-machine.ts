@@ -5,27 +5,35 @@
 //     │                 │  │  └─schedule─▶ scheduled ─(send_at)─▶ sending(released)│
 //     │                 │  └──unschedule──────┘                                    ▼
 //     │                 │   (approve while the source is down ──▶ queued_until_back ─resume─▶ sending(released))
+//     │                 │                          Slack, mode draft: drafted ──▶ draft_created ──confirm_sent (Andrés)──▶ sent
 //     │                 ├─deny──▶ denied                       sent ──deleted──▶ deleted
 //     │                 └─expire─▶ expired                     failed ──retry──▶ pending
 //
 // The session that owns a salida only executes the send after the `release`
 // (the 20 s undo window is over). `sent` before release is refused.
+//
+// Slack salidas carry a send mode chosen with the approval click (`approve`/`schedule` take `mode`, default
+// "draft"; an undo or any return to pending clears it): "draft" leaves the text as a Slack draft that Andrés sends
+// himself (`drafted` -> draft_created, closed by his "Ya lo envié" = `confirm_sent`), "send" has Claude send it
+// through the connector (it appends "Sent using @Claude"). A draft_created salida is never sent and never re-released.
 
-import { DELETE_POLICY, type Salida, type SalidaStatus, type WakeKind } from "./types";
+import { DELETE_POLICY, type Destination, type Salida, type SalidaSendMode, type SalidaStatus, type WakeKind } from "./types";
 
 export const UNDO_WINDOW_MS = 20_000;
 
 export type SalidaEvent =
   | { type: "propose" }
-  | { type: "approve"; version: number }
+  | { type: "approve"; version: number; mode?: SalidaSendMode }
   | { type: "undo" }
   | { type: "release" }
   | { type: "sent"; permalink?: string }
+  | { type: "drafted"; permalink?: string } // Slack, mode draft: the draft is in Andrés's composer (the sandbox records a simulated permalink)
+  | { type: "confirm_sent" } // Andrés: "Ya lo envié" (he sent the Slack draft himself)
   | { type: "failed"; error: string }
   | { type: "retry" }
   | { type: "deny" }
   | { type: "expire" }
-  | { type: "schedule"; at: string; version: number }
+  | { type: "schedule"; at: string; version: number; mode?: SalidaSendMode }
   | { type: "unschedule" }
   | { type: "request_delete" }
   | { type: "deleted" }
@@ -62,6 +70,7 @@ type S = Pick<
   | "expiresAt"
   | "currentVersion"
   | "approvedVersion"
+  | "sendMode"
   | "deleteRequestedAt"
 >;
 
@@ -69,6 +78,16 @@ const fail = (error: string): Transition => ({ ok: false, error });
 
 function expect(s: S, allowed: SalidaStatus[], event: string): Transition | null {
   return allowed.includes(s.status) ? null : fail(`cannot ${event} a salida that is ${s.status}`);
+}
+
+const isSlack = (d: Destination) => d.kind === "slack_thread" || d.kind === "slack_channel";
+
+/** The mode an approval records: Slack takes the requested one (default draft), every other source has none and refuses one. */
+function approvalMode(s: S, requested: SalidaSendMode | undefined): { ok: true; mode: SalidaSendMode | null } | { ok: false; error: string } {
+  if (!isSlack(s.destination)) {
+    return requested ? { ok: false, error: "only a Slack salida has a send mode" } : { ok: true, mode: null };
+  }
+  return { ok: true, mode: requested ?? "draft" };
 }
 
 /** Statuses in which Claude may add a new version (the text is not locked yet). */
@@ -95,10 +114,12 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (g.rewritePending) return fail("Claude is rewriting; approve the new version when it arrives");
       if (ev.version < 1 || ev.version > g.versionCount) return fail(`version ${ev.version} does not exist`);
       if (ev.version !== s.currentVersion) return fail("approve sends the version shown; select it first");
+      const m = approvalMode(s, ev.mode);
+      if (!m.ok) return fail(m.error);
       if (g.sourceDown) {
         return {
           ok: true,
-          patch: { status: "queued_until_back", approvedVersion: ev.version, undoUntil: null, releasedAt: null, error: null },
+          patch: { status: "queued_until_back", approvedVersion: ev.version, sendMode: m.mode, undoUntil: null, releasedAt: null, error: null },
           wake: "salida.queued",
         };
       }
@@ -107,6 +128,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
         patch: {
           status: "sending",
           approvedVersion: ev.version,
+          sendMode: m.mode,
           undoUntil: new Date(now.getTime() + UNDO_WINDOW_MS).toISOString(),
           releasedAt: null,
           error: null,
@@ -122,7 +144,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       }
       return {
         ok: true,
-        patch: { status: "pending", approvedVersion: null, undoUntil: null },
+        patch: { status: "pending", approvedVersion: null, sendMode: null, undoUntil: null },
         wake: "salida.undone",
       };
     }
@@ -150,6 +172,21 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       return { ok: true, patch: { status: "sent", sentAt: iso, permalink: ev.permalink ?? null, error: null } };
     }
 
+    case "drafted": {
+      const bad = expect(s, ["sending"], "mark drafted");
+      if (bad) return bad;
+      if (!isSlack(s.destination)) return fail("only a Slack salida can be left as a draft");
+      if (!s.releasedAt) return fail("refusing to mark drafted before the undo window is over");
+      if (s.sendMode === "send") return fail("this salida was approved as \"Claude lo envía\": it is sent, not drafted");
+      return { ok: true, patch: { status: "draft_created", draftedAt: iso, permalink: ev.permalink ?? null, error: null } };
+    }
+
+    case "confirm_sent": {
+      const bad = expect(s, ["draft_created"], "confirm");
+      if (bad) return bad;
+      return { ok: true, patch: { status: "sent", sentAt: iso, error: null } };
+    }
+
     case "failed": {
       const bad = expect(s, ["sending"], "mark failed");
       if (bad) return bad;
@@ -162,14 +199,14 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (bad) return bad;
       return {
         ok: true,
-        patch: { status: "pending", approvedVersion: null, undoUntil: null, releasedAt: null },
+        patch: { status: "pending", approvedVersion: null, sendMode: null, undoUntil: null, releasedAt: null },
       };
     }
 
     case "deny": {
       const bad = expect(s, ["draft", "pending", "scheduled", "queued_until_back"], "deny");
       if (bad) return bad;
-      return { ok: true, patch: { status: "denied", sendAt: null }, wake: "salida.denied" };
+      return { ok: true, patch: { status: "denied", sendAt: null, sendMode: null }, wake: "salida.denied" };
     }
 
     case "expire": {
@@ -187,16 +224,18 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       const at = Date.parse(ev.at);
       if (Number.isNaN(at)) return fail("invalid schedule time");
       if (at <= now.getTime()) return fail("schedule time must be in the future");
+      const m = approvalMode(s, ev.mode);
+      if (!m.ok) return fail(m.error);
       return {
         ok: true,
-        patch: { status: "scheduled", sendAt: new Date(at).toISOString(), approvedVersion: ev.version },
+        patch: { status: "scheduled", sendAt: new Date(at).toISOString(), approvedVersion: ev.version, sendMode: m.mode },
       };
     }
 
     case "unschedule": {
       const bad = expect(s, ["scheduled"], "unschedule");
       if (bad) return bad;
-      return { ok: true, patch: { status: "pending", sendAt: null, approvedVersion: null } };
+      return { ok: true, patch: { status: "pending", sendAt: null, approvedVersion: null, sendMode: null } };
     }
 
     case "request_delete": {
@@ -239,7 +278,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
     case "unqueue": {
       const bad = expect(s, ["queued_until_back"], "unqueue");
       if (bad) return bad;
-      return { ok: true, patch: { status: "pending", approvedVersion: null, error: null } };
+      return { ok: true, patch: { status: "pending", approvedVersion: null, sendMode: null, error: null } };
     }
 
     case "bounce": {
@@ -248,7 +287,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (s.status === "sending" && !s.releasedAt) return fail("the undo window is still open; Andrés can undo");
       return {
         ok: true,
-        patch: { status: "pending", approvedVersion: null, undoUntil: null, releasedAt: null, error: ev.reason },
+        patch: { status: "pending", approvedVersion: null, sendMode: null, undoUntil: null, releasedAt: null, error: ev.reason },
       };
     }
 

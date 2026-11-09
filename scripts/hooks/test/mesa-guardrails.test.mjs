@@ -132,18 +132,137 @@ test("G5: a second released salida with the same text and the right mentions is 
   assert.equal((await sendComment(mesa, [2]))?.rule, "G5");
 });
 
-test("G5: slack_send_message is refused for the lead even with a released salida, naming the way out", async () => {
-  const mesa = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [{ id: "s1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, versions: [{ n: 1, body: "Hi Matt" }] }] } });
-  for (const fetchImpl of [mesa.fetchImpl, unreachable]) {
-    const r = await run(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "Hi Matt" }, fetchImpl);
-    assert.equal(r?.rule, "G5");
-    assert.match(r.reason, /Sent using @Claude/);
-    assert.match(r.reason, /mesa salida hold <id>/);
+// A released Slack salida as Mesa lists it. Its mode is the one Andrés chose with his approval click.
+const slackSalida = (over = {}) => ({
+  id: "sl1",
+  source: "slack",
+  releasedAt: "2026-11-03T20:00:00Z",
+  approvedVersion: 2,
+  sendMode: "draft",
+  versions: [{ n: 1, body: "old text" }, { n: 2, body: "Hi Matt, **confirmed**: https://x.y/z" }],
+  destination: { kind: "slack_thread", workspace: "designli", channel: "#scout-dev", channelId: "C0123ABCD", threadTs: "1730640660.118000", postAs: "Andrés" },
+  ...over,
+});
+const slackMesa = (...salidas) => fakeMesa({ "GET /api/salidas?status=sending": { salidas } });
+const DRAFT = "mcp__claude_ai_Slack__slack_send_message_draft";
+const SEND = "mcp__claude_ai_Slack__slack_send_message";
+const slackCall = { channel_id: "C0123ABCD", thread_ts: "1730640660.118000", message: "Hi Matt, *confirmed*: <https://x.y/z>" };
+
+test("G5: slack_send_message_draft passes only for a released salida in mode draft with that text and target", async () => {
+  const mesa = slackMesa(slackSalida());
+  assert.equal(await rule(run(lead, DRAFT, slackCall, mesa.fetchImpl)), null);
+  // a salida released before modes existed carries none: the default, draft
+  const legacy = slackMesa(slackSalida({ sendMode: undefined }));
+  assert.equal(await rule(run(lead, DRAFT, slackCall, legacy.fetchImpl)), null);
+  // snake_case rows too
+  const snake = slackMesa(slackSalida({ sendMode: undefined, send_mode: "draft" }));
+  assert.equal(await rule(run(lead, DRAFT, slackCall, snake.fetchImpl)), null);
+});
+
+test("G5: slack_send_message passes only for a released salida in mode send with that text and target", async () => {
+  const mesa = slackMesa(slackSalida({ sendMode: "send" }));
+  assert.equal(await rule(run(lead, SEND, slackCall, mesa.fetchImpl)), null);
+});
+
+test("G5: the wrong tool for the mode is refused with the right path (a draft is never sent, a direct send never drafted)", async () => {
+  const draftMode = slackMesa(slackSalida({ sendMode: "draft" }));
+  const r = await run(lead, SEND, slackCall, draftMode.fetchImpl);
+  assert.equal(r?.rule, "G5");
+  assert.match(r.reason, /approved as a draft/);
+  assert.match(r.reason, /slack_send_message_draft/);
+  assert.match(r.reason, /mesa salida drafted sl1/);
+  assert.match(r.reason, /never switch a draft to a send/);
+
+  const sendMode = slackMesa(slackSalida({ sendMode: "send" }));
+  const d = await run(lead, DRAFT, slackCall, sendMode.fetchImpl);
+  assert.equal(d?.rule, "G5");
+  assert.match(d.reason, /Claude lo envía/);
+  assert.match(d.reason, /slack_send_message/);
+  assert.match(d.reason, /mesa salida sent sl1/);
+});
+
+test("G5: a different text is refused for both Slack tools", async () => {
+  const mesa = slackMesa(slackSalida({ sendMode: "draft" }), slackSalida({ id: "sl2", sendMode: "send", approvedVersion: 1 }));
+  for (const tool of [DRAFT, SEND]) {
+    const r = await run(lead, tool, { ...slackCall, message: "Hi Matt, confirmed AND shipped" }, mesa.fetchImpl);
+    assert.equal(r?.rule, "G5", tool);
+    assert.match(r.reason, /exactly this text/);
   }
-  // Threads and broadcasts are the same tool.
-  assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", thread_ts: "1.2", message: "x", reply_broadcast: true }, mesa.fetchImpl)), "G5");
-  // A teammate still gets G4.
-  assert.equal(await rule(run(mate(), "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "Hi Matt" }, mesa.fetchImpl)), "G4");
+  // sl2's approved version is v1 ("old text"): that is what its mode-send tool may carry, nothing else
+  assert.equal(await rule(run(lead, SEND, { ...slackCall, message: "old text" }, slackMesa(slackSalida({ id: "sl2", sendMode: "send", approvedVersion: 1 })).fetchImpl)), null);
+  // an old version's text is not the approved one of sl1 (approved v2)
+  assert.equal(await rule(run(lead, DRAFT, { ...slackCall, message: "old text" }, slackMesa(slackSalida()).fetchImpl)), "G5");
+});
+
+test("G5: the channel and the thread must be the salida's destination", async () => {
+  const mesa = slackMesa(slackSalida());
+  for (const bad of [{ channel_id: "C9999" }, { channel_id: undefined }, { thread_ts: "1730640660.999999" }, { thread_ts: undefined }]) {
+    const r = await run(lead, DRAFT, { ...slackCall, ...bad }, mesa.fetchImpl);
+    assert.equal(r?.rule, "G5", JSON.stringify(bad));
+    assert.match(r.reason, /target does not/);
+    assert.match(r.reason, /C0123ABCD, thread 1730640660\.118000/);
+  }
+  // a channel salida (no thread) accepts no thread_ts
+  const channel = slackMesa(slackSalida({ destination: { kind: "slack_channel", workspace: "designli", channel: "#pruebas", channelId: "C0123ABCD", postAs: "Andrés" } }));
+  assert.equal(await rule(run(lead, DRAFT, { channel_id: "C0123ABCD", message: slackCall.message }, channel.fetchImpl)), null);
+  assert.equal(await rule(run(lead, DRAFT, slackCall, channel.fetchImpl)), "G5");
+  // a destination without channelId can never match
+  const noId = slackMesa(slackSalida({ destination: { kind: "slack_channel", workspace: "designli", channel: "#pruebas", postAs: "Andrés" } }));
+  assert.equal(await rule(run(lead, DRAFT, { message: slackCall.message }, noId.fetchImpl)), "G5");
+});
+
+test("G5: no released salida, an unreleased one, a sample or another source all refuse both Slack tools", async () => {
+  const cases = {
+    none: slackMesa(),
+    unreleased: slackMesa(slackSalida({ releasedAt: null })),
+    sample: slackMesa(slackSalida({ isSample: true })),
+    basecamp: slackMesa(slackSalida({ source: "basecamp" })),
+  };
+  for (const [name, mesa] of Object.entries(cases)) {
+    for (const tool of [DRAFT, SEND]) assert.equal(await rule(run(lead, tool, slackCall, mesa.fetchImpl)), "G5", `${name} ${tool}`);
+  }
+  // Mesa lists only `sending` salidas: once drafted (draft_created) or sent it is gone from the list, so a second call has no match.
+  const none = await run(lead, DRAFT, slackCall, slackMesa().fetchImpl);
+  assert.match(none.reason, /already drafted or sent is done/);
+});
+
+test("G5: the Slack check reads the approved text from salida show when the list has no bodies, and a stringified destination", async () => {
+  const listed = { id: "sl1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", sendMode: "draft" };
+  const mesa = fakeMesa({
+    "GET /api/salidas?status=sending": { salidas: [listed] },
+    "GET /api/salidas/sl1": { salida: slackSalida({ destination: JSON.stringify(slackSalida().destination) }) },
+  });
+  assert.equal(await rule(run(lead, DRAFT, slackCall, mesa.fetchImpl)), null);
+  assert.equal(await rule(run(lead, SEND, slackCall, mesa.fetchImpl)), "G5");
+});
+
+test("G5: with Mesa unreachable both Slack tools are blocked, and teammates still get G4", async () => {
+  for (const tool of [DRAFT, SEND]) {
+    const r = await run(lead, tool, slackCall, unreachable);
+    assert.equal(r?.rule, "G5", tool);
+    assert.match(r.reason, /unreachable/);
+    assert.equal(await rule(run(mate(), tool, slackCall, slackMesa(slackSalida()).fetchImpl)), "G4", tool);
+  }
+});
+
+test("G5: the other Slack tools keep their rules: schedule is refused, reads are open", async () => {
+  assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_schedule_message", { channel_id: "C1", message: "x" })), "G5");
+  assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_read_thread", { channel_id: "C1" })), null);
+});
+
+test("G10: nobody sets the Slack mode or presses Ya lo envié through the raw API", async () => {
+  for (const body of ['{"type":"approve","version":1,"mode":"send"}', '{"type":"confirm_sent"}']) {
+    for (const who of [lead, mate()]) {
+      const r = await sh(who, `curl -s -X POST http://127.0.0.1:8790/api/salidas/sl1/transition -H 'content-type: application/json' -d '${body}'`);
+      assert.equal(r?.rule, "G10", body);
+      assert.match(r.reason, /Ya lo envié/);
+    }
+  }
+});
+
+test("G4: a teammate cannot report a draft; the lead can", async () => {
+  assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1")), "G4");
+  assert.equal(await rule(sh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1")), null);
 });
 
 test("tokens ignore markup, entities and URLs", () => {
@@ -214,6 +333,7 @@ test("G11: Slack and Basecamp writes are blocked for the lead and teammates, wit
   for (const who of [lead, mate()]) {
     for (const [tool, input] of [
       ["mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola" }],
+      ["mcp__claude_ai_Slack__slack_send_message_draft", { channel_id: "C1", message: "hola" }],
       ["mcp__claude_ai_Slack__slack_add_reaction", { name: "eyes" }],
       ["mcp__basecamp__create_comment", { content: "hola" }],
       ["mcp__basecamp__trash_comment", { id: 1 }],
@@ -223,6 +343,7 @@ test("G11: Slack and Basecamp writes are blocked for the lead and teammates, wit
       assert.equal(r?.rule, "G11", tool);
       assert.match(r.reason, NADA);
       assert.match(r.reason, /mesa salida sent <id> --simulated/);
+      assert.match(r.reason, /mesa salida drafted <id> --simulated/);
     }
   }
   // Reads stay open.
@@ -275,6 +396,11 @@ test("G11: the lead reports sends only as simulated and never calls the live boa
   assert.equal(r?.rule, "G11");
   assert.match(r.reason, /--simulated/);
   assert.equal(await rule(sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida sent s1 --simulated")), null);
+  const d = await sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1");
+  assert.equal(d?.rule, "G11");
+  assert.match(d.reason, /drafted <id> --simulated/);
+  assert.equal(await rule(sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1 --simulated")), null);
+  assert.equal(await rule(sbxSh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1 --simulated")), "G4");
   assert.equal(await rule(sbxSh(lead, "MESA_URL=http://127.0.0.1:8790 node G:/WorkSpace/designli/ops/bin/mesa ticket list")), "G11");
   assert.equal(await rule(sbxSh(lead, "curl -s -m 3 http://127.0.0.1:8790/api/health")), "G11");
   assert.equal(await rule(sbxSh(lead, "curl -s -m 3 http://127.0.0.1:8796/api/health")), null);
@@ -288,12 +414,13 @@ test("G11: live mode is unaffected", async () => {
   const salidas = fakeMesa({
     "GET /api/salidas?status=sending": {
       salidas: [
-        { id: "s1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, versions: [{ n: 1, body: "hola Ana" }] },
+        { id: "s1", source: "slack", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 1, sendMode: "send", versions: [{ n: 1, body: "hola Ana" }], destination: { kind: "slack_channel", channelId: "C1" } },
         { id: "g1", source: "github", releasedAt: "2026-11-03T20:00:00Z", destination: { kind: "github_review", repo: "a/b", pr: 1, event: "APPROVE", postAs: "x" } },
       ],
     },
   });
-  assert.equal(await rule(live(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola Ana" }, salidas.fetchImpl)), "G5");
+  assert.equal(await rule(live(lead, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hola Ana" }, salidas.fetchImpl)), null);
+  assert.equal(await rule(live(lead, "mcp__claude_ai_Slack__slack_send_message_draft", { channel_id: "C1", message: "hola Ana" }, salidas.fetchImpl)), "G5");
   assert.equal(await rule(live(lead, "PowerShell", { command: "node C:/Users/z4yross/.claude-work/pr-gh.mjs approve a/b 1 abc" }, salidas.fetchImpl)), null);
   assert.equal(await rule(live(mate(), "Bash", { command: 'gh pr create --draft --title "feat(x): y" --body-file b.md' })), null);
   assert.equal(await rule(live(mate(), "Bash", { command: "git push -u origin feat/x" })), null);

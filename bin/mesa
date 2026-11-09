@@ -47,9 +47,13 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida propose --source slack|basecamp|github --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
                   [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired (exit 3)
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
-  mesa salida sent <id> [--permalink URL]          only after salida.released
+  mesa salida sent <id> [--permalink URL]          only after salida.released, for a Slack salida in mode send ("Claude lo envía"),
+                                                   Basecamp and GitHub
   mesa salida sent <id> --simulated                sandbox only (MESA_ENV=sandbox): nothing was sent; Mesa records
                                                    sandbox://<source>/<id>. Refused in live
+  mesa salida drafted <id>                         Slack salida in mode draft (the default): its text is now a draft in Andrés's Slack
+                                                   (slack_send_message_draft); status draft_created, closed by his "Ya lo envié"
+  mesa salida drafted <id> --simulated             sandbox only: no draft was created; Mesa records sandbox://slack/<id>
   mesa salida failed <id> --error E
   mesa salida hold <id> --reason R               released but the source is down (waits as "Aprobar al volver")
   mesa salida bounce <id> --reason R             the thread changed: back to Andrés for a new approval
@@ -266,7 +270,7 @@ async function waitAnswer(ticket, sessionId, timeoutS) {
 async function waitRelease(salida, sessionId, timeoutS) {
   const res = await peekLoop(sessionId, timeoutS, async () => {
     const s = await call("GET", `/api/salidas/${enc(salida.id)}`);
-    if ((s.status === "sending" && s.releasedAt) || s.status === "sent") return { released: true, salida: s };
+    if ((s.status === "sending" && s.releasedAt) || s.status === "draft_created" || s.status === "sent") return { released: true, salida: s };
     if (["denied", "expired", "deleted"].includes(s.status)) return { released: false, salida: s };
     return null;
   });
@@ -434,6 +438,12 @@ async function main() {
           return out(
             await call("POST", `/api/salidas/${enc(need(sid, "<id>"))}/transition`, simulated ? { type: "sent", simulated: true } : { type: "sent", permalink: opt.permalink }),
           );
+        }
+        case "drafted": {
+          // --simulated is a flag; `drafted --simulated <id>` would otherwise read the id as its value.
+          const did = id ?? (typeof opt.simulated === "string" ? opt.simulated : undefined);
+          const simulated = opt.simulated !== undefined;
+          return out(await call("POST", `/api/salidas/${enc(need(did, "<id>"))}/transition`, simulated ? { type: "drafted", simulated: true } : { type: "drafted" }));
         }
         case "failed":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "failed", error: text(opt.error, "--error") }));

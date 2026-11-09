@@ -88,7 +88,7 @@ in the ticket's salida links.
 argument), for the lead and teammates alike. Every message starts "sandbox: nada sale de aquí." and says what to do
 instead.
 
-- Every Slack and Basecamp write tool. The lead "sends" with `mesa salida sent <id> --simulated`.
+- Every Slack and Basecamp write tool, `slack_send_message_draft` included. The lead "sends" with `mesa salida sent <id> --simulated`, or `mesa salida drafted <id> --simulated` for a Slack salida in mode draft (Mesa records `sandbox://slack/<id>`).
 - `pr-gh.mjs approve|review|reply`. Each github salida is reported `--simulated`, and findings get no `ghCommentId`.
 - Every `gh` write: `gh api` with a method or fields, and `gh pr create|merge|review|comment|close|…`, `gh issue
   create|comment|…`, `gh repo create|edit|delete|…`, releases, workflows, labels, secrets and Projects. Reads pass.

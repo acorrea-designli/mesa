@@ -207,9 +207,17 @@ export type SalidaStatus =
   | "expired"
   | "scheduled"
   | "queued_until_back" // approved while the source was down ("Aprobar al volver")
+  | "draft_created" // Slack, mode draft: the text waits as a draft in Andrés's Slack ("Borrador en Slack · envíalo tú") until "Ya lo envié"
   | "deleted";
 
 export type SalidaSource = "slack" | "basecamp" | "github";
+
+/**
+ * How a Slack salida goes out, chosen by Andrés with his approval click: "draft" (default) leaves the text as a draft in
+ * his Slack that he sends himself (it goes out as his own message); "send" has Claude send it through the connector,
+ * which adds "Sent using @Claude". Non-Slack salidas have none (null).
+ */
+export type SalidaSendMode = "draft" | "send";
 
 export type Destination =
   | {
@@ -296,10 +304,14 @@ export interface Salida {
   ownerSession: string | null;
   currentVersion: number;
   approvedVersion: number | null;
+  /** Slack only: set with the approval (or Programar), cleared by an undo; null for every other source. */
+  sendMode: SalidaSendMode | null;
   undoUntil: string | null;
   releasedAt: string | null;
   sendAt: string | null;
   expiresAt: string | null;
+  /** When the Slack draft was created (draft_created). */
+  draftedAt: string | null;
   sentAt: string | null;
   permalink: string | null;
   error: string | null;
@@ -347,6 +359,13 @@ export interface SalidaDetail extends Salida {
   engram: EngramLink[];
   /** "Abrir destino": where this salida is published (the permalink once sent). Set by the read model and the salida API; null when unknowable. */
   destinationUrl?: string | null;
+  /** "Abrir conversación" on a Slack salida: the Slack-app deep link (needs MESA_SLACK_TEAM_ID) and the https fallback (needs MESA_SLACK_DOMAIN). Set by the read model and the salida API. */
+  conversation?: ConversationLinks | null;
+}
+
+export interface ConversationLinks {
+  app: string | null;
+  web: string | null;
 }
 
 export interface LearnedChip {
@@ -380,7 +399,7 @@ export type WakeKind =
   | "ticket.reopened"
   | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
   | "salida.turn" // Andrés asked for a change
-  | "salida.released" // undo window over: send now
+  | "salida.released" // undo window over: send now. payload { version, status, mode, recheckThread }; mode (Slack only) "draft" = leave a Slack draft, "send" = send through the connector
   | "salida.undone"
   | "salida.denied"
   | "salida.delete_requested"

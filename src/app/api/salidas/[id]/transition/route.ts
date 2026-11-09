@@ -7,7 +7,9 @@ import { withDestinationUrl } from "@/features/salidas/read";
 /**
  * POST /api/salidas/:id/transition SalidaEvent -> SalidaDetail. 409 on an invalid transition.
  * `sent` takes `simulated: true` only in sandbox, where it is also required and the permalink
- * becomes `sandbox://<source>/<id>` (409 `sandbox` otherwise; see src/lib/domain/sandbox.ts).
+ * becomes `sandbox://<source>/<id>` (409 `sandbox` otherwise; see src/lib/domain/sandbox.ts); `drafted` (Slack, mode draft) works the same.
+ * `approve` and `schedule` take `mode` ("draft" default | "send") for a Slack salida only; `confirm_sent` is Andrés's
+ * "Ya lo envié" (G10 keeps sessions off it, like approve).
  */
 export const POST = route<{ id: string }>(async (req, r, { id }) => {
   const ev = await body(req, salidaTransition);

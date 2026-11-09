@@ -6,9 +6,11 @@ import type { Destination, SalidaDetail, SalidaTurn, SalidaVersion } from "@/lib
 import { DELETE_POLICY } from "@/lib/domain/types";
 import { isSimulated } from "@/lib/domain/sandbox";
 import { Chip, srcClass } from "@/components/ui/primitives";
+import { useToast } from "@/components/ui/interactive";
 import { confirmPick, rise, travel } from "@/lib/motion";
+import { COPY_TOAST, copyExactText } from "./copy";
 import { IcCheck, IcClock, IcCopy, IcExternal, IcStar, IcUndo } from "./icons";
-import { age, comparedWith, destinationLinkLabel, destShort, hhmm, mentionCount, routeStops, scheduleChoices, secondsElapsed, secondsLeft, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
+import { age, comparedWith, conversationHref, destinationLinkLabel, destShort, hhmm, mentionCount, routeStops, scheduleChoices, secondsElapsed, secondsLeft, shownText, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -72,6 +74,99 @@ export function PhoneRoute({ d, source }: { d: Destination; source: SalidaDetail
         </span>
       ))}
     </div>
+  );
+}
+
+// ---------- Slack: send mode and quick buttons ----------
+
+/** A Slack salida: what "Aprobar" does (a draft Andrés sends) and the second button, with its cost said next to it. */
+export function SlackModes({ onDirect, disabled, phone }: { onDirect: () => void; disabled?: boolean; phone?: boolean }) {
+  return (
+    <div className={cx("sa-modes", phone && "phone")}>
+      <button type="button" className="btn" disabled={disabled} onClick={onDirect}>
+        Aprobar y que Claude lo envíe
+      </button>
+      <span className="sa-modenote">
+        <b>Sale con «Sent using @Claude».</b> Aprobar deja el texto como borrador en tu Slack y lo envías tú; si ya escribes algo en ese canal, el borrador puede reemplazarlo.
+      </span>
+    </div>
+  );
+}
+
+/** Select the visible text of the card the buttons live in, so Andrés can copy it by hand when the clipboard is unavailable. */
+function selectCardText(from: HTMLElement | null): boolean {
+  const el = from?.closest(".sa-card, .sa-apv")?.querySelector(".msg");
+  const sel = typeof window !== "undefined" ? window.getSelection() : null;
+  if (!el || !sel) return false;
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  sel.removeAllRanges();
+  sel.addRange(r);
+  return true;
+}
+
+/**
+ * "Copiar" and "Abrir conversación" on a Slack salida. Copiar puts exactly the text shown (the approved version once approved) on the
+ * clipboard and says so in a toast, falling back to selecting the text; Abrir conversación opens the Slack app (slack:// deep link)
+ * or, without a team id, the https link. Both are plain buttons/links: they work the same on the phone.
+ */
+export function SlackQuick({ s }: { s: SalidaDetail }) {
+  const toast = useToast();
+  const root = useRef<HTMLDivElement>(null);
+  const href = conversationHref(s.conversation);
+  const copy = async () => {
+    const r = await copyExactText(shownText(s), {
+      clipboard: typeof navigator !== "undefined" ? navigator.clipboard : null,
+      select: () => selectCardText(root.current),
+    });
+    toast({ text: COPY_TOAST[r] });
+  };
+  return (
+    <div className="sa-quick" ref={root}>
+      <button type="button" className="btn sm" onClick={copy}>
+        <IcCopy />
+        Copiar
+      </button>
+      {href ? (
+        <a className="btn sm" href={href} {...(href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})} aria-label={`Abrir conversación: ${destShort(s.destination)}`}>
+          Abrir conversación
+          <IcExternal />
+        </a>
+      ) : (
+        <>
+          <button type="button" className="btn sm" disabled aria-disabled="true" aria-describedby={`conv-${s.id}`}>
+            Abrir conversación
+          </button>
+          <span className="sx-why" id={`conv-${s.id}`}>
+            Falta MESA_SLACK_TEAM_ID o MESA_SLACK_DOMAIN en .env.local
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Slack, mode draft, drafted: the text waits in Andrés's Slack until he sends it and presses "Ya lo envié". */
+export function DraftBlock({ s, busy, onSent }: { s: SalidaDetail; busy: boolean; onSent: () => void }) {
+  const simulated = isSimulated(s);
+  return (
+    <Banner
+      tone="draft"
+      title="Borrador en Slack · envíalo tú"
+      text={
+        simulated
+          ? `Simulado · no salió. Sandbox: Claude marcó el borrador sin crear nada en Slack (${destShort(s.destination)}).`
+          : `Está en tu Slack, en ${destShort(s.destination)}${s.draftedAt ? ` · desde las ${hhmm(s.draftedAt)}` : ""}. Ábrelo, revisa y dale enviar; sale como mensaje tuyo.`
+      }
+    >
+      <div className="sx-del">
+        <button className="btn p" type="button" disabled={busy} onClick={onSent}>
+          <IcCheck />
+          Ya lo envié
+        </button>
+        <span className="sx-why">Márcalo cuando lo hayas enviado; Mesa no ve tu Slack.</span>
+      </div>
+    </Banner>
   );
 }
 
@@ -279,15 +374,18 @@ export function UndoTrack({ undoUntil, now, source }: { undoUntil: string | null
 export function SendingBanner({ s, now, onUndo }: { s: SalidaDetail; now: number; onUndo: () => void }) {
   const left = secondsLeft(s.undoUntil, now);
   const slack = DELETE_POLICY[s.destination.kind] === "none";
+  const draft = s.source === "slack" && s.sendMode !== "send";
   return (
     <div className="sa-sx send" role="status">
       <UndoTrack undoUntil={s.undoUntil} now={now} source={s.source} />
       <div className="sx-tx">
         <b>
-          Enviando en <span data-n>{left}</span> s
+          {draft ? "Borrador en " : "Enviando en "}
+          <span data-n>{left}</span> s
         </b>
         <span>
           a {destShort(s.destination)}
+          {draft ? " · queda en tu Slack y lo envías tú" : s.source === "slack" ? " · sale con «Sent using @Claude»" : ""}
           {slack ? (s.source === "slack" ? " · después Slack no deja borrarlo desde Mesa" : " · después no se puede borrar desde Mesa") : ""}
         </span>
       </div>

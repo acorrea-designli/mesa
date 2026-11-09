@@ -1,6 +1,6 @@
 // Pure helpers for Salidas: version stepper collapse, undo countdown, word diff,
 // schedule choices, destination route stops and short labels. Unit tested.
-import type { Destination, Salida, SalidaDetail, SalidaVersion } from "@/lib/domain/types";
+import type { ConversationLinks, Destination, Salida, SalidaDetail, SalidaVersion } from "@/lib/domain/types";
 
 // ---------- version stepper ----------
 
@@ -238,6 +238,8 @@ export interface DestinationConfig {
   slackDomain?: string | null;
   /** Basecamp account id, the number in https://3.basecamp.com/<account>/. */
   basecampAccount?: string | null;
+  /** Slack team id (T0…, or E0… on Enterprise Grid): only the slack:// deep link of "Abrir conversación" needs it; without it the https link is used. */
+  slackTeamId?: string | null;
 }
 
 const SLACK_SUB = /^[a-z0-9][a-z0-9-]*$/i;
@@ -317,6 +319,43 @@ export function destinationUrl(s: Pick<Salida, "destination" | "permalink" | "li
   }
 }
 
+const SLACK_TEAM = /^[TE][A-Z0-9]{2,}$/;
+const SLACK_USER = /^[UW][A-Z0-9]+$/;
+
+/** Slack team id from MESA_SLACK_TEAM_ID ("T0123ABC"); anything else -> null. */
+export function slackTeamId(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").trim().toUpperCase();
+  return SLACK_TEAM.test(v) ? v : null;
+}
+
+/**
+ * "Abrir conversación" on a Slack salida: where the conversation lives, for the Slack app and for the browser.
+ * `app` is slack://channel?team=<T…>&id=<channelId> (a thread adds &message=<threadTs>; a U… destination is the person's DM,
+ * slack://user?team=&id=) and needs the team id (MESA_SLACK_TEAM_ID); `web` is https://<MESA_SLACK_DOMAIN>.slack.com/archives/<channelId>
+ * (a thread adds /p<ts without the dot>; a U… destination is /team/<id>) and needs the domain. Unlike destinationUrl it never
+ * switches to the permalink and it never guesses: a missing id or host gives null for that link. Not Slack: null.
+ */
+export function conversationLinks(s: Pick<Salida, "destination" | "links">, cfg: DestinationConfig = {}): ConversationLinks | null {
+  const d = s.destination;
+  if (d.kind !== "slack_channel" && d.kind !== "slack_thread") return null;
+  const id = d.channelId?.trim() ?? "";
+  if (!/^[A-Z0-9]+$/i.test(id)) return { app: null, web: null };
+  const ch = id.toUpperCase();
+  const { slack } = resolvedConfig(s, cfg);
+  const team = slackTeamId(cfg.slackTeamId);
+  const ts = d.kind === "slack_thread" && d.threadTs && SLACK_TS.test(d.threadTs) ? d.threadTs : null;
+  if (SLACK_USER.test(ch)) {
+    return { app: team ? `slack://user?team=${team}&id=${ch}` : null, web: slack ? `https://${slack}.slack.com/team/${ch}` : null };
+  }
+  return {
+    app: team ? `slack://channel?team=${team}&id=${ch}${ts ? `&message=${ts}` : ""}` : null,
+    web: slack ? `https://${slack}.slack.com/archives/${ch}${ts ? `/p${ts.replace(".", "")}` : ""}` : null,
+  };
+}
+
+/** The link "Abrir conversación" opens: the Slack app when its link is known, else the https one (null when neither is). */
+export const conversationHref = (c: ConversationLinks | null | undefined): string | null => c?.app ?? c?.web ?? null;
+
 /** Aria label for the "Abrir destino" link: names the place it opens. */
 export const destinationLinkLabel = (d: Destination) => `Abrir destino: ${destShort(d)}`;
 
@@ -326,5 +365,18 @@ export const sourceLabel = (s: Salida["source"]) => (s === "slack" ? "Slack" : s
 export function exactBody(s: Pick<SalidaDetail, "destination">, v: SalidaVersion | undefined): string {
   return v?.body ?? "";
 }
+
+/**
+ * The text a card shows for its salida, and what "Copiar" copies: the current version while it is still editable (draft, pending),
+ * the approved version once it is approved (sending, scheduled, draft_created, sent...). Byte for byte, no trimming.
+ */
+export function shownText(s: Pick<SalidaDetail, "status" | "currentVersion" | "approvedVersion" | "versions">): string {
+  const editable = s.status === "pending" || s.status === "draft";
+  const n = editable ? s.currentVersion : (s.approvedVersion ?? s.currentVersion);
+  return s.versions.find((v) => v.n === n)?.body ?? "";
+}
+
+/** Statuses in which a Slack salida still has a conversation worth opening or copying from (not decided, not gone). */
+export const SLACK_QUICK_STATUSES: ReadonlySet<Salida["status"]> = new Set(["pending", "scheduled", "sending", "queued_until_back", "draft_created", "failed"]);
 
 export const firstLine = (s: string) => (s.split("\n").find((l) => l.trim()) ?? "").trim();

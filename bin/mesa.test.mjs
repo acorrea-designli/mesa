@@ -68,6 +68,7 @@ describe("mesa CLI", () => {
       "mesa salida propose",
       "--wait-release",
       "mesa salida sent",
+      "mesa salida drafted",
       "mesa salida hold",
       "mesa salida bounce",
       "mesa handoff",
@@ -393,5 +394,38 @@ describe("mesa CLI", () => {
     const real = await mesa(["salida", "sent", "sa_1", "--permalink", "https://x"]);
     expect(real.code).toBe(0);
     expect(requests.at(-1).body).toEqual({ type: "sent", permalink: "https://x" });
+  });
+
+  it("salida drafted posts the drafted event, simulated only with --simulated, in either argument order", async () => {
+    const real = await mesa(["salida", "drafted", "sa_1"]);
+    expect(real.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/salidas/sa_1/transition", body: { type: "drafted" } });
+    expect(requests[0].body.simulated).toBeUndefined();
+    for (const args of [["salida", "drafted", "sa_1", "--simulated"], ["salida", "drafted", "--simulated", "sa_1"]]) {
+      requests = [];
+      expect((await mesa(args)).code).toBe(0);
+      expect(requests[0]).toMatchObject({ method: "POST", path: "/api/salidas/sa_1/transition", body: { type: "drafted", simulated: true } });
+    }
+    expect((await mesa(["salida", "drafted"])).code).toBe(2);
+  });
+
+  it("has no verb for \"Ya lo envié\" or the Slack mode: those are Andrés's clicks", async () => {
+    for (const args of [["salida", "confirm_sent", "sa_1"], ["salida", "approve", "sa_1", "--mode", "send"], ["salida", "mode", "sa_1", "send"]]) {
+      requests = [];
+      expect((await mesa(args)).code).toBe(2);
+      expect(requests).toEqual([]);
+    }
+  });
+
+  it("propose --wait-release also returns for a salida that is already draft_created", async () => {
+    handler = (q) => {
+      if (q.method === "POST") return { status: 201, body: { id: "sa_1", status: "pending" } };
+      if (q.path === "/api/salidas/sa_1") return { body: { id: "sa_1", status: "draft_created", releasedAt: "2026-11-03T10:00:20Z", sendMode: "draft" } };
+      return { body: { events: [], cursor: 0 } };
+    };
+    const args = ["salida", "propose", "--source", "slack", "--dest", '{"kind":"slack_thread","workspace":"w","channel":"c","postAs":"Andrés"}', "--body", "hola", "--wait-release", "--timeout", "2"];
+    const r = await mesa(args);
+    expect(r.code).toBe(0);
+    expect(r.json()).toMatchObject({ released: true, salida: { id: "sa_1", status: "draft_created" } });
   });
 });

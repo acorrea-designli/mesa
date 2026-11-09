@@ -229,7 +229,7 @@ piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
 
 | Event | Script | Rules |
 |---|---|---|
-| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Slack/Basecamp sends must match a released salida's approved text, its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** blocks curl-style calls to the approve, schedule, deny, undo and permission-decision routes (partial, see section 6.6) · **G11** sandbox only (`MESA_ENV=sandbox`): no Slack/Basecamp/GitHub write, no `git push`, `mesa salida sent` only `--simulated`, no call to :8790 (`docs/SANDBOX.md`) |
+| PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp or GitHub; `gh api` is GET-only for everyone · **G5** the lead's Basecamp sends must match a released salida's approved text, and its Slack calls the salida's mode (`slack_send_message_draft` for a draft-mode one, `slack_send_message` for "Claude lo envía", each with the exact text and the salida's `channel_id`/`thread_ts`), its pr-gh.mjs writes need a released github salida for that PR; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** blocks curl-style calls to the approve (and its Slack mode), schedule, deny, undo, "Ya lo envié" and permission-decision routes (partial, see section 6.6) · **G11** sandbox only (`MESA_ENV=sandbox`): no Slack/Basecamp/GitHub write, no `git push`, `mesa salida sent` and `mesa salida drafted` only `--simulated`, no call to :8790 (`docs/SANDBOX.md`) |
 | PermissionRequest (all tools) | `mesa-approval.mjs` | § 6 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
 
@@ -245,7 +245,7 @@ subagent's `.meta.json`, its agent id (`a<name>-<hex>`) or the spawn prompt's fi
 
 Only the lead acts outward, and only after Andrés's approval:
 
-- **Messages** (Slack, Basecamp): on `salida.released`, `mesa-salida` § Send.
+- **Messages** (Slack, Basecamp): on `salida.released`, `mesa-salida` § Send (Slack: a draft Andrés sends himself by default, or a direct send when he picked "Aprobar y que Claude lo envíe"; the event's `mode` says which).
 - **GitHub** (approve, review comments, thread replies): github salidas, on `salida.released`, `mesa-review` § Lead writes.
 - **Other `needs_ok` actions** (move a GitHub Project or Basecamp card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
   the approved action, marks it with `mesa ticket action <id> --state done|failed`, and tells the owner.

@@ -11,11 +11,16 @@
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
 //                the text being sent; its pr-gh.mjs writes need a released github salida for that repo and PR.
 //                A Basecamp create_comment also needs its `mentions` ids to equal the salida's destination.mentions
-//                (same set; none = none). slack_send_message is refused for everyone: the connector appends
-//                "Sent using @Claude" and cannot be told not to (no Claude attribution in Slack text).
+//                (same set; none = none). A Slack salida carries the mode Andrés chose with his approval click:
+//                slack_send_message_draft passes only for a released, unsent, non-sample Slack salida in mode draft, and
+//                slack_send_message only for one in mode send ("Claude lo envía": the connector appends "Sent using
+//                @Claude" and Andrés accepted that); either way with exactly the approved text and the salida's
+//                channelId (and threadTs when it has one) as channel_id / thread_ts. The wrong tool for the mode is
+//                refused with the right path: a draft is never sent, a direct send is never drafted.
 //                Mesa unreachable = blocked (nothing goes out unseen).
-//   G10 (rule 3) Nobody approves, schedules, denies or undoes a salida, approves a plan or decides a permission
-//                card through the raw API: those are Andrés's clicks.
+//   G10 (rule 3) Nobody approves (and so never picks the Slack mode), schedules, denies or undoes a salida, closes a
+//                Slack draft as sent ("Ya lo envié"), approves a plan or decides a permission card through the raw
+//                API: those are Andrés's clicks.
 //   G6 (rule 8)  run_in_background for git, gh, tests or builds. Only `mesa wait` may run in the background.
 //   G7 (rule 10) `gh pr create` without --draft, bare force push, --no-verify, `gh auth` changes.
 //   G11 (rule 16) Sandbox (MESA_ENV=sandbox, or `--env sandbox` on the hook command), lead and teammates alike:
@@ -35,12 +40,10 @@ const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
 const SLACK_SEND = /^mcp__claude_ai_Slack__slack_(send_message|send_message_draft|schedule_message|create_canvas|update_canvas|add_reaction)$/;
 const BASECAMP_WRITE =
   /^mcp__basecamp__(create|update|trash|delete|destroy|complete|uncomplete|move|archive|unarchive|pin|unpin|enable|disable|remove|reposition|reorder|subscribe|unsubscribe|watch|unwatch|toggle|pause|resume|copy|prioritize|deprioritize|set|mark|restore)_/;
-// Sends whose text the lead may only post from a released salida. (slack_send_message is refused outright below.)
+// Sends whose text the lead may only post from a released salida. (The two Slack message tools have their own check below.)
 const LEAD_TEXT_SENDS = /^(mcp__basecamp__create_(comment|campfire_line|message|ping)|mcp__basecamp__update_(comment|message))$/;
 const SLACK_SEND_MESSAGE = "mcp__claude_ai_Slack__slack_send_message";
-const SLACK_SEND_REFUSAL =
-  "slack_send_message appends \"Sent using @Claude\" to the message and has no param to turn it off; Andrés wants no Claude attribution in any Slack text, so it is never used, not even for a released salida. " +
-  "Slack salidas do not go out through the connector: hold the salida (`mesa salida hold <id>`) and tell Andrés it waits for his Slack path (a draft he sends himself, decision pending on t32).";
+const SLACK_SEND_DRAFT = "mcp__claude_ai_Slack__slack_send_message_draft";
 
 const nonEmptyLines = (s) => s.split(/\r?\n/).filter((l) => l.trim()).length;
 
@@ -132,6 +135,75 @@ async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
   return { match: null, mismatch };
 }
 
+const slackDestination = (s) => {
+  const d = s.destination ?? {};
+  if (typeof d !== "string") return d;
+  try {
+    return JSON.parse(d);
+  } catch {
+    return {};
+  }
+};
+
+// The mode Andrés chose with his approval click; a salida released before modes existed carries none = draft (the default).
+const slackMode = (s) => s.sendMode ?? s.send_mode ?? "draft";
+
+const SLACK_TOOL_MODE = { [SLACK_SEND_DRAFT]: "draft", [SLACK_SEND_MESSAGE]: "send" };
+const showTarget = (channel, thread) => `channel ${channel || "(none)"}${thread ? `, thread ${thread}` : ", no thread"}`;
+
+// Returns { match, wrongMode, mismatch } for slack_send_message_draft / slack_send_message: match is a released, unsent,
+// non-sample Slack salida in the mode this tool serves, with exactly this text and this channel_id (and thread_ts);
+// wrongMode is one with this text and target but the other mode; mismatch is one with this text but another target.
+async function releasedSlackSalida(tool, ti, { fetchImpl, base }) {
+  const wantMode = SLACK_TOOL_MODE[tool];
+  const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
+  // Only `sending` + released salidas are listed: a draft_created or sent one is no longer open for a send. Samples never match.
+  const list = (data.salidas ?? data ?? []).filter((s) => s.source === "slack" && (s.releasedAt ?? s.released_at) && !s.isSample);
+  const want = tokens(sentText(ti)).join(" ");
+  const channel = String(ti.channel_id ?? ti.channelId ?? "");
+  const thread = String(ti.thread_ts ?? ti.threadTs ?? "");
+  let wrongMode = null;
+  let mismatch = null;
+  for (const item of list) {
+    let s = item;
+    if (approvedBody(s) === null) {
+      const full = await mesaCall(`/api/salidas/${encodeURIComponent(item.id)}`, { fetchImpl, base, timeoutMs: 4000 });
+      s = full.salida ?? full;
+    }
+    const body = approvedBody(s);
+    if (body === null || tokens(body).join(" ") !== want) continue;
+    const d = slackDestination(s);
+    const expected = { channel: String(d.channelId ?? ""), thread: String(d.threadTs ?? "") };
+    if (!expected.channel || expected.channel !== channel || expected.thread !== thread) {
+      mismatch = { id: s.id, expected, got: { channel, thread } };
+      continue;
+    }
+    if (slackMode(s) !== wantMode) {
+      wrongMode = s;
+      continue;
+    }
+    return { match: s, wrongMode, mismatch };
+  }
+  return { match: null, wrongMode, mismatch };
+}
+
+function slackRefusal(tool, found) {
+  const wantMode = SLACK_TOOL_MODE[tool];
+  if (found.wrongMode) {
+    const id = found.wrongMode.id;
+    return wantMode === "draft"
+      ? `rule 3: salida ${id} was approved as "Claude lo envía" (mode send), not as a draft. Send it with slack_send_message (the connector adds "Sent using @Claude", which Andrés accepted with that button), then \`mesa salida sent ${id} --permalink <url>\`.`
+      : `rule 3: salida ${id} was approved as a draft (mode draft, the default): Andrés sends it himself. Create it with slack_send_message_draft (same channel_id, thread_ts and exact text), then \`mesa salida drafted ${id}\`. slack_send_message is only for a salida approved as "Claude lo envía"; never switch a draft to a send.`;
+  }
+  if (found.mismatch) {
+    const { id, expected, got } = found.mismatch;
+    return `rule 3: the text matches released Slack salida ${id} but the target does not. Its destination is ${showTarget(expected.channel, expected.thread)}; this call passes ${showTarget(got.channel, got.thread)}. Use the salida's destination.channelId as channel_id and its destination.threadTs as thread_ts (no thread_ts when it has none).`;
+  }
+  const which = wantMode === "draft" ? "mode draft (Aprobar)" : "mode send (Aprobar y que Claude lo envíe)";
+  const other = wantMode === "draft" ? "slack_send_message_draft is only for" : "slack_send_message is only for";
+  return `rule 3: no released, unsent Slack salida in ${which} has exactly this text. ${other} a released salida in that mode, on salida.released (Andrés approved it and the 20 s undo window is over), with the approved version's text unchanged. A salida already drafted or sent is done.`;
+}
+
 // A released GitHub salida for this repo and PR (approve, review and reply all go out as github salidas).
 async function releasedGithubSalida(repo, pr, { fetchImpl, base }) {
   const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
@@ -151,7 +223,7 @@ const GH_API_WRITE_FLAGS = /(?:^|\s)(?:-X|--method)[\s=]*(POST|PUT|PATCH|DELETE)
 
 export function sandboxBlock(tool, ti) {
   if (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool)) {
-    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
+    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`; a Slack salida in mode draft: \`mesa salida drafted <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
   }
   if (tool !== "Bash" && tool !== "PowerShell") return null;
   const cmd = String(ti.command ?? "");
@@ -170,6 +242,9 @@ export function sandboxBlock(tool, ti) {
   }
   if (/\bmesa\b[^\n|;&]*\bsalida\s+sent\b/.test(c) && !/--simulated\b/.test(c)) {
     return `${NADA} Nothing was really sent, so report it as \`mesa salida sent <id> --simulated\` (no --permalink); Mesa records sandbox://<source>/<id>.`;
+  }
+  if (/\bmesa\b[^\n|;&]*\bsalida\s+drafted\b/.test(c) && !/--simulated\b/.test(c)) {
+    return `${NADA} No Slack draft was really created, so report it as \`mesa salida drafted <id> --simulated\`; Mesa records sandbox://slack/<id>.`;
   }
   return null;
 }
@@ -213,9 +288,16 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
   }
 
   // The claude.ai Slack connector appends "Sent using @Claude" to every slack_send_message and has no param to turn it
-  // off, so no Slack text goes out through it, released salida or not (no Claude attribution in Slack text).
-  if (tool === SLACK_SEND_MESSAGE) {
-    return block("G5", SLACK_SEND_REFUSAL);
+  // off. Andrés chooses per salida (his approval click): a draft he sends himself (no footer) or "Claude lo envía"
+  // (with the footer). Each tool passes only for a released salida in its own mode, with that exact text and target.
+  if (!teammate && (tool === SLACK_SEND_DRAFT || tool === SLACK_SEND_MESSAGE)) {
+    let found;
+    try {
+      found = await releasedSlackSalida(tool, ti, { fetchImpl, base });
+    } catch (err) {
+      return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this Slack call cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and act on salida.released.`);
+    }
+    if (!found.match) return block("G5", slackRefusal(tool, found));
   }
 
   if (!teammate && LEAD_TEXT_SENDS.test(tool)) {
@@ -234,7 +316,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     }
   }
   if (tool === "mcp__claude_ai_Slack__slack_schedule_message") {
-    return block("G5", "rule 3: Mesa schedules sends (Programar); never schedule through the connector. At salida.released follow mesa-salida § Send (Slack never goes out through slack_send_message either).");
+    return block("G5", "rule 3: Mesa schedules sends (Programar); never schedule through the connector. At salida.released follow mesa-salida § Send (a Slack salida goes out as a draft or a direct send, per the mode in the event).");
   }
 
   if (tool === "Bash" || tool === "PowerShell") {
@@ -249,7 +331,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
     if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/actions\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
-      return block("G10", "rule 3: approvals, plan approvals, permission decisions and Pídeme permiso are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, failed) and wait for the wake event.");
+      return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
     if (!teammate) {
@@ -274,8 +356,8 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       if (/\bgh\s+pr\s+(review|comment|merge|close|reopen|edit|ready)\b|\bgh\s+issue\s+(comment|create|close|reopen|edit|delete)\b|\bgh\s+release\s+create\b/.test(c)) {
         return block("G4", "rule 3: that gh command writes to GitHub on Andrés's behalf. Only `gh pr create --draft` for your own branch is yours; everything else goes through the lead after approval.");
       }
-      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|failed|hold|bounce|deleted|restored)\b/.test(c)) {
-        return block("G4", "rule 3: only the lead reports a salida as sent, failed, held, bounced, deleted or restored.");
+      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|drafted|failed|hold|bounce|deleted|restored)\b/.test(c)) {
+        return block("G4", "rule 3: only the lead reports a salida as sent, drafted, failed, held, bounced, deleted or restored.");
       }
     }
 

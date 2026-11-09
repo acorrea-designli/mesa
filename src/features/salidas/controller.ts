@@ -3,7 +3,7 @@
 // <SalidaApproval>. Every press goes through the API (the server's state machine
 // decides) and the fresh detail replaces the local copy.
 import { useCallback, useRef, useState } from "react";
-import type { Mark, SalidaDetail } from "@/lib/domain/types";
+import type { Mark, SalidaDetail, SalidaSendMode } from "@/lib/domain/types";
 import { useToast } from "@/components/ui/interactive";
 import { salidaApi } from "./api";
 
@@ -19,8 +19,11 @@ export interface SalidaController<T extends SalidaDetail> {
   rewritePending: boolean;
   /** The text is locked (not pending, or Claude is rewriting). */
   locked: boolean;
-  approve: () => Promise<boolean>;
-  approveText: (body: string) => Promise<boolean>;
+  /** `mode` is Slack only: omitted = draft (Aprobar), "send" = Aprobar y que Claude lo envíe. */
+  approve: (mode?: SalidaSendMode) => Promise<boolean>;
+  approveText: (body: string, mode?: SalidaSendMode) => Promise<boolean>;
+  /** "Ya lo envié": Andrés sent the Slack draft himself. */
+  confirmSent: () => Promise<void>;
   saveText: (body: string) => Promise<boolean>;
   undo: () => Promise<void>;
   deny: () => void;
@@ -88,16 +91,16 @@ export function useSalidaController<T extends SalidaDetail>(
     openTurnId: openTurn?.id ?? null,
     rewritePending: Boolean(openTurn),
     locked,
-    approve: async () => {
-      const ok = await run(() => salidaApi.approve(s.id, s.currentVersion));
+    approve: async (mode) => {
+      const ok = await run(() => salidaApi.approve(s.id, s.currentVersion, mode));
       if (ok) setUndone(false);
       return ok;
     },
-    approveText: async (body) => {
+    approveText: async (body, mode) => {
       setBusy(true);
       try {
         const e = await salidaApi.edit(s.id, body);
-        const d = await salidaApi.approve(s.id, e.currentVersion);
+        const d = await salidaApi.approve(s.id, e.currentVersion, mode);
         setLocal(d);
         opts.onChange?.(d);
         setMode("view");
@@ -151,6 +154,9 @@ export function useSalidaController<T extends SalidaDetail>(
     },
     retry: async () => {
       await run(() => salidaApi.retry(s.id));
+    },
+    confirmSent: async () => {
+      await run(() => salidaApi.confirmSent(s.id), "Marcada como enviada");
     },
     unqueue: async () => {
       await run(() => salidaApi.unqueue(s.id), "Sacada de la cola · vuelve a pendiente");

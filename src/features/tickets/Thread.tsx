@@ -348,6 +348,7 @@ const SAL_STATUS: Record<string, string> = {
   expired: "caducada",
   scheduled: "programada",
   queued_until_back: "al volver",
+  draft_created: "borrador en Slack",
   deleted: "eliminada",
   draft: "borrador",
 };

@@ -1,13 +1,13 @@
 ---
 name: mesa-salida
-description: Outgoing messages through Mesa Salidas - propose a draft with its exact destination, refine it turn by turn with Andrés (semáforo marks Mantener/Reformular/Quitar, versions, learned quick chips), send only after his approval and the 20 s undo window, report the permalink, scheduled sends, and delete per destination (Basecamp trash 25 days, Campfire permanent, Slack not deletable from Mesa). Use for any message to Slack, Basecamp or GitHub on Andrés's behalf, "respóndele a", "mándale", "contesta en Basecamp", "afinar", or a salida.* wake event.
+description: Outgoing messages through Mesa Salidas - propose a draft with its exact destination, refine it turn by turn with Andrés (semáforo marks Mantener/Reformular/Quitar, versions, learned quick chips), send only after his approval and the 20 s undo window (Slack: a draft he sends himself, or "Claude lo envía"), report the permalink, scheduled sends, and delete per destination (Basecamp trash 25 days, Campfire permanent, a Slack draft is his to delete in Slack, a direct Slack send not deletable from Mesa). Use for any message to Slack, Basecamp or GitHub on Andrés's behalf, "respóndele a", "mándale", "contesta en Basecamp", "afinar", or a salida.* wake event.
 ---
 
 # Salidas: nothing goes out unseen
 
 Every message on Andrés's behalf is a salida: exact destination + exact text, approved by him in Mesa. Writers
 propose and refine; only the lead sends, and only on `salida.released` (hook G5 checks it). No session ever calls
-approve, schedule, deny or undo: those are his clicks (hook G10). `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`.
+approve (which carries the Slack mode), schedule, deny, undo or "Ya lo envié": those are his clicks (hook G10). `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`.
 
 ## Language and voice
 
@@ -31,7 +31,7 @@ Destination JSON (the server validates it; `postAs` is who it posts as):
 
 | kind | fields |
 |---|---|
-| `slack_thread` / `slack_channel` | `workspace` ("designli"), `channel` ("#name"), `channelId`, `threadTs` (thread only), `threadLabel`, `postAs` |
+| `slack_thread` / `slack_channel` | `workspace` ("designli"), `channel` ("#name"), `channelId` (required to send: it is the draft's and the send's `channel_id`), `threadTs` (thread only), `threadLabel`, `postAs` |
 | `basecamp_comment` / `basecamp_message` / `basecamp_campfire` | `project`, `projectId`, `recordingId` (comment: the recording it attaches to; campfire: the chat id), `recordingTitle`, `mentions` (`basecamp_comment` only), `postAs` |
 | `github_review` / `github_comment` | `repo`, `pr`, `event`, `path`, `line`, `commitId`, `findingN`, `postAs` (see `mesa-review`) |
 
@@ -44,9 +44,11 @@ through the MCP: the server answers 400 if their destination carries `mentions`;
 gets pinged.
 
 **No attribution.** No Claude or AI attribution in any Slack or Basecamp text: no "sent by Claude", no "written
-with Claude", no robot sign-off (unless Andrés asks for that exact line on purpose). The Slack connector already
-stamps "Sent using @Claude" on what it sends, which is why Slack never goes out through `slack_send_message`
-(§ Send); the text you write must not add a second one.
+with Claude", no robot sign-off (unless Andrés asks for that exact line on purpose). A Slack message carries the
+"Sent using @Claude" footer only when Andrés picks the direct mode ("Aprobar y que Claude lo envíe", § Send): the
+connector stamps it on `slack_send_message` and cannot be told not to. In the default mode (Aprobar) the text goes
+out as a draft he sends himself, as his own message, with no footer. Either way the text you write must not add a
+second attribution.
 
 Read the thread before writing so the text answers what was actually asked. Link the ticket that produced it
 (`--ticket`) and its sources (`--link`), which Mesa shows as the Origen strip.
@@ -76,7 +78,7 @@ sees. A manual edit by him is his version: never overwrite it.
 
 ## Send (lead, on `salida.released`)
 
-Delivery is at least once: first `MESA salida show <id>`; if it is already `sent`, do nothing.
+Delivery is at least once: first `MESA salida show <id>`; if it is already `sent` or `draft_created`, do nothing.
 
 0. If the event carries `recheckThread: true` (the salida waited for its source to come back), re-read the
    destination thread first; if it has new messages since the draft, `MESA salida bounce <id> --reason "<what
@@ -87,20 +89,38 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
    `create_message`, or `create_campfire_line`, converting Markdown to the HTML the tool takes without changing words
    (for `create_comment` the server builds the mention markup itself: do not type an `@Name` or a mention tag in
    `content`). GitHub: `mesa-review` § Lead writes.
-   **Slack: never `slack_send_message`** (hook G5 refuses it for everyone). The connector appends "Sent using
-   @Claude" to the message and cannot be told not to. The Slack path is pending Andrés's decision on t32 (a draft he
-   sends himself); until the ticket says it is built, `MESA salida hold <id> --reason "slack path pending (t32)"`
-   and tell Andrés in the ticket.
-3. `MESA salida sent <id> --permalink <url>` with the URL the tool returned, or
-   `MESA salida failed <id> --error "<message>"`. Tell the writer `SENT <ref> <salida>`.
+   **Slack goes out in the mode Andrés chose with his approval click**, carried in the event (`mode`) and stored on
+   the salida (`MESA salida show <id>`: `sendMode`). Never choose or change it yourself.
+   - **`draft`** ("Aprobar", the default; also what Programar records): ONE call to
+     `mcp__claude_ai_Slack__slack_send_message_draft` with `channel_id` = `destination.channelId`, `thread_ts` =
+     `destination.threadTs` (only for a `slack_thread`) and `message` = the approved body unchanged. This only leaves
+     the text as a draft in his Slack composer; he presses send and it goes out as his own message, with no
+     footer. Then step 3 is `MESA salida drafted <id>` (status `draft_created`, "Borrador en Slack · envíalo tú").
+     You do not see whether he sent it: his "Ya lo envié" click closes it (never call that yourself, hook G10). A
+     draft never counts as sent and never re-releases.
+   - **`send`** ("Aprobar y que Claude lo envíe"): ONE call to `mcp__claude_ai_Slack__slack_send_message` with the
+     same three fields. The connector appends "*Sent using* @Claude" to it; Andrés accepted that with that button,
+     which says so next to it. Step 3 is `MESA salida sent <id> --permalink <url>`.
+   Hook G5 passes each tool only for a released, unsent Slack salida in that mode with exactly that text and
+   `channel_id` (and `thread_ts` when the destination has a thread). The wrong tool for the mode is refused with the
+   right path: a draft-mode salida is never sent, whatever happens to the draft call.
+   **The draft call fails** (a draft already exists in that channel or thread, or any error from the tool):
+   `MESA salida hold <id> --reason "<clear reason, e.g. ya hay un borrador en ese canal>"` and tell Andrés in the
+   ticket what to clear. Unreachable or rate limited: hold with that error and step 4. Never fall back to
+   `slack_send_message`, and never retry with different text. A draft may replace what he is typing in that
+   channel; the card says so next to Aprobar.
+3. `MESA salida sent <id> --permalink <url>` with the URL the tool returned (Slack direct mode, Basecamp, GitHub),
+   `MESA salida drafted <id>` (Slack draft mode, no permalink exists), or `MESA salida failed <id> --error
+   "<message>"`. Tell the writer `SENT <ref> <salida>` (`DRAFTED <ref> <salida>` for a draft).
 4. Source down at send time (the MCP call fails as unreachable or rate limited): `MESA salida hold <id> --reason
    "<error>"` ("Aprobar al volver") and `MESA source set <slack|basecamp> --health down --note "<error>"`. When the
-   source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with `recheckThread: true` (step 0).
+   source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with
+   `recheckThread: true` (step 0); its mode is kept.
 
-**Sandbox** (`echo $MESA_ENV` prints `sandbox`): step 2 is skipped, never call the MCP tool (hook G11 blocks it).
-Step 3 is `MESA salida sent <id> --simulated` (no `--permalink`; Mesa records `sandbox://<source>/<id>` and shows
-"Simulado · no salió"). Steps 0, 1 and 4 are the same. A delete is `MESA salida deleted <id>` alone, a restore
-`MESA salida restored <id>`.
+**Sandbox** (`echo $MESA_ENV` prints `sandbox`): step 2 is skipped, never call the MCP tool (hook G11 blocks both
+Slack tools). Step 3 is `MESA salida sent <id> --simulated` (no `--permalink`; Mesa records `sandbox://<source>/<id>`
+and shows "Simulado · no salió"), or `MESA salida drafted <id> --simulated` for a Slack salida in mode draft. Steps
+0, 1 and 4 are the same. A delete is `MESA salida deleted <id>` alone, a restore `MESA salida restored <id>`.
 
 Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases the salida and the same
 `salida.released` arrives. Never use `slack_schedule_message` (hook G5).
@@ -111,5 +131,6 @@ Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases th
 |---|---|---|
 | Basecamp comment / message | `trash_comment` / `trash_message` (recoverable 25 days) | `MESA salida deleted <id>`; restore: `restore_recording`, then `MESA salida restored <id>` |
 | Campfire line | `delete_campfire_line` (permanent; Mesa warned him) | `MESA salida deleted <id>` |
-| Slack | not possible from Mesa (no delete tool): Mesa already refuses it; the 20 s undo was the only way back | nothing |
+| Slack, draft mode | a draft is Andrés's to delete in Slack (Mesa never touched a message); once he sends it, it is his own message and Mesa cannot delete it | nothing |
+| Slack, direct send | not possible from Mesa (no delete tool): Mesa already refuses it; the 20 s undo was the only way back | nothing |
 | GitHub | not supported: tell Andrés in the ticket with the comment link | nothing |
