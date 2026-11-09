@@ -24,12 +24,25 @@ watermarks.
 
 **Periodic (the sweeper agent, `.claude/agents/sweeper.md`, haiku).** During work hours, a two-stage tick:
 
-1. *Probe*: one MCP call per source since its watermark (Slack: `(to:me OR <@U06E2UBDC73>)` search by timestamp;
-   Basecamp: `get_my_notifications`). Nothing new: `sweep-tick.mjs report <source> --new 0` and silence.
-2. *Triage*: only for what the probe found, § 2 or § 3 below, then upserts and `report --new N --watermark W`.
+1. *Probe*, per source since its watermark. Slack: one call, a `(to:me OR <@U06E2UBDC73>)` search by timestamp.
+   Basecamp, exactly this:
+
+> **Basecamp probe** (every Basecamp tick, two calls):
+> 1. `mcp__basecamp__search` with `{query: "Andres", sort: "recency", limit: 3}`. New = hits whose `created_at` is after the probe watermark and not written by Andrés. If all 3 hits are new, repeat the call once with `{query: "Andres", sort: "recency", limit: 10}`. The probe watermark advances to the newest `created_at` seen.
+> 2. `mcp__basecamp__get_my_assignments` with `{group: "priorities"}`. New = assignments this instance has not upserted yet.
+>
+> **Basecamp catch-up** (client comments that do not name him): `mcp__basecamp__get_my_notifications` with no parameters, on this instance's first Basecamp tick and then every `fullScanEveryTicks`-th Basecamp tick. `fullScanEveryTicks` and `scanSince.basecamp` come from the `sweep-tick.mjs wait` output, never from prose. New = notifications with `unread_at` after `scanSince.basecamp` (null: all). Its window is kept apart from the probe watermark: the report carries `--scan-since <newest unread_at seen>`.
+>
+> Ignored projects (`mesa-sweep` § 0b) are dropped from the probe hits and from the catch-up before any `get_by_url`.
+
+   Nothing new: `sweep-tick.mjs report <source> --new 0` and silence.
+2. *Triage*: only for what the probe or the catch-up found, § 2 or § 3 below, then upserts and
+   `report --new N --watermark W` (Basecamp after a catch-up: also `--scan-since S`).
 
 The clock is `scripts/sweep-tick.mjs`; every number (60 s active, 5 min after 30 quiet minutes, exponential
-backoff to 30 min on errors, work hours, probe limit) is in `config/sweep.json`. It snaps back to 60 s on any new
+backoff to 30 min on errors, work hours, probe limit, ticks per instance, the Basecamp catch-up interval
+`sources.basecamp.fullScanEveryTicks`) is in `config/sweep.json`; the catch-up window lives in Mesa, in the Basecamp
+`source_state.watermark` as `<probe>|<scan>`. It snaps back to 60 s on any new
 item or when Andrés interacts with Mesa (`lastInteractionAt`). "Barrer ahora" (or `mesa sweep`) emits
 `sweep.requested` to the Mesa session `sweeper`, which `wait` long-polls, so the probe runs at once
 (`sweep-tick.mjs force` is the lead's manual equivalent). A 429 or an MCP error backs that source off and sets its
@@ -95,8 +108,10 @@ Read tools only: `mcp__basecamp__get_my_assignments`, `get_my_notifications`, `g
 
 `externalId` = the recording id (comments: `<recording>#<comment>`), `url` = the app URL, `project` = the project name.
 
-In the periodic triage the input is only the new notifications from the probe: read each one's recording or
-comment (`get_by_url`) and apply the three rules above; the watermark advances to the newest notification seen.
+In the periodic triage the input is only what the probe and the catch-up marked new. A new search hit or
+notification: read its recording or comment (`get_by_url`) and apply the three rules above. A new priority assignment
+is upserted as it is (`kind: "assignment"`, no `get_by_url`). The probe watermark advances to the newest hit's
+`created_at`, the catch-up window to the newest notification's `unread_at`; they never share a value.
 
 ## 3. Slack: who is waiting on him (slack-triage logic)
 

@@ -23,7 +23,7 @@
   "waitMaxSec": 540,
   "longPollSec": 25,
   "probeLimit": 10,
-  "maxTicksPerInstance": 60,
+  "maxTicksPerInstance": 25,
   "sweeperModel": "haiku",
   "sources": {
     "slack": {
@@ -32,7 +32,8 @@
       "workspace": "designli.slack.com"
     },
     "basecamp": {
-      "enabled": true
+      "enabled": true,
+      "fullScanEveryTicks": 10
     }
   }
 }

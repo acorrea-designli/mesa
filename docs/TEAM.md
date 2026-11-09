@@ -289,18 +289,28 @@ Slack and Basecamp reach Mesa only through Claude's MCP connectors (Andrés, 202
 OAuth). GitHub is polled by the Mesa server. The sweeper agent is the periodic ingest; `mesa-sweep` is its
 procedure and the lead's on-demand pass.
 
-- **Two stages per tick.** The probe is one MCP call per source since its watermark (Slack: `(to:me OR
-  <@U06E2UBDC73>)` by timestamp; Basecamp: `get_my_notifications`). Only when it finds something new does the
+- **Two stages per tick.** The probe is cheap and runs since the source's watermark (Slack: one call, `(to:me OR
+  <@U06E2UBDC73>)` by timestamp; Basecamp: exactly this):
+
+> **Basecamp probe** (every Basecamp tick, two calls):
+> 1. `mcp__basecamp__search` with `{query: "Andres", sort: "recency", limit: 3}`. New = hits whose `created_at` is after the probe watermark and not written by Andrés. If all 3 hits are new, repeat the call once with `{query: "Andres", sort: "recency", limit: 10}`. The probe watermark advances to the newest `created_at` seen.
+> 2. `mcp__basecamp__get_my_assignments` with `{group: "priorities"}`. New = assignments this instance has not upserted yet.
+>
+> **Basecamp catch-up** (client comments that do not name him): `mcp__basecamp__get_my_notifications` with no parameters, on this instance's first Basecamp tick and then every `fullScanEveryTicks`-th Basecamp tick. `fullScanEveryTicks` and `scanSince.basecamp` come from the `sweep-tick.mjs wait` output, never from prose. New = notifications with `unread_at` after `scanSince.basecamp` (null: all). Its window is kept apart from the probe watermark: the report carries `--scan-since <newest unread_at seen>`.
+>
+> Ignored projects (`mesa-sweep` § 0b) are dropped from the probe hits and from the catch-up before any `get_by_url`.
+
+  Only when the probe or the catch-up finds something new does the
   triage run (the slack-triage classification, the Basecamp rules), followed by `mesa item upsert` with the dedupe
   key as `externalId` and the watermark advance. A quiet tick writes only `lastChecked` and says nothing.
 - **Cadence in config, not prose**: `config/sweep.json` holds work hours, the active interval (60 s), the idle
-  interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit and the
-  ticks per instance. `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
+  interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit, the
+  ticks per instance and the Basecamp catch-up interval (`sources.basecamp.fullScanEveryTicks`). `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
   records a tick's outcome. Any new item or any interaction by Andrés snaps the cadence back to 60 s.
 - **Barrer ahora** (or `mesa sweep`) emits `sweep.requested` to the Mesa session `sweeper`
   (`MESA_SWEEPER_SESSION`); `sweep-tick.mjs wait` long-polls that session and returns at once with every listed
   source, even outside work hours. `sweep-tick.mjs force [--source s]` does the same by hand.
-- **State in Mesa.** `GET /api/sources` and `PATCH /api/sources/:name` (`source_state`: watermark, lastChecked,
+- **State in Mesa.** `GET /api/sources` and `PATCH /api/sources/:name` (`source_state`: watermark (Basecamp: `<probe>|<scan>`, the catch-up window apart from the probe), lastChecked,
   lastNewAt, backoffUntil, cadenceS, errorCount, lastError, health) plus `lastInteractionAt`, stamped by any UI
   action of Andrés. There is no local fallback: Mesa down means `wait` reports `mesa_down` and the tick waits.
 - **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its health to
