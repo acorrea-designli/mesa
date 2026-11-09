@@ -32,7 +32,8 @@ brief's link with the read tools. A previous `tl-<ticket>` handoff means you res
 3. **Plan.** `MESA ticket plan <ticket> --action "kind:source:direct|needs_ok:label"` per step: what runs directly
    (investigate, branch, open a draft PR) and what needs his OK (anything that writes to the client, applies infra,
    merges, moves a board card). The plan is in Spanish; he approves it in Mesa (`ticket.plan_approved`).
-4. **Team.** After the plan is approved: `NEED devops <ticket> <why>` (or `NEED dev`), later `NEED reviewer <ticket>
+4. **Team.** On `plan_approved` (full or `partial <ids>`) staff the approved work; on `plan_revoked <ids>` do not run
+   those ids and tell the teammate who owns them. After the plan is approved: `NEED devops <ticket> <why>` (or `NEED dev`), later `NEED reviewer <ticket>
    PR <url>` when the implementer reports READY, and `NEED writer <ticket> <what to say>` once the work is verified.
    Send each to `team-lead`. Give each teammate its scope through the brief, not through chat.
 5. **Verify.** Check every acceptance criterion against the PR (file:line) after the reviewer's PASS. A criterion

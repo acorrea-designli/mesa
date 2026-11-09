@@ -76,7 +76,7 @@ acknowledgements (hook G3). Detail lives in the ticket; a message points at it.
 |---|---|
 | owner → team-lead | `NEED <role> <ref> <why>[ complexity: high]` · `DONE <ref> <name> <result>` · `BLOCKED <ref> <why>` |
 | any → team-lead | `HANDOFF <ref> <name>` + the handoff text (only when Mesa is unreachable, hook H3) |
-| team-lead → agent | the spawn prompt · `ANSWER <ref> <message id \| plan_approved \| salida.turn <salida> <turn>>` · `SENT <ref> <salida> [comment ids]` · `CLOSED <ref>` · `REOPENED <ref>` · `HANDOFF-NOW <ref>` · `SPAWNED <ref> <name>` |
+| team-lead → agent | the spawn prompt · `ANSWER <ref> <message id \| plan_approved \| plan_approved partial <ids> \| plan_revoked <ids> \| salida.turn <salida> <turn>>` (`plan_revoked <ids>`: Andrés took those steps back, do not run them) · `SENT <ref> <salida> [comment ids]` · `CLOSED <ref>` · `REOPENED <ref>` · `HANDOFF-NOW <ref>` · `SPAWNED <ref> <name>` |
 | implementer → tl | `READY <ref> PR <url> at <sha>` |
 | reviewer/tl → implementer | `PASS <ref> #<n> at <sha>` · `FAIL <ref> #<n> at <sha>` + numbered items with `path:line` |
 | teammate → owner | `DONE <ref> <name> <result>` (the owner forwards what the lead needs) |
@@ -248,7 +248,9 @@ Only the lead acts outward, and only after Andrés's approval:
 - **Messages** (Slack, Basecamp): on `salida.released`, `mesa-salida` § Send (Slack: a draft Andrés sends himself by default, or a direct send when he picked "Aprobar y que Claude lo envíe"; the event's `mode` says which).
 - **GitHub** (approve, review comments, thread replies): github salidas, on `salida.released`, `mesa-review` § Lead writes.
 - **Other `needs_ok` actions** (move a GitHub Project or Basecamp card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
-  the approved action (never an id in the wake's `revoked`: Andrés took that pre-approval back and it is `planned` again), marks it with `mesa ticket action <id> --state done|failed`, and tells the owner.
+  the approved action (never an id in the wake's `revoked`: Andrés took that pre-approval back and it is `planned` again). It marks the action
+  `running` first (`mesa ticket action <id> --state running`), executes it only if that succeeds, then marks it `done|failed` and tells the owner. A 409 on `running`
+  means Andrés took the step back or never approved it: do not run it, re-read the plan (`mesa ticket context`).
 
 ## 9. Install
 

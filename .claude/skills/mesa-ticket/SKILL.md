@@ -83,9 +83,11 @@ is `needs_ok`. Anything that writes to a client goes through Salidas. Mark progr
 `ticket.plan_approved`; a `needs_ok` action already `approved` was pre-approved by Andrés: run it without
 asking again (a wake with `partial: true` approved only its `approved` ids). Andrés can take a pre-approval back
 (the chip toggles "autoaprobado" <-> "te pide OK") while you have not started it: that wake carries
-`revoked: [ids]` and no `approved`. A revoked id is back to `planned`: do not run it. Mark a step `running` before you
-start it (after that Mesa refuses the revoke), and re-read `MESA ticket context` for the action states when a
-`plan_approved` wake arrives.
+`revoked: [ids]` and no `approved`; the lead relays it as `ANSWER <ref> plan_revoked <ids>` (and a partial approval
+as `plan_approved partial <ids>`). A revoked id is back to `planned`: do not run it. Mark a step `running` before you
+start it: after that Mesa refuses the revoke, and before that Mesa answers 409 to `running` on a step that is not
+`approved` (do not run it then). Re-read `MESA ticket context` for the action states when a `plan_approved` or
+`plan_revoked` message arrives.
 
 ## Cards handed to Claude
 
