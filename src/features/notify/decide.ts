@@ -11,10 +11,14 @@
 //   salida:<id>:v<n>       a new version is a new thing to sign; going back to pending at the same
 //                          version (undo, unqueue, unschedule) is not
 //   approval:<id>          an approval is pending once
-import type { Approval, Salida, Ticket } from "@/lib/domain/types";
+//   item:<id>              a Hoy item (t63) is episodic like a ticket: the episode is the stay open and waiting
+//                          on Andrés (station not done, waitOn you); when it leaves that set the key is dropped,
+//                          so an item that comes back (a PR review re-requested) notifies again, while a sweeper
+//                          refresh of an item that never left does not
+import { SOURCE_LABEL, SOURCES, type Approval, type Item, type Salida, type Source, type Ticket } from "@/lib/domain/types";
 import { destShort } from "@/features/salidas/model";
 
-export type WaitingKind = "ticket" | "salida" | "approval";
+export type WaitingKind = "ticket" | "salida" | "approval" | "item";
 
 export interface Waiting {
   key: string;
@@ -27,6 +31,8 @@ export interface Waiting {
   sample?: boolean;
   /** His own doing (a version he wrote): remembered, never shown. */
   own?: boolean;
+  /** Only on Hoy items: where it came from. */
+  source?: Source;
 }
 
 export interface Shown {
@@ -34,6 +40,10 @@ export interface Shown {
   title: string;
   body: string;
   url: string;
+  /** Set on what arrived in Hoy (an item, or the batch of several): it gets the Hoy sound. */
+  hoy?: true;
+  /** Only on a single Hoy item. */
+  source?: Source;
 }
 
 /** key -> last time it was seen waiting (epoch ms). */
@@ -43,7 +53,12 @@ export type Seen = Record<string, number>;
 export const SEEN_TTL_MS = 14 * 24 * 3600_000;
 export const SEEN_MAX = 300;
 
-const isEpisodic = (key: string) => key.startsWith("ticket:");
+const isEpisodic = (key: string) => key.startsWith("ticket:") || key.startsWith("item:");
+
+/** Marker in `seen`: Hoy items have been read once. Without it the first read of items is a silent baseline. */
+export const HOY_READY = "hoy:ready";
+/** Tag and key of the one banner (and push) that stands for Hoy arrivals. */
+export const HOY_TAG = "mesa-hoy";
 
 /** A scan by any tab this recent means the browser was watching: the first scan of a new load is a normal one. */
 export const LAST_SCAN_FRESH_MS = 10 * 60_000;
@@ -64,6 +79,20 @@ export function shouldBaseline(lastScan: number | null, now: number): boolean {
 export const ticketKey = (t: Pick<Ticket, "id">) => `ticket:${t.id}`;
 export const salidaKey = (s: Pick<Salida, "id" | "currentVersion">) => `salida:${s.id}:v${s.currentVersion}`;
 export const approvalKey = (a: Pick<Approval, "id">) => `approval:${a.id}`;
+export const itemKey = (i: Pick<Item, "id">) => `item:${i.id}`;
+
+/** An item that is open and waits on Andrés ("Nuevo en Hoy · GitHub"). The collector only lists open ones. */
+export function itemWaiting(i: Pick<Item, "id" | "source" | "title" | "isSample">): Waiting {
+  return {
+    key: itemKey(i),
+    kind: "item",
+    title: `Nuevo en Hoy · ${SOURCE_LABEL[i.source]}`,
+    body: i.title,
+    url: "/",
+    sample: i.isSample,
+    source: i.source,
+  };
+}
 
 /** A ticket in waiting_andres. `review` is its open review card, when it has one ("Review lista"). */
 export function ticketWaiting(
@@ -123,6 +152,8 @@ export interface DecideInput {
   quiet?: boolean;
   /** The sandbox board: titles start with "[sandbox] ". */
   sandbox?: boolean;
+  /** The collector read Hoy items. The first time (no HOY_READY in `seen`) they are a silent baseline. */
+  hoy?: boolean;
 }
 
 export interface Decision {
@@ -130,11 +161,25 @@ export interface Decision {
   seen: Seen;
 }
 
-export function decide({ seen, waiting, now, baseline = false, quiet = false, sandbox = false }: DecideInput): Decision {
+/** Several Hoy arrivals become one entry ("3 nuevos en Hoy", "Slack 2 · GitHub 1"); one stays as it is. */
+function batchHoy(show: Shown[], prefix: string): Shown[] {
+  const hoy = show.filter((s) => s.hoy);
+  if (hoy.length < 2) return show;
+  const count = new Map<Source, number>();
+  for (const s of hoy) if (s.source) count.set(s.source, (count.get(s.source) ?? 0) + 1);
+  const body = SOURCES.filter((src) => count.has(src))
+    .map((src) => `${SOURCE_LABEL[src]} ${count.get(src)}`)
+    .join(" · ");
+  return [...show.filter((s) => !s.hoy), { key: HOY_TAG, title: `${prefix}${hoy.length} nuevos en Hoy`, body, url: "/", hoy: true }];
+}
+
+export function decide({ seen, waiting, now, baseline = false, quiet = false, sandbox = false, hoy = false }: DecideInput): Decision {
   const live = waiting.filter((w) => !w.sample);
   const liveKeys = new Set(live.map((w) => w.key));
   const prefix = sandbox ? "[sandbox] " : "";
   const next: Seen = {};
+  // Hoy items already open when this feature first looks are not news (the inbox today never notifies).
+  const hoyBaseline = hoy && !(HOY_READY in seen);
 
   // Carry the old keys over: tickets only while they still wait; everything else until it ages out.
   for (const [k, ts] of Object.entries(seen)) {
@@ -144,11 +189,15 @@ export function decide({ seen, waiting, now, baseline = false, quiet = false, sa
     next[k] = ts;
   }
 
+  if (hoy) next[HOY_READY] = now; // after the carry-over, so it never ages out while Hoy is read
+
   const show: Shown[] = [];
   for (const w of live) {
     const isNew = !(w.key in seen);
     next[w.key] = now; // still waiting: the key stays fresh
-    if (isNew && !baseline && !quiet && !w.own) show.push({ key: w.key, title: prefix + w.title, body: w.body, url: w.url });
+    if (isNew && !baseline && !quiet && !w.own && !(hoyBaseline && w.kind === "item")) {
+      show.push({ key: w.key, title: prefix + w.title, body: w.body, url: w.url, ...(w.kind === "item" ? { hoy: true as const, source: w.source } : {}) });
+    }
   }
 
   // Bounded: keep the newest SEEN_MAX, never dropping a key that is waiting right now.
@@ -157,5 +206,5 @@ export function decide({ seen, waiting, now, baseline = false, quiet = false, sa
     const droppable = keys.filter((k) => !liveKeys.has(k)).sort((a, b) => next[a]! - next[b]!);
     for (const k of droppable.slice(0, keys.length - SEEN_MAX)) delete next[k];
   }
-  return { show, seen: next };
+  return { show: batchHoy(show, prefix), seen: next };
 }

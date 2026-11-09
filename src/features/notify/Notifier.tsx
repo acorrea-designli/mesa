@@ -6,7 +6,7 @@ import { useLive } from "@/lib/live/useLive";
 import { startNotifier, type Engine } from "./engine";
 import { useNotifyState } from "./prefs";
 
-const TYPES = ["ticket", "salida", "review", "approval"];
+const TYPES = ["ticket", "salida", "review", "approval", "item"];
 
 export function Notifier() {
   const on = useNotifyState() === "on";

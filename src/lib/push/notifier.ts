@@ -5,7 +5,7 @@
 // The seen keys and the time of the last scan are persisted, so a restart within 10 minutes scans normally (what
 // entered waiting meanwhile is news) and an older one is a silent baseline (nothing floods after a long outage).
 // While any Mesa tab reports looking, new keys are remembered and nothing is sent. Never started in the sandbox.
-import { decide, shouldBaseline } from "@/features/notify/decide";
+import { decide, HOY_TAG, shouldBaseline } from "@/features/notify/decide";
 import { isSandbox } from "../env";
 import { subscribeChanges } from "../live/bus";
 import { repos, type Repos } from "../repo";
@@ -17,7 +17,7 @@ import { deliver, webPushSender, type DeliverResult, type Sender } from "./send"
 
 export const SCAN_DEBOUNCE_MS = 400;
 export const TICK_MS = 30_000;
-const TYPES = new Set(["ticket", "salida", "review", "approval"]);
+const TYPES = new Set(["ticket", "salida", "review", "approval", "item"]);
 
 export interface ScanDeps {
   repos: Repos;
@@ -42,12 +42,13 @@ export async function scanOnce(deps: ScanDeps, now = Date.now()): Promise<ScanRe
   const baseline = shouldBaseline(r.push.lastScan(), now);
   const quiet = looking.isLooking(now);
   const waiting = collectWaiting(r, baseline ? null : seen, new Date(now));
-  const d = decide({ seen, waiting, now, baseline, quiet });
+  const d = decide({ seen, waiting, now, baseline, quiet, hoy: true });
   r.push.saveScan(d.seen, now);
 
   const delivery: DeliverResult = { sent: 0, removed: 0, failed: 0 };
   for (const s of d.show) {
-    const res = await deliver(r.push, sender, r.push.list(), { title: s.title, url: s.url, tag: s.key }, new Date(now));
+    // What arrived in Hoy is one push per scan (the decision already batched it) under one tag, so a newer one alerts again.
+    const res = await deliver(r.push, sender, r.push.list(), { title: s.title, url: s.url, tag: s.hoy ? HOY_TAG : s.key }, new Date(now));
     delivery.sent += res.sent;
     delivery.removed += res.removed;
     delivery.failed += res.failed;

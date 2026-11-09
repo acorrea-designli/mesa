@@ -21,7 +21,7 @@ export function PushCard() {
   return (
     <section className="tel-card tel-push" aria-labelledby="tel-push">
       <h2 id="tel-push">Avisos en este teléfono</h2>
-      <p>Mesa te avisa aunque la app esté cerrada cuando algo te espera, hay una salida por firmar o un permiso pendiente.</p>
+      <p>Mesa te avisa aunque la app esté cerrada cuando algo te espera, llega algo nuevo a Hoy, hay una salida por firmar o un permiso pendiente.</p>
       <p className="tel-push-state" role="status" data-state={state}>
         {copy.status}
       </p>
@@ -63,7 +63,26 @@ export function PushCard() {
           </Btn>
         ) : null}
       </div>
+      {state === "on" ? <ToneSteps /> : null}
     </section>
+  );
+}
+
+/** The Hoy tone as a file, and how to make Android ring with it (Web Push cannot choose a sound). */
+function ToneSteps() {
+  return (
+    <div className="tel-tone">
+      <p className="tel-note">Android suena con el tono que tú elijas para Mesa. El de Hoy es largo y propio:</p>
+      <ol className="tel-steps">
+        <li>
+          <a className="btn" href="/sounds/mesa-hoy.wav" download="mesa-hoy.wav">
+            Descargar tono
+          </a>
+        </li>
+        <li>Ajustes de Android, Notificaciones, Mesa (o Opera), Sonido: elige <code>mesa-hoy</code>.</li>
+        <li>Toca «Probar aviso» para oírlo.</li>
+      </ol>
+    </div>
   );
 }
 

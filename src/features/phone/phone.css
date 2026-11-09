@@ -308,3 +308,12 @@ html[data-link="login"] .work .btn.p:not(.alert .btn) {
     flex: 1 1 100%;
   }
 }
+
+.tel-tone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tel-tone .btn {
+  display: inline-block;
+}

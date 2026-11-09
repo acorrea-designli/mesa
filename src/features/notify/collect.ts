@@ -1,6 +1,6 @@
 // Reads what waits on Andrés from the existing GETs (the stream frames carry no state).
-import type { Approval, Review, Salida, SalidaDetail, Ticket } from "@/lib/domain/types";
-import { approvalWaiting, salidaKey, salidaWaiting, ticketKey, ticketWaiting, type Seen, type Waiting } from "./decide";
+import type { Approval, Item, Review, Salida, SalidaDetail, Ticket } from "@/lib/domain/types";
+import { approvalWaiting, itemWaiting, salidaKey, salidaWaiting, ticketKey, ticketWaiting, type Seen, type Waiting } from "./decide";
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
@@ -35,16 +35,19 @@ async function wroteByHand(s: Salida): Promise<boolean> {
  * each and only run for keys not in `seen`; pass `seen = null` for a baseline read, which needs none.
  */
 export async function fetchWaiting(seen: Seen | null): Promise<Waiting[]> {
-  const [tickets, salidas, approvals] = await Promise.all([
+  const [tickets, salidas, approvals, items] = await Promise.all([
     getJson<Ticket[]>("/api/tickets?status=waiting_andres"),
     getJson<Salida[]>("/api/salidas?status=pending"),
     getJson<{ approvals: Approval[] }>("/api/approvals?status=pending").then((r) => r.approvals),
+    // Hoy: open and waiting on Andrés, samples and ignored projects already left out by the server.
+    getJson<Item[]>("/api/items?open=you"),
   ]);
   const fresh = (key: string) => seen !== null && !(key in seen);
   const out = await Promise.all([
     ...tickets.map(async (t) => ticketWaiting(t, t.isSample || !fresh(ticketKey(t)) ? null : await openReview(t.id))),
     ...salidas.map(async (s) => salidaWaiting(s, !s.isSample && fresh(salidaKey(s)) ? await wroteByHand(s) : false)),
     ...approvals.map(async (a) => approvalWaiting(a)),
+    ...items.map(async (i) => itemWaiting(i)),
   ]);
   return out;
 }

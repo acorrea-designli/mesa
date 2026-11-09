@@ -106,7 +106,11 @@ self.addEventListener("push", (event) => {
   }
   const title = typeof data.title === "string" && data.title ? data.title.slice(0, 120) : "Mesa";
   const options = { body: PUSH_BODY, data: { url: safePath(data.url) } };
-  if (typeof data.tag === "string" && data.tag) options.tag = data.tag.slice(0, 120);
+  if (typeof data.tag === "string" && data.tag) {
+    options.tag = data.tag.slice(0, 120);
+    // A newer push under the same tag (the Hoy batch, "mesa-hoy") alerts again instead of replacing the old one silently.
+    options.renotify = true;
+  }
   // A push always shows something (browsers require it); no fetch here.
   event.waitUntil(self.registration.showNotification(title, options));
 });

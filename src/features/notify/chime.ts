@@ -1,8 +1,9 @@
-// A short two-note chime made with WebAudio (nothing bundled, nothing remote).
+// A short two-note chime and the longer "Hoy" sound (hoyTone.ts), both made with WebAudio (nothing bundled, nothing remote).
 // Browsers keep an AudioContext suspended until the page has had a user gesture (or the site is allowed
 // to autoplay). A chime asked for while suspended first tries resume(), which succeeds without a gesture
 // when the site may autoplay; if the context stays suspended the chime is skipped (the notification
 // still shows) and the Sonido control shows "blocked" until a chime plays or a click unlocks audio.
+import { HOY_ATTACK, HOY_FLOOR, HOY_NOTES, HOY_PARTIALS, hoyPartialGain } from "./hoyTone";
 import { setSoundBlocked } from "./prefs";
 
 /** How long a chime waits for resume() before it gives up and reports blocked. */
@@ -72,20 +73,53 @@ function play(c: AudioContext): void {
   });
 }
 
-/** Plays the chime; never throws. A suspended context is resumed first; if it stays suspended the control shows "blocked". */
-export function chime(): void {
-  void (async () => {
+/** The "Hoy" sound: the notes of hoyTone.ts, each a fundamental and two overtones with the same envelope as the WAV. */
+function playHoy(c: AudioContext): void {
+  const t0 = c.currentTime;
+  for (const n of HOY_NOTES) {
+    const start = t0 + n.at;
+    for (const [mult, amp] of HOY_PARTIALS) {
+      const peak = hoyPartialGain(n, amp);
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = "sine";
+      osc.frequency.value = n.hz * mult;
+      gain.gain.setValueAtTime(HOY_FLOOR, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(peak, HOY_FLOOR), start + HOY_ATTACK);
+      gain.gain.exponentialRampToValueAtTime(HOY_FLOOR, start + n.dur);
+      osc.connect(gain).connect(c.destination);
+      osc.start(start);
+      osc.stop(start + n.dur + 0.02);
+    }
+  }
+}
+
+export type Tone = "chime" | "hoy";
+
+/**
+ * Plays a tone ("chime" by default, "hoy" for what arrives in Hoy); never throws. A suspended context is resumed first;
+ * if it stays suspended the control shows "blocked". Resolves true when the sound was started (the caller then makes the
+ * banner silent), false when it was not (blocked, no WebAudio): the OS sound is the fallback.
+ */
+export function chime(tone: Tone = "chime"): Promise<boolean> {
+  return (async () => {
     try {
       const c = audio();
-      if (!c) return; // no WebAudio at all: nothing to unblock, the notification still shows
+      if (!c) return false; // no WebAudio at all: nothing to unblock, the notification still shows
       if (await running(c)) {
-        play(c);
+        if (tone === "hoy") playHoy(c);
+        else play(c);
         setSoundBlocked(false);
-      } else {
-        setSoundBlocked(true);
+        return true;
       }
+      setSoundBlocked(true);
+      return false;
     } catch {
       /* no audio: the notification still shows */
+      return false;
     }
   })();
 }
+
+/** "Probar sonido": the Hoy sound, started from a click (which also unlocks audio). */
+export const testHoy = (): Promise<boolean> => chime("hoy");

@@ -16,6 +16,7 @@
     "start": "node scripts/serve.mjs start",
     "tunnel": "node scripts/tunnel.mjs",
     "push:keys": "node scripts/push-keys.mjs",
+    "tone:render": "node --experimental-strip-types scripts/render-hoy-tone.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && pnpm test:team",

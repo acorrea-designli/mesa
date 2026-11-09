@@ -3,6 +3,7 @@
 // push labels: kind + ref, never titles.
 import {
   approvalWaiting,
+  itemWaiting,
   salidaKey,
   salidaWaiting,
   ticketKey,
@@ -20,7 +21,7 @@ const NO_BODY = "";
  * The whole waiting set. Costlier lookups (the open review, the own-version check) only run for keys not in `seen`;
  * pass `seen = null` for a baseline read, which needs none.
  */
-export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals" | "reviews">, seen: Seen | null, now = new Date()): Waiting[] {
+export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals" | "reviews" | "items">, seen: Seen | null, now = new Date()): Waiting[] {
   const fresh = (key: string) => seen !== null && !(key in seen);
   const out: Waiting[] = [];
 
@@ -44,6 +45,11 @@ export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals
 
   for (const a of r.approvals.list({ status: "pending" }, now)) {
     out.push({ ...approvalWaiting(a), title: approvalTitle(a.agent), body: NO_BODY });
+  }
+
+  // Hoy (t63): "Nuevo en Hoy · <Source>" is already source-only; the item's title never leaves the PC.
+  for (const i of r.items.list({ open: "you", includeSamples: false, ignored: "exclude" })) {
+    out.push({ ...itemWaiting(i), body: NO_BODY });
   }
   return out;
 }

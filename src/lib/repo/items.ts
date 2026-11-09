@@ -31,6 +31,8 @@ export interface ItemFilter {
   includeSamples?: boolean;
   /** Items of ignored projects: "include" (default), "exclude" (Hoy, band, ingest) or "only". */
   ignored?: "include" | "exclude" | "only";
+  /** "you": open (station not done) and waiting on Andrés, the items Hoy shows as his. */
+  open?: "you";
 }
 
 export function itemsRepo(db: Db) {
@@ -54,6 +56,7 @@ export function itemsRepo(db: Db) {
         where.push("source = ?");
         args.push(f.source);
       }
+      if (f.open === "you") where.push("station <> 'done' AND wait_on = 'you'");
       if (f.includeSamples === false) where.push("is_sample = 0");
       if (f.ignored === "exclude") where.push(`NOT ${ITEM_IGNORED("items")}`);
       if (f.ignored === "only") where.push(ITEM_IGNORED("items"));

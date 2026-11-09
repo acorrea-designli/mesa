@@ -174,7 +174,7 @@ describe("baseline and restarts", () => {
     const res = await scanOnce(deps(), NOW);
     expect(res).toMatchObject({ baseline: true, shown: 0 });
     expect(sent).toEqual([]);
-    expect(Object.keys(r.push.seen())).toHaveLength(2);
+    expect(Object.keys(r.push.seen()).sort()).toEqual(["hoy:ready", expect.stringMatching(/^salida:/), expect.stringMatching(/^ticket:/)]);
   });
 
   it("a restart within 10 minutes scans normally: what entered meanwhile is news, what was seen does not repeat", async () => {

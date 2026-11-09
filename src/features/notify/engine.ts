@@ -89,11 +89,12 @@ export function startNotifier(navigate: (url: string) => void): Engine {
 
   // A device that holds a push subscription is told by the server (push), so the page stays quiet: no double on one device.
   const canShow = () => !stopped && !deviceHoldsPush() && typeof window.Notification !== "undefined" && window.Notification.permission === "granted";
-  const show = (s: Shown) => {
+  // `silent`: Mesa plays its own sound for this batch, so the banner must not add the OS one (no double sound).
+  const show = (s: Shown, silent: boolean) => {
     if (!canShow()) return;
     try {
       // The banner goes away on its own (Andrés, t38: "el banner se queda hasta que le doy dismiss"); Mesa keeps the item.
-      const n = new window.Notification(s.title, { body: s.body, tag: s.key, requireInteraction: false });
+      const n = new window.Notification(s.title, { body: s.body, tag: s.key, requireInteraction: false, silent });
       window.setTimeout(() => n.close(), 10_000);
       n.onclick = () => {
         window.focus();
@@ -116,15 +117,17 @@ export function startNotifier(navigate: (url: string) => void): Engine {
         const seen = loadSeen(memorySeen);
         const waiting = await fetchWaiting(mode === "normal" ? seen : null);
         if (stopped) return;
-        const d = decide({ seen, waiting, now: Date.now(), baseline: mode === "baseline", quiet: looking() || othersLooking(), sandbox });
+        const d = decide({ seen, waiting, now: Date.now(), baseline: mode === "baseline", quiet: looking() || othersLooking(), sandbox, hoy: true });
         memorySeen = d.seen;
         store.set(SEEN_KEY, JSON.stringify(d.seen));
         store.set(SCAN_KEY, String(Date.now()));
         mode = "normal";
         healthy = true;
-        d.show.forEach(show);
-        // One chime per batch, from the tab that showed it (every tab scans; the seen lock lets one show each entry).
-        if (d.show.length > 0 && !stopped && soundOn() && canShow()) chime();
+        // One sound per batch, from the tab that showed it (every tab scans; the seen lock lets one show each entry):
+        // the Hoy sound when something arrived in Hoy, the short chime otherwise. Banners are made silent only when
+        // Mesa's sound actually started; with Sonido off or audio blocked the OS sound plays as before.
+        const played = d.show.length > 0 && !stopped && soundOn() && canShow() ? await chime(d.show.some((s) => s.hoy) ? "hoy" : "chime") : false;
+        d.show.forEach((s) => show(s, played));
       });
     } catch {
       /* a list could not be read: keep what we had, the next change retries */
