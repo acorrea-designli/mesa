@@ -8,14 +8,15 @@ import type { Attachment, PlannedAction, TicketMessage, TicketRef } from "@/lib/
 import { Alert, Chip, FilesBadge, srcClass } from "@/components/ui/primitives";
 import { chipOfMeta } from "@/lib/domain/files";
 import { useToast } from "@/components/ui/interactive";
-import { arrive, confirmPick, usePress } from "@/lib/motion";
+import { arrive, arrivePlan, confirmPick, usePress } from "@/lib/motion";
 import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { ReviewCard } from "@/features/reviews/ReviewCard";
 import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/features/salidas/icons";
+import { ApiError } from "@/features/salidas/api";
 import { ticketApi } from "./api";
 import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
-import { isNearBottom, onNewMessage, type ScrollBox } from "./follow";
+import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
 import { clearReply, loadReply, saveReply, type ReplyDraft } from "./drafts";
 import { useDraft } from "./useDraft";
@@ -91,14 +92,80 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
     if (bodyRef.current) bodyRef.current.style.overflowAnchor = near ? "none" : "";
     if (near) setPill(false);
   };
+
+  // The plan pill (follow.ts): the plan sits above the messages and the thread opens at the end, so a plan that
+  // arrives (or still waits when the ticket opens) is usually off screen. "Ver plan nuevo ↑" / "Plan pendiente ↑"
+  // take its place over the composer, win over "nuevo mensaje", never scroll by themselves, and hide when the plan
+  // is in view or nothing is planned. The plan's rows arrive (and its stubs grow) when it comes into view.
+  const planRef = useRef<HTMLDivElement>(null);
+  const planned = t.status === "closed" ? [] : t.actions.filter((a) => a.state === "planned").map((a) => a.id);
+  const actionIds = t.actions.map((a) => a.id);
+  const live = useRef({ planned, actionIds });
+  useLayoutEffect(() => {
+    live.current = { planned, actionIds };
+  });
+  const [planPill, setPlanPill] = useState<PlanPillKind | null>(null);
+  const planPillNow = useRef<PlanPillKind | null>(null);
+  const seenSteps = useRef<string[]>([]);
+  const opened = useRef(false);
+  const arrivalDue = useRef(false);
+  const checkPlan = () => {
+    const s = scroller();
+    if (!s) return; // the thread is not on screen (phone list view): it is judged when it appears
+    const opening = !opened.current;
+    opened.current = true;
+    const { planned: waiting, actionIds: all } = live.current;
+    const el = planRef.current;
+    const view = s.el ? s.el.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    const inView = el ? planInView(el.getBoundingClientRect(), view) : false;
+    const grew = !opening && hasUnseenStep(waiting, seenSteps.current);
+    const next = nextPlanPill({ current: planPillNow.current, planned: waiting, seen: seenSteps.current, inView, opening });
+    seenSteps.current = all;
+    if (next !== planPillNow.current) {
+      planPillNow.current = next;
+      setPlanPill(next);
+    }
+    if (grew) arrivalDue.current = true;
+    if (!waiting.length) arrivalDue.current = false;
+    if (arrivalDue.current && inView && el) {
+      arrivalDue.current = false;
+      arrivePlan(el);
+    }
+  };
+  const goPlan = () => {
+    planPillNow.current = null;
+    setPlanPill(null);
+    arrivalDue.current = true;
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    nearBottom.current = false; // leaving the end: a resize must not pull him back
+    planRef.current?.scrollIntoView({ block: "start", behavior });
+  };
+
   useLayoutEffect(() => {
     toBottom(false); // opening: already at the end on first paint, no jump from the top
     nearBottom.current = true;
     if (bodyRef.current) bodyRef.current.style.overflowAnchor = "none";
     // On a hard load the server HTML is hidden (tickets.css) until here, so it is never painted at the top.
     bodyRef.current?.removeAttribute("data-pin");
+    checkPlan(); // opening with a plan still waiting out of view: "Plan pendiente"
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // A plan that arrives or grows is judged after the frame in which the list rail, the end-of-thread pin and the
+  // new rows have settled (the pin runs in the resize observer).
+  const actionsKey = actionIds.join(",");
+  const plannedKey = planned.join(",");
+  useEffect(() => {
+    if (!opened.current) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(checkPlan);
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionsKey, plannedKey]);
   useLayoutEffect(() => {
     if (!lastMsg || seenMsg.current === lastMsg.id) return;
     seenMsg.current = lastMsg.id;
@@ -115,9 +182,11 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
     const on = () => {
       const s = scroller();
       if (s && !s.el && performance.now() >= quiet.current) measured(isNearBottom(s.box));
+      checkPlan();
     };
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Staying at the bottom when sizes change under him (the list rail opening or closing re-wraps
   // the text and resizes the composer; the thread appearing on the phone): re-pin if he was there.
@@ -125,6 +194,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
   useEffect(() => {
     resizes.current = new ResizeObserver(() => {
       if (nearBottom.current) toBottom(false);
+      checkPlan(); // after the pin: what the plan shows now is what he sees
     });
     return () => resizes.current?.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,6 +246,22 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
     }
   };
 
+  /** "autoaprobado" -> "te pide OK". Once Claude started the step the server says 409: it stays autoaprobado. */
+  const revoke = async (a: PlannedAction) => {
+    setBusy(true);
+    try {
+      await ticketApi.revokeStep(t.id, a.id);
+      toast({ text: "El paso vuelve a pedirte OK" });
+      onChanged();
+    } catch (e) {
+      toast({ text: e instanceof ApiError && e.status === 409 ? "Claude ya empezó ese paso" : e instanceof Error ? e.message : "No se pudo completar" });
+      onChanged(); // show what the step really is now
+    } finally {
+      setBusy(false);
+    }
+  };
+  const shown = visiblePill({ plan: planPill, message: pill });
+
   const fileIn = useRef<HTMLInputElement>(null);
   const actions: SlashAction[] = [
     { key: "hecho", label: "Marcar hecho", hint: "cierra el ticket", run: () => void transition(() => ticketApi.close(t.id), "Ticket cerrado") },
@@ -202,6 +288,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
           data-pin="1"
           onScroll={(e) => {
             if (performance.now() >= quiet.current) measured(isNearBottom(e.currentTarget));
+            checkPlan();
           }}
         >
           <div className="kind">
@@ -230,7 +317,20 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
 
           {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
 
-          {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} onApproveStep={(a) => transition(() => ticketApi.approveStep(t.id, a.id), "Paso aprobado · Claude lo hace sin volver a preguntar")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
+          {t.actions.length ? (
+            <div className="tk-planwrap" ref={planRef}>
+              <Plan
+                ticketId={t.id}
+                actions={t.actions}
+                verbs={verbs}
+                busy={busy}
+                onVerb={(v) => c.setText(`${v}: `)}
+                onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")}
+                onApproveStep={(a) => transition(() => ticketApi.approveStep(t.id, a.id), "Paso autoaprobado · Claude lo hace sin volver a preguntar")}
+                onRevokeStep={(a) => revoke(a)}
+              />
+            </div>
+          ) : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
             <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
           ) : null}
 
@@ -270,18 +370,21 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
       </div>
 
       <div className="tk-foot">
-        {pill ? (
+        {shown ? (
           <button
+            key={shown}
             className="tk-newmsg"
             type="button"
             // The composer keeps its focus and caret: the pill only moves the thread.
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              toBottom(true);
-              setPill(false);
+              if (shown === "message") {
+                toBottom(true);
+                setPill(false);
+              } else goPlan();
             }}
           >
-            nuevo mensaje <span aria-hidden="true">↓</span>
+            {shown === "plan-nuevo" ? "Ver plan nuevo" : shown === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje"} <span aria-hidden="true">{shown === "message" ? "↓" : "↑"}</span>
           </button>
         ) : null}
         {closed ? (
@@ -506,7 +609,7 @@ function LiveTrackSmall() {
 
 // ---------- "Claude va a hacer" ----------
 
-function Plan({ actions, verbs, busy, onApprove, onApproveStep, onVerb }: { ticketId: string; actions: PlannedAction[]; verbs: string[]; busy: boolean; onApprove: (reject: string[]) => void; onApproveStep: (a: PlannedAction) => void; onVerb: (v: string) => void }) {
+function Plan({ actions, verbs, busy, onApprove, onApproveStep, onRevokeStep, onVerb }: { ticketId: string; actions: PlannedAction[]; verbs: string[]; busy: boolean; onApprove: (reject: string[]) => void; onApproveStep: (a: PlannedAction) => void; onRevokeStep: (a: PlannedAction) => void; onVerb: (v: string) => void }) {
   const [reject, setReject] = useState<string[]>([]);
   const waiting = actions.filter((a) => a.state === "planned");
   return (
@@ -519,6 +622,9 @@ function Plan({ actions, verbs, busy, onApprove, onApproveStep, onVerb }: { tick
           const [head, ...tail] = a.label.split(" · ");
           const detail = typeof a.target.detail === "string" ? a.target.detail : "";
           const off = reject.includes(a.id) || a.state === "rejected";
+          const approved = a.state === "approved";
+          // Only a needs_ok step while the plan still waits toggles: planned (and not marked "no hacer") or autoaprobado.
+          const toggles = a.mode === "needs_ok" && ((a.state === "planned" && !off) || (approved && waiting.length > 0));
           return (
             <div key={a.id} className={off ? "tk-act off" : "tk-act"}>
               <span className={`ln ${srcClass(a.source)}`} style={{ background: "var(--c)" }} />
@@ -528,18 +634,38 @@ function Plan({ actions, verbs, busy, onApprove, onApproveStep, onVerb }: { tick
                 {detail ? <small>{detail}</small> : null}
               </span>
               <span className="tk-gate">
-                <span className={a.mode === "needs_ok" ? "gate ask" : "gate"}>{a.mode === "needs_ok" ? "te pide OK" : "directo"}</span>
+                {toggles ? (
+                  // The chip is the toggle: te pide OK <-> autoaprobado (approve this step now, or take it back while Claude has not started it).
+                  <button
+                    className={approved ? "gate ask tog on" : "gate ask tog"}
+                    type="button"
+                    aria-pressed={approved}
+                    disabled={busy}
+                    title={approved ? "Toca para que vuelva a pedirte OK" : "Toca para que Claude lo haga sin volver a preguntar"}
+                    onClick={(e) => {
+                      confirmPick(e.currentTarget);
+                      if (approved) onRevokeStep(a);
+                      else onApproveStep(a);
+                    }}
+                  >
+                    {approved ? (
+                      <>
+                        <IcCheck aria-hidden="true" />
+                        autoaprobado
+                      </>
+                    ) : (
+                      "te pide OK"
+                    )}
+                  </button>
+                ) : (
+                  <span className={a.mode === "needs_ok" ? "gate ask" : "gate"}>{a.mode === "needs_ok" ? "te pide OK" : "directo"}</span>
+                )}
                 {a.state === "planned" && a.mode === "needs_ok" ? (
-                  <span className="tk-step">
-                    <button className="tk-ok" type="button" disabled={busy || off} aria-label={`Aprobar solo este paso: ${head}`} onClick={() => onApproveStep(a)}>
-                      Aprobar
-                    </button>
-                    <label className="tk-no">
-                      <input type="checkbox" checked={reject.includes(a.id)} onChange={() => setReject((r) => (r.includes(a.id) ? r.filter((x) => x !== a.id) : [...r, a.id]))} />
-                      no hacer
-                    </label>
-                  </span>
-                ) : a.state !== "planned" && (a.state !== "approved" || a.mode === "needs_ok") ? (
+                  <label className="tk-no">
+                    <input type="checkbox" checked={reject.includes(a.id)} onChange={() => setReject((r) => (r.includes(a.id) ? r.filter((x) => x !== a.id) : [...r, a.id]))} />
+                    no hacer
+                  </label>
+                ) : !toggles && a.state !== "planned" && (a.state !== "approved" || a.mode === "needs_ok") ? (
                   <small className="tk-astate">{ACTION_STATE[a.state]}</small>
                 ) : null}
               </span>

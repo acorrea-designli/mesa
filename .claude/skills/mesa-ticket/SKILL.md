@@ -81,7 +81,11 @@ Rule of thumb: reading and preparing are `direct`; anything another person can s
 is `needs_ok`. Anything that writes to a client goes through Salidas. Mark progress with
 `MESA ticket action <actionId> --state running|done|failed`. A `needs_ok` action waits for
 `ticket.plan_approved`; a `needs_ok` action already `approved` was pre-approved by Andrés: run it without
-asking again (a wake with `partial: true` approved only its `approved` ids).
+asking again (a wake with `partial: true` approved only its `approved` ids). Andrés can take a pre-approval back
+(the chip toggles "autoaprobado" <-> "te pide OK") while you have not started it: that wake carries
+`revoked: [ids]` and no `approved`. A revoked id is back to `planned`: do not run it. Mark a step `running` before you
+start it (after that Mesa refuses the revoke), and re-read `MESA ticket context` for the action states when a
+`plan_approved` wake arrives.
 
 ## Cards handed to Claude
 

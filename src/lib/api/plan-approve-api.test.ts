@@ -71,6 +71,51 @@ describe("POST /api/tickets/:id/plan/approve { only }", () => {
   });
 });
 
+describe("POST /api/tickets/:id/plan/approve { revoke }", () => {
+  const wakes = () => eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "ticket.plan_approved");
+
+  it("takes a pre-approval back: the step is planned again and the owner wakes with revoked, partial", async () => {
+    await approve({ only: [ids[0]] });
+    const res = await approve({ revoke: [ids[0]] });
+    expect(res.status).toBe(200);
+    expect(states()).toEqual(["planned", "planned"]);
+    expect(r.tickets.get(ref).status).toBe("waiting_andres");
+    expect(wakes().slice(-1)[0]!.payload).toMatchObject({ ref, revoked: [ids[0]], partial: true });
+  });
+
+  it("a step Claude already started is refused with 409 and a clear English error", async () => {
+    await approve({ only: [ids[0]] });
+    r.tickets.setActionState(ids[0]!, "running");
+    const res = await approve({ revoke: [ids[0]] });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/already started/);
+    expect(states()).toEqual(["running", "planned"]);
+  });
+
+  it("is refused for a step that is only planned (409), an empty list (400), revoke with only or reject (400)", async () => {
+    expect((await approve({ revoke: [ids[0]] })).status).toBe(409);
+    expect((await approve({ revoke: [] })).status).toBe(400);
+    await approve({ only: [ids[0]] });
+    expect((await approve({ revoke: [ids[0]], only: [ids[1]] })).status).toBe(400);
+    expect((await approve({ revoke: [ids[0]], reject: [ids[1]] })).status).toBe(400);
+    expect(states()).toEqual(["approved", "planned"]);
+  });
+
+  it("is refused after the full approval (409) and on a closed ticket (409)", async () => {
+    await approve({ only: [ids[0]] });
+    await approve({ only: [ids[1]] });
+    expect((await approve({ revoke: [ids[0]] })).status).toBe(409);
+    expect(states()).toEqual(["approved", "approved"]);
+  });
+
+  it("is refused on a closed ticket (409)", async () => {
+    await approve({ only: [ids[0]] });
+    r.tickets.transition(ref, { type: "close", by: "andres" });
+    expect((await approve({ revoke: [ids[0]] })).status).toBe(409);
+    expect(states()).toEqual(["approved", "planned"]);
+  });
+});
+
 describe("PATCH /api/actions/:id (sessions)", () => {
   const patch = (state: string) => PATCH_ACTION(req("PATCH", "/x", { state }), ctx({ id: ids[0]! }));
 
