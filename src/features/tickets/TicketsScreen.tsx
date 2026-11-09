@@ -280,7 +280,7 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
   const router = useRouter();
   const toast = useToast();
   const c = useComposer();
-  const [project, setProject] = useState(data.projects[0] ?? "");
+  const [project, setProject] = useState("");
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const [noteOnly, setNoteOnly] = useState(false);
@@ -338,7 +338,7 @@ function NewRequest({ data, tab }: { data: TicketsData; tab?: string }) {
           <ComposerBox c={c} pick={data.pick} actions={verbs} label="Pedido" placeholder="Pídele algo a Claude: investiga, mueve, crea, revisa…" rows={4} onSubmit={() => void submit()} autoFocus />
           <div className="tk-verbs" aria-label="Acciones frecuentes">
             {data.verbs.map((v) => (
-              <button key={v} className="tk-verb" type="button" onClick={() => c.setText(`${c.state.text}${c.state.text ? " " : ""}${v}: `)}>
+              <button key={v} className="tk-verb" type="button" title={v} onClick={() => c.setText(`${c.state.text}${c.state.text ? " " : ""}${v}: `)}>
                 {v}
               </button>
             ))}

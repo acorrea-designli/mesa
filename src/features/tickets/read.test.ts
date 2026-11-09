@@ -64,6 +64,56 @@ describe("loadTickets selection", () => {
   });
 });
 
+describe("loadTickets verbs", () => {
+  const plan = (kinds: [string, string][]) => {
+    const t = claudeAsks("Pedido", at(1000));
+    r.tickets.plan(t.id, kinds.map(([kind, label]) => ({ kind, source: "claude" as const, label, mode: "direct" as const })), "lead");
+  };
+
+  it("an unknown kind adds no verb, and never a plan-step label", () => {
+    plan([["weird_kind", "Hacer algo muy largo y específico · con detalle"]]);
+    const v = loadTickets(r, { creating: true }, now).verbs;
+    expect(v).toEqual(["Cancelar salida", "Mover en el tablero", "Crear tarea", "Revisar PR", "Investigar"]);
+    expect(v.join("|")).not.toContain("Hacer algo");
+  });
+
+  it("known kinds map to their short verb, most used first, padded with the defaults, at most 5", () => {
+    plan([["branch_pr", "dev-t15 en worktree desde main local, con una frase larguísima"], ["merge_pr", "Merge a main"], ["branch_pr", "otro"]]);
+    expect(loadTickets(r, { creating: true }, now).verbs).toEqual(["Abrir PR", "Mergear PR", "Cancelar salida", "Mover en el tablero", "Crear tarea"]);
+  });
+
+  it("the catalogue kinds have short Spanish verbs", () => {
+    const kinds = ["branch_pr", "merge_pr", "send_message", "cancel_message", "apply_infra", "post_github"];
+    plan(kinds.map((k) => [k, k] as [string, string]));
+    const learned = loadTickets(r, { creating: true }, now).verbs;
+    expect(learned).toEqual(["Abrir PR", "Mergear PR", "Enviar mensaje", "Cancelar mensaje", "Aplicar infra"]);
+    expect(Math.max(...learned.map((v) => v.length))).toBeLessThanOrEqual(20);
+  });
+});
+
+describe("loadTickets projects", () => {
+  const item = (source: "slack" | "github" | "basecamp", externalId: string, project: string) =>
+    r.items.upsert({ source, externalId, kind: "message", title: externalId, project }, T0).item;
+
+  it("leaves out the project of a Slack item (a person from a DM, a channel) and of a ticket made from it", () => {
+    const dm = item("slack", "dm1", "Christian Ruiz");
+    item("slack", "ch1", "scout-dev");
+    r.tickets.create({ direction: "andres_asks", title: "De un DM", project: "Christian Ruiz", itemId: dm.id }, at(1000));
+    r.tickets.create({ direction: "andres_asks", title: "Otro", project: "scout-dev" }, at(2000));
+    expect(loadTickets(r, { creating: true }, now).projects).toEqual([]);
+  });
+
+  it("keeps ticket, GitHub and Basecamp projects, sorted and deduplicated", () => {
+    item("slack", "dm1", "Christian Ruiz");
+    item("github", "pr1", "scout-api");
+    item("github", "pr2", "scout-api");
+    item("basecamp", "bc1", "Acme");
+    r.tickets.create({ direction: "andres_asks", title: "T", project: "mesa" }, at(1000));
+    r.tickets.create({ direction: "andres_asks", title: "U", project: "Christian Ruiz", itemId: r.items.list().find((i) => i.externalId === "dm1")!.id }, at(2000));
+    expect(loadTickets(r, { creating: true }, now).projects).toEqual(["Acme", "mesa", "scout-api"]);
+  });
+});
+
 describe("loadTickets read state", () => {
   it("flags the tickets with a message he has not seen, and the selected one", () => {
     const a = claudeAsks("A", at(1000));

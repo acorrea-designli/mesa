@@ -533,7 +533,7 @@ function Plan({ actions, verbs, busy, onApprove, onVerb }: { ticketId: string; a
       </div>
       <div className="tk-verbs" aria-label="Acciones frecuentes">
         {verbs.map((v) => (
-          <button key={v} className="tk-verb" type="button" onClick={() => onVerb(v)}>
+          <button key={v} className="tk-verb" type="button" title={v} onClick={() => onVerb(v)}>
             {v}
           </button>
         ))}

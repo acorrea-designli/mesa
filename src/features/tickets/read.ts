@@ -54,6 +54,13 @@ const VERB_BY_KIND: Record<string, string> = {
   review_pr: "Revisar PR",
   investigate: "Investigar",
   write_client: "Escribir al cliente",
+  // the plan catalogue of .claude/skills/mesa-ticket/SKILL.md
+  branch_pr: "Abrir PR",
+  merge_pr: "Mergear PR",
+  send_message: "Enviar mensaje",
+  cancel_message: "Cancelar mensaje",
+  apply_infra: "Aplicar infra",
+  post_github: "Publicar en GitHub",
 };
 
 function excerpt(t: TicketDetail, now: Date): string {
@@ -167,13 +174,21 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
 
   const kinds = new Map<string, number>();
   for (const t of all) for (const a of details.get(t.id)!.actions as PlannedAction[]) {
-    const v = VERB_BY_KIND[a.kind] ?? a.label.split(" · ")[0]!;
-    kinds.set(v, (kinds.get(v) ?? 0) + 1);
+    const v = Object.hasOwn(VERB_BY_KIND, a.kind) ? VERB_BY_KIND[a.kind] : undefined;
+    if (v) kinds.set(v, (kinds.get(v) ?? 0) + 1); // an unknown kind adds no chip: never a plan-step label
   }
   const learned = [...kinds.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
   const verbs = [...new Set([...learned, ...DEFAULT_VERBS])].slice(0, 5);
 
-  const projects = [...new Set([...all.map((t) => t.project), ...r.items.list().map((i) => i.project)].filter(Boolean))].sort();
+  // Slack items carry a channel or a person (DM) as project, and a ticket made from one inherits it:
+  // neither is a scope for engram, so they never reach the Proyecto suggestions.
+  const items = r.items.list();
+  const slackItems = new Set(items.filter((i) => i.source === "slack").map((i) => i.id));
+  const slack = new Set([
+    ...items.filter((i) => i.source === "slack").map((i) => i.project),
+    ...all.filter((t) => t.itemId && slackItems.has(t.itemId)).map((t) => t.project),
+  ]);
+  const projects = [...new Set([...all.map((t) => t.project), ...items.map((i) => i.project)].filter((p) => p && !slack.has(p)))].sort();
   const pick = all
     .filter((t) => t.status !== "closed" || t.createdAt >= week || (t.closedAt ?? "") >= week)
     .map((t) => ({ ref: t.ref, title: t.title, direction: t.direction, status: t.status }));
