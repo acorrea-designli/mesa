@@ -3,38 +3,66 @@ import { useState } from "react";
 import { BrokenLine, DirectionMarker, Interchange, LineStub, Ring, SourceDot } from "@/components/line/Line";
 import { Sheet, SplitApprove, Tabs, useToast } from "@/components/ui/interactive";
 import { Btn, Chip, ContextQuote, ExactText, Kind, Label, LinkChip, StatusTag } from "@/components/ui/primitives";
-import { TokenDetail } from "@/features/usage/TokenDetail";
 import { UsageBlock } from "@/features/usage/UsageBlock";
+import { UsoView } from "@/features/usage/UsoView";
 import { addUsage, summarize, type Buckets, type Role } from "@/lib/domain/tokens";
 import { SOURCES, type Source } from "@/lib/domain/types";
-import { usageView, type UsageSnapshot } from "@/lib/domain/usage";
+import { usageView, type UsagePoint, type UsageSnapshot } from "@/lib/domain/usage";
 import { useArrive, useLayLines, usePress } from "@/lib/motion";
 
 type Filter = "all" | Source;
 
-// Uso: fixed sample data, so the gallery renders the same on the server and the client (no clock).
-const USO_NOW = new Date("2026-11-09T20:00:00Z");
+// Uso: fixed sample data, so the gallery renders the same on the server and the client (no clock). A Thursday, 15:00 Bogota.
+const USO_NOW = new Date("2026-11-12T20:00:00Z");
 const sec = (iso: string) => Date.parse(iso) / 1000;
 const USO_SAMPLE: UsageSnapshot = {
-  capturedAt: "2026-11-09T19:56:00Z",
+  capturedAt: "2026-11-12T19:56:00Z",
   sessionId: "sample",
   model: { id: "claude-opus-5-5", displayName: "Opus 5.5" },
-  fiveHour: { usedPercentage: 32, resetsAt: sec("2026-11-09T23:30:00Z") },
+  fiveHour: { usedPercentage: 32, resetsAt: sec("2026-11-12T23:30:00Z") },
   sevenDay: { usedPercentage: 61, resetsAt: sec("2026-11-14T23:30:00Z") },
 };
 const USO_FRESH = usageView(USO_SAMPLE, USO_NOW);
-const USO_STALE = usageView({ ...USO_SAMPLE, capturedAt: "2026-11-09T19:20:00Z" }, USO_NOW);
+const USO_STALE = usageView({ ...USO_SAMPLE, capturedAt: "2026-11-12T19:20:00Z" }, USO_NOW);
 const USO_NONE = usageView(null, USO_NOW);
+/** A believable history: the week climbs in work hours only, the 5 h window climbs with the session. */
+const USO_HISTORY: UsagePoint[] = (() => {
+  const h: UsagePoint[] = [];
+  const weekStart = Date.parse("2026-11-07T23:30:00Z");
+  const raw: number[] = [];
+  let acc = 0;
+  for (let i = 0; weekStart + i * 3_600_000 <= Date.parse("2026-11-12T19:30:00Z"); i++) {
+    const hour = new Date(weekStart + i * 3_600_000).getUTCHours();
+    acc += hour >= 14 && hour < 23 ? 0.9 + ((i * 7) % 5) * 0.15 : 0;
+    raw.push(acc);
+  }
+  const k = 58 / acc;
+  raw.forEach((v, i) => h.push({ t: weekStart + i * 3_600_000, fiveHourUsed: null, sevenDayUsed: Math.round(v * k * 10) / 10 }));
+  const fiveStart = Date.parse("2026-11-12T18:30:00Z");
+  for (let i = 1; i <= 17; i++) {
+    const used = Math.round((2 + 29 * Math.pow(i / 17, 1.25)) * 10) / 10;
+    h.push({ t: fiveStart + i * 5 * 60_000, fiveHourUsed: used, sevenDayUsed: 58 + (used / 32) * 2.6 });
+  }
+  return h.sort((x, y) => x.t - y.t);
+})();
 const USO_TOKENS = (() => {
   const b: Buckets = {};
   const add = (role: Role, at: string, model: string, input: number, output: number, cacheRead: number) =>
-    addUsage(b, role, { at, id: `${role}${at}`, model, use: { input, cacheWrite: Math.round(input / 4), cacheRead, output } });
-  add("lead", "2026-11-09T14:00:00Z", "claude-opus-5-5", 52_000, 41_000, 6_800_000);
-  add("dev", "2026-11-09T15:00:00Z", "claude-opus-5-5", 31_000, 22_000, 3_100_000);
-  add("sweeper", "2026-11-09T16:00:00Z", "claude-haiku-5-5", 9_000, 4_000, 800_000);
-  add("lead", "2026-11-05T16:00:00Z", "claude-opus-5-5", 180_000, 120_000, 21_000_000);
+    addUsage(b, role, { at, id: `${role}${at}${model}`, model, use: { input, cacheWrite: Math.round(input / 4), cacheRead, output } });
+  add("tl", "2026-11-09T16:00:00Z", "claude-opus-5-5", 2_400_000, 1_100_000, 310_000_000);
+  add("dev", "2026-11-09T17:00:00Z", "claude-opus-5-5", 3_100_000, 900_000, 280_000_000);
+  add("lead", "2026-11-10T15:00:00Z", "claude-opus-5-5", 800_000, 400_000, 190_000_000);
+  add("sweeper", "2026-11-10T16:00:00Z", "claude-haiku-5-5", 1_900_000, 300_000, 150_000_000);
+  add("reviewer", "2026-11-11T16:00:00Z", "claude-sonnet-5-5", 1_300_000, 500_000, 120_000_000);
+  add("lead", "2026-11-12T14:00:00Z", "claude-opus-5-5", 520_000, 410_000, 68_000_000);
+  add("dev", "2026-11-12T15:00:00Z", "claude-opus-5-5", 310_000, 220_000, 31_000_000);
+  add("sweeper", "2026-11-12T16:00:00Z", "claude-haiku-5-5", 190_000, 40_000, 8_000_000);
+  add("writer", "2026-11-12T17:00:00Z", "claude-sonnet-5-5", 60_000, 30_000, 2_000_000);
   return summarize(b, USO_NOW);
 })();
+const USO_EMPTY_TOKENS = summarize({}, USO_NOW);
+
+const usoData = (view: typeof USO_FRESH, tokens: typeof USO_TOKENS | null, history: UsagePoint[]) => ({ now: USO_NOW.toISOString(), view, tokens, history });
 
 export function KitDemo() {
   const [tab, setTab] = useState<Filter>("all");
@@ -144,15 +172,35 @@ export function KitDemo() {
       </section>
 
       <section>
-        <Label>Uso</Label>
+        <Label>Uso: bloque del rail y de Ajustes (con dato, medido hace rato, sin dato)</Label>
         <div className="kit-line" style={{ alignItems: "flex-start" }}>
           {[USO_FRESH, USO_STALE, USO_NONE].map((v, i) => (
-            <div key={i} style={{ width: 184 }}>
+            <div key={i} style={{ width: 184, background: "var(--deep)" }}>
               <UsageBlock view={v} />
             </div>
           ))}
         </div>
-        <TokenDetail tokens={USO_TOKENS} />
+      </section>
+
+      <section>
+        <Label>Uso: pantalla /uso con dato</Label>
+        <div className="kit-uso">
+          <UsoView initial={usoData(USO_FRESH, USO_TOKENS, USO_HISTORY)} live={false} />
+        </div>
+      </section>
+
+      <section>
+        <Label>Uso: pantalla /uso, medición vieja (más de 15 min)</Label>
+        <div className="kit-uso">
+          <UsoView initial={usoData(USO_STALE, USO_TOKENS, USO_HISTORY)} live={false} />
+        </div>
+      </section>
+
+      <section>
+        <Label>Uso: pantalla /uso sin dato (ejes y líneas punteadas)</Label>
+        <div className="kit-uso">
+          <UsoView initial={usoData(USO_NONE, USO_EMPTY_TOKENS, [])} live={false} />
+        </div>
       </section>
 
       <Sheet open={sheet} onClose={() => setSheet(false)} title="Programar salida">

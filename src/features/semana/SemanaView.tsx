@@ -5,8 +5,6 @@
 import Link from "next/link";
 import { Btn, cx } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/interactive";
-import { TokenDetail } from "@/features/usage/TokenDetail";
-import type { TokenSummary } from "@/lib/domain/tokens";
 import type { EntryView, SemanaData } from "./read";
 
 /** /semana URL for a week and a project; the current week and "Todos" stay out of the query. */
@@ -40,7 +38,7 @@ function Line({ e }: { e: EntryView }) {
   );
 }
 
-export function SemanaView({ data, usage }: { data: SemanaData; /** Tokens spent (current week only; `tokens` is null when Mesa cannot find the transcripts). */ usage?: { tokens: TokenSummary | null } }) {
+export function SemanaView({ data }: { data: SemanaData }) {
   const toast = useToast();
   const { week, project } = data;
   // The current week is the default: keep it out of the URL so the bookmark always means "this week".
@@ -117,7 +115,6 @@ export function SemanaView({ data, usage }: { data: SemanaData; /** Tokens spent
         )}
         {data.hasSample ? <p className="sm-sample">Datos de muestra.</p> : null}
       </div>
-      {usage ? <TokenDetail tokens={usage.tokens} /> : null}
     </div>
   );
 }

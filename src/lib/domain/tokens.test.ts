@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addUsage, classifyRole, compactTokens, parseUsageLine, pruneDays, summarize, type Buckets, type UsageRecord } from "./tokens";
+import { addUsage, classifyRole, compactTokens, exactTokens, freshOf, modelFamily, parseUsageLine, pruneDays, summarize, weekDays, type Buckets, type UsageRecord } from "./tokens";
 
 const line = (over: Record<string, unknown> = {}, usage: Record<string, unknown> = {}) =>
   JSON.stringify({
@@ -78,9 +78,10 @@ describe("buckets and summarize", () => {
       ["dev", 110],
     ]);
     expect(s.today.byModel.map((r) => [r.label, r.total])).toEqual([
-      ["opus-5-5", 1110],
-      ["haiku-5-5", 110],
+      ["Opus", 1110],
+      ["Haiku", 110],
     ]);
+    expect(s.today.byModel.map((r) => r.key)).toEqual(["claude-opus-5-5", "claude-haiku-5-5"]);
     expect(s.week.total).toBe(s.today.total);
   });
 
@@ -97,10 +98,40 @@ describe("buckets and summarize", () => {
     expect(s.week.byRole.map((r) => r.key)).toEqual(["tl"]);
   });
 
-  it("orders roles in the fixed role order", () => {
+  it("ranks roles by tokens nuevos, biggest first, and keeps the role order on a tie", () => {
     const b: Buckets = {};
     for (const r of ["other", "writer", "reviewer", "dev", "tl", "sweeper", "lead"] as const) addUsage(b, r, rec("2026-11-09T15:00:00Z", "claude-opus-5-5", 1));
     expect(summarize(b, NOW).today.byRole.map((r) => r.key)).toEqual(["lead", "sweeper", "tl", "dev", "reviewer", "writer", "other"]);
+    addUsage(b, "writer", rec("2026-11-09T15:00:00Z", "claude-opus-5-5", 5));
+    addUsage(b, "dev", rec("2026-11-09T15:00:00Z", "claude-opus-5-5", 2));
+    expect(summarize(b, NOW).today.byRole.map((r) => r.key).slice(0, 3)).toEqual(["writer", "dev", "lead"]);
+  });
+
+  it("ranks by tokens nuevos, not by cache reads", () => {
+    const b: Buckets = {};
+    addUsage(b, "lead", rec("2026-11-09T15:00:00Z", "claude-opus-5-5", 10, 0, 900_000)); // huge cache reads, few new
+    addUsage(b, "dev", rec("2026-11-09T15:00:00Z", "claude-opus-5-5", 500, 100, 10));
+    const s = summarize(b, NOW).today;
+    expect(s.byRole.map((r) => r.key)).toEqual(["dev", "lead"]);
+    expect(s.fresh).toBe(610);
+    expect(s.byRole[0]?.fresh).toBe(600);
+    expect(s.total).toBe(610 + 900_010);
+  });
+
+  it("names models by family and keeps the version only when a family repeats", () => {
+    expect(modelFamily("claude-opus-5-5")).toBe("Opus");
+    expect(modelFamily("claude-3-5-sonnet-20241022")).toBe("Sonnet");
+    expect(modelFamily("claude-haiku-5-5")).toBe("Haiku");
+    expect(modelFamily("gpt-x")).toBe("gpt-x");
+    const b: Buckets = {};
+    addUsage(b, "lead", rec("2026-11-09T15:00:00Z", "claude-opus-5-5", 10));
+    addUsage(b, "lead", rec("2026-11-09T15:00:00Z", "claude-opus-4-1-20250805", 5));
+    addUsage(b, "lead", rec("2026-11-09T15:00:00Z", "claude-haiku-5-5", 1));
+    expect(summarize(b, NOW).today.byModel.map((r) => r.label)).toEqual(["Opus 5.5", "Opus 4.1", "Haiku"]);
+  });
+
+  it("freshOf is input + cache write + output", () => {
+    expect(freshOf({ input: 1, cacheWrite: 2, cacheRead: 400, output: 8 })).toBe(11);
   });
 
   it("is empty with no data", () => {
@@ -119,6 +150,37 @@ describe("buckets and summarize", () => {
   });
 });
 
+describe("weekDays", () => {
+  // Thursday 12 Nov 2026, 15:00 Bogota.
+  const NOW = new Date("2026-11-12T20:00:00Z");
+
+  it("is Monday to Sunday of this week with tokens nuevos per Bogota day", () => {
+    const b: Buckets = {};
+    addUsage(b, "lead", { at: "2026-11-09T15:00:00Z", id: "a", model: "claude-opus-5-5", use: { input: 10, cacheWrite: 5, cacheRead: 999, output: 20 } });
+    addUsage(b, "dev", rec("2026-11-09T16:00:00Z", "claude-opus-5-5", 1)); // same day, another role
+    addUsage(b, "lead", rec("2026-11-10T04:00:00Z", "claude-opus-5-5", 7)); // 23:00 Bogota on Monday
+    addUsage(b, "lead", rec("2026-11-12T15:00:00Z", "claude-opus-5-5", 40));
+    addUsage(b, "lead", rec("2026-11-08T15:00:00Z", "claude-opus-5-5", 500)); // last Sunday: not this week
+    const days = weekDays(b, NOW);
+    expect(days.map((d) => d.label)).toEqual(["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]);
+    expect(days.map((d) => d.day)).toEqual(["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"]);
+    expect(days.map((d) => d.fresh)).toEqual([10 + 5 + 20 + 1 + 7, 0, 0, 40, 0, 0, 0]);
+    expect(days.map((d) => d.today)).toEqual([false, false, false, true, false, false, false]);
+    expect(days.map((d) => d.future)).toEqual([false, false, false, false, true, true, true]);
+    expect(summarize(b, NOW).days).toEqual(days);
+  });
+
+  it("is seven empty days with no data", () => {
+    expect(weekDays({}, NOW).every((d) => d.fresh === 0)).toBe(true);
+  });
+
+  it("on a Sunday the week ends today", () => {
+    const days = weekDays({}, new Date("2026-11-15T20:00:00Z"));
+    expect(days[0]?.day).toBe("2026-11-09");
+    expect(days[6]).toMatchObject({ day: "2026-11-15", today: true, future: false });
+  });
+});
+
 describe("compactTokens", () => {
   it("abbreviates with a decimal comma", () => {
     expect(compactTokens(950)).toBe("950");
@@ -126,7 +188,19 @@ describe("compactTokens", () => {
     expect(compactTokens(42_000)).toBe("42 k");
     expect(compactTokens(4_250_000)).toBe("4,3 M");
     expect(compactTokens(999_000_000)).toBe("999 M");
-    expect(compactTokens(1_268_300_000)).toBe("1,3 G");
-    expect(compactTokens(12_000_000_000)).toBe("12 G");
+  });
+
+  it("never prints G: billions read as thousands of millions", () => {
+    expect(compactTokens(1_268_300_000)).toBe("1.268 M");
+    expect(compactTokens(1_310_000_000)).toBe("1.310 M");
+    expect(compactTokens(12_000_000_000)).toBe("12.000 M");
+    expect(compactTokens(1_000_000)).toBe("1 M");
+    for (const n of [999_999_999, 1_000_000_000, 5_432_100_000, 123_456_789_012]) expect(compactTokens(n)).not.toMatch(/G/);
+  });
+
+  it("exactTokens groups thousands with a dot", () => {
+    expect(exactTokens(950)).toBe("950");
+    expect(exactTokens(8_312_450)).toBe("8.312.450");
+    expect(exactTokens(1_310_000_000)).toBe("1.310.000.000");
   });
 });

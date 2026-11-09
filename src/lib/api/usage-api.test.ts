@@ -89,6 +89,27 @@ describe("GET /api/usage", () => {
     fs.rmSync(cfg, { recursive: true, force: true });
   });
 
+  it("records a history point per accepted snapshot, one per 5 minutes, and GET returns it on request", async () => {
+    const win = { fiveHour: { usedPercentage: 10, resetsAt: reset(3) }, sevenDay: { usedPercentage: 4, resetsAt: reset(80) } };
+    await post({ sessionId: "s1", capturedAt: at(30), ...win });
+    await post({ sessionId: "s1", capturedAt: at(28), ...win }); // 2 min later: no new point
+    await post({ sessionId: "s1", capturedAt: at(20), fiveHour: { usedPercentage: 12, resetsAt: reset(3) }, sevenDay: { usedPercentage: 5, resetsAt: reset(80) } });
+    await post({ sessionId: "s0", capturedAt: at(40), ...win }); // older than the stored snapshot: not saved, no point
+    const body = (await (await get("?history=1")).json()) as { now: string; history: { t: number; fiveHourUsed: number | null; sevenDayUsed: number | null }[] };
+    expect(body.history.map((p) => [p.fiveHourUsed, p.sevenDayUsed])).toEqual([
+      [10, 4],
+      [12, 5],
+    ]);
+    expect(body.history[0]!.t).toBeLessThan(body.history[1]!.t);
+    expect(Number.isNaN(Date.parse(body.now))).toBe(false);
+    expect(((await (await get()).json()) as { history: unknown[] }).history).toEqual([]);
+  });
+
+  it("a snapshot with no rate_limits adds no point", async () => {
+    await post({ sessionId: "s1", capturedAt: at(5) });
+    expect(((await (await get("?history=1")).json()) as { history: unknown[] }).history).toEqual([]);
+  });
+
   it("tokens are null when there is no transcripts folder", async () => {
     vi.stubEnv("MESA_TRANSCRIPTS_DIR", "");
     vi.stubEnv("CLAUDE_CONFIG_DIR", path.join(os.tmpdir(), "mesa-no-such-config"));

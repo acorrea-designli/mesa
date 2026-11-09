@@ -310,6 +310,15 @@ The outgoing message on `porcelain` with a 1px `rule` border and 6px corners at 
 ### Alerts
 `porcelain`, 1px `ink` border, 6px corners, Float low. Outages name the source and dot the affected line; they never turn red.
 
+### Uso (/uso, and the rail and Ajustes block)
+Every number that matters has a mark; the screen is never a table of text.
+- **Meter:** the plan's % remaining as a thick line in ink with round caps on a `rule` track: 10px on /uso, 6px in the rail and Ajustes. The % is a big tabular number (40px on /uso) with "restante" and "reinicia <hora>" in `mute`. A stale measure (over 15 minutes) turns the fill and the number `mute`; no figure turns the whole meter into a dotted line with "sin dato" (the out-of-service idiom, no slash).
+- **Pace tick:** a 3px ink tick across the track, haloed in the ground it sits on, at the % an even pace would leave right now (100 minus the share of the window already elapsed, from `resets_at` and the window length). A fill that ends past the tick has spare; one that ends short of it is burning faster than the clock.
+- **Ranked bars (Quién gastó, Por modelo):** one 6px round-capped bar per row in the Claude line ink (all the tokens are Claude's, so the Lines Carry Source rule holds), sorted by tokens nuevos, a tabular ink value and a `mute` share (hidden under 480px). One series: no legend. Hover or focus swaps the compact value for the exact one.
+- **Day columns (Semana, por día):** seven Monday-to-Sunday columns in the same ink, today's label in ink, empty and future days a dotted baseline.
+- **History chart:** % used across the window as a 2px ink line (round joins) over hairline gridlines at 0, 50 and 100, with a dashed `dim` straight pace line from 0 at the start to 100 at the reset. A crosshair and a dot read the nearest point's exact time and %; the arrow keys walk the points. No history yet: the axes with a dotted line and one line of copy.
+- **Tokens nuevos** (input + cache writes + output) are the hero number; cache reads appear once, in `mute`. Billions read "1.310 M", never "G".
+
 ## Do's and Don'ts
 
 ### Do:

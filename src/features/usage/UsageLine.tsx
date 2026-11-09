@@ -1,15 +1,17 @@
 "use client";
 // The live "Uso" block of the rail and of the phone's Ajustes sheet: polls GET /api/usage (the latest statusLine
 // snapshot Mesa saved) and shows it with UsageBlock. A failed request or an empty Mesa reads "sin dato", never an error.
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { UsageView } from "@/lib/domain/usage";
+import { usageView, type UsageView } from "@/lib/domain/usage";
 import { UsageBlock } from "./UsageBlock";
 
 const POLL_MS = 30_000;
-const EMPTY: UsageView = { state: "none", age: "", model: "", windows: [] };
+export const EMPTY_VIEW: UsageView = usageView(null, new Date(0));
 
 export function UsageLine({ onDetail }: { onDetail?: (href: string) => void }) {
-  const [view, setView] = useState<UsageView>(EMPTY);
+  const [view, setView] = useState<UsageView>(EMPTY_VIEW);
+  const path = usePathname();
 
   useEffect(() => {
     let alive = true;
@@ -20,7 +22,7 @@ export function UsageLine({ onDetail }: { onDetail?: (href: string) => void }) {
         const body = (await r.json()) as { view?: UsageView };
         if (alive && body.view) setView(body.view);
       } catch {
-        if (alive) setView(EMPTY);
+        if (alive) setView(EMPTY_VIEW);
       }
     };
     const first = window.setTimeout(() => void load(), 0);
@@ -37,5 +39,5 @@ export function UsageLine({ onDetail }: { onDetail?: (href: string) => void }) {
     };
   }, []);
 
-  return <UsageBlock view={view} onDetail={onDetail} />;
+  return <UsageBlock view={view} onDetail={onDetail} current={path.startsWith("/uso")} />;
 }
