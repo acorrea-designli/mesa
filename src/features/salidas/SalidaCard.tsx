@@ -146,17 +146,17 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
 
       {c.mode === "view" && sendLabel ? (
         <div className="acts sa-desk-acts">
-          <SplitApprove version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} kbd="A" />
+          <SplitApprove version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button className="btn" type="button" disabled={c.locked || c.busy || isGithubBatch} onClick={() => c.setMode("edit")}>
             <IcPencil />
-            Editar<span className="kbd">E</span>
+            Editar
           </button>
           <button className="btn" type="button" disabled={c.busy} onClick={c.deny}>
-            Denegar<span className="kbd">D</span>
+            Denegar
           </button>
           {onSkip ? (
             <button className="btn sa-skip" type="button" onClick={onSkip}>
-              Saltar por ahora<span className="kbd">S</span>
+              Saltar por ahora
             </button>
           ) : null}
         </div>

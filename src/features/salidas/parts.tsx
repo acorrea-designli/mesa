@@ -292,7 +292,7 @@ export function SendingBanner({ s, now, onUndo }: { s: SalidaDetail; now: number
         </span>
       </div>
       <button className="btn" type="button" onClick={onUndo}>
-        Deshacer<span className="kbd">Z</span>
+        Deshacer
       </button>
     </div>
   );

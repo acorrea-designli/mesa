@@ -1,13 +1,11 @@
 "use client";
 // Salidas B: a free-order queue strip above one card. Any item opens on click;
-// J/K or arrows move without acting; A/E/D act on the open one; P programar,
-// S "Saltar por ahora", Z deshacer. Deciding opens the next undecided item.
+// J/K or arrows move without acting; every action is a button on the card.
+// Deciding opens the next undecided item.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Mark } from "@/lib/domain/types";
 import { isSimulated } from "@/lib/domain/sandbox";
 import { useArrive, usePress } from "@/lib/motion";
-import { useToast } from "@/components/ui/interactive";
-import type { SalidaController } from "./controller";
 import { IcClock } from "./icons";
 import { ago, destShort, firstLine, hhmm, sourceLabel, undoOpen, whenLabel } from "./model";
 import { cx } from "./parts";
@@ -45,7 +43,6 @@ function stripStatus(s: SalidaView, now: number): string {
 
 export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: string }) {
   const refresh = useLiveRefresh();
-  const toast = useToast();
   const [order, setOrder] = useState<string[]>(() => data.items.map((s) => s.id));
   const [denied, setDenied] = useState<Set<string>>(() => new Set());
   const [openId, setOpenId] = useState<string | null>(() => {
@@ -53,8 +50,6 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
     return (data.items.find((s) => UNDECIDED.has(s.status)) ?? data.items.find((s) => !isDecided(s)) ?? data.items[0])?.id ?? null;
   });
   const [marks, setMarksMap] = useState<Record<string, Mark[]>>({});
-  const ctl = useRef<SalidaController<SalidaView> | null>(null);
-  const lastApproved = useRef<string | null>(null);
   const anySending = data.items.some((s) => s.status === "sending");
   const now = useNow(data.now, true, anySending ? 250 : 1000);
 
@@ -122,7 +117,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
     [items, openId, select],
   );
 
-  // Keyboard shortcuts; never while typing, never with modifiers, never while the semáforo toolbar is open.
+  // Navigation keys only; never while typing, never with modifiers, never while the semáforo toolbar is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
@@ -130,49 +125,15 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
       if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable || t.closest("[data-sema],[role=dialog],[role=menu]"))) return;
       if (document.querySelector(".sm-float")) return;
       const k = e.key.toLowerCase();
-      const c = ctl.current;
-      const s = c?.s;
       if (k === "j" || e.key === "ArrowRight") return e.preventDefault(), move(1);
       if (k === "k" || e.key === "ArrowLeft") return e.preventDefault(), move(-1);
-      if (!c || !s) return;
-      if (k === "z") {
-        e.preventDefault();
-        if (s.status === "sending" && undoOpen(s, Date.now())) return void c.undo();
-        const last = lastApproved.current && byId.get(lastApproved.current);
-        if (last && undoOpen(last, Date.now())) {
-          select(last.id);
-          toast({ text: "Abre la salida y pulsa Z otra vez para deshacer" });
-        }
-        return;
-      }
-      if (s.status !== "pending" || c.mode !== "view") return;
-      if (k === "a" && !c.locked) {
-        e.preventDefault();
-        lastApproved.current = s.id;
-        void c.approve();
-      } else if (k === "e" && !c.locked) {
-        e.preventDefault();
-        c.setMode("edit");
-      } else if (k === "d") {
-        e.preventDefault();
-        c.deny();
-      } else if (k === "p" && !c.locked) {
-        e.preventDefault();
-        c.setMode("pick");
-      } else if (k === "s") {
-        e.preventDefault();
-        skip();
-      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [move, skip, byId, select, toast]);
+  }, [move]);
 
   const listRef = useArrive<HTMLDivElement>(".sa-qi");
   const pressRef = usePress<HTMLDivElement>(".sa-qi", true);
-  const bind = useCallback((c: SalidaController<SalidaView> | null) => {
-    ctl.current = c;
-  }, []);
   const setMarks = useCallback((m: Mark[]) => openId && setMarksMap((x) => ({ ...x, [openId]: m })), [openId]);
 
   const counter = [
@@ -189,7 +150,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
         <h1>
           Salidas<span>Nada sale sin tu firma</span>
         </h1>
-        <span className="sort sa-keys">J/K o ←/→ moverse · A aprobar · E editar · D denegar · P programar · S saltar · Z deshacer</span>
+        <span className="sort sa-keys">J/K o ←/→ moverse</span>
       </div>
       {items.length ? (
         <>
@@ -230,11 +191,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
               now={now}
               marks={marks[open.id] ?? []}
               setMarks={setMarks}
-              bind={bind}
-              onChanged={() => {
-                if (ctl.current?.s.status === "sending") lastApproved.current = open.id;
-                refresh();
-              }}
+              onChanged={refresh}
               onDecided={(id) => {
                 setDenied((d) => new Set(d).add(id));
                 window.setTimeout(() => setDenied((d) => (d.delete(id), new Set(d))), 6000);
