@@ -431,6 +431,10 @@
 .tk-reply:focus-within {
   border-color: var(--ink);
 }
+/* Expand control: top-right corner of the composer, desktop only, while it has focus or text (or is pressed). */
+.tk-pane .tk-reply .tk-expand {
+  display: none;
+}
 .tk-reply.drag {
   border: 2px dashed var(--ink);
 }
@@ -956,8 +960,44 @@
   }
 }
 
-/* ---------- rail: while he writes, the list shrinks and the thread widens ---------- */
+/* ---------- rail (focus mode): the expand control shrinks the list and the thread widens ---------- */
 @media (min-width: 721px) {
+  .tk-reply.has-expand textarea {
+    padding-right: 44px;
+  }
+  .tk-pane .tk-reply .tk-expand {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    color: var(--mute);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms var(--ease-out);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tk-pane .tk-reply .tk-expand {
+      transition: none;
+    }
+  }
+  .tk-pane .tk-reply:focus-within .tk-expand,
+  .tk-pane .tk-reply.typed .tk-expand,
+  .tk-pane .tk-reply .tk-expand[aria-pressed="true"],
+  .tk-pane .tk-reply .tk-expand:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .tk-pane .tk-reply .tk-expand:hover {
+    color: var(--ink);
+    background: var(--deep);
+  }
+  .tk-pane .tk-reply .tk-expand:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
   .tk-scroll,
   .tk-foot {
     transition: padding var(--rail-ms) var(--ease-out);
