@@ -14,6 +14,7 @@ import { ignoreLabel } from "../ignore/model";
 import { useIgnore } from "../ignore/useIgnore";
 import { dispatchToast } from "../tablero/api";
 import { hoyApi } from "./api";
+import { useSkip } from "./useSkip";
 
 async function call(url: string, method: string, body?: unknown) {
   const res = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -29,6 +30,7 @@ export function ItemDetailPane({ d, health }: { d: ItemDetail; health?: SourceHe
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const { ignore } = useIgnore();
+  const { skip } = useSkip();
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -143,20 +145,36 @@ export function ItemDetailPane({ d, health }: { d: ItemDetail; health?: SourceHe
         <span>Llegó {d.received}</span>
         {d.isSample ? <span>Datos de muestra.</span> : null}
       </div>
-      {d.ignore ? (
+      {d.skip || d.ignore ? (
         <div className="hy-ign-d">
-          <button
-            type="button"
-            className="ig-link"
-            disabled={busy}
-            onClick={() => {
-              if (!d.ignore) return;
-              setBusy(true);
-              void ignore(d.ignore).finally(() => setBusy(false));
-            }}
-          >
-            {ignoreLabel(d.ignore)}
-          </button>
+          {d.skip ? (
+            <button
+              type="button"
+              className="ig-link"
+              disabled={busy}
+              onClick={() => {
+                if (!d.skip) return;
+                setBusy(true);
+                void skip(d.skip).finally(() => setBusy(false));
+              }}
+            >
+              Saltar
+            </button>
+          ) : null}
+          {d.ignore ? (
+            <button
+              type="button"
+              className="ig-link"
+              disabled={busy}
+              onClick={() => {
+                if (!d.ignore) return;
+                setBusy(true);
+                void ignore(d.ignore).finally(() => setBusy(false));
+              }}
+            >
+              {ignoreLabel(d.ignore)}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -68,8 +68,8 @@ export function tasksRepo(db: Db) {
   const link = (taskId: string, itemIds: string[], station: Station, ts: string) => {
     for (const itemId of itemIds) {
       const r = db
-        .prepare("UPDATE items SET task_id = ?, station = ?, updated_at = ? WHERE id = ?")
-        .run(taskId, station, ts, itemId);
+        .prepare("UPDATE items SET task_id = ?, station = ?, skipped_at = CASE WHEN ? = 'done' THEN skipped_at ELSE NULL END, updated_at = ? WHERE id = ?")
+        .run(taskId, station, station, ts, itemId);
       if (!r.changes) throw new NotFoundError("item", itemId);
     }
   };
@@ -78,7 +78,8 @@ export function tasksRepo(db: Db) {
     db.prepare(
       "UPDATE tasks SET station = ?, position = COALESCE(?, position), sync_state = 'pending', sync_error = NULL, updated_at = ? WHERE id = ?",
     ).run(station, position ?? null, ts, id);
-    db.prepare("UPDATE items SET station = ?, updated_at = ? WHERE task_id = ?").run(station, ts, id);
+    // A card moved out of Hecho brings a skipped item back for real (skipped_at cleared).
+    db.prepare("UPDATE items SET station = ?, skipped_at = CASE WHEN ? = 'done' THEN skipped_at ELSE NULL END, updated_at = ? WHERE task_id = ?").run(station, station, ts, id);
   };
 
   const restoreOrMove = (moves: StationMove[], now: Date) => {

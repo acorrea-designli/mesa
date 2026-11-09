@@ -27,6 +27,8 @@ export const itemInput = z.object({
   receivedAt: isoDate.optional(),
 });
 export const itemPatch = itemInput.omit({ source: true, externalId: true }).partial();
+/** POST /api/items/:id/unskip: the station and waitOn the item had before "Saltar". */
+export const itemUnskip = z.object({ station, waitOn });
 
 export const taskInput = z.object({
   title: z.string().min(1),

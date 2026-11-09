@@ -69,6 +69,9 @@ Dropped items count as noise: the watermark still advances past them, and they a
 through, `mesa item upsert` answers `{ "ignored": true }` and stores nothing; that is not an error. To manage the
 list by hand: `MESA ignore add <source|'*'> <projectKey> --label L`, `MESA ignore remove <id>`.
 
+A skipped item ("Saltar", `MESA item skip <id>`) is never reopened by an upsert of the same `externalId`: it stays
+done with waitOn none and only its content refreshes. A new `externalId` (a new comment) is a normal item.
+
 ## 1. GitHub: review requests (gate from pr-monitor step 2)
 
 Source of truth for the rules: `C:/Users/z4yross/.claude-work/commands/pr-monitor.md` § "Step 2" and § "The gate"

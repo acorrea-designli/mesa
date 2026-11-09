@@ -73,22 +73,51 @@ export function itemsRepo(db: Db) {
       return get(id);
     },
 
-    /** Insert or update by (source, externalId). Station is kept on update unless given. */
+    /**
+     * Insert or update by (source, externalId). Station is kept on update unless given. A skipped item
+     * ("Saltar") keeps its station and waitOn whatever the input says: only its content refreshes.
+     */
     upsert(input: ItemInput, now = new Date()): { item: Item; created: boolean } {
       const existing = db
-        .prepare("SELECT id FROM items WHERE source = ? AND external_id = ?")
-        .get(input.source, input.externalId) as { id: string } | undefined;
+        .prepare("SELECT id, skipped_at FROM items WHERE source = ? AND external_id = ?")
+        .get(input.source, input.externalId) as { id: string; skipped_at: string | null } | undefined;
       if (!existing) return { item: this.create(input, now), created: true };
       const { source: _s, externalId: _e, ...patch } = input;
       void _s;
       void _e;
+      if (existing.skipped_at) {
+        delete patch.station;
+        delete patch.waitOn;
+      }
       return { item: this.update(existing.id, patch, now), created: false };
     },
 
+    /** A move to a station other than done brings a skipped item back for real: skippedAt is cleared. */
     update(id: string, patch: ItemPatch, now = new Date()): Item {
       get(id);
-      const { sql, values } = toAssignments({ ...patch, updatedAt: nowIso(now) }, SPEC);
+      const clear = patch.station !== undefined && patch.station !== "done" ? { skippedAt: null } : {};
+      const { sql, values } = toAssignments({ ...patch, ...clear, updatedAt: nowIso(now) }, SPEC);
       db.prepare(`UPDATE items SET ${sql} WHERE id = ?`).run(...values, id);
+      return get(id);
+    },
+
+    /** "Saltar": done, waitOn none, skippedAt now. Never touches the card (task_id) or a ticket. */
+    skip(id: string, now = new Date()): Item {
+      get(id);
+      const ts = nowIso(now);
+      db.prepare("UPDATE items SET station = 'done', wait_on = 'none', skipped_at = ?, updated_at = ? WHERE id = ?").run(ts, ts, id);
+      return get(id);
+    },
+
+    /** Deshacer of skip: restores the station and waitOn the item had, and clears skippedAt. */
+    unskip(id: string, restore: { station: Station; waitOn: string }, now = new Date()): Item {
+      get(id);
+      db.prepare("UPDATE items SET station = ?, wait_on = ?, skipped_at = NULL, updated_at = ? WHERE id = ?").run(
+        restore.station,
+        restore.waitOn,
+        nowIso(now),
+        id,
+      );
       return get(id);
     },
 

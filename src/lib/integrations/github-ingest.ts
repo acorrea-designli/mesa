@@ -201,6 +201,12 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
       out.skippedIgnored++;
       continue;
     }
+    // Andrés skipped this PR ("Saltar"): it stays done even if the review is requested again. No detail
+    // read, no upsert, no reopen; Deshacer or a manual move out of Hecho brings it back.
+    if (byExt.get(ext)?.skippedAt) {
+      seen.add(ext);
+      continue;
+    }
     const readDetail = async (): Promise<PrDetail | null> => {
       try {
         return await fetchPrDetail(gh, rr.repo, rr.number, login);

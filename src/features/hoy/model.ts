@@ -30,7 +30,20 @@ export interface HoyRow {
   taskId: string | null;
   /** The project "Ignorar proyecto «X»" would ignore (items only; never salidas). */
   ignore?: IgnoreTarget | null;
+  /** What "Saltar" skips and what Deshacer restores; null for done items and samples (items only). */
+  skip?: SkipTarget | null;
 }
+
+/** "Saltar" on an open item: its id and the station and waitOn Deshacer puts back. */
+export interface SkipTarget {
+  id: string;
+  station: Station;
+  waitOn: string;
+}
+
+/** Null when Saltar does not apply: the item is already done (or was skipped), or it is sample data. */
+export const skipTarget = (i: Pick<Item, "id" | "station" | "waitOn" | "isSample">): SkipTarget | null =>
+  i.station === "done" || i.isSample ? null : { id: i.id, station: i.station, waitOn: i.waitOn };
 
 export interface ItemDetail {
   id: string;
@@ -47,6 +60,7 @@ export interface ItemDetail {
   received: string;
   isSample: boolean;
   ignore?: IgnoreTarget | null;
+  skip?: SkipTarget | null;
 }
 
 export interface HoyApproval extends Approval {
@@ -113,9 +127,9 @@ const KIND: Record<string, string> = {
 export const kindLabel = (source: Source, kind: string) =>
   `${{ github: "GitHub", slack: "Slack", basecamp: "Basecamp", claude: "Claude" }[source]} · ${KIND[kind] ?? kind}`;
 
-/** Status tag for something waiting. Only "Te espera" is solid. */
-export function waitTag(waitOn: WaitOn | string, station: Station, tag?: string | null): Tag {
-  if (station === "done") return { tone: "plain", label: "Hecho" };
+/** Status tag for something waiting. Only "Te espera" is solid. A skipped item in Hecho reads "Saltado". */
+export function waitTag(waitOn: WaitOn | string, station: Station, tag?: string | null, skipped?: boolean): Tag {
+  if (station === "done") return { tone: "plain", label: skipped ? "Saltado" : "Hecho" };
   if (tag === "clean") return { tone: "ok", label: "Limpio" };
   if (waitOn === "you") return { tone: "you", label: "Te espera" };
   if (waitOn === "claude") return { tone: "cl", label: "Espera a Claude" };
@@ -162,7 +176,7 @@ export const isHealthSource = (s: Source): s is "github" | "slack" | "basecamp" 
 export function itemRow(i: Item, time: string, health?: SourceHealth): HoyRow {
   const down = health?.state === "down";
   const stale = Boolean(health && health.state !== "ok") && i.station !== "done";
-  const tag = stale && down ? { tone: "off" as const, label: "Sin datos" } : waitTag(i.waitOn, i.station, i.tag);
+  const tag = stale && down ? { tone: "off" as const, label: "Sin datos" } : waitTag(i.waitOn, i.station, i.tag, Boolean(i.skippedAt));
   return {
     key: `it:${i.id}`,
     kind: "item",

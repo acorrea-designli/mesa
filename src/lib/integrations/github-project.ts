@@ -338,7 +338,7 @@ const isDraft = (it: GhProjectItem) => it.content?.type === "DraftIssue";
 /** Apply a GitHub-side Status change to a synced task without marking it pending. */
 function applyRemoteStation(db: Db, taskId: string, station: Station, ts: string): void {
   db.prepare("UPDATE tasks SET station = ?, updated_at = ?, synced_at = ? WHERE id = ? AND sync_state = 'synced'").run(station, ts, ts, taskId);
-  db.prepare("UPDATE items SET station = ?, updated_at = ? WHERE task_id = ?").run(station, ts, taskId);
+  db.prepare("UPDATE items SET station = ?, skipped_at = CASE WHEN ? = 'done' THEN skipped_at ELSE NULL END, updated_at = ? WHERE task_id = ?").run(station, station, ts, taskId);
 }
 
 /** Pure reconciliation: what to do with each remote item given the local tasks. */

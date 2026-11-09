@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Salida } from "@/lib/domain/types";
 import { mapHealth, railHealth } from "@/components/shell/health";
-import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, sourceCounts, visibleRows, waitTag } from "./model";
+import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, skipTarget, sourceCounts, visibleRows, waitTag } from "./model";
 
 const base: Item = {
   id: "it_1",
@@ -19,6 +19,7 @@ const base: Item = {
   taskId: null,
   meta: {},
   isSample: true,
+  skippedAt: null,
   receivedAt: "2026-11-03T14:02:00.000Z",
   createdAt: "2026-11-03T14:02:00.000Z",
   updatedAt: "2026-11-03T14:02:00.000Z",
@@ -48,6 +49,18 @@ describe("labels", () => {
     expect(waitTag("claude", "doing")).toEqual({ tone: "cl", label: "Espera a Claude" });
     expect(waitTag("person:Matt", "waiting")).toEqual({ tone: "plain", label: "Espera a Matt" });
     expect(waitTag("you", "done").tone).toBe("plain");
+  });
+
+  it("a skipped item in Hecho reads Saltado; Saltar applies to open, non-sample items only", () => {
+    expect(waitTag("none", "done")).toEqual({ tone: "plain", label: "Hecho" });
+    expect(waitTag("none", "done", null, true)).toEqual({ tone: "plain", label: "Saltado" });
+    const skipped = { ...base, station: "done" as const, waitOn: "none" as const, skippedAt: "2026-11-03T15:00:00.000Z" };
+    expect(itemRow(skipped, "09:02").tag.label).toBe("Saltado");
+    expect(itemRow({ ...skipped, skippedAt: null }, "09:02").tag.label).toBe("Hecho");
+    const open = { ...base, isSample: false, station: "waiting" as const, waitOn: "client" as const };
+    expect(skipTarget(open)).toEqual({ id: "it_1", station: "waiting", waitOn: "client" });
+    expect(skipTarget(skipped)).toBeNull();
+    expect(skipTarget({ ...open, isSample: true })).toBeNull();
   });
 
   it("prefixes the project except for Claude questions", () => {

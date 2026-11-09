@@ -53,6 +53,8 @@ export interface Item {
   /** Most specific stable project id (generated column items.project_key; domain/ignore.ts projectKey). */
   projectKey?: string;
   isSample: boolean;
+  /** Set when Andrés skipped the item ("Saltar"): done, waitOn none, and no upsert reopens it. */
+  skippedAt: string | null;
   receivedAt: string;
   createdAt: string;
   updatedAt: string;

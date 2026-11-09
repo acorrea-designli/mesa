@@ -687,6 +687,9 @@
 }
 .hy-ign-d {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
 }
 @media (max-width: 720px) {
   .hy-more {

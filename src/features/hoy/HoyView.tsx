@@ -20,6 +20,7 @@ import { SalidaApproval } from "@/features/salidas/SalidaApproval";
 import { clock } from "./format";
 import { LeadFocus } from "./LeadFocus";
 import { useLive } from "./useLive";
+import { useSkip } from "./useSkip";
 import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu";
 import { IgnoredLink } from "../ignore/IgnoredSheet";
 import { ignoreLabel } from "../ignore/model";
@@ -156,6 +157,7 @@ export function HoyView({ data }: { data: HoyData }) {
   const pressRef = usePress<HTMLDivElement>(".hy-row", true);
   const menu = useActionMenu();
   const { ignore } = useIgnore();
+  const { skip } = useSkip();
 
   // ---------- selection (item rows only) ----------
   const picked = useMemo(() => items.filter((r) => sel.has(r.id)), [items, sel]);
@@ -241,12 +243,14 @@ export function HoyView({ data }: { data: HoyData }) {
 
   const rowMenu = (r: HoyRow): RowMenu => {
     const t = r.kind === "item" ? r.ignore : null;
+    const sk = r.kind === "item" ? r.skip : null;
     const actions: MenuAction[] = [
       {
         label: sel.has(r.id) ? "Quitar de la selección" : "Seleccionar",
         detail: "Shift+clic elige un rango · Ctrl/Cmd+clic suma",
         onSelect: () => toggleRow({ shiftKey: false, ctrlKey: true, metaKey: false }, r),
       },
+      ...(sk ? [{ label: "Saltar", detail: "Sale de Hoy sin responder; no vuelve aunque Claude lo barra otra vez", onSelect: () => void skip(sk) }] : []),
       ...(t ? [{ label: ignoreLabel(t), detail: "Sale de Hoy y del tablero; Claude deja de barrerlo", onSelect: () => void ignore(t) }] : []),
     ];
     return { actions, onMore: (el) => menu.openFrom(el, `Acciones de ${r.subject}`, actions), onContext: menu.onContext(`Acciones de ${r.subject}`, actions) };

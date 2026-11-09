@@ -4,7 +4,7 @@ import type { Source } from "@/lib/domain/types";
 import { repos } from "@/lib/repo";
 import { clock, isToday, longDay, shortDay, when } from "./format";
 import { ignoreTarget } from "../ignore/model";
-import { itemRow, kindLabel, openLabel, salidaRow, type HoyData, type HoyRow, type ItemDetail, type SetupRow } from "./model";
+import { itemRow, kindLabel, openLabel, salidaRow, skipTarget, type HoyData, type HoyRow, type ItemDetail, type SetupRow } from "./model";
 
 function setting(key: string): string | null {
   const row = repos().db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
@@ -28,7 +28,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
   // Items of ignored projects stay in the DB but leave Hoy, the band and the counts.
   const all = r.items.list({ ignored: "exclude" });
   const items = all.filter((i) => i.station !== "done" || isToday(i.updatedAt, now));
-  const rows: HoyRow[] = items.map((i) => ({ ...itemRow(i, when(i.receivedAt, now), i.source === "claude" ? undefined : health[i.source]), ignore: ignoreTarget(i) }));
+  const rows: HoyRow[] = items.map((i) => ({ ...itemRow(i, when(i.receivedAt, now), i.source === "claude" ? undefined : health[i.source]), ignore: ignoreTarget(i), skip: skipTarget(i) }));
 
   // "Ticket tN" comes from the item's card: the open ticket it hangs on (after a fold, the primary), else the item's own meta.
   const openTicketOfCard = new Map(
@@ -52,6 +52,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
       received: `${when(i.receivedAt, now)}${isToday(i.receivedAt, now) ? "" : ` ${clock(i.receivedAt)}`}`,
       isSample: i.isSample,
       ignore: ignoreTarget(i),
+      skip: skipTarget(i),
     };
   }
 

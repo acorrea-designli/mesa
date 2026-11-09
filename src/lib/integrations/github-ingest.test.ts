@@ -103,6 +103,32 @@ describe("GitHub ingest", () => {
     expect(r.items.list({ source: "github" })[0]!.station).toBe("inbox");
   });
 
+  it("a skipped PR stays done with no detail fetch; a non-skipped done PR still comes back", async () => {
+    search = [pr("acme/api", 7), pr("acme/api", 8)];
+    const gh = fakeGh(searchHandler, detailHandler);
+    await syncReviewRequests(r, gh.run, "acorrea-designli", T0);
+    const seven = r.items.list({ source: "github" }).find((i) => i.externalId === "pr:acme/api#7")!;
+    const eight = r.items.list({ source: "github" }).find((i) => i.externalId === "pr:acme/api#8")!;
+    r.items.skip(seven.id, at(500));
+    r.items.update(eight.id, { station: "done", waitOn: "none" }, at(500));
+
+    // Both PRs changed and are still requested.
+    search = [pr("acme/api", 7, { updated_at: "2026-11-03T16:00:00Z" }), pr("acme/api", 8, { updated_at: "2026-11-03T16:00:00Z" })];
+    const before = gh.calls.length;
+    const res = await syncReviewRequests(r, gh.run, "acorrea-designli", at(1000));
+    expect(r.items.get(seven.id)).toMatchObject({ station: "done", waitOn: "none", skippedAt: at(500).toISOString() });
+    expect(r.items.get(eight.id)).toMatchObject({ station: "inbox", waitOn: "you" });
+    expect(res).toMatchObject({ created: 0, updated: 1, done: 0 });
+    const fetched = gh.calls.slice(before).filter((c) => /pulls\/\d+/.test(path(c.args) ?? ""));
+    expect(fetched.every((c) => /pulls\/8/.test(path(c.args) ?? ""))).toBe(true);
+    expect(fetched.length).toBeGreaterThan(0);
+
+    // A complete search without it does not touch a skipped item either.
+    search = [];
+    await syncReviewRequests(r, gh.run, "acorrea-designli", at(2000));
+    expect(r.items.get(seven.id)).toMatchObject({ station: "done", skippedAt: at(500).toISOString() });
+  });
+
   it("does not trust absences from an incomplete search", async () => {
     const gh = fakeGh(searchHandler, detailHandler);
     await syncReviewRequests(r, gh.run, "x", T0);
