@@ -81,21 +81,50 @@ export interface PrDetail {
   additions: number;
   deletions: number;
   head: string;
+  /** Branch names from the same pulls/<n> read; null when GitHub did not send them. */
+  headRef: string | null;
+  baseRef: string | null;
   /** Andrés's latest review on the PR, if any: APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED. */
   myReview: string | null;
   myReviewHead: string | null;
 }
 
 export async function fetchPrDetail(gh: GhRunner, repo: string, n: number, login: string): Promise<PrDetail> {
-  const pr = JSON.parse((await ghApi(gh, `repos/${repo}/pulls/${n}`)).body) as { additions: number; deletions: number; head: { sha: string } };
+  const pr = JSON.parse((await ghApi(gh, `repos/${repo}/pulls/${n}`)).body) as {
+    additions: number;
+    deletions: number;
+    head: { sha: string; ref?: string };
+    base?: { ref?: string };
+  };
   const reviews = JSON.parse((await ghApi(gh, `repos/${repo}/pulls/${n}/reviews?per_page=100`)).body) as {
     state: string;
     commit_id: string;
     user?: { login?: string } | null;
   }[];
   const mine = reviews.filter((r) => r.user?.login === login && r.state !== "PENDING").at(-1);
-  return { additions: pr.additions, deletions: pr.deletions, head: pr.head.sha, myReview: mine?.state ?? null, myReviewHead: mine?.commit_id ?? null };
+  return {
+    additions: pr.additions,
+    deletions: pr.deletions,
+    head: pr.head.sha,
+    headRef: pr.head.ref ?? null,
+    baseRef: pr.base?.ref ?? null,
+    myReview: mine?.state ?? null,
+    myReviewHead: mine?.commit_id ?? null,
+  };
 }
+
+// An auto-created release PR ("Create staging PR", develop -> staging) is approved only at deploy time: it is
+// never an item. Same rule as the mesa-sweep § 1 gate.
+const RELEASE_TITLE = /^\s*create\s+(staging|prod|production)\s+pr\s*$/i;
+const LONG_LIVED = new Set(["develop", "staging", "main", "master", "production", "prod"]);
+
+/** True for a release-train PR: the release title AND both branches long-lived. Branch names are exact (case-sensitive). */
+export function isReleaseTrainPr(p: { title: string; headRef: string | null | undefined; baseRef: string | null | undefined }): boolean {
+  return RELEASE_TITLE.test(p.title) && !!p.headRef && !!p.baseRef && LONG_LIVED.has(p.headRef) && LONG_LIVED.has(p.baseRef);
+}
+
+/** Cheap pre-check: only a matching title is worth the pulls/<n> read for the branches. */
+export const hasReleaseTitle = (title: string): boolean => RELEASE_TITLE.test(title);
 
 export const prExternalId = (repo: string, n: number) => `pr:${repo}#${n}`;
 
@@ -143,6 +172,8 @@ export interface ReviewSyncResult {
   skippedDrafts: number;
   /** Requests of ignored projects: never upserted. */
   skippedIgnored: number;
+  /** Release-train PRs (auto-created "Create staging PR"): never upserted. */
+  skippedRelease: number;
 }
 
 /**
@@ -158,7 +189,7 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
   const open = r.items.list({ source: "github", includeSamples: false, ignored: "exclude" }).filter((i) => i.kind === "pr_review");
   const byExt = new Map<string, Item>(open.map((i) => [i.externalId, i]));
   const seen = new Set<string>();
-  const out: ReviewSyncResult = { requests: requests.length, created: 0, updated: 0, done: 0, skippedDrafts: 0, skippedIgnored: 0 };
+  const out: ReviewSyncResult = { requests: requests.length, created: 0, updated: 0, done: 0, skippedDrafts: 0, skippedIgnored: 0, skippedRelease: 0 };
 
   for (const rr of requests) {
     if (rr.draft) {
@@ -170,17 +201,32 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
       out.skippedIgnored++;
       continue;
     }
+    const readDetail = async (): Promise<PrDetail | null> => {
+      try {
+        return await fetchPrDetail(gh, rr.repo, rr.number, login);
+      } catch (err) {
+        if (err instanceof GhError && err.kind === "rate_limit") throw err;
+        // A PR we cannot read in detail still enters with its title (and, with unknown branches, is not a proven release PR).
+        return null;
+      }
+    };
+    // Release-train check first, before the fresh shortcut: only a matching title costs the branch read. Not added to
+    // `seen`, so an item created before this filter moves to Hecho on a complete search.
+    let detail: PrDetail | null = null;
+    let read = false;
+    if (hasReleaseTitle(rr.title)) {
+      detail = await readDetail();
+      read = true;
+      if (detail && isReleaseTrainPr({ title: rr.title, headRef: detail.headRef, baseRef: detail.baseRef })) {
+        out.skippedRelease++;
+        continue;
+      }
+    }
     seen.add(ext);
     const existing = byExt.get(ext);
     const fresh = existing && existing.meta?.updatedAt === rr.updatedAt && existing.station !== "done";
     if (fresh) continue;
-    let detail: PrDetail | null = null;
-    try {
-      detail = await fetchPrDetail(gh, rr.repo, rr.number, login);
-    } catch (err) {
-      if (err instanceof GhError && err.kind === "rate_limit") throw err;
-      // A PR we cannot read in detail still enters with its title.
-    }
+    if (!read) detail = await readDetail();
     const input = toItemInput(rr, detail);
     // A request that came back (re-requested after a push) returns to the inbox.
     if (existing?.station === "done") input.station = "inbox";
