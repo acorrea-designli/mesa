@@ -43,6 +43,7 @@ test("parseTunnelList: finds the live tunnel by name and counts connections", ()
   assert.equal(parseTunnelList(list, "nope"), null);
   assert.equal(parseTunnelList(JSON.stringify([{ id: ID, name: "mesa", deleted_at: "2026-01-01" }]), "mesa"), null);
   assert.deepEqual(parseTunnelList(JSON.stringify([{ id: ID, name: "mesa" }]), "mesa"), { id: ID, name: "mesa", connections: 0 });
+  assert.deepEqual(parseTunnelList(JSON.stringify([{ id: ID, name: "mesa", deleted_at: "0001-01-01T00:00:00Z", connections: [] }]), "mesa"), { id: ID, name: "mesa", connections: 0 });
   assert.equal(parseTunnelList("not json", "mesa"), null);
   assert.equal(parseTunnelList("{}", "mesa"), null);
 });

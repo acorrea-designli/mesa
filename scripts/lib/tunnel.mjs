@@ -53,7 +53,9 @@ export function parseTunnelList(text, name) {
     return null;
   }
   if (!Array.isArray(list)) return null;
-  const t = list.find((x) => x?.name === name && !x?.deleted_at);
+  // cloudflared reports a live tunnel with the zero time "0001-01-01T00:00:00Z" in deleted_at.
+  const deleted = (x) => Boolean(x?.deleted_at) && !String(x.deleted_at).startsWith("0001-01-01");
+  const t = list.find((x) => x?.name === name && !deleted(x));
   if (!t?.id) return null;
   const conns = Array.isArray(t.connections) ? t.connections.length : 0;
   return { id: t.id, name: t.name, connections: conns };
