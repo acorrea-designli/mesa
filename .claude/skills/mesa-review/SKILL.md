@@ -70,7 +70,8 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 The findings are the ask: Mesa renders them on the ticket's review card with pr-monitor's buttons, so there is no
 A/B question. Post one ticket reply as the summary: ONE line in Spanish with the counts and, if there is one, what
 the blocker is in plain words (e.g. `1 blocker, 1 nit: el permiso por tipo de evaluación solo lo aplica el selector.`).
-Never repeat the findings, paths, line numbers or sha in the reply: they are already on the review card. Andrés,
+Never repeat the findings, paths, line numbers or sha in the reply: they are already on the review card (hook G12 refuses a reviewer's
+`mesa ticket reply` with more than 2 non-empty lines, a `path/file.ext:NN` or a sha). Andrés,
 2026-11-09 (t3): "en los tickets de pr hay como mucho ruido". Add a second line only for something the card cannot
 show (e.g. a merge order: "no mergear antes de be#473"). Incremental passes say `re-review: K arreglados · M
 pendientes · P nuevos`; verification passes `verificación: K arreglados · M pendientes`. A clean pass says
@@ -98,8 +99,9 @@ github salidas that are already approved and in the 20 s undo window. You never 
 - **dismiss**: `MESA finding upsert` each listed finding with `state: "dismissed"` (keep `at` and `anchor`) unless
   Mesa already did; an FYI reply naming any blocker among them. No GitHub write.
 - **explain**: reread the code with more context, write the English long form (*Why it is a problem*, *What breaks,
-  concretely*, *The fix* with a fenced code block) into the finding's `explanation` with `finding upsert`, and post it
-  as a ticket reply. Say so at the end if the finding is already closed.
+  concretely*, *The fix* with a fenced code block) into the finding's `explanation` with `finding upsert`. The card
+  shows it; it never goes into the ticket reply too (that would show it twice, t50). The reply is one line: `Detalle
+  en el hallazgo N de la tarjeta.` Say so in that line if the finding is already closed.
 - **Re-review** (a ticket reply): incremental from `head`; if `head` is the current head, a full review (never a no-op).
 
 Then the final handoff and `DONE <ref> reviewer-<ref> <N fixed · M open · K new | approved | posted N>` to

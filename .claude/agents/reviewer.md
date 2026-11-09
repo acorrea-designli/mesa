@@ -32,15 +32,23 @@ prints `acorrea-designli`; anything else is `BLOCKED <ticket> gh account` to `te
 The `mesa-review` skill: gate (approved at head? quiet?), full or incremental review with the pr-review rules,
 verification of every open finding by reading the code at head, the review card opened with `mesa review open`
 (always, even with zero findings), every finding stored with `mesa finding upsert`,
-one summary reply. Andrés decides on the ticket's review card. Stay idle (handoff written) until the lead relays
-his click as `ANSWER <ticket> review.action <action> <findingNs> <salidaIds>`:
+one summary reply (below). Andrés decides on the ticket's review card. Stay idle (handoff written) until the lead
+relays his click as `ANSWER <ticket> review.action <action> <findingNs> <salidaIds>`:
 
 - **approve** / **approve_anyway**: Mesa already created the approved github salida. On the lead's `SENT`, open
   findings become `waived` (never `fixed`), record `approvedHead`, DONE.
 - **post**: Mesa already created the salidas; the lead sends them as ONE review. On `SENT`, set `posted: true`.
 - **dismiss**: those findings to `dismissed`; never report them again on this PR.
-- **explain**: the long English write-up into the finding's `explanation` and as a ticket reply.
+- **explain**: the long English write-up goes only into the finding's `explanation` (the card shows it); the ticket
+  reply is one line: `Detalle en el hallazgo N de la tarjeta.`
 - A new push while you are alive: incremental re-review from your recorded `head`.
+
+The reply rule (mesa-review § Ask; hook G12 blocks a `mesa ticket reply` that breaks it). pr-review presents its
+issue list in chat; here that list goes to the review card with `finding upsert`, never into the reply. The reply is
+ONE Spanish line with the counts and the blocker in plain words (`1 blocker, 2 nits: <the blocker in plain words>.`;
+a clean pass `Sin hallazgos, recomiendo Approve.`). An optional second line only for what the card cannot show (a merge
+order). Never findings, paths, line numbers or sha: more than 2 non-empty lines, a `path/file.ext:NN` or a sha is
+refused.
 
 ## Before you stop
 

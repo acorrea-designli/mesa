@@ -33,6 +33,67 @@ test("G3: long and ack-only messages are blocked; HANDOFF gets more room", async
   assert.equal(await rule(run(mate(), "SendMessage", { to: "team-lead", message: "ok, will do" })), "G3");
 });
 
+const MESA_REPLY = "node G:/WorkSpace/designli/ops/bin/mesa ticket reply t48";
+const heredoc = (body, extra = "") => `${MESA_REPLY} --body -${extra} <<'EOF'\n${body}\nEOF`;
+const reviewer = () => fakeAgent({ name: "reviewer-t48" }).input;
+const findings = "1 blocker, 2 nits.\n1. [blocker] src/api/eval.ts:42 the permission is not checked.\n2. [nit] src/api/eval.ts:60 rename.";
+
+test("G12: a reviewer's one-line reply is allowed", async () => {
+  const r = reviewer();
+  assert.equal(await rule(sh(r, heredoc("1 blocker, 2 nits: el permiso por tipo de evaluación solo lo aplica el selector."))), null);
+  assert.equal(await rule(sh(r, heredoc("Sin hallazgos, recomiendo Approve."))), null);
+  assert.equal(await rule(sh(r, heredoc("1 blocker, 1 nit: falta el permiso.\nno mergear antes de be#473"))), null);
+  assert.equal(await rule(sh(r, heredoc("Detalle en el hallazgo 2 de la tarjeta."), " --ask")), null);
+  assert.equal(await rule(run(r, "PowerShell", { command: heredoc("0 blockers, 1 nit: solo un nombre.") })), null);
+});
+
+test("G12: a reviewer's multi-line findings list is blocked", async () => {
+  const r = reviewer();
+  const b = await sh(r, heredoc(findings));
+  assert.equal(b?.rule, "G12");
+  assert.match(b.reason, /mesa-review § Ask/);
+  assert.match(b.reason, /1 blocker, 2 nits: <the blocker in plain words>\./);
+  assert.equal(await rule(sh(r, heredoc("uno\ndos\ntres"))), "G12");
+  assert.equal(await rule(sh(r, heredoc("uno\n\ndos\n\n"))), null);
+  assert.equal(await rule(run(r, "PowerShell", { command: heredoc(findings) })), "G12");
+});
+
+test("G12: a path:line or a sha in a reviewer's one-line reply is blocked", async () => {
+  const r = reviewer();
+  assert.equal(await rule(sh(r, heredoc("1 blocker: src/x.ts:12 no valida el permiso."))), "G12");
+  assert.equal(await rule(sh(r, heredoc("1 nit: x.tsx:7 renombrar"))), "G12");
+  assert.equal(await rule(sh(r, heredoc("re-review 2d3d0df..5434391: 1 arreglado"))), "G12");
+  assert.equal(await rule(sh(r, heredoc("verificación en 5434391bda98e7c888617f9a9103e0cde2a5d2ce"))), "G12");
+  // plain numbers, words and PR refs are not shas or paths
+  assert.equal(await rule(sh(r, heredoc("1 blocker: el límite de 1234567 filas; no mergear antes de be#473; decaded ya."))), null);
+});
+
+test("G12: the quoted --body form is covered", async () => {
+  const r = reviewer();
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body "1 blocker, 2 nits: falta el permiso."`)), null);
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body '1 blocker, 2 nits: falta el permiso.' --ask`)), null);
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body "1 blocker: src/x.ts:12 falta el permiso."`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body='fixed in 2d3d0df'`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body "uno\ndos\ntres"`)), "G12");
+  assert.equal(await rule(run(r, "PowerShell", { command: `${MESA_REPLY} --body "1 blocker: a/b.ts:3 mal."` })), "G12");
+  assert.equal(await rule(run(r, "PowerShell", { command: `${MESA_REPLY} --body @'\nuno\ndos\ntres\n'@` })), "G12");
+});
+
+test("G12: only reviewers are held to it; the lead, tl, dev and writer reply freely", async () => {
+  for (const who of [lead, fakeAgent({ name: "tl-t48" }).input, fakeAgent({ name: "dev-t48" }).input, fakeAgent({ name: "writer-t48" }).input]) {
+    assert.equal(await rule(sh(who, heredoc(findings))), null);
+    assert.equal(await rule(sh(who, `${MESA_REPLY} --body "1 blocker: src/x.ts:12 falta 2d3d0df."`)), null);
+  }
+});
+
+test("G12: other reviewer commands are untouched", async () => {
+  const r = reviewer();
+  const handoff = "node G:/WorkSpace/designli/ops/bin/mesa handoff t48 --agent reviewer-t48 --status paused --body - <<'EOF'\nline 1\nsrc/x.ts:12\n2d3d0df\nEOF";
+  assert.equal(await rule(sh(r, handoff)), null);
+  assert.equal(await rule(sh(r, "node G:/WorkSpace/designli/ops/bin/mesa finding upsert t48 --json - <<'EOF'\n{\"at\":\"src/x.ts:12\"}\nEOF")), null);
+  assert.equal(await rule(sh(r, "gh api repos/a/b/pulls/1/files")), null);
+});
+
 test("G4: teammates cannot write to Slack, Basecamp or GitHub", async () => {
   const m = mate();
   assert.equal(await rule(run(m, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hi" })), "G4");
