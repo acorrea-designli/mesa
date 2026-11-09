@@ -112,7 +112,10 @@ export const plannedAction = z.object({
   target: z.record(z.string(), z.unknown()).optional(),
 });
 export const ticketPlan = z.object({ actions: z.array(plannedAction), session: z.string().optional() });
-export const ticketPlanApprove = z.object({ reject: z.array(z.string()).optional() });
+/** `only`: pre-approve just these planned needs_ok steps (a partial approval); without it the whole plan, minus `reject`. */
+export const ticketPlanApprove = z
+  .object({ reject: z.array(z.string()).optional(), only: z.array(z.string()).min(1).optional() })
+  .refine((b) => !(b.only && b.reject?.length), { message: "only and reject cannot be combined" });
 export const ticketTransition = z.object({
   event: z.enum(["claim", "close", "reopen"]),
   by: z.enum(["andres", "claude"]).optional(),
@@ -127,8 +130,9 @@ export const ticketFold = z.object({
 });
 /** Andrés splits a folded ticket out again (mesa ticket unfold <primary> <ref>). */
 export const ticketUnfold = z.object({ ticket: z.string().min(1) });
+/** What a session may report. "approved" is Andrés's (POST /api/tickets/:id/plan/approve), never a session's. */
 export const actionState = z.object({
-  state: z.enum(["planned", "approved", "rejected", "running", "done", "failed"]),
+  state: z.enum(["running", "done", "failed"]),
 });
 
 const slackDest = z.object({

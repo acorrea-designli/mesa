@@ -222,7 +222,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
 
           {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
 
-          {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
+          {t.actions.length ? <Plan ticketId={t.id} actions={t.actions} verbs={verbs} busy={busy} onVerb={(v) => c.setText(`${v}: `)} onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")} onApproveStep={(a) => transition(() => ticketApi.approveStep(t.id, a.id), "Paso aprobado · Claude lo hace sin volver a preguntar")} /> : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
             <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
           ) : null}
 
@@ -497,7 +497,7 @@ function LiveTrackSmall() {
 
 // ---------- "Claude va a hacer" ----------
 
-function Plan({ actions, verbs, busy, onApprove, onVerb }: { ticketId: string; actions: PlannedAction[]; verbs: string[]; busy: boolean; onApprove: (reject: string[]) => void; onVerb: (v: string) => void }) {
+function Plan({ actions, verbs, busy, onApprove, onApproveStep, onVerb }: { ticketId: string; actions: PlannedAction[]; verbs: string[]; busy: boolean; onApprove: (reject: string[]) => void; onApproveStep: (a: PlannedAction) => void; onVerb: (v: string) => void }) {
   const [reject, setReject] = useState<string[]>([]);
   const waiting = actions.filter((a) => a.state === "planned");
   return (
@@ -521,11 +521,16 @@ function Plan({ actions, verbs, busy, onApprove, onVerb }: { ticketId: string; a
               <span className="tk-gate">
                 <span className={a.mode === "needs_ok" ? "gate ask" : "gate"}>{a.mode === "needs_ok" ? "te pide OK" : "directo"}</span>
                 {a.state === "planned" && a.mode === "needs_ok" ? (
-                  <label className="tk-no">
-                    <input type="checkbox" checked={reject.includes(a.id)} onChange={() => setReject((r) => (r.includes(a.id) ? r.filter((x) => x !== a.id) : [...r, a.id]))} />
-                    no hacer
-                  </label>
-                ) : a.state !== "planned" && a.state !== "approved" ? (
+                  <span className="tk-step">
+                    <button className="tk-ok" type="button" disabled={busy || off} aria-label={`Aprobar solo este paso: ${head}`} onClick={() => onApproveStep(a)}>
+                      Aprobar
+                    </button>
+                    <label className="tk-no">
+                      <input type="checkbox" checked={reject.includes(a.id)} onChange={() => setReject((r) => (r.includes(a.id) ? r.filter((x) => x !== a.id) : [...r, a.id]))} />
+                      no hacer
+                    </label>
+                  </span>
+                ) : a.state !== "planned" && (a.state !== "approved" || a.mode === "needs_ok") ? (
                   <small className="tk-astate">{ACTION_STATE[a.state]}</small>
                 ) : null}
               </span>

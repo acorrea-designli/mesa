@@ -28,7 +28,9 @@ export function Dir({ direction }: { direction: Ticket["direction"] }) {
 export const statusLabel = (s: Ticket["status"]) =>
   ({ waiting_andres: "Te espera", waiting_claude: "Espera a Claude", working: "Claude trabaja", closed: "Cerrado" })[s];
 
-export function TicketStatus({ t }: { t: Pick<Ticket, "status"> }) {
+/** A ticket with something for Andrés reads "Te espera" whatever its stored status (ticket-needs.ts). The action's name goes in the excerpt, never in a second solid tag. */
+export function TicketStatus({ t }: { t: Pick<Ticket, "status"> & { needs?: unknown[] } }) {
+  if (t.needs?.length) return <StatusTag tone="you">Te espera</StatusTag>;
   switch (t.status) {
     case "waiting_andres":
       return <StatusTag tone="you">Te espera</StatusTag>;

@@ -39,10 +39,10 @@ describe("loadTickets selection", () => {
     const landing = loadTickets(r, {}, now);
     expect(landing.selected?.ticket.ref).toBe(a.ref); // landing: first row
     const b = claudeAsks("B", at(2000));
-    expect(loadTickets(r, {}, now).selected?.ticket.ref).toBe(b.ref); // still the landing default
+    expect(loadTickets(r, {}, now).selected?.ticket.ref).toBe(a.ref); // landing: the first row is the one waiting longest
     expect(loadTickets(r, { pinned: a.ref }, now).selected?.ticket.ref).toBe(a.ref);
     expect(loadTickets(r, { selected: a.ref }, now).selected?.ticket.ref).toBe(a.ref);
-    expect(loadTickets(r, { pinned: a.ref }, now).rows[0]?.ref).toBe(b.ref); // the list still shows the new one
+    expect(loadTickets(r, { pinned: a.ref }, now).rows.map((x) => x.ref)).toContain(b.ref); // the list still shows the new one
   });
 
   it("a message arriving on another ticket does not move the open one", () => {
@@ -141,5 +141,43 @@ describe("loadTickets read state", () => {
     r.tickets.markSeen(a.ref, at(2000));
     r.tickets.addMessage(a.id, { author: "andres", body: "A" }, at(3000));
     expect(loadTickets(r, { selected: a.ref }, now).rows.find((x) => x.ref === a.ref)?.unread).toBe(false);
+  });
+});
+
+describe("loadTickets needs", () => {
+  const needsOk = [{ kind: "merge_pr", source: "github" as const, label: "Mergear", mode: "needs_ok" as const }];
+  const request = (title: string, when: Date) => r.tickets.create({ direction: "andres_asks", title, ownerSession: "lead" }, when);
+
+  it("a plan still waiting for his OK marks the row after the status drifted off waiting_andres", () => {
+    const t = request("Plan", at(1000));
+    r.tickets.plan(t.id, needsOk, "lead");
+    r.tickets.addMessage(t.id, { author: "andres", body: "una duda" }, at(2000)); // waiting_claude
+    const d = loadTickets(r, {}, now);
+    const row = d.rows.find((x) => x.id === t.id)!;
+    expect(row.status).toBe("waiting_claude");
+    expect(row.needs.map((n) => n.label)).toEqual(["Aprobar plan"]);
+    expect(row.excerpt).toBe("Aprobar plan · 1 paso te pide OK");
+    expect(d.counts.you).toBe(1);
+  });
+
+  it("sorts rows with needs first by need priority then oldest first, then the rest newest first", () => {
+    const plain = request("Sin nada", at(5000));
+    const salida = request("Salida", at(1000));
+    r.salidas.create({ source: "slack", destination: { kind: "slack_channel", workspace: "w", channel: "#a", postAs: "Andrés" }, title: "Hola", body: "Hola", ticketId: salida.id }, at(1500));
+    const planNew = request("Plan nuevo", at(3000));
+    r.tickets.plan(planNew.id, needsOk, "lead");
+    const planOld = request("Plan viejo", at(2000));
+    r.tickets.plan(planOld.id, needsOk, "lead");
+    const rows = loadTickets(r, {}, now).rows;
+    expect(rows.map((x) => x.ref)).toEqual([planOld.ref, planNew.ref, salida.ref, plain.ref]);
+  });
+
+  it("the Te esperan tab lists and counts only tickets with a need", () => {
+    const withNeed = request("Con plan", at(1000));
+    r.tickets.plan(withNeed.id, needsOk, "lead");
+    request("Sin nada", at(2000));
+    const d = loadTickets(r, { tab: "you" }, now);
+    expect(d.rows.map((x) => x.ref)).toEqual([withNeed.ref]);
+    expect(d.counts).toMatchObject({ open: 2, you: 1 });
   });
 });

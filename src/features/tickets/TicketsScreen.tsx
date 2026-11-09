@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/interactive";
 import { useArrive, usePress } from "@/lib/motion";
 import { IcBack, IcEngram, IcPlus } from "@/features/salidas/icons";
 import { useLiveRefresh } from "@/features/salidas/live";
+import { needLine } from "@/lib/domain/ticket-needs";
 import { ticketApi } from "./api";
 import { Dir, hm, LivePill, statusLabel, TicketStatus } from "./bits";
 import { ComposerBox, useComposer, type SlashAction } from "./Composer";
@@ -215,6 +216,7 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
 }
 
 function Row({ t, sel, tab }: { t: TicketRow; sel: boolean; tab?: string }) {
+  const line = needLine(t.needs);
   return (
     <Link
       role="listitem"
@@ -228,7 +230,7 @@ function Row({ t, sel, tab }: { t: TicketRow; sel: boolean; tab?: string }) {
       <span className="subj">
         {t.unread ? <span className="tk-flag">new</span> : null}
         {t.title}
-        <small>{t.excerpt}</small>
+        <small>{line ? <><b>{line.lead}</b>{line.rest}</> : t.excerpt}</small>
       </span>
       <span className="t">{hm(t.createdAt)}</span>
       <TicketStatus t={t} />
@@ -256,19 +258,20 @@ function Rail({ rows, sel, tab, onExpand, onLeave }: { rows: TicketRow[]; sel?: 
       {rows.map((t) => {
         const isSel = sel === t.id;
         const flag = t.unread && !isSel;
+        const need = t.needs[0];
         return (
           <Link
             key={t.id}
             href={href({ tab, t: t.ref })}
             className={["tk-rail-item", isSel && "sel", t.status === "closed" && "closed"].filter(Boolean).join(" ")}
-            aria-label={`${t.ref} · ${t.title} · ${statusLabel(t.status)}${flag ? " · nuevo" : ""}`}
+            aria-label={`${t.ref} · ${t.title} · ${need ? `Te espera · ${need.label}` : statusLabel(t.status)}${flag ? " · nuevo" : ""}`}
             aria-current={isSel ? "true" : undefined}
             title={t.title}
             scroll={false}
           >
             <span className="id">{t.ref}</span>
             <span className="tk-rail-meta" aria-hidden="true">
-              <i className={`tk-dot ${t.status}`} />
+              <i className={`tk-dot ${need ? "waiting_andres" : t.status}`} />
               {flag ? <span className="tk-flag">new</span> : null}
             </span>
           </Link>

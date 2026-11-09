@@ -195,6 +195,17 @@ export function itemRow(i: Item, time: string, health?: SourceHealth): HoyRow {
   };
 }
 
+/**
+ * A row whose item hangs on an open ticket that needs Andrés names the first need in the Necesita column
+ * and reads "Te espera" (the one solid tag), whatever the item's own wait says. Other rows pass unchanged.
+ */
+export function withTicketNeed(row: HoyRow, needs: readonly { label: string }[] | undefined): HoyRow {
+  const first = needs?.[0];
+  if (!first || row.kind !== "item" || row.station === "done") return row;
+  const tag: Tag = { tone: "you", label: "Te espera" };
+  return { ...row, need: first.label, tag, phoneTag: tag, waitsOnYou: true };
+}
+
 export function salidaRow(s: Salida, body: string, time: string): HoyRow {
   const quote = firstLine(body);
   return {

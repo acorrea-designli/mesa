@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Salida } from "@/lib/domain/types";
 import { mapHealth, railHealth } from "@/components/shell/health";
-import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, skipTarget, sourceCounts, visibleRows, waitTag } from "./model";
+import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, skipTarget, sourceCounts, visibleRows, waitTag, withTicketNeed } from "./model";
 
 const base: Item = {
   id: "it_1",
@@ -126,5 +126,28 @@ describe("rail health", () => {
       ["Basecamp", "al día"],
       ["Claude", "escucha"],
     ]);
+  });
+});
+
+describe("withTicketNeed", () => {
+  const claudeWaits = { ...base, waitOn: "claude" as const, need: "reply", tag: null, station: "doing" as const };
+  const need = [{ label: "Aprobar plan" }, { label: "Firmar salida" }];
+
+  it("names the first need in Necesita and reads Te espera, whatever the item waits on", () => {
+    const row = withTicketNeed(itemRow(claudeWaits, "09:02"), need);
+    expect(row.need).toBe("Aprobar plan");
+    expect(row.tag).toEqual({ tone: "you", label: "Te espera" });
+    expect(row.phoneTag).toEqual({ tone: "you", label: "Te espera" });
+    expect(row.waitsOnYou).toBe(true);
+  });
+
+  it("leaves rows without needs, done rows and salidas unchanged", () => {
+    const row = itemRow(claudeWaits, "09:02");
+    expect(withTicketNeed(row, [])).toBe(row);
+    expect(withTicketNeed(row, undefined)).toBe(row);
+    const done = itemRow({ ...claudeWaits, station: "done" }, "09:02");
+    expect(withTicketNeed(done, need)).toBe(done);
+    const sal = salidaRow({ id: "sa_1", source: "slack", title: "t", destination: { kind: "slack_channel", workspace: "w", channel: "#a", postAs: "x" } } as Salida, "Hola", "10:38");
+    expect(withTicketNeed(sal, need)).toBe(sal);
   });
 });

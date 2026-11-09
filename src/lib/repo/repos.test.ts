@@ -134,6 +134,98 @@ describe("ticket flow", () => {
     expect(ok.actions.every((a) => a.state === "approved")).toBe(true);
   });
 
+  it("approving works when the ticket moved off waiting_andres, and fails with nothing planned", () => {
+    const needsOk = [{ kind: "merge_pr", source: "github" as const, label: "Mergear", mode: "needs_ok" as const }];
+    for (const move of ["waiting_claude", "working"] as const) {
+      const t = r.tickets.create({ direction: "andres_asks", title: `Plan ${move}` }, T0);
+      r.tickets.plan(t.id, needsOk, "s1");
+      // He writes something (waiting_claude); a session claims the ticket (working): the plan is still waiting for his OK.
+      expect(r.tickets.addMessage(t.id, { author: "andres", body: "una duda" }, at(1)).status).toBe("waiting_claude");
+      if (move === "working") r.tickets.transition(t.id, { type: "claim" }, "s1", at(1));
+      expect(r.tickets.get(t.id).status).toBe(move);
+      const ok = r.tickets.approvePlan(t.id, [], at(2));
+      expect(ok.status).toBe("working");
+      expect(ok.actions.every((a) => a.state === "approved")).toBe(true);
+      expect(eventsAfter(r.db, "s1", 0).some((e) => e.kind === "ticket.plan_approved" && e.entityId === t.id)).toBe(true);
+      expect(() => r.tickets.approvePlan(t.id)).toThrow(/no plan waiting/);
+    }
+  });
+
+  describe("pre-approving single steps (approveActions)", () => {
+    const steps = [
+      { kind: "merge_pr", source: "github" as const, label: "Mergear", mode: "needs_ok" as const },
+      { kind: "move_card", source: "github" as const, label: "Mover tarjeta", mode: "needs_ok" as const },
+      { kind: "investigate", source: "claude" as const, label: "Revisar", mode: "direct" as const },
+    ];
+    const planned = () => {
+      const t = r.tickets.create({ direction: "andres_asks", title: "Plan con dos OK" }, T0);
+      const d = r.tickets.plan(t.id, steps, "s1");
+      return { t, merge: d.actions[0]!, move: d.actions[1]!, direct: d.actions[2]! };
+    };
+    const wakes = (id: string) => eventsAfter(r.db, "s1", 0).filter((e) => e.kind === "ticket.plan_approved" && e.entityId === id);
+
+    it("one step: only it moves to approved, the status stays and the owner wakes with partial: true", () => {
+      const { t, merge, move } = planned();
+      r.tickets.addMessage(t.id, { author: "andres", body: "ojo" }, at(1)); // waiting_claude
+      const d = r.tickets.approveActions(t.id, [merge.id], at(2));
+      expect(d.status).toBe("waiting_claude");
+      expect(d.actions.map((a) => a.state)).toEqual(["approved", "planned", "approved"]);
+      expect(wakes(t.id).map((e) => e.payload)).toEqual([{ ref: t.ref, approved: [merge.id], partial: true }]);
+      expect(r.tickets.get(t.id).wokeAt).not.toBeNull();
+      void move;
+    });
+
+    it("stamps Andrés's interaction", () => {
+      const { t, merge } = planned();
+      const before = r.db.prepare("SELECT value FROM settings WHERE key = 'last_interaction_at'").get() as { value: string } | undefined;
+      r.tickets.approveActions(t.id, [merge.id], at(5000));
+      const after = r.db.prepare("SELECT value FROM settings WHERE key = 'last_interaction_at'").get() as { value: string };
+      expect(after.value).toBe(at(5000).toISOString());
+      expect(before?.value).not.toBe(after.value);
+    });
+
+    it("the last planned step is the full approval: working, ticket.plan_approved not partial", () => {
+      const { t, merge, move } = planned();
+      r.tickets.approveActions(t.id, [merge.id], at(1));
+      const d = r.tickets.approveActions(t.id, [move.id], at(2));
+      expect(d.status).toBe("working");
+      expect(wakes(t.id).map((e) => e.payload)).toEqual([
+        { ref: t.ref, approved: [merge.id], partial: true },
+        { ref: t.ref, approved: [move.id], partial: false },
+      ]);
+    });
+
+    it("Aprobar plan afterwards approves only what is still planned and keeps a rejection", () => {
+      const { t, merge, move } = planned();
+      r.tickets.approveActions(t.id, [merge.id], at(1));
+      const d = r.tickets.approvePlan(t.id, [move.id], at(2));
+      expect(d.actions.map((a) => a.state)).toEqual(["approved", "rejected", "approved"]);
+      expect(d.status).toBe("working");
+    });
+
+    it("refuses a step that is direct, already approved, of another ticket, unknown, or an empty list, and a closed ticket", () => {
+      const { t, merge, direct } = planned();
+      const other = planned();
+      expect(() => r.tickets.approveActions(t.id, [direct.id])).toThrow(/ask for OK/);
+      expect(() => r.tickets.approveActions(t.id, [other.merge.id])).toThrow(/ask for OK/);
+      expect(() => r.tickets.approveActions(t.id, ["pa_nope"])).toThrow(/ask for OK/);
+      expect(() => r.tickets.approveActions(t.id, [])).toThrow(/ask for OK/);
+      r.tickets.approveActions(t.id, [merge.id]);
+      expect(() => r.tickets.approveActions(t.id, [merge.id])).toThrow(/ask for OK/);
+      r.tickets.transition(other.t.id, { type: "close", by: "andres" });
+      expect(() => r.tickets.approveActions(other.t.id, [other.move.id])).toThrow(/closed/);
+      expect(r.tickets.detail(other.t.id).actions[1]!.state).toBe("planned"); // nothing moved
+    });
+
+    it("a pre-approved step survives a re-plan (only planned rows are replaced)", () => {
+      const { t, merge } = planned();
+      r.tickets.approveActions(t.id, [merge.id], at(1));
+      const d = r.tickets.plan(t.id, [{ kind: "move_card", source: "github", label: "Mover otra", mode: "needs_ok" }], "s1", at(2));
+      expect(d.actions.filter((a) => a.state === "approved" && a.id === merge.id)).toHaveLength(1);
+      expect(d.actions.filter((a) => a.state === "planned").map((a) => a.label)).toEqual(["Mover otra"]);
+    });
+  });
+
   it("wait times out empty and ignores other sessions' events", async () => {
     r.sessions.touch({ id: "s2" }, T0);
     const t = r.tickets.create({ direction: "claude_asks", title: "q", ownerSession: "s2" }, T0);

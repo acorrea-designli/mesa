@@ -1,12 +1,16 @@
 // Server read model for Tickets A (list + thread).
 import type { Repos } from "@/lib/repo";
 import { isSimulated } from "@/lib/domain/sandbox";
+import { needLine, needRank, type TicketNeed } from "@/lib/domain/ticket-needs";
+import { loadTicketNeeds } from "./needs";
 import type { Approval, Brief, Handoff, Item, PlannedAction, Review, Salida, TeamAgent, Ticket, TicketDetail } from "@/lib/domain/types";
 
 export type TicketTab = "open" | "you" | "closed";
 
 export interface TicketRow extends Ticket {
   excerpt: string;
+  /** What he must do here, first the one the list names (ticket-needs.ts); empty when nothing waits on him. */
+  needs: TicketNeed[];
   /** A message Andrés has not seen (src/lib/repo/tickets.ts unreadIds): the list shows a "new" flag. */
   unread: boolean;
 }
@@ -63,7 +67,9 @@ const VERB_BY_KIND: Record<string, string> = {
   post_github: "Publicar en GitHub",
 };
 
-function excerpt(t: TicketDetail, now: Date): string {
+function excerpt(t: TicketDetail, needs: TicketNeed[], now: Date): string {
+  const line = needLine(needs);
+  if (line) return line.lead + line.rest;
   const first = t.messages[0];
   const last = t.messages[t.messages.length - 1];
   const opts = first?.options?.length;
@@ -152,13 +158,19 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
   const all = r.tickets.list();
   const details = new Map(all.map((t) => [t.id, r.tickets.detail(t.id)]));
   const unread = r.tickets.unreadIds();
-  const row = (t: Ticket): TicketRow => ({ ...t, excerpt: excerpt(details.get(t.id)!, now), unread: unread.has(t.id) });
+  const needs = loadTicketNeeds(r, [...details.values()], now);
+  const needsOf = (t: Ticket) => needs.get(t.id) ?? [];
+  const row = (t: Ticket): TicketRow => ({ ...t, excerpt: excerpt(details.get(t.id)!, needsOf(t), now), needs: needsOf(t), unread: unread.has(t.id) });
   const open = all.filter((t) => t.status !== "closed");
+  const waitsOnYou = open.filter((t) => needsOf(t).length > 0);
   const closedToday = all.filter((t) => t.status === "closed" && (t.closedAt ?? t.updatedAt) >= day.toISOString());
   const tab: TicketTab = opts.tab === "you" || opts.tab === "closed" ? opts.tab : "open";
-  const rows = (tab === "you" ? open.filter((t) => t.status === "waiting_andres") : tab === "closed" ? closedToday : open).sort(
-    (a, b) => Number(b.status === "waiting_andres") - Number(a.status === "waiting_andres") || b.createdAt.localeCompare(a.createdAt),
-  );
+  // Tickets with a need first (by the priority of the first need, then the one waiting longest), then the rest, newest first.
+  const rows = (tab === "you" ? waitsOnYou : tab === "closed" ? closedToday : open).sort((a, b) => {
+    const [ra, rb] = [needRank(needsOf(a)), needRank(needsOf(b))];
+    if (ra !== rb) return ra - rb; // Infinity - Infinity is NaN: equal ranks are handled above
+    return ra === Infinity ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt);
+  });
   let selected: ThreadData | null = null;
   for (const id of selectionOrder(opts, rows)) {
     try {
@@ -198,7 +210,7 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
     rows: rows.map(row),
     closedToday: tab === "open" ? closedToday.map(row) : [],
     selectedUnread: Boolean(selected && unread.has(selected.ticket.id)),
-    counts: { open: open.length, you: open.filter((t) => t.status === "waiting_andres").length, closedToday: closedToday.length },
+    counts: { open: open.length, you: waitsOnYou.length, closedToday: closedToday.length },
     selected,
     listening,
     pick,

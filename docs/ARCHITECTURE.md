@@ -124,7 +124,7 @@ Rules (`transitionSalida`, tested in `salida-machine.test.ts`):
 | `working` | Claude trabaja | the lead / its agents |
 | `closed` | Cerrado · Reabrir | nobody |
 
-Events: `andres_reply` → waiting_claude (wake `ticket.answered`); `claude_reply` → waiting_andres; `claude_plan(needsOk)` → waiting_andres if any action needs OK, else working; `approve_plan` → working (wake `ticket.plan_approved`); `claim` → working; `close` → closed (wake when Andrés closes); `reopen` → waiting_claude (wake). A new `andres_asks` ticket wakes its named owner, or every session; tickets made by the dispatch service (below) always name `lead`.
+Events: `andres_reply` → waiting_claude (wake `ticket.answered`); `claude_reply` → waiting_andres; `claude_plan(needsOk)` → waiting_andres if any action needs OK, else working; `approve_plan` → working (wake `ticket.plan_approved`; needs a step still planned, from any non-closed status); `claim` → working; `close` → closed (wake when Andrés closes); `reopen` → waiting_claude (wake). A new `andres_asks` ticket wakes its named owner, or every session; tickets made by the dispatch service (below) always name `lead`.
 
 ### Dispatch: tasks go straight to an agent
 
@@ -218,13 +218,13 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | GET/POST `/api/tickets/:ref/findings` | POST `FindingInput` (upsert) | `{ findings }` / `{ finding }` |
 | POST `/api/tickets/:id/messages` | `{ author, body?, options?, recommended?, recommendation?, chosen?, refs?, session? }` | `TicketDetail` |
 | POST `/api/tickets/:id/plan` | `{ actions, session? }` | `TicketDetail` |
-| POST `/api/tickets/:id/plan/approve` | `{ reject? }` | `TicketDetail` |
+| POST `/api/tickets/:id/plan/approve` | `{ reject? }` or `{ only: [actionId] }` | `TicketDetail`; works on any non-closed status that still has planned steps. `only` pre-approves just those needs_ok steps (wake `ticket.plan_approved { approved, partial: true }`, status unchanged while others stay planned; the full approval once none remain) |
 | POST `/api/tickets/:id/permission-request` | | `TicketDetail`; "Pídeme permiso": posts the marked andres message, wakes the owner with `ticket.permission_requested { ref, ticketRef, messageId }`, hands a waiting_andres ticket to Claude; 409 on a closed ticket |
 | POST `/api/tickets/:id/fold` | `{ from: [id\|ref], why, session? }` | `TicketDetail` (the primary); the lead groups a `ticket.batch`, see "Batches and grouping"; 409 on a closed, sample or `claude_asks` ticket, or `from` holding the primary |
 | POST `/api/tickets/:id/unfold` | `{ ticket: id\|ref }` | `TicketDetail` (the reopened ticket); emits `ticket.created { …, splitFrom }`; 409 when it was not folded into `:id` |
 | POST `/api/tickets/:id/transition` | `{ event: claim\|close\|reopen, by?, session? }` | `TicketDetail` |
 | POST `/api/tickets/:id/attachments` | multipart `file`, `messageId?` | `Attachment` 201 |
-| PATCH `/api/actions/:id` | `{ state }` | `PlannedAction` |
+| PATCH `/api/actions/:id` | `{ state: running\|done\|failed }` | `PlannedAction`; 400 for any other state. A needs_ok step in state `approved` was pre-approved by Andrés, so the owner runs it without asking again |
 | GET `/api/handoffs` | `?agent=&ticket=&limit=` | `{ handoffs }` newest first |
 | GET/POST `/api/team` | `?status=live\|retired&ticket=` / `{ ticketRef, agent, role, owner? }` | `{ agents }` / `{ agent }` 201 |
 | POST `/api/team/:name/retire` | | `{ agent }` |

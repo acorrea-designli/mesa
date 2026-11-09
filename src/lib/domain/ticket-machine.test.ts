@@ -34,13 +34,13 @@ describe("ticket machine", () => {
     expect(transitionTicket("waiting_claude", { type: "claude_plan", needsOk: false })).toMatchObject({ status: "working" });
   });
 
-  it("approving a plan needs one waiting", () => {
-    expect(transitionTicket("waiting_andres", { type: "approve_plan" })).toEqual({
-      ok: true,
-      status: "working",
-      wake: "ticket.plan_approved",
-    });
-    expect(transitionTicket("working", { type: "approve_plan" }).ok).toBe(false);
+  it("approving a plan needs a planned step, whatever the status", () => {
+    const ok = { ok: true, status: "working", wake: "ticket.plan_approved" };
+    for (const status of ["waiting_andres", "waiting_claude", "working"] as const) {
+      expect(transitionTicket(status, { type: "approve_plan", planned: true })).toEqual(ok);
+      expect(transitionTicket(status, { type: "approve_plan", planned: false }).ok).toBe(false);
+    }
+    expect(transitionTicket("closed", { type: "approve_plan", planned: true }).ok).toBe(false);
   });
 
   it("claim only from waiting_claude", () => {

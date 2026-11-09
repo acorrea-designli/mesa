@@ -130,6 +130,11 @@
   text-overflow: ellipsis;
   margin-top: 1px;
 }
+/* What he must do here: the action's name in bold ink, then its detail in mute. Never a second solid tag. */
+.tk-row .subj small b {
+  font-weight: 700;
+  color: var(--ink);
+}
 .tk-row.sel {
   background: var(--raise);
   margin: 0 -28px;
@@ -737,6 +742,35 @@
 }
 .tk-no input {
   accent-color: var(--ink);
+}
+/* Per-step "Aprobar": an outline text button, never a solid element (the plan's own primary stays the only solid one). */
+.tk-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.tk-ok {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tk-ok:hover:not(:disabled) {
+  background: var(--raise);
+}
+.tk-ok:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tk-ok:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .tk-astate {
   font-size: 11.5px;

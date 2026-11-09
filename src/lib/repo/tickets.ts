@@ -409,13 +409,40 @@ export function ticketsRepo(db: Db) {
       return tx(db, () => {
         const t = get(id);
         const ts = nowIso(now);
-        for (const a of actions(t.id)) {
-          if (a.state !== "planned") continue;
+        const planned = actions(t.id).filter((a) => a.state === "planned");
+        // The machine decides on this fact, not on the status; a failed transition rolls the whole tx back.
+        for (const a of planned) {
           const state: ActionState = reject.includes(a.id) ? "rejected" : "approved";
           db.prepare("UPDATE planned_actions SET state = ?, updated_at = ? WHERE id = ?").run(state, ts, a.id);
         }
-        apply(t, { type: "approve_plan" }, now, { rejected: reject });
+        apply(t, { type: "approve_plan", planned: planned.length > 0 }, now, { rejected: reject });
         touchInteraction(db, now);
+        return this.detail(t.id);
+      });
+    },
+
+    /**
+     * Andrés pre-approves single needs_ok steps from the plan ("Aprobar" beside "no hacer"). Only planned needs_ok
+     * steps of this ticket qualify. While other steps stay planned the status does not move and the wake says
+     * `partial: true` (the owner runs only the approved steps); when none remain it is the full approval.
+     * Andrés only: the sessions' PATCH /api/actions/:id never accepts "approved".
+     */
+    approveActions(id: string, only: string[], now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        if (t.status === "closed") throw new TransitionError("ticket is closed; reopen it first");
+        const ids = [...new Set(only)];
+        const planned = actions(t.id).filter((a) => a.state === "planned");
+        const picked = ids.map((x) => planned.find((a) => a.id === x && a.mode === "needs_ok"));
+        if (!ids.length || picked.some((a) => !a)) throw new TransitionError("only planned steps that ask for OK can be approved");
+        const ts = nowIso(now);
+        for (const a of picked) db.prepare("UPDATE planned_actions SET state = 'approved', updated_at = ? WHERE id = ?").run(ts, a!.id);
+        touchInteraction(db, now);
+        if (planned.length === picked.length) apply(t, { type: "approve_plan", planned: true }, now, { approved: ids, partial: false });
+        else {
+          db.prepare("UPDATE tickets SET updated_at = ?, woke_at = ? WHERE id = ?").run(ts, ts, t.id);
+          emitWake(db, { sessionId: t.ownerSession, kind: "ticket.plan_approved", entityType: "ticket", entityId: t.id, payload: { ref: t.ref, approved: ids, partial: true } }, now);
+        }
         return this.detail(t.id);
       });
     },

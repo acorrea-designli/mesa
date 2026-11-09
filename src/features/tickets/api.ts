@@ -54,4 +54,6 @@ export const ticketApi = {
   /** "Pídeme permiso": posts the marked message and wakes the owner (ticket.permission_requested). */
   requestPermission: (id: string) => call<TicketDetail>(`${T(id)}/permission-request`, { body: {} }),
   approvePlan: (id: string, reject: string[]) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { reject } }),
+  /** Pre-approves one needs_ok step from the plan; the owner wakes with ticket.plan_approved { partial }. */
+  approveStep: (id: string, actionId: string) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { only: [actionId] } }),
 };

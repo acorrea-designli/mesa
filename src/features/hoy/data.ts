@@ -4,7 +4,8 @@ import type { Source } from "@/lib/domain/types";
 import { repos } from "@/lib/repo";
 import { clock, isToday, longDay, shortDay, when } from "./format";
 import { ignoreTarget } from "../ignore/model";
-import { itemRow, kindLabel, openLabel, salidaRow, skipTarget, type HoyData, type HoyRow, type ItemDetail, type SetupRow } from "./model";
+import { loadTicketNeeds } from "../tickets/needs";
+import { itemRow, kindLabel, openLabel, salidaRow, skipTarget, withTicketNeed, type HoyData, type HoyRow, type ItemDetail, type SetupRow } from "./model";
 
 function setting(key: string): string | null {
   const row = repos().db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
@@ -35,6 +36,24 @@ export function loadHoy(now: Date = new Date()): HoyData {
     (r.db.prepare("SELECT t.id AS taskId, k.ref AS ref FROM tasks t JOIN tickets k ON k.id = t.ticket_id WHERE k.status <> 'closed'").all() as { taskId: string; ref: string }[]).map((x) => [x.taskId, x.ref]),
   );
 
+  const ticketRefOf = (i: (typeof items)[number]) => (i.taskId ? openTicketOfCard.get(i.taskId) : undefined) ?? (typeof i.meta.ticketRef === "string" ? i.meta.ticketRef : null);
+
+  // A row whose item links an open ticket that needs Andrés names that need (ticket-needs.ts).
+  const linkedDetails = [...new Set(items.map(ticketRefOf).filter((x): x is string => Boolean(x)))].flatMap((ref) => {
+    try {
+      const t = r.tickets.detail(ref);
+      return t.status === "closed" ? [] : [t];
+    } catch {
+      return []; // the meta ref points at a ticket that is gone
+    }
+  });
+  const needs = loadTicketNeeds(r, linkedDetails, now);
+  const needsOfRef = new Map(linkedDetails.map((t) => [t.ref, needs.get(t.id) ?? []]));
+  for (const [n, i] of items.entries()) {
+    const ref = ticketRefOf(i);
+    if (ref) rows[n] = withTicketNeed(rows[n]!, needsOfRef.get(ref));
+  }
+
   const details: Record<string, ItemDetail> = {};
   for (const i of items) {
     details[i.id] = {
@@ -48,7 +67,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
       linkLabel: openLabel(i.source),
       station: i.station,
       taskId: i.taskId,
-      ticketRef: (i.taskId ? openTicketOfCard.get(i.taskId) : undefined) ?? (typeof i.meta.ticketRef === "string" ? i.meta.ticketRef : null),
+      ticketRef: ticketRefOf(i),
       received: `${when(i.receivedAt, now)}${isToday(i.receivedAt, now) ? "" : ` ${clock(i.receivedAt)}`}`,
       isSample: i.isSample,
       ignore: ignoreTarget(i),
