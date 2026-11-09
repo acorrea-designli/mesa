@@ -2,7 +2,7 @@
  *  - precaches the static shell: the offline page, the manifest and the icons (none contains board data);
  *  - caches /_next/static/* (hashed JS, CSS, fonts) cache-first, so the app shell opens fast;
  *  - navigations are network-first with an 8 s limit; when the PC does not answer (network error, timeout, or a
- *    502/503/504 from `tailscale serve`) the cached /offline.html ("Sin conexión con tu PC") is shown;
+ *    502/503/504/530 from the Cloudflare Tunnel: Mesa or the tunnel is down) the cached /offline.html ("Sin conexión con tu PC") is shown;
  *  - NEVER caches /api/*, HTML pages or anything else with board data, and never stores or replays a write:
  *    every non-GET request and every other URL goes straight to the network, untouched.
  * Bump VERSION to drop old caches. */
@@ -16,7 +16,9 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
-      .then((cache) => cache.addAll(PRECACHE))
+      // One by one and tolerant: with an expired Access session these answer a redirect to the login, which must not
+      // fail the whole install (the next visit retries). Same-origin fetches carry the CF_Authorization cookie.
+      .then((cache) => Promise.allSettled(PRECACHE.map((u) => cache.add(u))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -48,7 +50,7 @@ async function navigate(request) {
     const timer = setTimeout(() => ctl.abort(), NAV_TIMEOUT_MS);
     const res = await fetch(request, { signal: ctl.signal });
     clearTimeout(timer);
-    if (res.status === 502 || res.status === 503 || res.status === 504) return (await offline()) || res;
+    if (res.status === 502 || res.status === 503 || res.status === 504 || res.status === 530) return (await offline()) || res;
     return res; // never stored
   } catch {
     return (await offline()) || Response.error();

@@ -10,7 +10,7 @@ import { timeLeft } from "./pairing";
 import { QrCode } from "./QrCode";
 import { promptInstall, useInstall } from "./useInstall";
 
-type Pairing = { url: string; expiresAt: string };
+type Pairing = { url: string; code: string; expiresAt: string };
 
 function InstallEntry() {
   const { ready, standalone, hasPrompt, platform } = useInstall();
@@ -33,7 +33,7 @@ function InstallEntry() {
   return <p className="tel-note">Este navegador no ofrece instalar. En Chrome del Android o en Safari del iPhone sí aparece.</p>;
 }
 
-function Pair({ tailnetUrl }: { tailnetUrl: string | null }) {
+function Pair({ publicUrl }: { publicUrl: string | null }) {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +53,7 @@ function Pair({ tailnetUrl }: { tailnetUrl: string | null }) {
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: { code?: string } } | null;
         setPairing(null);
-        setError(body?.error?.code === "no_tailnet" ? "Tailscale no está activo en esta PC." : "No pude generar el código. Intenta otra vez.");
+        setError(body?.error?.code === "no_public_url" ? "Falta MESA_PUBLIC_URL en la PC." : "No pude generar el código. Intenta otra vez.");
         return;
       }
       setPairing((await res.json()) as Pairing);
@@ -70,23 +70,25 @@ function Pair({ tailnetUrl }: { tailnetUrl: string | null }) {
 
   return (
     <section className="tel-card" aria-labelledby="tel-pair">
-      <h2 id="tel-pair">Vincular un teléfono</h2>
+      <h2 id="tel-pair">Primero vincula, luego instala</h2>
       <div className="tel-status">
-        <LineStub source="ink" width={22} dotted={!tailnetUrl} />
-        {tailnetUrl ? (
+        <LineStub source="ink" width={22} dotted={!publicUrl} />
+        {publicUrl ? (
           <span>
-            Tailscale activo · <code>{tailnetUrl.replace("https://", "")}</code>
+            Túnel en <code>{publicUrl.replace("https://", "")}</code>
           </span>
         ) : (
-          <span>Tailscale no está activo en esta PC.</span>
+          <span>Mesa no tiene dirección pública todavía.</span>
         )}
       </div>
 
-      {!tailnetUrl ? (
+      {!publicUrl ? (
         <ol className="tel-steps">
-          <li>Instala Tailscale en la PC e inicia sesión.</li>
           <li>
-            Publica Mesa solo para tus dispositivos: <code>pnpm tunnel up</code>. Funnel queda apagado.
+            Pon la dirección del túnel en <code>MESA_PUBLIC_URL</code> (por ejemplo <code>https://mesa.tudominio.com</code>) y reinicia Mesa.
+          </li>
+          <li>
+            Publica Mesa con <code>pnpm tunnel up</code>: el túnel de Cloudflare solo abre con tu login de Access.
           </li>
           <li>Vuelve aquí y genera el código.</li>
         </ol>
@@ -96,9 +98,11 @@ function Pair({ tailnetUrl }: { tailnetUrl: string | null }) {
             <div className="tel-qr-wrap">
               <QrCode text={pairing.url} label="Código QR para vincular el teléfono" />
               <div className="tel-qr-copy">
-                <p>
-                  Escanéalo con la cámara del teléfono. Abre Mesa en el túnel y deja la sesión iniciada por 30 días.
-                </p>
+                <p>Escanéalo con la cámara del teléfono. Abre Mesa por el túnel y deja la sesión iniciada por 30 días.</p>
+                <div className="tel-code">
+                  <span className="tel-note">¿Ya instalaste la app? Escribe este código en ella:</span>
+                  <b aria-label={`Código ${pairing.code.split("").join(" ")}`}>{pairing.code}</b>
+                </div>
                 <p className="tel-note">
                   Un solo uso · vence en <b>{left}</b>
                 </p>
@@ -111,7 +115,9 @@ function Pair({ tailnetUrl }: { tailnetUrl: string | null }) {
               {pairing && !expired ? "Generar otro código" : "Generar código QR"}
             </Btn>
           </div>
-          <p className="tel-note">El teléfono necesita la app de Tailscale con tu misma cuenta. El token de Mesa nunca aparece en pantalla ni en un enlace.</p>
+          <p className="tel-note">
+            Primero entras con tu correo en Cloudflare Access y luego vinculas con el QR o el código. El token de Mesa nunca aparece en pantalla ni en un enlace.
+          </p>
         </>
       )}
       {error ? (
@@ -123,7 +129,7 @@ function Pair({ tailnetUrl }: { tailnetUrl: string | null }) {
   );
 }
 
-export function PhoneScreen({ local, tailnetUrl }: { local: boolean; tailnetUrl: string | null }) {
+export function PhoneScreen({ local, publicUrl }: { local: boolean; publicUrl: string | null }) {
   return (
     <>
       <header className="screen-head">
@@ -132,7 +138,7 @@ export function PhoneScreen({ local, tailnetUrl }: { local: boolean; tailnetUrl:
       </header>
       <div className="screen-body tel">
         {local ? (
-          <Pair tailnetUrl={tailnetUrl} />
+          <Pair publicUrl={publicUrl} />
         ) : (
           <section className="tel-card">
             <h2>Vinculado</h2>
@@ -141,7 +147,7 @@ export function PhoneScreen({ local, tailnetUrl }: { local: boolean; tailnetUrl:
         )}
         <section className="tel-card tel-install" aria-labelledby="tel-install">
           <h2 id="tel-install">Instalar</h2>
-          <p>Mesa se abre desde la pantalla de inicio, sin la barra del navegador.</p>
+          <p>Primero vincula este teléfono, luego instala: Mesa se abre desde la pantalla de inicio, sin la barra del navegador. Si ya la instalaste, escribe el código corto dentro de la app.</p>
           <InstallEntry />
         </section>
       </div>

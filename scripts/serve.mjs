@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pnpm dev / pnpm start: the board on 127.0.0.1:8790. Loopback only, so nothing on the LAN reaches the port;
-// the phone gets in through `tailscale serve` (pnpm tunnel), which runs on this PC. MESA_HOST overrides the
+// the phone gets in through the Cloudflare Tunnel (pnpm tunnel), cloudflared, which runs on this PC. MESA_HOST overrides the
 // address (for example 0.0.0.0, which is an explicit decision: it opens :8790 to the LAN).
 //   node scripts/serve.mjs dev|start
 import { spawn } from "node:child_process";

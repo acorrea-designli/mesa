@@ -61,11 +61,14 @@ Never list or read other files in this folder; it holds secrets.
 | engram | `mem_current_project`, then `mem_context` | project resolves from this cwd; read the last `session/mesa-lead` summary and its open items |
 | engram write | `mem_save` with topic_key `mesa/smoke`, content `preflight <ISO time>`, then `mem_search mesa/smoke` | the save succeeds and the search returns this time. The MCP has no delete tool, so the smoke record is one upserted observation that each preflight overwrites. "host session registration could not be confirmed" or an unresolved project: pass `project: "designli"` on **every** engram call this session (yours and, through the spawn prompt, every teammate's) and retry once; failing again is a stop |
 
-Tunnel check (informational; it never blocks the start, except Funnel): `node G:/WorkSpace/designli/ops/scripts/tunnel.mjs status --json`
-prints `{ installed, running, url, serving, funnel }`. `funnel: true` is a stop: Mesa would be on the public internet,
-tell Andrés now and do not continue until `tailscale funnel --https=443 off` is done with him. `installed: false`, or
-`serving: false` while he expects the phone to work, is a one-line note in your first message ("el túnel no está
-publicado: `pnpm tunnel up`, te pide OK"); you never run `tailscale`, `pnpm tunnel up` or edit `.env.local` without his OK.
+Tunnel check (informational; it never blocks the start, except exit 3): `node G:/WorkSpace/designli/ops/scripts/tunnel.mjs status --json`
+prints `{ installed, hostname, tunnel, service, pid, probe }` (cloudflared, tunnel connections, Windows service, and the
+unauthenticated probe of the public URL). Exit **3** (`probe: "mesa"`) is a stop: https://<host>/ answers from Mesa without
+Cloudflare Access in front, so tell Andrés now and do not continue until the Access app exists or the tunnel is stopped
+(`pnpm tunnel down`) with him. Exit 0 is healthy (`probe: "access"`). Exit 1 (cloudflared missing, tunnel not connected,
+`MESA_PUBLIC_URL` unset, probe unreachable) is a one-line note in your first message when he expects the phone to work
+("el túnel no está arriba: `pnpm tunnel up`, te pide OK"). You never install cloudflared, log in to Cloudflare, create the
+tunnel or the Access app, run `pnpm tunnel up`, or edit `.env.local` without his OK.
 
 ## 1b. First run with this team (once, then mark it done in engram `mesa/setup`)
 

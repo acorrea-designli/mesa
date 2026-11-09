@@ -290,13 +290,18 @@ registered with the node that ran the installer. Re-run after every pull. Restar
    `G:/WorkSpace/designli`, every engram call passes `project: "designli"` explicitly for the session, and the spawn
    prompts say so.
 10. **One engram key per ticket** (agreed): `mesa/<ref>`, shared by Mesa and the agents (upserts).
-11. **Tunnel** (t28, decided 2026-11-09: Tailscale): phone access goes through `tailscale serve` on this PC, tailnet
-    only. **Funnel is never enabled** (it would put Mesa on the public internet), and Mesa never listens beyond
-    `127.0.0.1` unless `MESA_HOST` says so. Two keys: tailnet membership (optionally the identity in
-    `MESA_TAILSCALE_USER`) and the `MESA_TOKEN` cookie, which the phone gets by scanning the one-time QR on
-    `/telefono` (the token is never typed, shown or put in a URL). `pnpm tunnel` prints the state and refuses to run
-    while Funnel is on; mesa-start checks it (`node scripts/tunnel.mjs status --json`). Installing Tailscale, logging
-    in, `pnpm tunnel up` and writing `.env.local` are `needs_ok` steps done with Andrés. See ARCHITECTURE § 11.
+11. **Tunnel** (t28, decided 2026-11-09: Cloudflare Tunnel + Cloudflare Access; a VPN was tried and dropped because a
+    VPN toggle on the phone does not hold): phone access goes through a named cloudflared tunnel on this PC to
+    `http://127.0.0.1:8790`, at `MESA_PUBLIC_URL` (https://mesa.<his domain>, a domain in his own Cloudflare account, not
+    Designli's). Nothing reaches Mesa without two keys: a Cloudflare Access login for his email only (Access app, 30 d
+    session), whose JWT Mesa verifies itself (`MESA_CF_ACCESS_TEAM`, `_AUD`, `_EMAIL`; fails closed), and the
+    `MESA_TOKEN` cookie, which the phone gets by scanning the one-time QR on `/telefono` or typing its 8-character code.
+    The token is never typed, shown or put in a URL. Mesa never listens beyond `127.0.0.1` unless `MESA_HOST` says so, and
+    :8790 is never exposed directly. `pnpm tunnel status` probes the public URL without credentials and must see
+    Cloudflare Access answer; if Mesa answers directly it exits 3 and `up` refuses. mesa-start checks it (`node
+    scripts/tunnel.mjs status --json`; exit 3 is a stop). Installing cloudflared, logging in to Cloudflare, creating the
+    tunnel, the DNS route and the Windows service, creating the Access app (before the DNS route goes live), and writing
+    `.env.local` are `needs_ok` steps done with Andrés; no Cloudflare API token ever lives in the repo. See ARCHITECTURE § 11.
 12. **pr-monitor coexistence** (decided): reviewers seed their state from `~/.claude-work/pr-monitor-state.json`,
     read-only, when Mesa has none.
 13. **Allow rules** (decided): the `--allow` list stays read-only; the lead reviews it before Andrés runs the

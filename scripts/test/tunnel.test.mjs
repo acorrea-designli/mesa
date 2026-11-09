@@ -3,61 +3,101 @@ import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { isLoopbackBind, pickHost } from "../lib/host.mjs";
-import { MESA_TARGET, SERVE_ARGS, analyzeServe, describe, statusExitCode } from "../lib/tunnel.mjs";
+import { MESA_TARGET, buildConfig, classifyProbe, describe, hostFromPublicUrl, parseServiceState, parseTunnelList, statusExitCode, tunnelName } from "../lib/tunnel.mjs";
 
-const serveJson = (extra = {}) =>
-  JSON.stringify({
-    TCP: { 443: { HTTPS: true } },
-    Web: { "pc.tail1234.ts.net:443": { Handlers: { "/": { Proxy: MESA_TARGET } } } },
-    ...extra,
-  });
+const ID = "6ff42ae2-765d-4adf-8112-31c55c1551ef";
 
-test("analyzeServe: Mesa served, Funnel off", () => {
-  const s = analyzeServe(serveJson());
-  assert.equal(s.mesa, true);
-  assert.equal(s.funnel, false);
-  assert.equal(s.serving[0].host, "pc.tail1234.ts.net:443");
+test("hostFromPublicUrl: the hostname of MESA_PUBLIC_URL, https only", () => {
+  assert.equal(hostFromPublicUrl("https://mesa.example.com"), "mesa.example.com");
+  assert.equal(hostFromPublicUrl(" https://mesa.example.com/ "), "mesa.example.com");
+  for (const bad of [undefined, "", "  ", "http://mesa.example.com", "mesa.example.com", "https://localhost", "junk"]) {
+    assert.equal(hostFromPublicUrl(bad), null, String(bad));
+  }
 });
 
-test("analyzeServe: Funnel on is detected", () => {
-  const s = analyzeServe(serveJson({ AllowFunnel: { "pc.tail1234.ts.net:443": true } }));
-  assert.equal(s.funnel, true);
-  assert.deepEqual(s.funnelHosts, ["pc.tail1234.ts.net:443"]);
-  assert.equal(statusExitCode({ ...s, installed: true, running: true }), 3);
+test("tunnelName: MESA_CF_TUNNEL, default mesa", () => {
+  assert.equal(tunnelName({}), "mesa");
+  assert.equal(tunnelName({ MESA_CF_TUNNEL: "  " }), "mesa");
+  assert.equal(tunnelName({ MESA_CF_TUNNEL: "andres-mesa" }), "andres-mesa");
 });
 
-test("analyzeServe: AllowFunnel false and empty config are not Funnel", () => {
-  assert.equal(analyzeServe(serveJson({ AllowFunnel: { "pc.tail1234.ts.net:443": false } })).funnel, false);
-  const empty = analyzeServe("{}");
-  assert.equal(empty.mesa, false);
-  assert.equal(empty.funnel, false);
-  assert.equal(analyzeServe("").mesa, false);
+test("buildConfig: hostname -> Mesa on loopback, then a catch-all 404, credentials by path only", () => {
+  const cfg = buildConfig({ tunnel: "mesa", uuid: ID, credentialsFile: "C:\\Users\\a\\.cloudflared\\" + ID + ".json", hostname: "mesa.example.com" });
+  assert.match(cfg, new RegExp(`^tunnel: '${ID}'$`, "m"));
+  assert.match(cfg, /^credentials-file: 'C:\\Users\\a\\\.cloudflared\\[0-9a-f-]+\.json'$/m);
+  const lines = cfg.split("\n");
+  const rule = lines.indexOf("  - hostname: 'mesa.example.com'");
+  assert.ok(rule > 0);
+  assert.equal(lines[rule + 1], `    service: ${MESA_TARGET}`);
+  assert.equal(lines[rule + 2], "  - service: http_status:404"); // the catch-all is last
+  assert.equal(lines.filter((l) => l.includes("service:")).length, 2);
+  assert.ok(!/TunnelSecret|AccountTag|token/i.test(cfg), "no credential content");
 });
 
-test("analyzeServe: another target is not Mesa, junk is reported", () => {
-  const other = analyzeServe(JSON.stringify({ Web: { "h:443": { Handlers: { "/": { Proxy: "http://127.0.0.1:3000" } } } } }));
-  assert.equal(other.mesa, false);
-  assert.ok(analyzeServe("{nope").error);
+test("parseTunnelList: finds the live tunnel by name and counts connections", () => {
+  const list = JSON.stringify([
+    { id: "x", name: "old", connections: [] },
+    { id: ID, name: "mesa", connections: [{ colo_name: "mia01" }, { colo_name: "mia02" }] },
+  ]);
+  assert.deepEqual(parseTunnelList(list, "mesa"), { id: ID, name: "mesa", connections: 2 });
+  assert.equal(parseTunnelList(list, "nope"), null);
+  assert.equal(parseTunnelList(JSON.stringify([{ id: ID, name: "mesa", deleted_at: "2026-01-01" }]), "mesa"), null);
+  assert.deepEqual(parseTunnelList(JSON.stringify([{ id: ID, name: "mesa" }]), "mesa"), { id: ID, name: "mesa", connections: 0 });
+  assert.equal(parseTunnelList("not json", "mesa"), null);
+  assert.equal(parseTunnelList("{}", "mesa"), null);
 });
 
-test("statusExitCode: 0 only when installed, running and serving Mesa with Funnel off", () => {
-  const ok = { installed: true, running: true, mesa: true, funnel: false };
+test("parseServiceState: sc query output", () => {
+  assert.equal(parseServiceState("SERVICE_NAME: Cloudflared\n        TYPE : 10  WIN32_OWN_PROCESS\n        STATE              : 4  RUNNING", 0), "running");
+  assert.equal(parseServiceState("        STATE              : 1  STOPPED", 0), "stopped");
+  assert.equal(parseServiceState("        STATE              : 2  START_PENDING", 0), "other");
+  assert.equal(parseServiceState("[SC] EnumQueryServicesStatus:OpenService FAILED 1060:\nThe specified service does not exist as an installed service.", 1060), "absent");
+  assert.equal(parseServiceState("", 1), "absent");
+});
+
+test("classifyProbe: an Access redirect or a Cloudflare 403 is the only good answer", () => {
+  const redirect = { status: 302, headers: { server: "cloudflare" }, location: "https://acme.cloudflareaccess.com/cdn-cgi/access/login/mesa.example.com?kid=abc" };
+  assert.equal(classifyProbe(redirect), "access");
+  assert.equal(classifyProbe({ status: 302, headers: {}, location: "https://mesa.example.com/cdn-cgi/access/login/x" }), "access");
+  assert.equal(classifyProbe({ status: 403, headers: { server: "cloudflare" } }), "access");
+});
+
+test("classifyProbe: any answer from Mesa is bad", () => {
+  assert.equal(classifyProbe({ status: 403, headers: { "x-mesa-guard": "1", server: "cloudflare" } }), "mesa"); // our guard, even through Cloudflare
+  assert.equal(classifyProbe({ status: 401, headers: { "x-mesa-guard": "1" } }), "mesa");
+  assert.equal(classifyProbe({ status: 200, headers: { "x-powered-by": "Next.js" } }), "mesa");
+  assert.equal(classifyProbe({ status: 200, headers: {} }), "mesa");
+  assert.equal(classifyProbe({ status: 404, headers: { "x-powered-by": "Next.js" } }), "mesa");
+  // a redirect that is not Access's does not count as Access
+  assert.equal(classifyProbe({ status: 302, headers: {}, location: "https://elsewhere.example/" }), "unknown");
+});
+
+test("classifyProbe: no answer or Cloudflare tunnel errors mean the tunnel is not up", () => {
+  assert.equal(classifyProbe({ error: true }), "unreachable");
+  assert.equal(classifyProbe(null), "unreachable");
+  for (const status of [502, 530]) assert.equal(classifyProbe({ status, headers: { server: "cloudflare" } }), "unreachable");
+  assert.equal(classifyProbe({ status: 404, headers: { server: "cloudflare" } }), "unknown"); // the catch-all 404: no Access in front proven
+});
+
+test("statusExitCode: 0 only when installed, connected and Access is proven; 3 when Mesa answers directly", () => {
+  const ok = { installed: true, hostname: "mesa.example.com", tunnel: { connections: 2 }, service: "absent", pid: false, probe: "access" };
   assert.equal(statusExitCode(ok), 0);
-  assert.equal(statusExitCode({ ...ok, mesa: false }), 1);
-  assert.equal(statusExitCode({ ...ok, running: false }), 1);
+  assert.equal(statusExitCode({ ...ok, tunnel: { connections: 0 }, service: "running" }), 0);
+  assert.equal(statusExitCode({ ...ok, tunnel: null, pid: true }), 0);
+  assert.equal(statusExitCode({ ...ok, tunnel: { connections: 0 } }), 1); // nothing connected
   assert.equal(statusExitCode({ ...ok, installed: false }), 1);
-  assert.equal(statusExitCode({ ...ok, funnel: true }), 3);
+  assert.equal(statusExitCode({ ...ok, hostname: null }), 1);
+  for (const probe of ["unreachable", "unknown", "skipped"]) assert.equal(statusExitCode({ ...ok, probe }), 1, probe);
+  assert.equal(statusExitCode({ ...ok, probe: "mesa" }), 3);
+  assert.equal(statusExitCode({ ...ok, installed: false, probe: "mesa" }), 3);
 });
 
-test("describe: warns loudly about Funnel and says when Tailscale is missing", () => {
+test("describe: says when cloudflared is missing and shouts when Mesa answers without Access", () => {
   assert.match(describe({ installed: false })[0], /no está instalado/);
-  const lines = describe({ installed: true, running: true, url: "https://pc.tail1234.ts.net", mesa: true, funnel: true, funnelHosts: ["h:443"] });
-  assert.ok(lines.some((l) => l.includes("FUNNEL ENCENDIDO")));
-});
-
-test("serve command targets loopback only, on tailnet https", () => {
-  assert.deepEqual(SERVE_ARGS, ["serve", "--bg", "--https=443", "http://127.0.0.1:8790"]);
-  assert.ok(!SERVE_ARGS.some((a) => /funnel/i.test(a)));
+  const lines = describe({ installed: true, hostname: "mesa.example.com", tunnel: { name: "mesa", connections: 1 }, service: "running", probe: "mesa" });
+  assert.ok(lines.some((l) => l.includes("MESA RESPONDE SIN ACCESS")));
+  assert.ok(lines.some((l) => l.includes("https://mesa.example.com")));
+  assert.ok(describe({ installed: true, hostname: null, tunnel: null, service: "absent", probe: "skipped" }).some((l) => l.includes("MESA_PUBLIC_URL")));
 });
 
 test("pickHost: loopback by default, MESA_HOST overrides", () => {

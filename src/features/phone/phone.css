@@ -1,6 +1,6 @@
 /* Phone access (t28): status strip, install banner, /telefono. Tokens only (src/styles/tokens.css). */
 
-/* ---------- "vía túnel" / "sin túnel" strip (phone only) ---------- */
+/* ---------- "vía túnel" / "sin túnel" / "Vuelve a entrar" strip (phone only) ---------- */
 .tn {
   display: none;
 }
@@ -16,7 +16,8 @@
     font-weight: 600;
     color: var(--mute);
   }
-  .tn[data-state="down"] {
+  .tn[data-state="down"],
+  .tn[data-state="login"] {
     color: var(--ink);
     font-weight: 700;
     background: var(--raise);
@@ -26,9 +27,23 @@
     font-weight: 600;
     color: var(--mute);
   }
+  .tn-act {
+    margin-left: auto;
+    flex: none;
+    min-height: 24px;
+    padding: 2px 12px;
+    font: inherit;
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--gnd);
+    border: 1px solid var(--ink);
+    border-radius: var(--r-control);
+    cursor: pointer;
+  }
 }
 /* While the PC is unreachable, primary actions in the work area read as off (clicks are stopped in TunnelStatus). */
-html[data-link="down"] .work .btn.p:not(.alert .btn) {
+html[data-link="down"] .work .btn.p:not(.alert .btn),
+html[data-link="login"] .work .btn.p:not(.alert .btn) {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -165,6 +180,18 @@ html[data-link="down"] .work .btn.p:not(.alert .btn) {
 }
 .tel-actions {
   display: flex;
+}
+.tel-code {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tel-code b {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
 }
 .tel-note {
   font-size: 13px;

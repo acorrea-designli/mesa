@@ -54,6 +54,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es" className={hanken.variable} data-env={sandbox ? "sandbox" : undefined} suppressHydrationWarning>
       <head>
+        {/* use-credentials: behind Cloudflare Access the manifest fetch must carry the session cookie (see src/app/manifest.webmanifest/route.ts). */}
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body>
