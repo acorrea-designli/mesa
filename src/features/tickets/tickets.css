@@ -1398,3 +1398,33 @@
     gap: 6px;
   }
 }
+
+/* Links inside ticket text (Linkified.tsx): an address, a PR, a Slack or Basecamp thread, a @ticket.
+   A known source takes its line colour (the underline) and its ink; anything else is plain ink. */
+.tk-pane a.tk-link {
+  color: var(--ci, var(--ink));
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--c, var(--mute));
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.tk-pane a.tk-link.ref {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration-color: var(--ink);
+}
+.tk-pane a.tk-link:hover {
+  text-decoration-thickness: 3px;
+}
+.tk-pane a.tk-link:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+/* a link in an option's label sits inside its button: it keeps the pointer of a link */
+.tk-opt a.tk-link {
+  cursor: pointer;
+  position: relative;
+}

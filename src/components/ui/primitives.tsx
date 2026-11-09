@@ -43,7 +43,7 @@ export function Chip({
 }) {
   const cls = cx("chip", srcClass(source), variant, className);
   return href ? (
-    <a className={cls} href={href} target="_blank" rel="noreferrer">
+    <a className={cls} href={href} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
   ) : (
@@ -54,7 +54,7 @@ export function Chip({
 export function LinkChip({ source, children, href }: { source?: Source; children: ReactNode; href?: string }) {
   const cls = cx("lk", srcClass(source));
   return href ? (
-    <a className={cls} href={href} target="_blank" rel="noreferrer">
+    <a className={cls} href={href} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
   ) : (
