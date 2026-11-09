@@ -16,7 +16,7 @@ export function UsageBlock({ view, onDetail }: { view: UsageView; onDetail?: (hr
       }
     : undefined;
   return (
-    <div className={view.state === "stale" ? "rl-usage stale" : "rl-usage"} role="status" aria-label="Uso">
+    <div className={view.state === "stale" ? "rl-usage stale" : "rl-usage"} aria-label="Uso">
       <div className="k">Uso</div>
       {none ? (
         <div className="us-none">sin dato</div>
