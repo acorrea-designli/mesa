@@ -152,6 +152,26 @@ test("G12: the reply is found on any line of a multi-line command", async () => 
   assert.equal(await rule(sh(r, "echo no es una respuesta\nls")), null);
 });
 
+test("G12: another command's heredoc or here-string body that mentions the reply command is data, not a reply", async () => {
+  const r = reviewer();
+  const ps = (command) => run(r, "PowerShell", { command });
+  const MESA = "node G:/WorkSpace/designli/ops/bin/mesa";
+  const text = "G12 now finds mesa ticket reply on any line.\nsrc/x.ts:12 and 2d3d0df";
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<'EOF'\n${text}\nEOF`)), null);
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<EOF\n${text}\nEOF`)), null);
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<-'EOF'\n\t${text}\n\tEOF`)), null);
+  assert.equal(await rule(sh(r, `${MESA} finding upsert t66 --json - <<'EOF'\n{"n":2,"summary":"a reply (\`mesa ticket reply t1 --body \\"$B\\"\`) is found"}\nEOF`)), null);
+  assert.equal(await rule(sh(r, `${MESA} ticket brief t66 --body - <<'EOF'\nThe reviewer posts one mesa ticket reply per pass.\nEOF`)), null);
+  assert.equal(await rule(ps(`${MESA} handoff t66 --agent reviewer-t66 --status done --body @'\n${text}\n'@`)), null);
+  assert.equal(await rule(ps(`${MESA} handoff t66 --agent reviewer-t66 --status done --body @"\n${text}\n"@`)), null);
+  assert.equal(await rule(ps(`$h = @'\n${text}\n'@\n${MESA} handoff t66 --agent reviewer-t66 --status done --body $h`)), null);
+  // The reply after such a body is still found and checked.
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<'EOF'\n${text}\nEOF\n${MESA_REPLY} --body "$B"`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<'EOF'\nok\nEOF\n${heredoc("uno\ndos\ntres")}`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA} handoff t66 --agent reviewer-t66 --status done --body - <<'EOF'\nok\nEOF\n${heredoc("1 blocker, 2 nits: falta el permiso.")}`)), null);
+  assert.equal(await rule(ps(`$h = @'\n${text}\n'@\n${MESA_REPLY} --body $h`)), "G12");
+});
+
 test("G12: a single-quoted body is literal, so a $ in it is allowed", async () => {
   const r = reviewer();
   assert.equal(await rule(sh(r, `${MESA_REPLY} --body 'cuesta $5, 1 nit.'`)), null);

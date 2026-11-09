@@ -60,6 +60,31 @@ const nonEmptyLines = (s) => s.split(/\r?\n/).filter((l) => l.trim()).length;
 // it. A heredoc with an unquoted delimiter and a PowerShell @"..."@ here-string expand $(...), $VAR and backticks, so
 // their text is not the body that will be sent when it has a $ or a backtick.
 const EXPANDS = /[$`]/;
+// Index of the first line that is a `mesa ticket reply`, or -1. Lines inside another command's heredoc or here-string
+// body (a `mesa handoff`, `finding upsert` or `ticket brief` whose text mentions the reply command) are data, not commands,
+// so they are skipped: a line that opens `<<X`, `<<'X'` or `@'` / `@"` at its end hides everything up to its terminator.
+function findReplyLine(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (/\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(line)) return i;
+    const here = /(?<!<)<<(?!<)(-?)\s*(['"]?)([A-Za-z_]\w*)\2/.exec(line);
+    if (here) {
+      const stop = (l) => (here[1] ? l.replace(/^\t+/, "") : l).trimEnd() === here[3];
+      let j = i + 1;
+      while (j < lines.length && !stop(lines[j] ?? "")) j++;
+      i = j;
+      continue;
+    }
+    const hs = /@(['"])\s*$/.exec(line);
+    if (hs) {
+      const close = new RegExp("^\\s*" + hs[1] + "@");
+      let j = i + 1;
+      while (j < lines.length && !close.test(lines[j] ?? "")) j++;
+      i = j;
+    }
+  }
+  return -1;
+}
 export function ticketReplyShape(cmd) {
   const text = String(cmd ?? "");
   const lines = text.split(/\r?\n/);
@@ -67,7 +92,7 @@ export function ticketReplyShape(cmd) {
   if (piped && /\bmesa\b[^\n|;&]*\bticket\s+reply\b[^\n]*--body[\s=]+-(\s|$)/.test(piped[3])) {
     return { reply: true, body: piped[1] === '"' && EXPANDS.test(piped[2]) ? null : piped[2] };
   }
-  const at = lines.findIndex((l) => /\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(l));
+  const at = findReplyLine(lines);
   if (at < 0) return { reply: false, body: null };
   // The statement is the reply line plus its continuation lines (a trailing backslash, or a backtick in PowerShell).
   let end = at;
