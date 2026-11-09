@@ -6,6 +6,9 @@
 //   G1 (rule 14) Chrome `navigate` without the tabId of a tab you created.
 //   G2 (rule 5)  SendMessage to a retired agent (a message would resume it).
 //   G3 (rule 5)  SendMessage over 12 non-empty lines (HANDOFF/BRIEF/SPAWN messages: 60), or an ack-only message.
+//   G12 (rule 5) A teammate with role `reviewer` runs `mesa ticket reply` with a body over 2 non-empty lines, a
+//                `path/file.ext:NN` reference or a 7-40 hex sha: the findings are on the review card, never again in
+//                the reply (mesa-review § Ask). The lead and every other role are not affected.
 //   G4 (rule 3)  Outward writes by a teammate: Slack sends, Basecamp writes, GitHub comments/reviews/merges,
 //                pr-gh.mjs, `mesa salida sent`. Only the lead sends, and only after approval.
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
@@ -46,6 +49,37 @@ const SLACK_SEND_MESSAGE = "mcp__claude_ai_Slack__slack_send_message";
 const SLACK_SEND_DRAFT = "mcp__claude_ai_Slack__slack_send_message_draft";
 
 const nonEmptyLines = (s) => s.split(/\r?\n/).filter((l) => l.trim()).length;
+
+// G12: the body of a `mesa ticket reply` as the command text shows it (heredoc `--body - <<'EOF'`, PowerShell
+// here-string, or a quoted `--body "..."`). null when the command is not a ticket reply or the body is not in the text
+// (a body piped from a file is not seen; the reviewer command sheet uses heredocs).
+export function ticketReplyBody(cmd) {
+  const text = String(cmd ?? "");
+  const lines = text.split(/\r?\n/);
+  const first = lines.find((l) => l.trim()) ?? "";
+  if (!/\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(first)) return null;
+  const here = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(first);
+  if (here) {
+    const rest = lines.slice(lines.indexOf(first) + 1);
+    const end = rest.findIndex((l) => l.trim() === here[2]);
+    return (end < 0 ? rest : rest.slice(0, end)).join("\n");
+  }
+  const hs = /--body[\s=]+(?:-\s+)?@(['"])\r?\n([\s\S]*?)\r?\n\s*\1@/.exec(text);
+  if (hs) return hs[2];
+  const q = /--body[\s=]+(?:"((?:[^"\\]|\\[\s\S])*)"|'([^']*)')/.exec(text);
+  if (q) return q[1] ?? q[2] ?? "";
+  return null;
+}
+
+// Why a reviewer's ticket reply repeats the review card, or null when it is the one-line summary it should be.
+export function reviewerReplyProblem(body) {
+  const why = [];
+  const n = nonEmptyLines(body);
+  if (n > 2) why.push(`${n} non-empty lines (max 2)`);
+  if (/[\w./\\-]*\w\.[A-Za-z][A-Za-z0-9]{0,5}:\d+\b/.test(body)) why.push("a path:line reference");
+  if ((body.match(/\b[0-9a-f]{7,40}\b/g) ?? []).some((t) => /\d/.test(t) && /[a-f]/.test(t))) why.push("a commit sha");
+  return why.length ? why.join(", ") : null;
+}
 
 // Text as a sequence of lowercase word tokens, ignoring markup, URLs and punctuation, so the approved Markdown and the
 // HTML or mrkdwn a connector takes compare equal when the words are the same.
@@ -275,6 +309,15 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     }
     if (msg && msg.split(/\s+/).length <= 20 && /^(ack(nowledged)?|understood|noted|got it|ok(ay)?|thanks?( you)?|will do|on it|roger|entendido|recibido)\b/i.test(msg.trim())) {
       return block("G3", "rule 5: acknowledgement-only message. Send a message only when it changes the recipient's next action.");
+    }
+  }
+
+  // G12 (rule 5): the review card already lists every finding; the reviewer's reply is one line (mesa-review § Ask).
+  if (agent?.role === "reviewer" && (tool === "Bash" || tool === "PowerShell")) {
+    const body = ticketReplyBody(ti.command);
+    const why = body === null ? null : reviewerReplyProblem(body);
+    if (why) {
+      return block("G12", `rule 5: a reviewer's ticket reply is ONE line (mesa-review § Ask) and this one has ${why}. Findings, paths, lines and sha are already on the review card (\`mesa finding upsert\`); never repeat them in the reply. Allowed shape: "1 blocker, 2 nits: <the blocker in plain words>." A second line only for what the card cannot show (e.g. a merge order). Explain more: the long form goes into the finding's \`explanation\`, the reply is "Detalle en el hallazgo N de la tarjeta."`);
     }
   }
 
