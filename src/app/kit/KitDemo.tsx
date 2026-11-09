@@ -3,10 +3,38 @@ import { useState } from "react";
 import { BrokenLine, DirectionMarker, Interchange, LineStub, Ring, SourceDot } from "@/components/line/Line";
 import { Sheet, SplitApprove, Tabs, useToast } from "@/components/ui/interactive";
 import { Btn, Chip, ContextQuote, ExactText, Kind, Label, LinkChip, StatusTag } from "@/components/ui/primitives";
+import { TokenDetail } from "@/features/usage/TokenDetail";
+import { UsageBlock } from "@/features/usage/UsageBlock";
+import { addUsage, summarize, type Buckets, type Role } from "@/lib/domain/tokens";
 import { SOURCES, type Source } from "@/lib/domain/types";
+import { usageView, type UsageSnapshot } from "@/lib/domain/usage";
 import { useArrive, useLayLines, usePress } from "@/lib/motion";
 
 type Filter = "all" | Source;
+
+// Uso: fixed sample data, so the gallery renders the same on the server and the client (no clock).
+const USO_NOW = new Date("2026-11-09T20:00:00Z");
+const sec = (iso: string) => Date.parse(iso) / 1000;
+const USO_SAMPLE: UsageSnapshot = {
+  capturedAt: "2026-11-09T19:56:00Z",
+  sessionId: "sample",
+  model: { id: "claude-opus-5-5", displayName: "Opus 5.5" },
+  fiveHour: { usedPercentage: 32, resetsAt: sec("2026-11-09T23:30:00Z") },
+  sevenDay: { usedPercentage: 61, resetsAt: sec("2026-11-14T23:30:00Z") },
+};
+const USO_FRESH = usageView(USO_SAMPLE, USO_NOW);
+const USO_STALE = usageView({ ...USO_SAMPLE, capturedAt: "2026-11-09T19:20:00Z" }, USO_NOW);
+const USO_NONE = usageView(null, USO_NOW);
+const USO_TOKENS = (() => {
+  const b: Buckets = {};
+  const add = (role: Role, at: string, model: string, input: number, output: number, cacheRead: number) =>
+    addUsage(b, role, { at, id: `${role}${at}`, model, use: { input, cacheWrite: Math.round(input / 4), cacheRead, output } });
+  add("lead", "2026-11-09T14:00:00Z", "claude-opus-5-5", 52_000, 41_000, 6_800_000);
+  add("dev", "2026-11-09T15:00:00Z", "claude-opus-5-5", 31_000, 22_000, 3_100_000);
+  add("sweeper", "2026-11-09T16:00:00Z", "claude-haiku-5-5", 9_000, 4_000, 800_000);
+  add("lead", "2026-11-05T16:00:00Z", "claude-opus-5-5", 180_000, 120_000, 21_000_000);
+  return summarize(b, USO_NOW);
+})();
 
 export function KitDemo() {
   const [tab, setTab] = useState<Filter>("all");
@@ -113,6 +141,18 @@ export function KitDemo() {
           Confirmed, <mark className="m-keep">SCOUT_API_URL</mark> is set on staging. <mark className="m-redo">Prod</mark>{" "}
           <mark className="m-drop">tentatively</mark> after 2pm.
         </ExactText>
+      </section>
+
+      <section>
+        <Label>Uso</Label>
+        <div className="kit-line" style={{ alignItems: "flex-start" }}>
+          {[USO_FRESH, USO_STALE, USO_NONE].map((v, i) => (
+            <div key={i} style={{ width: 184 }}>
+              <UsageBlock view={v} />
+            </div>
+          ))}
+        </div>
+        <TokenDetail tokens={USO_TOKENS} />
       </section>
 
       <Sheet open={sheet} onClose={() => setSheet(false)} title="Programar salida">

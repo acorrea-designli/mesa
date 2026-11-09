@@ -258,6 +258,9 @@ node G:/WorkSpace/designli/ops/scripts/install-team.mjs             # links + ho
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs --allow     # also the read-only allow rules
 ```
 
+It also adds a `statusLine` (`scripts/statusline.mjs`, plan usage in the terminal and in Mesa's rail, `docs/ARCHITECTURE.md` § 13) when the
+settings have none; an existing one is never replaced. No agent runs this against `G:/WorkSpace/designli`: Andrés does, then reopens the session.
+
 The sandbox folder (`docs/SANDBOX.md`) installs the same way with
 `--target G:/WorkSpace/designli-sandbox --env sandbox`.
 

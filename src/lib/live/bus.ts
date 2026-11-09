@@ -54,7 +54,7 @@ const ENTITY: Record<string, string> = {
 };
 
 // Plumbing that changes nothing a screen shows.
-const QUIET = new Set(["wait", "sessions", "stream", "health", "push"]);
+const QUIET = new Set(["wait", "sessions", "stream", "health", "push", "usage"]);
 
 /** Derive the change from a mutating API request: /api/<collection>/<id>/<action…>. */
 export function changeFromRequest(method: string, url: string): LiveChange | null {

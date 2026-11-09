@@ -1,0 +1,161 @@
+/* Uso (t45): the rail / Ajustes block and the tokens detail in /semana. Ink and greys only: lines carry source, not state. */
+.rl-usage {
+  padding: 12px 10px 10px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.rl-usage .k {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mute);
+}
+.rl-usage.stale > * {
+  opacity: 0.55;
+}
+.us-win {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.us-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.us-top b {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--ink);
+}
+.us-top small {
+  margin-left: auto;
+}
+.us-top small,
+.us-reset,
+.us-none,
+.us-foot small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.us-meter {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.us-meter i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+.us-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.us-foot .lk {
+  font-size: 12px;
+  font-weight: 600;
+}
+.sheet .rl-usage {
+  padding: 12px 12px 4px;
+  gap: 12px;
+}
+.sheet .us-top {
+  font-size: 14px;
+}
+.sheet .us-top small,
+.sheet .us-reset,
+.sheet .us-none,
+.sheet .us-foot small,
+.sheet .us-foot .lk {
+  font-size: 13px;
+}
+.sheet .us-foot .lk {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Tokens detail */
+.us-detail {
+  padding: 24px var(--s-gutter) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-margin-top: 16px;
+}
+.us-detail h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+.us-slice h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+  margin-bottom: 6px;
+}
+.us-slice h3 b {
+  margin-left: 8px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.us-table {
+  width: 100%;
+  max-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.us-table caption {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+  padding: 2px 0 4px;
+}
+.us-table th,
+.us-table td {
+  padding: 5px 0;
+  text-align: right;
+  border-top: 1px solid var(--rule);
+  font-weight: 500;
+  color: var(--ink2);
+}
+.us-table thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.us-table th:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+}
+.us-table td,
+.us-table thead th:not(:first-child) {
+  padding-left: 12px;
+  min-width: 64px;
+}
+.us-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.us-empty,
+.us-note {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mute);
+}
