@@ -56,4 +56,6 @@ export const ticketApi = {
   approvePlan: (id: string, reject: string[]) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { reject } }),
   /** Pre-approves one needs_ok step from the plan; the owner wakes with ticket.plan_approved { partial }. */
   approveStep: (id: string, actionId: string) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { only: [actionId] } }),
+  /** Takes the pre-approval back (autoaprobado -> te pide OK); 409 once Claude started the step. The owner wakes with ticket.plan_approved { revoked }. */
+  revokeStep: (id: string, actionId: string) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { revoke: [actionId] } }),
 };

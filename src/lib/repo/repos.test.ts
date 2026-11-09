@@ -224,6 +224,78 @@ describe("ticket flow", () => {
       expect(d.actions.filter((a) => a.state === "approved" && a.id === merge.id)).toHaveLength(1);
       expect(d.actions.filter((a) => a.state === "planned").map((a) => a.label)).toEqual(["Mover otra"]);
     });
+
+    describe("taking a pre-approval back (revokeActions)", () => {
+      it("an approved step returns to planned, the status holds and the owner wakes with revoked + partial: true", () => {
+        const { t, merge } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        const before = r.tickets.get(t.id).status;
+        const d = r.tickets.revokeActions(t.id, [merge.id], at(2));
+        expect(d.actions.map((a) => a.state)).toEqual(["planned", "planned", "approved"]);
+        expect(d.status).toBe(before);
+        expect(wakes(t.id).map((e) => e.payload)).toEqual([
+          { ref: t.ref, approved: [merge.id], partial: true },
+          { ref: t.ref, revoked: [merge.id], partial: true },
+        ]);
+        expect(r.tickets.get(t.id).wokeAt).toBe(at(2).toISOString());
+      });
+
+      it("stamps Andrés's interaction", () => {
+        const { t, merge } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.revokeActions(t.id, [merge.id], at(7000));
+        const row = r.db.prepare("SELECT value FROM settings WHERE key = 'last_interaction_at'").get() as { value: string };
+        expect(row.value).toBe(at(7000).toISOString());
+      });
+
+      it("approve, revoke, approve again works and the last step is still the full approval", () => {
+        const { t, merge, move } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.revokeActions(t.id, [merge.id], at(2));
+        r.tickets.approveActions(t.id, [merge.id], at(3));
+        const d = r.tickets.approveActions(t.id, [move.id], at(4));
+        expect(d.status).toBe("working");
+        expect(wakes(t.id).slice(-1)[0]!.payload).toEqual({ ref: t.ref, approved: [move.id], partial: false });
+      });
+
+      it("refuses a step Claude already started (running, done, failed) with a clear error and moves nothing", () => {
+        for (const state of ["running", "done", "failed"] as const) {
+          const { t, merge } = planned();
+          r.tickets.approveActions(t.id, [merge.id], at(1));
+          r.tickets.setActionState(merge.id, state, at(2));
+          const wakesBefore = wakes(t.id).length;
+          expect(() => r.tickets.revokeActions(t.id, [merge.id], at(3))).toThrow(/already started/);
+          expect(r.tickets.detail(t.id).actions[0]!.state).toBe(state);
+          expect(wakes(t.id)).toHaveLength(wakesBefore);
+        }
+      });
+
+      it("refuses a step that is planned, rejected, direct, of another ticket, unknown, or an empty list", () => {
+        const { t, merge, direct } = planned();
+        const other = planned();
+        r.tickets.approveActions(other.t.id, [other.merge.id], at(1));
+        expect(() => r.tickets.revokeActions(t.id, [merge.id])).toThrow(/approved steps/); // still planned
+        expect(() => r.tickets.revokeActions(t.id, [direct.id])).toThrow(/approved steps/);
+        expect(() => r.tickets.revokeActions(t.id, [other.merge.id])).toThrow(/approved steps/);
+        expect(() => r.tickets.revokeActions(t.id, ["pa_nope"])).toThrow(/approved steps/);
+        expect(() => r.tickets.revokeActions(t.id, [])).toThrow(/approved steps/);
+        const rejected = planned();
+        r.tickets.approvePlan(rejected.t.id, [rejected.move.id]);
+        expect(() => r.tickets.revokeActions(rejected.t.id, [rejected.move.id])).toThrow(/approved steps/);
+      });
+
+      it("refuses once the plan was approved in full, and on a closed ticket", () => {
+        const { t, merge, move } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.approveActions(t.id, [move.id], at(2)); // full approval: working
+        expect(() => r.tickets.revokeActions(t.id, [merge.id], at(3))).toThrow(/approved in full/);
+        const c = planned();
+        r.tickets.approveActions(c.t.id, [c.merge.id], at(1));
+        r.tickets.transition(c.t.id, { type: "close", by: "andres" });
+        expect(() => r.tickets.revokeActions(c.t.id, [c.merge.id])).toThrow(/closed/);
+        expect(r.tickets.detail(c.t.id).actions[0]!.state).toBe("approved");
+      });
+    });
   });
 
   it("wait times out empty and ignores other sessions' events", async () => {

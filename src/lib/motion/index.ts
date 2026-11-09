@@ -67,6 +67,21 @@ export function arrive(items: Element[] | NodeListOf<Element>): void {
   );
 }
 
+/** Line stubs (plan rows) grow along their direction. Under reduced motion they do not move. */
+export function growStubs(stubs: Element[] | NodeListOf<Element>): void {
+  if (prefersReducedMotion()) return;
+  [...stubs].forEach((ln, i) => {
+    (ln as HTMLElement).style.transformOrigin = "left center";
+    animate(ln, { transform: ["scaleX(0)", "scaleX(1)"] }, { duration: 0.45, delay: 0.2 + Math.min(i * 0.03, 0.3), ease: EASE });
+  });
+}
+
+/** A plan block arrives: its rows re-run the list arrival and their line stubs grow. */
+export function arrivePlan(plan: Element): void {
+  arrive(plan.querySelectorAll(".tk-act"));
+  growStubs(plan.querySelectorAll(".tk-act .ln"));
+}
+
 /** Overlays (toasts, alerts, menus, toolbars) rise 10 px with a spring. */
 export function rise(el: Element): void {
   const reduce = prefersReducedMotion();

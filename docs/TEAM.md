@@ -248,7 +248,7 @@ Only the lead acts outward, and only after Andrés's approval:
 - **Messages** (Slack, Basecamp): on `salida.released`, `mesa-salida` § Send (Slack: a draft Andrés sends himself by default, or a direct send when he picked "Aprobar y que Claude lo envíe"; the event's `mode` says which).
 - **GitHub** (approve, review comments, thread replies): github salidas, on `salida.released`, `mesa-review` § Lead writes.
 - **Other `needs_ok` actions** (move a GitHub Project or Basecamp card, merge, apply infra): after `ticket.plan_approved`, the lead runs exactly
-  the approved action, marks it with `mesa ticket action <id> --state done|failed`, and tells the owner.
+  the approved action (never an id in the wake's `revoked`: Andrés took that pre-approval back and it is `planned` again), marks it with `mesa ticket action <id> --state done|failed`, and tells the owner.
 
 ## 9. Install
 

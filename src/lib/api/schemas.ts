@@ -112,10 +112,14 @@ export const plannedAction = z.object({
   target: z.record(z.string(), z.unknown()).optional(),
 });
 export const ticketPlan = z.object({ actions: z.array(plannedAction), session: z.string().optional() });
-/** `only`: pre-approve just these planned needs_ok steps (a partial approval); without it the whole plan, minus `reject`. */
+/**
+ * `only`: pre-approve just these planned needs_ok steps (a partial approval); `revoke`: take back the pre-approval of
+ * these approved steps (back to planned); without either it is the whole plan, minus `reject`.
+ */
 export const ticketPlanApprove = z
-  .object({ reject: z.array(z.string()).optional(), only: z.array(z.string()).min(1).optional() })
-  .refine((b) => !(b.only && b.reject?.length), { message: "only and reject cannot be combined" });
+  .object({ reject: z.array(z.string()).optional(), only: z.array(z.string()).min(1).optional(), revoke: z.array(z.string()).min(1).optional() })
+  .refine((b) => !(b.only && b.reject?.length), { message: "only and reject cannot be combined" })
+  .refine((b) => !(b.revoke && (b.only || b.reject?.length)), { message: "revoke cannot be combined with only or reject" });
 export const ticketTransition = z.object({
   event: z.enum(["claim", "close", "reopen"]),
   by: z.enum(["andres", "claude"]).optional(),

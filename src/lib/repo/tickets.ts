@@ -422,7 +422,7 @@ export function ticketsRepo(db: Db) {
     },
 
     /**
-     * Andrés pre-approves single needs_ok steps from the plan ("Aprobar" beside "no hacer"). Only planned needs_ok
+     * Andrés pre-approves single needs_ok steps from the plan (tapping the "te pide OK" chip, which then reads "autoaprobado"; revokeActions is the way back). Only planned needs_ok
      * steps of this ticket qualify. While other steps stay planned the status does not move and the wake says
      * `partial: true` (the owner runs only the approved steps); when none remain it is the full approval.
      * Andrés only: the sessions' PATCH /api/actions/:id never accepts "approved".
@@ -443,6 +443,33 @@ export function ticketsRepo(db: Db) {
           db.prepare("UPDATE tickets SET updated_at = ?, woke_at = ? WHERE id = ?").run(ts, ts, t.id);
           emitWake(db, { sessionId: t.ownerSession, kind: "ticket.plan_approved", entityType: "ticket", entityId: t.id, payload: { ref: t.ref, approved: ids, partial: true } }, now);
         }
+        return this.detail(t.id);
+      });
+    },
+
+    /**
+     * Andrés takes back a pre-approval ("autoaprobado" -> "te pide OK"). Only approved needs_ok steps of a non-closed
+     * ticket go back to planned, and only while the plan still has other planned steps (once the plan is approved in
+     * full the owner is working). A step the owner already marked running, done or failed is refused: the owner marks
+     * `running` before it starts, and both writes run in a transaction on the same row, so one of them wins. The wake
+     * is `ticket.plan_approved { revoked, partial: true }` (no `approved` key): those ids must not run.
+     */
+    revokeActions(id: string, revoke: string[], now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        if (t.status === "closed") throw new TransitionError("ticket is closed; reopen it first");
+        const ids = [...new Set(revoke)];
+        const all = actions(t.id);
+        const picked = ids.map((x) => all.find((a) => a.id === x && a.mode === "needs_ok"));
+        if (!ids.length || picked.some((a) => !a)) throw new TransitionError("only approved steps that ask for OK can be taken back");
+        if (picked.some((a) => a!.state === "running" || a!.state === "done" || a!.state === "failed")) throw new TransitionError("Claude already started that step; it cannot be taken back");
+        if (picked.some((a) => a!.state !== "approved")) throw new TransitionError("only approved steps that ask for OK can be taken back");
+        if (!all.some((a) => a.state === "planned")) throw new TransitionError("the plan was already approved in full; Claude may have started");
+        const ts = nowIso(now);
+        for (const a of picked) db.prepare("UPDATE planned_actions SET state = 'planned', updated_at = ? WHERE id = ? AND state = 'approved'").run(ts, a!.id);
+        touchInteraction(db, now);
+        db.prepare("UPDATE tickets SET updated_at = ?, woke_at = ? WHERE id = ?").run(ts, ts, t.id);
+        emitWake(db, { sessionId: t.ownerSession, kind: "ticket.plan_approved", entityType: "ticket", entityId: t.id, payload: { ref: t.ref, revoked: ids, partial: true } }, now);
         return this.detail(t.id);
       });
     },
