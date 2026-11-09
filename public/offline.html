@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#eceae5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17191d" media="(prefers-color-scheme: dark)">
+<title>Sin conexión · Mesa</title>
+<!-- Static fallback of the service worker (public/sw.js): no board data, no scripts from the app, tokens inlined from src/styles/tokens.css. -->
+<style>
+  :root { color-scheme: light dark; --gnd:#eceae5; --deep:#e2dfd8; --raise:#fbfaf7; --rule:#d3cfc5; --edge:#c3beb2; --ink:#1c1d21; --ink2:#3e4047; --mute:#5d5f68; --gh:#e60012; --sl:#00a3a8; }
+  @media (prefers-color-scheme: dark) { :root { --gnd:#17191d; --deep:#111316; --raise:#20232a; --rule:#2b2f37; --edge:#3d424b; --ink:#f1efe9; --ink2:#c7cbd2; --mute:#9a9fa8; --gh:#ff5d52; --sl:#2ec5c2; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { min-height: 100dvh; background: var(--gnd); color: var(--ink); font: 400 16px/1.5 "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+  header { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 18px; border-bottom: 1px solid var(--rule); font-weight: 700; font-size: 20px; letter-spacing: .02em; }
+  header small { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--mute); letter-spacing: 0; }
+  .band { padding: 22px 18px 6px; filter: grayscale(1); opacity: .7; }
+  main { flex: 1; padding: 8px 18px 28px; max-width: 520px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .alert { display: flex; gap: 12px; align-items: flex-start; background: var(--raise); border: 1px solid var(--ink); border-radius: 6px; padding: 12px 14px; font-size: 14px; line-height: 1.45; box-shadow: 0 2px 8px rgba(28,29,33,.1); }
+  .alert b { font-weight: 700; }
+  .alert p { margin: 0; }
+  .alert svg { flex: none; margin-top: 3px; }
+  .row { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; }
+  button { font: inherit; font-weight: 600; font-size: 16px; height: 52px; border-radius: 6px; border: 1px solid var(--edge); background: transparent; color: var(--ink); width: 100%; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.p { height: 58px; font-size: 17px; background: var(--ink); color: var(--gnd); border-color: var(--ink); }
+  button.p:disabled { background: transparent; color: var(--ink); }
+  .ro { margin: 0; color: var(--ink2); font-size: 14px; }
+  .retry { margin-top: 6px; }
+  footer { padding: 0 18px 24px; text-align: center; color: var(--mute); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true">
+    <path d="M3 21H12L19 14H25" stroke="var(--gh)"/><path d="M3 14H25" stroke="var(--sl)"/><circle cx="19" cy="14" r="3.2" fill="var(--gnd)" stroke="var(--ink)" stroke-width="2"/>
+  </svg>
+  Mesa <small>sin túnel</small>
+</header>
+<div class="band" aria-hidden="true">
+  <svg width="100%" height="34" viewBox="0 0 340 34" preserveAspectRatio="xMinYMid meet" fill="none" stroke-linecap="round">
+    <path d="M6 10H120" stroke="var(--gh)" stroke-width="5"/><path d="M6 24H120" stroke="var(--sl)" stroke-width="5"/>
+    <path d="M134 10H334" stroke="var(--gh)" stroke-width="5" stroke-dasharray="1 8"/><path d="M134 24H334" stroke="var(--sl)" stroke-width="5" stroke-dasharray="1 8"/>
+    <path d="M122 30L134 4" stroke="var(--ink)" stroke-width="2"/>
+  </svg>
+</div>
+<main>
+  <div class="alert" role="alert">
+    <svg width="32" height="14" viewBox="0 0 32 14" aria-hidden="true"><path d="M2 7H11M21 7H30" stroke="var(--ink)" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M13 11L19 3" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/></svg>
+    <p><b>Sin conexión con tu PC.</b> El túnel no responde. Mesa vive en tu PC, así que aquí no hay nada guardado que mostrar. Cuando la PC vuelva a estar encendida y conectada, esta pantalla se actualiza sola.</p>
+  </div>
+  <div class="row">
+    <button type="button" disabled>Aprobar</button>
+    <button type="button" disabled>Enviar</button>
+    <button type="button" disabled>Responder</button>
+  </div>
+  <p class="ro">Aprobar, enviar y responder vuelven con la conexión: nada sale sin la PC.</p>
+  <button type="button" class="p retry" id="retry">Reintentar</button>
+</main>
+<footer>Mesa · modo sin conexión</footer>
+<script>
+  var go = function () { location.replace("/"); };
+  document.getElementById("retry").addEventListener("click", go);
+  window.addEventListener("online", go);
+</script>
+</body>
+</html>

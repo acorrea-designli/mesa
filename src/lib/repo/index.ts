@@ -9,6 +9,7 @@ import { engramRepo } from "./engram";
 import { leadFocusRepo } from "./focus";
 import { ignoredRepo, ITEM_IGNORED, TASK_IGNORED } from "./ignored";
 import { lastInteractionAt, touchInteraction } from "./interaction";
+import { pairingRepo } from "./pairing";
 import { sourcesRepo } from "./sources";
 import { itemsRepo } from "./items";
 import { reviewsRepo } from "./reviews";
@@ -34,6 +35,7 @@ export function createRepos(db: Db) {
     reviews: reviewsRepo(db),
     sources: sourcesRepo(db),
     ignored: ignoredRepo(db),
+    pairing: pairingRepo(db),
     counts: () => counts(db),
     /** Time-driven transitions: salida undo windows, schedules, expiry; approval expiry. */
     sweep: (now = new Date()) => {

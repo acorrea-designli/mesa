@@ -11,9 +11,10 @@
     "mesa": "bin/mesa"
   },
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port 8790",
+    "dev": "node scripts/serve.mjs dev",
     "build": "next build",
-    "start": "next start --hostname 0.0.0.0 --port 8790",
+    "start": "node scripts/serve.mjs start",
+    "tunnel": "node scripts/tunnel.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && pnpm test:team",
@@ -28,6 +29,7 @@
   "dependencies": {
     "motion": "14.9.0",
     "next": "16.4.5",
+    "qrcode-generator": "2.0.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"

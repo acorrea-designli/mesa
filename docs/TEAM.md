@@ -290,7 +290,13 @@ registered with the node that ran the installer. Re-run after every pull. Restar
    `G:/WorkSpace/designli`, every engram call passes `project: "designli"` explicitly for the session, and the spawn
    prompts say so.
 10. **One engram key per ticket** (agreed): `mesa/<ref>`, shared by Mesa and the agents (upserts).
-11. **Tunnel**: out of scope for now (phone access later). No code and no preflight check.
+11. **Tunnel** (t28, decided 2026-11-09: Tailscale): phone access goes through `tailscale serve` on this PC, tailnet
+    only. **Funnel is never enabled** (it would put Mesa on the public internet), and Mesa never listens beyond
+    `127.0.0.1` unless `MESA_HOST` says so. Two keys: tailnet membership (optionally the identity in
+    `MESA_TAILSCALE_USER`) and the `MESA_TOKEN` cookie, which the phone gets by scanning the one-time QR on
+    `/telefono` (the token is never typed, shown or put in a URL). `pnpm tunnel` prints the state and refuses to run
+    while Funnel is on; mesa-start checks it (`node scripts/tunnel.mjs status --json`). Installing Tailscale, logging
+    in, `pnpm tunnel up` and writing `.env.local` are `needs_ok` steps done with Andrés. See ARCHITECTURE § 11.
 12. **pr-monitor coexistence** (decided): reviewers seed their state from `~/.claude-work/pr-monitor-state.json`,
     read-only, when Mesa has none.
 13. **Allow rules** (decided): the `--allow` list stays read-only; the lead reviews it before Andrés runs the

@@ -7,13 +7,13 @@ Product and design sources: `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json`
 ## 1. Shape of the system
 
 ```
- phone (tunnel + token) ─┐
- desktop browser ────────┼──▶ Next.js app (0.0.0.0:8790) ──▶ SQLite  data/mesa.db
-                         │      ├─ RSC pages: / /tablero /tickets /salidas /kit
-                         │      ├─ REST API  /api/*
-                         │      ├─ long-polls /api/wait (sessions), /api/approvals/:id?wait= (hook)
-                         │      └─ sweeper (1 s): undo windows, schedules, expiry, approval expiry
-                         │
+ phone (Tailscale + token) ──▶ tailscale serve (this PC, https :443, tailnet only) ────┐
+ desktop browser (localhost) ──────────────────────────────────────────────────────────┼──▶ Next.js app (127.0.0.1:8790) ──▶ SQLite  data/mesa.db
+                                                                                       │      ├─ RSC pages: / /tablero /tickets /salidas /telefono /kit
+                                                                                       │      ├─ REST API  /api/*
+                                                                                       │      ├─ long-polls /api/wait (sessions), /api/approvals/:id?wait= (hook)
+                                                                                       │      └─ sweeper (1 s): undo windows, schedules, expiry, approval expiry
+                                                                                       │
  lead session (MESA_SESSION=lead) ──▶ bin/mesa ──▶ REST API ◀── mesa wait
    ├─ ephemeral agents (MESA_AGENT, MESA_TICKET) ─▶ bin/mesa
    │    └─ PermissionRequest hook ─▶ scripts/hooks/mesa-approval.mjs ─▶ /api/approvals
@@ -43,7 +43,10 @@ Product and design sources: `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json`
 | `src/lib/wake/sweeper.ts` | 1 s interval started from `src/instrumentation.ts`. |
 | `src/lib/api/*` | Route wrapper (`route()`: sweep, error mapping) and zod request schemas. |
 | `src/app/api/**/route.ts` | REST routes (contract below). |
-| `src/proxy.ts` | Access guard (local only unless `MESA_TOKEN`). |
+| `src/proxy.ts`, `src/lib/access.ts` | Access guard: local only, otherwise `MESA_TOKEN` cookie/header (+ optional Tailscale user), §11. |
+| `src/app/pair/route.ts`, `src/app/api/pairing/route.ts`, `src/lib/repo/pairing.ts` | Phone pairing: one-time code to cookie (§11). |
+| `src/features/phone/*`, `src/app/telefono`, `src/app/manifest.ts`, `public/sw.js`, `public/offline.html` | Phone: `/telefono` (QR, install), install banner, tunnel status strip, service worker (§11). |
+| `scripts/serve.mjs`, `scripts/tunnel.mjs` | `pnpm dev` / `pnpm start` bind, `pnpm tunnel` (Tailscale Serve, Funnel check). |
 | `scripts/hooks/mesa-approval.mjs` | PermissionRequest hook (§7). |
 | `src/styles/*`, `src/components/*`, `src/lib/motion` | Design system in code (§10). |
 | `bin/mesa` | CLI for sessions and agents (§9). |
@@ -191,6 +194,7 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | Method & path | Body / query | Response |
 | --- | --- | --- |
 | GET `/api/health` | | `{ ok, now }` |
+| GET/POST `/api/pairing` | (PC only; 403 `local_only` through the tunnel) | `{ tailnetUrl }` / `{ url, expiresAt }` 201 (409 `no_tailnet` without Tailscale) |
 | GET `/api/counts` | | `Counts` (rail, stations, pending approvals) |
 | GET/POST `/api/items` | `?station=&source=` / `ItemInput` | `Item[]` / `Item` 201 |
 | POST `/api/items/upsert` | `ItemInput` (by source + externalId) | `{ item, created }`, or `{ ignored: true, created: false }` (200, nothing stored) for an ignored project |
@@ -292,7 +296,9 @@ Browser notifications (`src/features/notify/`, no server part): the `Notifier` m
 
 ## 11. Security
 
-- **Local first.** The server binds `0.0.0.0:8790`, but `src/proxy.ts` only serves requests addressed to `localhost`/`127.0.0.1`/`[::1]`. Other hosts need `MESA_TOKEN` (header `x-mesa-token`, cookie `mesa_token`, or `?token=` once); without it they get 403. The Host check is not a network boundary: keep the firewall closed for 8790 and expose Mesa only through the tunnel with a token.
+- **Local first.** The server binds `127.0.0.1:8790` (`pnpm dev` and `pnpm start` go through `scripts/serve.mjs`; `MESA_HOST` overrides, and `0.0.0.0` is an explicit decision), so nothing on the LAN reaches the port. `src/proxy.ts` (policy in `src/lib/access.ts`) treats a request as local only when its Host is loopback AND it shows no sign of a proxy: none of `Tailscale-User-*`, `Forwarded`, `X-Real-IP`, `Via`, `CF-*`, and no `X-Forwarded-*` value that differs from what Next fills in for a direct connection (Host as host, a loopback client, `http`, the Host's port). Gotcha: Next 16 sets all four `X-Forwarded-*` itself on every request before the proxy runs, so their mere presence cannot be the test. Any non-local request needs the `mesa_token` cookie or the `x-mesa-token` header; with `MESA_TOKEN` unset every one is refused (403). With `MESA_TAILSCALE_USER` set, `Tailscale-User-Login` must equal it (403 otherwise), even for the public assets. The Host check is never a boundary on its own. `?token=` was removed: the token never travels in a URL.
+- **Phone access: Tailscale Serve, two keys, no Funnel.** `tailscale serve --bg --https=443 http://127.0.0.1:8790` (`pnpm tunnel up`) publishes `https://<pc>.<tailnet>.ts.net` to the tailnet only; `pnpm tunnel` refuses to run while Funnel (public internet) is on. Key 1 is tailnet membership (plus the identity header when `MESA_TAILSCALE_USER` is set), key 2 is the `MESA_TOKEN` cookie. The phone gets the cookie by scanning the QR on `/telefono` (PC only): `POST /api/pairing` (local only) mints a code (32 random bytes, 10 minutes, single use, only its SHA-256 stored in `phone_pairings`), the QR holds `https://<tailnet host>/pair?c=<code>`, and `GET /pair` sets `mesa_token` (httpOnly, Secure, SameSite=Strict, 30 days) and redirects to `/`. The token is never shown, copied or put in a URL or chat. Without a token set, or before pairing, the phone sees only 401.
+- **PWA.** `src/app/manifest.ts`, the icons (`scripts/make-icons.mjs`, drawn from the BrandMark), `sw.js` and `offline.html` are served without the token (they hold no data; browsers fetch the manifest without cookies). The service worker (`public/sw.js`, scope `/`, production builds only; dev unregisters it) precaches only that shell, caches `/_next/static/*`, answers navigations network-first and falls back to `offline.html` ("Sin conexión con tu PC", actions disabled) when the PC does not answer; it never caches `/api/*` or any HTML with board data and never queues a write. The install banner uses `beforeinstallprompt` on Chrome/Android and a written guide on iOS, hidden when standalone and for 14 days after a dismiss.
 - **No secrets in the repo, and no Slack or Basecamp credentials at all.** Those connectors live in Claude's MCP, and GitHub uses the `gh` login. `.env.local` (gitignored) holds only Mesa settings, which `.env.example` lists. `data/` and `*.db` are gitignored.
 - **Every outgoing write needs Andrés's explicit approval of the exact text and destination.** Slack and Basecamp messages and GitHub reviews/comments are salidas, and the review buttons approve the exact text shown on the card. Mesa refuses `sent` before the 20 s undo window ends.
 - **Permission approvals allow one call at a time.** Allow comes only from an explicit "Dar permiso" before expiry. Everything else is deny, and the hook never emits `updatedPermissions`.

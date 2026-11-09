@@ -61,6 +61,9 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
         <span className="nav foot">
           Hecho hoy <b>{counts.doneToday}</b>
         </span>
+        <Link href="/telefono" className="nav theme" aria-current={path.startsWith("/telefono") ? "page" : undefined}>
+          Teléfono
+        </Link>
         <NotifyToggle className="nav theme" />
         <ThemeToggle className="theme" />
       </div>

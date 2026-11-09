@@ -24,12 +24,20 @@ const DESCRIPTION = "Lo que te espera hoy: PRs, Basecamp, Slack y Claude en una 
 // The sandbox board's tab title starts with "[sandbox]" on every page.
 export function generateMetadata(): Metadata {
   const p = isSandbox() ? "[sandbox] " : "";
-  return { title: { default: `${p}Mesa`, template: `${p}%s · Mesa` }, description: DESCRIPTION };
+  return {
+    title: { default: `${p}Mesa`, template: `${p}%s · Mesa` },
+    description: DESCRIPTION,
+    applicationName: "Mesa",
+    // iOS has no manifest icons: the home-screen icon and the standalone launch come from these.
+    icons: { icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }] },
+    appleWebApp: { capable: true, title: "Mesa", statusBarStyle: "default" },
+  };
 }
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#eceae5" },
     { media: "(prefers-color-scheme: dark)", color: "#17191d" },
