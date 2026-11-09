@@ -92,7 +92,9 @@ export function startNotifier(navigate: (url: string) => void): Engine {
   const show = (s: Shown) => {
     if (!canShow()) return;
     try {
-      const n = new window.Notification(s.title, { body: s.body, tag: s.key, requireInteraction: true });
+      // The banner goes away on its own (Andrés, t38: "el banner se queda hasta que le doy dismiss"); Mesa keeps the item.
+      const n = new window.Notification(s.title, { body: s.body, tag: s.key, requireInteraction: false });
+      window.setTimeout(() => n.close(), 10_000);
       n.onclick = () => {
         window.focus();
         navigate(s.url);
