@@ -16,7 +16,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pidAlive as pidAliveAt, probePublic, runCloudflared, serviceState as serviceStateOf, stopRunningTunnel } from "./lib/cloudflared.mjs";
-import { WINDOWS_SERVICE, buildConfig, describe, hostFromPublicUrl, parseTunnelList, statusExitCode, tunnelName } from "./lib/tunnel.mjs";
+import { WINDOWS_SERVICE, buildConfig, describe, hostFromPublicUrl, parseTunnelList, reuseDecision, statusExitCode, tunnelName } from "./lib/tunnel.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -106,13 +106,15 @@ console.log(`Config escrita en ${CONFIG}`);
 
 const svc = serviceState();
 let started = false;
-if (t.connections > 0 || pidAlive() || svc === "running") {
+const { reuse, staleRemote } = reuseDecision({ connections: t.connections, pidAlive: pidAlive(), service: svc });
+if (reuse) {
   console.log("El túnel ya está conectado; no arranco otro.");
 } else if (svc === "stopped") {
   const r = spawnSync("sc", ["start", WINDOWS_SERVICE], { encoding: "utf8", windowsHide: true });
   if (r.status !== 0) fail(`No pude iniciar el servicio ${WINDOWS_SERVICE} (¿terminal de administrador?): ${(r.stdout || r.stderr).trim()}`);
   started = true;
 } else {
+  if (staleRemote) console.log(`Cloudflare lista ${t.connections} conexión(es) pero no hay cloudflared local: parecen viejas; arranco el mío.`);
   const exe = cf(["--version"]).file;
   const child = spawn(exe, ["tunnel", "--config", CONFIG, "run", tunnel], { detached: true, stdio: "ignore", windowsHide: true });
   child.unref();

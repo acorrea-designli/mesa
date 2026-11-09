@@ -61,6 +61,17 @@ export function parseTunnelList(text, name) {
   return { id: t.id, name: t.name, connections: conns };
 }
 
+/**
+ * Reuse or start our own connector? Shared by `pnpm tunnel up` and the autostart so the two cannot drift.
+ * Only a LOCAL connector counts: the pidfile's process is a live cloudflared (`pidAlive`, see ./cloudflared.mjs) or the
+ * Windows service runs. Cloudflare keeps listing connections for about a minute after a connector dies, so a remote
+ * `connections` count alone never means "reuse": it is `staleRemote` (info for the log), and the caller starts its own.
+ */
+export function reuseDecision({ connections = 0, pidAlive = false, service = "absent" } = {}) {
+  const local = pidAlive === true || service === "running";
+  return { reuse: local, staleRemote: !local && connections > 0 };
+}
+
 /** `sc query Cloudflared` text -> "running" | "stopped" | "absent" | "other". */
 export function parseServiceState(text, exitCode = 0) {
   if (exitCode === 1060 || /1060|does not exist/i.test(text ?? "")) return "absent";

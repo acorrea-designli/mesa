@@ -118,17 +118,40 @@ test("does nothing before the server listens, and stop() before then starts noth
   assert.equal(b.w.spawned.length, 0);
 });
 
-test("reuses a tunnel that already has connections: no second one, not stopped with the board", async () => {
-  for (const over of [{ connections: 2 }, { pidAlive: true }, { service: "running" }]) {
+test("reuses a tunnel with a local connector: no second one, not stopped with the board", async () => {
+  for (const over of [{ pidAlive: true }, { service: "running" }, { connections: 2, pidAlive: true }, { connections: 2, service: "running" }]) {
     const { w, run } = world(over);
     const t = run();
     await t.done;
     assert.equal(w.spawned.length, 0, JSON.stringify(over));
     assert.match(w.lines[0], /reusing the tunnel/);
+    assert.equal(w.lines.length, 1, "no stale line when a local connector is alive");
     t.stop();
     assert.equal(w.killed, 0, "a tunnel we did not start is not ours to kill");
     assert.equal(w.stoppedExisting, 0);
   }
+});
+
+test("connections listed by Cloudflare with no local connector look stale: own child, one stale line, stops with the board", async () => {
+  const { w, run } = world({ connections: 2 });
+  const t = run();
+  await t.done;
+  assert.equal(w.spawned.length, 1, "a second connector is allowed");
+  const stale = w.lines.filter((l) => /look stale/.test(l));
+  assert.equal(stale.length, 1);
+  assert.match(stale[0], /2 connection\(s\)/);
+  assert.ok(!w.lines.some((l) => /reusing/.test(l)));
+  t.stop();
+  assert.equal(w.killed, 1, "the child stops with the board");
+});
+
+test("no connections and no local connector: own child, no stale line", async () => {
+  const { w, run } = world({ connections: 0 });
+  const t = run();
+  await t.done;
+  assert.equal(w.spawned.length, 1);
+  assert.ok(!w.lines.some((l) => /stale/.test(l)));
+  t.stop();
 });
 
 test("Access probe guard: Mesa answering the public URL before start blocks the tunnel", async () => {
@@ -140,12 +163,23 @@ test("Access probe guard: Mesa answering the public URL before start blocks the 
   assert.match(w.lines[0], /without Cloudflare Access/);
 });
 
-test("Access probe guard: a running tunnel that exposes Mesa is stopped", async () => {
+test("Access probe guard: a running local tunnel that exposes Mesa is stopped", async () => {
+  for (const over of [{ pidAlive: true }, { service: "running" }]) {
+    const { w, run } = world({ connections: 1, probeSeq: ["mesa"], ...over });
+    const t = run();
+    await t.done;
+    assert.equal(w.stoppedExisting, 1);
+    assert.match(w.lines[0], /stopped the running tunnel/);
+  }
+});
+
+test("Access probe guard: remote connections alone stop nothing local and start nothing", async () => {
   const { w, run } = world({ connections: 1, probeSeq: ["mesa"] });
   const t = run();
   await t.done;
-  assert.equal(w.stoppedExisting, 1);
-  assert.match(w.lines[0], /stopped the running tunnel/);
+  assert.equal(w.stoppedExisting, 0);
+  assert.equal(w.spawned.length, 0);
+  assert.match(w.lines[0], /not starting the tunnel/);
 });
 
 test("Access probe guard: if Mesa answers once our child is up, the child is stopped (one line)", async () => {

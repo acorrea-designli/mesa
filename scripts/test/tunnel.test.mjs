@@ -3,9 +3,40 @@ import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { isLoopbackBind, pickHost } from "../lib/host.mjs";
-import { MESA_TARGET, buildConfig, classifyProbe, describe, hostFromPublicUrl, parseServiceState, parseTunnelList, statusExitCode, tunnelName } from "../lib/tunnel.mjs";
+import { isCloudflaredImage, pidAlive } from "../lib/cloudflared.mjs";
+import { MESA_TARGET, buildConfig, classifyProbe, describe, hostFromPublicUrl, parseServiceState, parseTunnelList, reuseDecision, statusExitCode, tunnelName } from "../lib/tunnel.mjs";
 
 const ID = "6ff42ae2-765d-4adf-8112-31c55c1551ef";
+
+test("reuseDecision: only a local connector means reuse; remote connections alone are stale", () => {
+  assert.deepEqual(reuseDecision({ connections: 0, pidAlive: true }), { reuse: true, staleRemote: false });
+  assert.deepEqual(reuseDecision({ connections: 0, service: "running" }), { reuse: true, staleRemote: false });
+  assert.deepEqual(reuseDecision({ connections: 3, pidAlive: true }), { reuse: true, staleRemote: false });
+  assert.deepEqual(reuseDecision({ connections: 3, service: "stopped" }), { reuse: false, staleRemote: true });
+  assert.deepEqual(reuseDecision({ connections: 0 }), { reuse: false, staleRemote: false });
+});
+
+const tasklist = (stdout) => () => ({ status: 0, stdout });
+
+test("isCloudflaredImage: the tasklist row must name cloudflared with that PID", () => {
+  assert.equal(isCloudflaredImage(4242, { spawn: tasklist('"cloudflared.exe","4242","Console","1","30,000 K"\r\n') }), true);
+  assert.equal(isCloudflaredImage(4242, { spawn: tasklist('"chrome.exe","4242","Console","1","30,000 K"\r\n') }), false, "PID reused by another program");
+  assert.equal(isCloudflaredImage(4242, { spawn: tasklist("INFO: No tasks are running which match the specified criteria.\r\n") }), false);
+  assert.equal(isCloudflaredImage(4242, { spawn: () => { throw new Error("no tasklist"); } }), false);
+});
+
+test("pidAlive: windows needs a live cloudflared image; elsewhere kill 0 is enough", () => {
+  const read = () => "4242";
+  const kill = () => true;
+  const dead = () => { throw Object.assign(new Error("ESRCH"), { code: "ESRCH" }); };
+  const cf = tasklist('"cloudflared.exe","4242","Console","1","30,000 K"\n');
+  const other = tasklist('"notepad.exe","4242","Console","1","30,000 K"\n');
+  assert.equal(pidAlive("p", { read, kill, platform: "win32", spawn: cf }), true);
+  assert.equal(pidAlive("p", { read, kill, platform: "win32", spawn: other }), false, "live PID that is not cloudflared");
+  assert.equal(pidAlive("p", { read, kill: dead, platform: "win32", spawn: cf }), false);
+  assert.equal(pidAlive("p", { read, kill, platform: "linux", spawn: other }), true);
+  assert.equal(pidAlive("p", { read: () => "", kill, platform: "linux" }), false);
+});
 
 test("hostFromPublicUrl: the hostname of MESA_PUBLIC_URL, https only", () => {
   assert.equal(hostFromPublicUrl("https://mesa.example.com"), "mesa.example.com");

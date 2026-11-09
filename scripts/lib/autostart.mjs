@@ -5,8 +5,9 @@
 // Same rules as `pnpm tunnel up` (scripts/tunnel.mjs), so the two agree:
 //  - the Access probe guard: if https://<host>/ answers from Mesa without Cloudflare Access, nothing is exposed;
 //    a tunnel this process started is stopped, a running one is stopped too (service or pidfile);
-//  - a tunnel that already has connections (another `pnpm tunnel up`, the Windows service) is reused, not doubled,
-//    and is not ours to stop when the board exits.
+//  - a tunnel with a LOCAL connector (a live cloudflared in the pidfile from `pnpm tunnel up`, or the Windows
+//    service) is reused, not doubled, and is not ours to stop when the board exits. Connections that only Cloudflare
+//    lists never count: they linger ~1 min after a connector dies, so then we start our own child.
 // Everything with side effects arrives through `deps`, so the tests use fakes and touch neither cloudflared, the
 // network nor ~/.cloudflared.
 import { spawn as nodeSpawn } from "node:child_process";
@@ -15,7 +16,7 @@ import net from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pidAlive, probePublic, runCloudflared, serviceState, stopRunningTunnel } from "./cloudflared.mjs";
-import { WINDOWS_SERVICE, buildConfig, hostFromPublicUrl, parseTunnelList, tunnelName } from "./tunnel.mjs";
+import { WINDOWS_SERVICE, buildConfig, hostFromPublicUrl, parseTunnelList, reuseDecision, tunnelName } from "./tunnel.mjs";
 
 const PROBE_TRIES = 10;
 const PROBE_EVERY_MS = 3000;
@@ -127,7 +128,7 @@ export function startTunnel({ plan, env = process.env, port, host = "127.0.0.1",
     const credentialsFile = join(paths.dir, `${t.id}.json`);
     if (!d.exists(credentialsFile)) return say(`credentials file for "${plan.tunnel}" missing in ${paths.dir}; the board runs without the tunnel`);
 
-    const running = t.connections > 0 || d.pidAlive() || d.serviceState() === "running";
+    const { reuse: running, staleRemote } = reuseDecision({ connections: t.connections, pidAlive: d.pidAlive(), service: d.serviceState() });
     const before = await d.probe(plan.hostname);
     if (ctl.stopped) return;
     if (before === "mesa") {
@@ -135,6 +136,7 @@ export function startTunnel({ plan, env = process.env, port, host = "127.0.0.1",
       return say(`https://${plan.hostname}/ answers from Mesa without Cloudflare Access: ${running ? "stopped the running tunnel" : "not starting the tunnel"}; create the Access app first`);
     }
     if (running) return say(`reusing the tunnel "${plan.tunnel}" that is already connected (${plan.hostname})`);
+    if (staleRemote) say(`Cloudflare lists ${t.connections} connection(s) for "${plan.tunnel}" but no local cloudflared runs: they look stale; starting our own`);
 
     d.mkdir(paths.dir);
     d.write(paths.config, buildConfig({ tunnel: plan.tunnel, uuid: t.id, credentialsFile, hostname: plan.hostname }));

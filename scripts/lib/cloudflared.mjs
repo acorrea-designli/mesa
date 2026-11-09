@@ -43,13 +43,30 @@ export function serviceState(serviceName, { platform = process.platform, spawn =
   return parseServiceState(r.stdout ?? "", r.status ?? 1);
 }
 
-/** Is the process named in `pidfile` (written by `pnpm tunnel up` or the autostart) alive? */
-export function pidAlive(pidfile, { read = readFileSync, kill = process.kill } = {}) {
+/** Windows: is `pid` a running cloudflared? `tasklist` CSV row: "cloudflared.exe","1234",... (a reused PID names another image). */
+export function isCloudflaredImage(pid, { spawn = spawnSync } = {}) {
+  try {
+    const r = spawn("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf8", timeout: 10000, windowsHide: true });
+    const row = String(r.stdout ?? "").split(/\r?\n/).find((l) => l.trim().startsWith('"'));
+    if (!row) return false;
+    const [image, id] = row.split('","').map((c) => c.replace(/^"|"$/g, ""));
+    return /^cloudflared(\.exe)?$/i.test(image ?? "") && Number(id) === Number(pid);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Is the process named in `pidfile` (written by `pnpm tunnel up` or the autostart) a live LOCAL cloudflared?
+ * kill(pid, 0) alone is not enough on Windows, where a stale pidfile's PID can be reused by any program: there the
+ * image name must be cloudflared too.
+ */
+export function pidAlive(pidfile, { read = readFileSync, kill = process.kill, platform = process.platform, spawn = spawnSync } = {}) {
   try {
     const pid = Number(read(pidfile, "utf8"));
     if (!pid) return false;
     kill(pid, 0);
-    return true;
+    return platform === "win32" ? isCloudflaredImage(pid, { spawn }) : true;
   } catch {
     return false;
   }
@@ -62,7 +79,7 @@ export function stopRunningTunnel(pidfile, serviceName, { spawn = spawnSync, rea
     spawn("sc", ["stop", serviceName], { encoding: "utf8", windowsHide: true });
     stopped = true;
   }
-  if (pidAlive(pidfile, { read, kill })) {
+  if (pidAlive(pidfile, { read, kill, spawn })) {
     try {
       kill(Number(read(pidfile, "utf8")));
       stopped = true;
