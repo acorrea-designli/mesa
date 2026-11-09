@@ -15,6 +15,8 @@ import { promptInstall, refreshSw, resetInstallDismiss, useInstall } from "./use
 
 type Pairing = { url: string; code: string; expiresAt: string };
 
+const STATUS_POLL_MS = 3000;
+
 const STATUS_COPY: Record<InstallStatus, string> = {
   installed: "Mesa ya está instalada en este dispositivo.",
   prompt: "Este navegador puede instalarla ahora.",
@@ -80,12 +82,53 @@ function Pair({ publicUrl }: { publicUrl: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [spent, setSpent] = useState(false);
 
   useEffect(() => {
     if (!pairing) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [pairing]);
+
+  const left = pairing ? timeLeft(pairing.expiresAt, now) : null;
+  const expired = pairing !== null && left === null;
+  const watching = pairing !== null && !expired && !spent;
+
+  // While a code is shown: a light poll of the local-only status (refused through the tunnel like the rest of
+  // /api/pairing) learns when the QR or the typed code was spent. It stops once the code is spent or expired, and
+  // while the page is hidden.
+  useEffect(() => {
+    if (!watching) return;
+    let timer: number | undefined;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/pairing?status", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { state?: string };
+        if (!cancelled && body.state === "used") setSpent(true);
+      } catch {
+        /* offline blip: the next tick tries again */
+      }
+    };
+    const start = () => {
+      if (timer !== undefined || document.hidden) return;
+      void tick();
+      timer = window.setInterval(() => void tick(), STATUS_POLL_MS);
+    };
+    const stop = () => {
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
+    };
+    const onVisibility = () => (document.hidden ? stop() : start());
+    document.addEventListener("visibilitychange", onVisibility);
+    start();
+    return () => {
+      cancelled = true;
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [watching, pairing]);
 
   async function mint() {
     setBusy(true);
@@ -99,6 +142,7 @@ function Pair({ publicUrl }: { publicUrl: string | null }) {
         return;
       }
       setPairing((await res.json()) as Pairing);
+      setSpent(false);
       setNow(Date.now());
     } catch {
       setError("No pude generar el código. Intenta otra vez.");
@@ -106,9 +150,6 @@ function Pair({ publicUrl }: { publicUrl: string | null }) {
       setBusy(false);
     }
   }
-
-  const left = pairing ? timeLeft(pairing.expiresAt, now) : null;
-  const expired = pairing !== null && left === null;
 
   return (
     <section className="tel-card" aria-labelledby="tel-pair">
@@ -136,7 +177,7 @@ function Pair({ publicUrl }: { publicUrl: string | null }) {
         </ol>
       ) : (
         <>
-          {pairing && !expired ? (
+          {pairing && !expired && !spent ? (
             <div className="tel-qr-wrap">
               <QrCode text={pairing.url} label="Código QR para vincular el teléfono" />
               <div className="tel-qr-copy">
@@ -151,10 +192,16 @@ function Pair({ publicUrl }: { publicUrl: string | null }) {
               </div>
             </div>
           ) : null}
-          {expired ? <p className="tel-note">El código venció. Genera otro.</p> : null}
+          {spent ? (
+            <p className="tel-note" role="status">
+              Este código ya se usó. Genera otro.
+            </p>
+          ) : expired ? (
+            <p className="tel-note">El código venció. Genera otro.</p>
+          ) : null}
           <div className="tel-actions">
             <Btn variant="primary" disabled={busy} onClick={() => void mint()}>
-              {pairing && !expired ? "Generar otro código" : "Generar código QR"}
+              {pairing && !expired && !spent ? "Generar otro código" : "Generar código QR"}
             </Btn>
           </div>
           <p className="tel-note">

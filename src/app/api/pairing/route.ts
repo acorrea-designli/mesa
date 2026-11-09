@@ -7,13 +7,16 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/pairing -> { publicUrl: string | null }   where the phone will connect (null: MESA_PUBLIC_URL is not set)
+ * GET /api/pairing?status -> { state: "none"|"active"|"used"|"expired", expiresAt }   the newest code's state, so /telefono
+ *   learns that the QR or the typed code was spent (or voided by a newer one). Never returns a code.
  * POST /api/pairing -> { url, code, expiresAt }      mint a one-time pairing (10 min, single use): `url` is the link inside
  *   the QR, `code` the 8-character short code ("ABCD-EFGH") for typing inside an installed app.
  * Local to this PC only: src/lib/access.ts refuses it through the tunnel, and it is checked again here.
  * 409 no_public_url when MESA_PUBLIC_URL is unset.
  */
-export const GET = route(async (req) => {
+export const GET = route(async (req, r) => {
   if (!isLocalRequest(req.headers)) return error(403, "local_only", "pairing is only available from the PC Mesa runs on");
+  if (new URL(req.url).searchParams.has("status")) return json(r.pairing.status(), { headers: { "cache-control": "no-store" } });
   return json({ publicUrl: publicUrl() });
 });
 

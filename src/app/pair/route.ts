@@ -14,11 +14,29 @@ function redeem(input: string, token: string): Response {
   if (result === "limited") {
     return pairPage({ status: 429, title: "Demasiados intentos", text: "Espera 10 minutos o genera un código nuevo en tu PC: Mesa, Teléfono.", form: true });
   }
+  if (result === "used") {
+    return pairPage({
+      status: 410,
+      title: "Este código ya se usó",
+      text: "Si escaneaste el QR, ese escaneo ya lo gastó (o generaste otro después). En tu PC abre Mesa, Teléfono, y genera otro código.",
+      form: true,
+      error: "Ese código no sirve.",
+    });
+  }
+  if (result === "expired") {
+    return pairPage({
+      status: 410,
+      title: "El código venció",
+      text: "Cada código vale 10 minutos. En tu PC abre Mesa, Teléfono, y genera otro código.",
+      form: true,
+      error: "Ese código no sirve.",
+    });
+  }
   if (result === "invalid") {
     return pairPage({
       status: 410,
-      title: "Código vencido o ya usado",
-      text: "Cada código vale 10 minutos y una sola vez. En tu PC abre Mesa, Teléfono, y genera uno nuevo.",
+      title: "Ese código no existe",
+      text: "Revisa el código y escríbelo otra vez.",
       form: true,
       error: "Ese código no sirve.",
     });
