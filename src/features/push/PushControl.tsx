@@ -79,7 +79,9 @@ function ToneSteps() {
             Descargar tono
           </a>
         </li>
-        <li>Ajustes de Android, Notificaciones, Mesa (o Opera), Sonido: elige <code>mesa-hoy</code>.</li>
+        <li>
+          Ajustes de Android, Notificaciones, Mesa (o Opera), Sonido: toca «Añadir sonido» (+) y elige Descargas, <code>mesa-hoy.wav</code>.
+        </li>
         <li>Toca «Probar aviso» para oírlo.</li>
       </ol>
     </div>
