@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Counts } from "@/lib/domain/types";
 import { Notifier } from "@/features/notify/Notifier";
+import { PushSync } from "@/features/push/PushSync";
 import { InstallPrompt } from "@/features/phone/InstallPrompt";
 import { PwaBoot } from "@/features/phone/PwaBoot";
 import { TunnelStatus } from "@/features/phone/TunnelStatus";
@@ -46,6 +47,7 @@ export function AppShell({
       <VersionBanner />
       <PwaBoot />
       <Notifier />
+      <PushSync />
     </div>
   );
 }

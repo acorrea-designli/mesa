@@ -15,6 +15,7 @@
 import { chime, primeAudio } from "./chime";
 import { fetchWaiting } from "./collect";
 import { decide, shouldBaseline, type Seen, type Shown } from "./decide";
+import { deviceHoldsPush } from "@/features/push/device";
 import { soundOn } from "./prefs";
 
 const SEEN_KEY = "mesa.notify.seen";
@@ -86,7 +87,8 @@ export function startNotifier(navigate: (url: string) => void): Engine {
   const record = store.get(SCAN_KEY);
   let mode: "baseline" | "normal" = shouldBaseline(record === null ? null : Number(record), Date.now()) ? "baseline" : "normal";
 
-  const canShow = () => !stopped && typeof window.Notification !== "undefined" && window.Notification.permission === "granted";
+  // A device that holds a push subscription is told by the server (push), so the page stays quiet: no double on one device.
+  const canShow = () => !stopped && !deviceHoldsPush() && typeof window.Notification !== "undefined" && window.Notification.permission === "granted";
   const show = (s: Shown) => {
     if (!canShow()) return;
     try {

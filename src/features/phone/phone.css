@@ -293,3 +293,18 @@ html[data-link="login"] .work .btn.p:not(.alert .btn) {
     flex: 1;
   }
 }
+
+/* ---------- avisos push (t33) ---------- */
+.tel-card p.tel-push-state {
+  font-weight: 700;
+  color: var(--ink);
+}
+.tel-push-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .tel-push-actions .btn {
+    flex: 1 1 100%;
+  }
+}

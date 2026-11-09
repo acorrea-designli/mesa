@@ -1,13 +1,14 @@
 "use client";
 // "Ajustes" on the phone (opened by "Más" in the tab bar): every control the desktop rail keeps in its foot, because
-// the rail is hidden at <= 720px. It reuses the rail's own components (Teléfono link, NotifyToggle, SoundToggle,
-// ThemeToggle, Hecho hoy, Fuentes), so the theme persists exactly as on desktop (localStorage "mesa-theme").
+// the rail is hidden at <= 720px. It reuses the rail's own components (Teléfono link, ThemeToggle, Hecho hoy, Fuentes),
+// except the notification toggle: here it is the phone's Web Push row (PushRow). The theme persists exactly as on
+// desktop (localStorage "mesa-theme").
 // Closes with Esc, a tap outside (Sheet), or the phone's back gesture/button (one history entry while open).
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import type { Counts } from "@/lib/domain/types";
-import { NotifyToggle, SoundToggle } from "@/features/notify/NotifyToggle";
+import { PushRow } from "@/features/push/PushControl";
 import { Sheet, ThemeToggle } from "../ui/interactive";
 import type { SourceHealth } from "./health";
 import { SourceHealthList } from "./SourceHealthList";
@@ -67,9 +68,8 @@ export function SettingsSheet({ open, onClose, counts, health }: { open: boolean
         >
           Teléfono
         </Link>
-        <NotifyToggle className="nav theme" />
-        <SoundToggle className="nav theme" />
-        {/* Web Push on the phone (t33) gets its own row here; nothing is implemented in this ticket. */}
+        {/* Web Push (t33). The desktop browser-notification toggle is not here: on a phone it only ends in "bloqueadas". */}
+        <PushRow className="nav theme" onOpen={() => closeThen(() => router.push("/telefono"))} />
         <ThemeToggle className="theme" />
         <span className="nav foot">
           Hecho hoy <b>{counts.doneToday}</b>

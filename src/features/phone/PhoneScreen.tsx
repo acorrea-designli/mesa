@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { LineStub } from "@/components/line/Line";
 import { Btn } from "@/components/ui/primitives";
+import { PushCard } from "@/features/push/PushControl";
 import { guidesFor, installDiagnostics, installStatus, type InstallStatus } from "./install";
 import { timeLeft } from "./pairing";
 import { QrCode } from "./QrCode";
@@ -202,6 +203,7 @@ export function PhoneScreen({ local, publicUrl }: { local: boolean; publicUrl: s
           <p>Primero vincula este teléfono, luego instala: Mesa se abre desde la pantalla de inicio, sin la barra del navegador. Si ya la instalaste, escribe el código corto dentro de la app.</p>
           <InstallEntry />
         </section>
+        {local ? null : <PushCard />}
         <VersionLine />
       </div>
     </>

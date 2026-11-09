@@ -5,6 +5,9 @@
  *    502/503/504/530 from the Cloudflare Tunnel: Mesa or the tunnel is down) the cached /offline.html ("Sin conexión con tu PC") is shown;
  *  - NEVER caches /api/*, HTML pages or anything else with board data, and never stores or replays a write:
  *    every non-GET request and every other URL goes straight to the network, untouched.
+ *  - Web Push (t33): `push` shows a notification from the payload alone and fetches NOTHING (so Cloudflare Access cannot
+ *    block it); `notificationclick` focuses an open Mesa window and navigates it, else opens the URL;
+ *    `pushsubscriptionchange` re-subscribes and re-POSTs best effort (every page load also re-syncs, see usePush.ts).
  * Bump VERSION to drop old caches. */
 const VERSION = "mesa-sw-v1";
 const SHELL = `${VERSION}-shell`;
@@ -82,5 +85,71 @@ self.addEventListener("message", (event) => {
           .map((u) => cache.match(u).then((hit) => hit || fetch(u).then((res) => (res.ok ? cache.put(u, res) : undefined)).catch(() => undefined))),
       ),
     ),
+  );
+});
+
+// ---------- Web Push (t33) ----------
+// The server sends { title, url, tag } and nothing else (no ticket or salida text): the body is this fixed line.
+const PUSH_BODY = "Toca para abrir Mesa.";
+
+/** A same-origin path, never an absolute or protocol-relative URL. */
+function safePath(url) {
+  return typeof url === "string" && url.startsWith("/") && !url.startsWith("//") && !url.includes("\\") ? url : "/";
+}
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === "string" && data.title ? data.title.slice(0, 120) : "Mesa";
+  const options = { body: PUSH_BODY, data: { url: safePath(data.url) } };
+  if (typeof data.tag === "string" && data.tag) options.tag = data.tag.slice(0, 120);
+  // A push always shows something (browsers require it); no fetch here.
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = safePath(event.notification.data && event.notification.data.url);
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (wins) => {
+      const win = wins.find((c) => new URL(c.url).origin === self.location.origin);
+      if (win) {
+        try {
+          const focused = await win.focus();
+          return await (focused || win).navigate(url);
+        } catch {
+          /* the window went away or cannot navigate: open a new one */
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});
+
+// The push service rotated the subscription: make a new one with the same key and tell Mesa, best effort. If Access
+// blocks the POST, the next page load re-syncs it.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const old = event.oldSubscription;
+        const key = old && old.options && old.options.applicationServerKey;
+        const sub = event.newSubscription || (key ? await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) : null);
+        if (!sub) return;
+        const j = sub.toJSON();
+        await fetch("/api/push/subscription", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint, keys: { p256dh: (j.keys && j.keys.p256dh) || "", auth: (j.keys && j.keys.auth) || "" } }),
+        });
+      } catch {
+        /* best effort */
+      }
+    })(),
   );
 });
