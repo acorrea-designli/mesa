@@ -16,17 +16,23 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Spawning (lead)
 
-- **Requested review**: one ticket per PR, titled `Review <owner/repo>#<n>: <PR title>`. Find it by the PR, never by
+- **Requested review**: one ticket per PR, titled `Review <owner/repo>#<n> · <author login>: <PR title>` (Andrés, 2026-11-09: he wants the author on every PR ticket). Find it by the PR, never by
   the title (a renamed PR would not match): `MESA review list` (no `--ticket`), take the row with that `repo` and
   `pr`, and its `ticketId` is the PR's ticket, closed or not (`MESA ticket show <ticketId>` gives the `ref`). A closed
   one comes back with `MESA ticket reopen <ticketId> --reason "new push"` (Mesa also reopens it by itself on a new
   head). Never `ticket ask` for a PR that has a review row with a `ticketId`: `MESA review open` would move the review
   to the duplicate and the original would reopen with no owner. Only when no review row exists, or its `ticketId` is
   null (a pr-monitor import), look for a ticket with that title
-  (`MESA ticket list`, closed included) and, finding none, `MESA ticket ask --title "Review <owner/repo>#<n>:
+  (`MESA ticket list`, closed included) and, finding none, `MESA ticket ask --title "Review <owner/repo>#<n> · <author>:
   <title>" --body "FYI: revisión en curso <url>"`. Brief: repo, PR, URL, author, why it entered (requested / tracked
   advance / post-approve push).
   Spawn `reviewer-<ref>` (next suffix if that name was used) as the owner.
+  **Card first** (Andrés, 2026-11-09: tickets and Tablero cards move together): never open a review ticket with
+  `ticket ask`, because that ticket has no card. Find the PR's card in `MESA task list --source github` (match
+  `items[].url`). If there is none, create one with `MESA task create --title "<repo>#<n> · <author>: <PR title>"
+  --project <owner/repo> --source github --station todo`. Then run `MESA task dispatch <taskId> --kind review`. That
+  gives a linked ticket and a `ticket.created` wake, which the lead routes like a card Andrés handed over: claim, move
+  the card to doing, spawn the reviewer. The card goes to waiting on READY and to done when the ticket closes.
 - **Review pass** ("haz un review pass"): run `mesa-sweep` § 1, then one ticket and one reviewer per entering PR,
   at most 5 at a time in pr-monitor's order (tracked advance, moved, new, untracked advance; oldest first). The
   rest wait for a slot; say `+N en cola`.

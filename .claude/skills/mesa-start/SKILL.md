@@ -113,6 +113,12 @@ Owners: for each open ticket that needs work, spawn ONLY its owner
 (`docs/TEAM.md` § 2) with the next free name (`tl-t14` was live, so the new one is `tl-t14-2`). The owner boots
 from the brief and the handoffs and asks for its teammates again with NEED. Do not respawn teammates yourself.
 
+Review pass (Andrés, 2026-11-09: "tienes que spawnear un reviewer por tarea en paralelo"): every start runs
+`mesa-sweep` § 1 and then `mesa-review` § Spawning for each PR that passes the gate. That is one ticket and one
+`reviewer-<ref>` per PR, all spawned in parallel in one message, up to 5 working (TEAM.md § 2). The rest wait as
+`+N en cola`, and each one starts when a reviewer reports READY or DONE. One review card handed from the board is never
+the whole pass, and one reviewer never takes a second PR.
+
 ## 5. Route every wake event
 
 | Event | Do |
