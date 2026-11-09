@@ -24,7 +24,12 @@ watermarks.
 
 **Periodic (the sweeper agent, `.claude/agents/sweeper.md`, haiku).** During work hours, a two-stage tick:
 
-1. *Probe*, per source since its watermark. Slack: one call, a `(to:me OR <@U06E2UBDC73>)` search by timestamp.
+1. *Probe*, per source since its watermark. Slack: one `mcp__claude_ai_Slack__slack_search_public_and_private`
+   call with exactly `{"query": "(to:me OR <@U06E2UBDC73>) after:<YYYY-MM-DD of the watermark minus 1 day>",
+   "sort": "timestamp"}` and no other parameter (2026-11-09: extra `filters`/`keywords` fields made every probe
+   return nothing, and a DM from Sebastián never reached Hoy). A probe with zero results while the watermark is
+   older than an hour is suspect: re-check the call against this line. A DM from a person (not a bot) to Andrés is
+   never Ruido, even when it is only a link (a bare PR link is a review ask).
    Basecamp, exactly this:
 
 > **Basecamp probe** (every Basecamp tick, two calls):
