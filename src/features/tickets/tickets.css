@@ -639,6 +639,34 @@
   margin-top: 3px;
   white-space: pre-wrap;
 }
+/* a Claude reply that repeats the review card: first line, the rest behind a closed toggle */
+.tk-fold {
+  margin-top: 4px;
+}
+.tk-fold summary {
+  display: inline-block;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 4px 0;
+}
+.tk-fold summary::-webkit-details-marker {
+  display: none;
+}
+.tk-fold summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tk-fold[open] summary {
+  color: var(--mute);
+}
+.tk-fold p {
+  overflow-wrap: anywhere;
+}
 /* options in a later message: same buttons; answered or superseded ones are read-only */
 .tk-msg .tk-opts {
   margin-top: 8px;

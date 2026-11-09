@@ -8,7 +8,9 @@
 //   G3 (rule 5)  SendMessage over 12 non-empty lines (HANDOFF/BRIEF/SPAWN messages: 60), or an ack-only message.
 //   G12 (rule 5) A teammate with role `reviewer` runs `mesa ticket reply` with a body over 2 non-empty lines, a
 //                `path/file.ext:NN` reference or a 7-40 hex sha: the findings are on the review card, never again in
-//                the reply (mesa-review § Ask). The lead and every other role are not affected.
+//                the reply (mesa-review § Ask). A body the command does not show (`--body -` fed by a pipe or a `<` file,
+//                `--body` from a variable or `$(...)`) is blocked too: write it as a heredoc. The lead and every other
+//                role are not affected.
 //   G4 (rule 3)  Outward writes by a teammate: Slack sends, Basecamp writes, GitHub comments/reviews/merges,
 //                pr-gh.mjs, `mesa salida sent`. Only the lead sends, and only after approval.
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
@@ -50,26 +52,36 @@ const SLACK_SEND_DRAFT = "mcp__claude_ai_Slack__slack_send_message_draft";
 
 const nonEmptyLines = (s) => s.split(/\r?\n/).filter((l) => l.trim()).length;
 
-// G12: the body of a `mesa ticket reply` as the command text shows it (heredoc `--body - <<'EOF'`, PowerShell
-// here-string, or a quoted `--body "..."`). null when the command is not a ticket reply or the body is not in the text
-// (a body piped from a file is not seen; the reviewer command sheet uses heredocs).
-export function ticketReplyBody(cmd) {
+// G12: a `mesa ticket reply` and its body as the command text shows it (heredoc `--body - <<'EOF'`, PowerShell
+// here-string, here-string piped into `--body -`, or a quoted `--body "..."` / `--body '...'`). `reply` is false when the
+// command is not a ticket reply; `body` is null when it is one but the text does not show the body: fed to `--body -` by
+// a pipe or a `<` file, taken from a variable, `$(...)` or a backtick expression, or not quoted at all.
+export function ticketReplyShape(cmd) {
   const text = String(cmd ?? "");
   const lines = text.split(/\r?\n/);
   const first = lines.find((l) => l.trim()) ?? "";
-  if (!/\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(first)) return null;
+  const piped = /^\s*@(['"])\r?\n([\s\S]*?)\r?\n\1@\s*\|\s*(.*)$/m.exec(text);
+  if (piped && /\bmesa\b[^\n|;&]*\bticket\s+reply\b[^\n]*--body[\s=]+-(\s|$)/.test(piped[3])) return { reply: true, body: piped[2] };
+  if (!/\bmesa\b[^\n|;&]*\bticket\s+reply\b/.test(first)) return { reply: false, body: null };
   const here = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1/.exec(first);
   if (here) {
     const rest = lines.slice(lines.indexOf(first) + 1);
     const end = rest.findIndex((l) => l.trim() === here[2]);
-    return (end < 0 ? rest : rest.slice(0, end)).join("\n");
+    return { reply: true, body: (end < 0 ? rest : rest.slice(0, end)).join("\n") };
   }
   const hs = /--body[\s=]+(?:-\s+)?@(['"])\r?\n([\s\S]*?)\r?\n\s*\1@/.exec(text);
-  if (hs) return hs[2];
+  if (hs) return { reply: true, body: hs[2] };
   const q = /--body[\s=]+(?:"((?:[^"\\]|\\[\s\S])*)"|'([^']*)')/.exec(text);
-  if (q) return q[1] ?? q[2] ?? "";
-  return null;
+  if (q) {
+    // Inside double quotes a $ or a backtick is an expansion, so the text is not the body that will be sent.
+    if (q[1] !== undefined && /[$`]/.test(q[1])) return { reply: true, body: null };
+    return { reply: true, body: q[1] ?? q[2] ?? "" };
+  }
+  return { reply: true, body: null };
 }
+
+// The body of a `mesa ticket reply` the command text shows; null when it is not a ticket reply or the body is not visible.
+export const ticketReplyBody = (cmd) => ticketReplyShape(cmd).body;
 
 // Why a reviewer's ticket reply repeats the review card, or null when it is the one-line summary it should be.
 export function reviewerReplyProblem(body) {
@@ -314,7 +326,10 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
   // G12 (rule 5): the review card already lists every finding; the reviewer's reply is one line (mesa-review § Ask).
   if (agent?.role === "reviewer" && (tool === "Bash" || tool === "PowerShell")) {
-    const body = ticketReplyBody(ti.command);
+    const { reply, body } = ticketReplyShape(ti.command);
+    if (reply && body === null) {
+      return block("G12", "rule 5: a reviewer's ticket reply must show its body in the command so it can be checked (it is ONE line, mesa-review § Ask), and this one does not: `--body -` fed by a pipe or a `<` file, or `--body` taken from a variable or `$(...)`. Write it as a heredoc: `mesa ticket reply <ref> --body - <<'EOF'`, the one line, then `EOF` (PowerShell: `--body @'` ... `'@`).");
+    }
     const why = body === null ? null : reviewerReplyProblem(body);
     if (why) {
       return block("G12", `rule 5: a reviewer's ticket reply is ONE line (mesa-review § Ask) and this one has ${why}. Findings, paths, lines and sha are already on the review card (\`mesa finding upsert\`); never repeat them in the reply. Allowed shape: "1 blocker, 2 nits: <the blocker in plain words>." A second line only for what the card cannot show (e.g. a merge order). Explain more: the long form goes into the finding's \`explanation\`, the reply is "Detalle en el hallazgo N de la tarjeta."`);

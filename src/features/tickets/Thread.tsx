@@ -20,6 +20,7 @@ import { KnownTickets, Linked } from "./Linkified";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
+import { firstLine, repeatsReviewCard } from "@/lib/domain/review-repeat";
 import { clearReply, loadReply, saveReply, type ReplyDraft } from "./drafts";
 import { useDraft } from "./useDraft";
 import type { PickTicket, ThreadData } from "./read";
@@ -217,6 +218,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   const optStates = optionStates(t.messages);
   const openMsg = t.messages.find((m) => optStates.get(m.id)?.actionable);
   const closed = t.status === "closed";
+  // Claude replies that repeat the review card (older ones, from before hook G12) fold under it.
+  const cardFindings = data.reviews.flatMap((r) => r.findings);
   const pending = data.approvals.filter((a) => a.status === "pending");
   const pastApprovals = data.approvals.filter((a) => a.status !== "pending").slice(-3);
 
@@ -354,7 +357,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           {rest.length ? (
             <div className="tk-msgs">
               {rest.map((m) => (
-                <Message key={m.id} m={m} options={optStates.get(m.id)} disabled={busy || closed} onPick={(key) => send(key, m)} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
+                <Message key={m.id} m={m} fold={repeatsReviewCard(m, cardFindings, data.reviews.length > 0)} options={optStates.get(m.id)} disabled={busy || closed} onPick={(key) => send(key, m)} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
               ))}
             </div>
           ) : null}
@@ -572,7 +575,7 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   );
 }
 
-function Message({ m, options, disabled, onPick, atts, refs, ticketId, titles }: { m: TicketMessage; options?: OptionState; disabled: boolean; onPick: (key: string) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+function Message({ m, fold, options, disabled, onPick, atts, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; options?: OptionState; disabled: boolean; onPick: (key: string) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
   return (
     <div className="tk-msg">
       <div className="tk-who">
@@ -582,7 +585,15 @@ function Message({ m, options, disabled, onPick, atts, refs, ticketId, titles }:
         {m.chosen ? <span className="tk-chose">eligió {m.chosen}</span> : null}
         {m.kind === "permission_request" ? <span className="tk-chose">pedido de permiso</span> : null}
       </div>
-      {m.body ? <p><Linked text={m.body} /></p> : null}
+      {m.body && fold ? (
+        <>
+          <p><Linked text={firstLine(m.body)} /></p>
+          <details className="tk-fold">
+            <summary>Ver texto completo</summary>
+            <p><Linked text={m.body} /></p>
+          </details>
+        </>
+      ) : m.body ? <p><Linked text={m.body} /></p> : null}
       {m.options?.length ? <Options m={m} state={options} disabled={disabled} onPick={onPick} /> : null}
       {refs.length ? (
         <div className="tk-files">

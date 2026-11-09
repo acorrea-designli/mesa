@@ -94,6 +94,44 @@ test("G12: other reviewer commands are untouched", async () => {
   assert.equal(await rule(sh(r, "gh api repos/a/b/pulls/1/files")), null);
 });
 
+test("G12: a reply body the command does not show is blocked, with the heredoc as the way out", async () => {
+  const r = reviewer();
+  const pipe = await sh(r, `cat C:/tmp/reply.md | ${MESA_REPLY} --body -`);
+  assert.equal(pipe?.rule, "G12");
+  assert.match(pipe.reason, /heredoc/);
+  assert.match(pipe.reason, /<<'EOF'/);
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body - < C:/tmp/reply.md`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body "$BODY"`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body "$(cat C:/tmp/reply.md)"`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body $BODY`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body "uno \`date\`"`)), "G12");
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body -`)), "G12");
+  assert.equal(await rule(run(r, "PowerShell", { command: `Get-Content C:/tmp/reply.md | ${MESA_REPLY} --body -` })), "G12");
+  assert.equal(await rule(run(r, "PowerShell", { command: `${MESA_REPLY} --body $body` })), "G12");
+});
+
+test("G12: a here-string piped into --body - is read, so a one-line one passes", async () => {
+  const r = reviewer();
+  assert.equal(await rule(run(r, "PowerShell", { command: `@'\n1 blocker, 2 nits: falta el permiso.\n'@ | ${MESA_REPLY} --body -` })), null);
+  assert.equal(await rule(run(r, "PowerShell", { command: `@'\nuno\ndos\ntres\n'@ | ${MESA_REPLY} --body -` })), "G12");
+  assert.equal(await rule(run(r, "PowerShell", { command: `@'\n1 blocker: src/x.ts:12 mal.\n'@ | ${MESA_REPLY} --body -` })), "G12");
+});
+
+test("G12: a single-quoted body is literal, so a $ in it is allowed", async () => {
+  const r = reviewer();
+  assert.equal(await rule(sh(r, `${MESA_REPLY} --body 'cuesta $5, 1 nit.'`)), null);
+});
+
+test("G12: an unreadable body is only a problem for a reviewer's ticket reply", async () => {
+  for (const who of [lead, fakeAgent({ name: "tl-t48" }).input, fakeAgent({ name: "dev-t48" }).input]) {
+    assert.equal(await rule(sh(who, `cat C:/tmp/reply.md | ${MESA_REPLY} --body -`)), null);
+    assert.equal(await rule(sh(who, `${MESA_REPLY} --body "$BODY"`)), null);
+  }
+  const r = reviewer();
+  assert.equal(await rule(sh(r, "node G:/WorkSpace/designli/ops/bin/mesa handoff t48 --agent reviewer-t48 --status paused --body - < C:/tmp/h.md")), null);
+  assert.equal(await rule(sh(r, "cat C:/tmp/reply.md | node G:/WorkSpace/designli/ops/bin/mesa finding upsert t48 --json -")), null);
+});
+
 test("G4: teammates cannot write to Slack, Basecamp or GitHub", async () => {
   const m = mate();
   assert.equal(await rule(run(m, "mcp__claude_ai_Slack__slack_send_message", { channel_id: "C1", message: "hi" })), "G4");
