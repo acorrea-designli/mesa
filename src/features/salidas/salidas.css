@@ -1680,20 +1680,52 @@
   .sa-memsheet {
     margin-top: 12px;
   }
+  /* Only the Aprobar split is docked; composer, chips and the direct-send mode live in .sa-ph-flow
+     below the text. The card is a flex column that fills the screen, so the dock rests at the bottom. */
+  .sa-one {
+    display: flex;
+    flex-direction: column;
+  }
+  .sa-one > * {
+    flex-shrink: 0;
+  }
+  .sa-card.chat {
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 auto;
+  }
+  .sa-card.chat > * {
+    flex-shrink: 0;
+  }
+  .sa-ph-flow {
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+    margin: 14px 0 16px;
+  }
+  .sa-ph-flow .sa-modes {
+    margin-top: 0;
+  }
+  .sa-ph-flow .sa-modes .btn {
+    height: 44px;
+  }
+  .sa-ph-flow .sm-att {
+    margin: 0;
+  }
+  .sa-ph-flow .qc-cold {
+    display: none;
+  }
   .sa-dock {
     position: sticky;
     bottom: var(--phone-tabs-h);
     z-index: 5;
-    margin: 16px -16px 0;
+    margin: auto -16px 0;
     padding: 12px 16px 14px;
     border-top: 1px solid var(--rule);
     background: var(--deep);
     display: flex !important;
     flex-direction: column;
     gap: 8px;
-  }
-  .sa-dock .sm-att {
-    margin: 0;
   }
   .pp-in {
     display: flex;
@@ -1750,9 +1782,6 @@
   }
   .sa-dock .pair .btn {
     height: 48px;
-  }
-  .sa-dock .qc-cold {
-    display: none;
   }
   .sa-sx {
     grid-template-columns: minmax(0, 1fr);
@@ -1847,8 +1876,9 @@
     height: 48px;
     font-size: 15px;
   }
-  .sa-dock .sa-modes .btn {
-    height: 44px;
+  /* In a column the 260px flex-basis would be a 260px height: the note takes the height of its text. */
+  .sa-modes .sa-modenote {
+    flex: none;
   }
   .sa-quick .btn {
     min-height: 44px;

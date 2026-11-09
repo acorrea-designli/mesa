@@ -230,7 +230,9 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
         {memory}
       </Sheet>
       {s.status === "pending" && c.mode === "view" ? (
-        <div className="sa-dock sa-phone-only">
+        // Phone: the composer, quick chips and the direct-send mode sit in the flow below the text, so
+        // nothing covers the exact text; only the Aprobar split stays docked (sticky) at the bottom.
+        <div className="sa-ph-flow sa-phone-only">
           <Composer
             phone
             chips={chips}
@@ -240,8 +242,12 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
             placeholder={c.openTurnId ? `Espera a v${pendingN} o cancela el cambio` : "Pídele un cambio a Claude…"}
             onSend={sendTurn}
           />
-          <SplitApprove phone up slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           {isSlack ? <SlackModes phone disabled={c.locked || c.busy} onDirect={() => c.approve("send")} /> : null}
+        </div>
+      ) : null}
+      {s.status === "pending" && c.mode === "view" ? (
+        <div className="sa-dock sa-phone-only">
+          <SplitApprove phone up slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
         </div>
       ) : null}
     </article>
