@@ -464,8 +464,10 @@ export function ticketsRepo(db: Db) {
     /**
      * Andrés takes back a pre-approval ("autoaprobado" -> "te pide OK"). Only approved needs_ok steps of a non-closed
      * ticket go back to planned, and only while the plan still has other planned steps (once the plan is approved in
-     * full the owner is working). A step the owner already marked running, done or failed is refused: the owner marks
-     * `running` before it starts, and both writes run in a transaction on the same row, so one of them wins. The wake
+     * full the owner is working). A step the owner already marked running, done or failed is refused. Both writers
+     * are guarded on the same row: this revoke only takes an `approved` step (UPDATE ... WHERE state = 'approved'),
+     * and setActionState only moves a needs_ok step to running/done/failed from `approved` or `running`, so a revoke
+     * and a running mark cannot both win; the owner marks `running` before it starts. The wake
      * is `ticket.plan_approved { revoked, partial: true }` (no `approved` key): those ids must not run.
      */
     revokeActions(id: string, revoke: string[], now = new Date()): TicketDetail {
@@ -488,12 +490,24 @@ export function ticketsRepo(db: Db) {
       });
     },
 
+    /**
+     * A session reports a step as running, done or failed (PATCH /api/actions/:id). A needs_ok step may only move to
+     * those states from `approved` or `running`: a step Andrés took back (planned), rejected, or never approved is
+     * refused with a TransitionError (409), and a failed or done step needs a new approval before it runs again.
+     * Direct steps are unguarded. The guard is part of the UPDATE's WHERE, so a revoke and a running mark race on
+     * the same row and exactly one wins. Repeating the current state is a no-op; an unknown id is a 404.
+     */
     setActionState(actionId: string, state: ActionState, now = new Date()): PlannedAction {
+      const started = state === "running" || state === "done" || state === "failed";
+      const guard = started ? " AND (mode = 'direct' OR state IN ('approved','running'))" : "";
       const r = db
-        .prepare("UPDATE planned_actions SET state = ?, updated_at = ? WHERE id = ?")
-        .run(state, nowIso(now), actionId);
-      if (!r.changes) throw new NotFoundError("action", actionId);
-      return fromRow<PlannedAction>(db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId), A_SPEC);
+        .prepare(`UPDATE planned_actions SET state = ?, updated_at = ? WHERE id = ? AND state <> ?${guard}`)
+        .run(state, nowIso(now), actionId, state);
+      const row = db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId);
+      if (!row) throw new NotFoundError("action", actionId);
+      const a = fromRow<PlannedAction>(row, A_SPEC);
+      if (!r.changes && a.state !== state) throw new TransitionError("step is not approved; Andres took it back or never approved it");
+      return a;
     },
 
     /** claim / close / reopen. `reason` rides on the ticket.reopened wake. */
