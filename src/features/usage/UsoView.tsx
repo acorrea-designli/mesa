@@ -43,7 +43,7 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
           </span>
         )}
       </div>
-      <HistoryChart title={w.key === "five_hour" ? "Últimas 5 h" : "Semana"} series={chartSeries(history, w, view.at)} />
+      <HistoryChart title={w.key === "five_hour" ? "Ventana de 5 h" : "Semana"} series={chartSeries(history, w, view.at)} />
     </article>
   );
 }
