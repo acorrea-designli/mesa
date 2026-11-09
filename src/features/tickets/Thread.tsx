@@ -109,7 +109,15 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     opened.current = true;
     const { planned: waiting, actionIds: all } = live.current;
     const el = planRef.current;
-    const view = s.el ? s.el.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    // On the phone the window scrolls and the sticky header and the composer cover its edges: the plan is in
+    // view only between the header's bottom and the composer's top.
+    const edge = (sel: string, side: "top" | "bottom", dflt: number) => {
+      const node = ref.current?.querySelector(sel);
+      return node && node.getClientRects().length ? node.getBoundingClientRect()[side] : dflt;
+    };
+    const view = s.el
+      ? s.el.getBoundingClientRect()
+      : { top: edge("header.tk-phead", "bottom", 0), bottom: edge(".tk-foot", "top", window.innerHeight) };
     const inView = el ? planInView(el.getBoundingClientRect(), view) : false;
     const grew = !opening && hasUnseenStep(waiting, seenSteps.current);
     const next = nextPlanPill({ current: planPillNow.current, planned: waiting, seen: seenSteps.current, inView, opening });
