@@ -4,7 +4,7 @@
 // direction line) and inserts ink-bordered ref chips, "/" opens actions.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { rise } from "@/lib/motion";
-import { IcClip, IcFile, IcImage, IcX } from "@/features/salidas/icons";
+import { IcClip, IcCollapse, IcExpand, IcFile, IcImage, IcX } from "@/features/salidas/icons";
 import type { PickTicket } from "./read";
 import { DirLine } from "./bits";
 
@@ -58,7 +58,8 @@ export function ComposerBox({
   rows = 3,
   autoFocus,
   menuAbove,
-  onFocusChange,
+  focusMode,
+  onToggleFocus,
 }: {
   c: Composer;
   pick: PickTicket[];
@@ -70,8 +71,9 @@ export function ComposerBox({
   rows?: number;
   autoFocus?: boolean;
   menuAbove?: boolean;
-  /** The textarea gained or lost focus (the thread uses it to give the conversation the space). */
-  onFocusChange?: (focused: boolean) => void;
+  /** The thread's focus mode (list folded into the rail). The expand control renders only when `onToggleFocus` is given. */
+  focusMode?: boolean;
+  onToggleFocus?: () => void;
 }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
@@ -196,7 +198,7 @@ export function ComposerBox({
 
   return (
     <div
-      className={drag ? "tk-reply drag" : "tk-reply"}
+      className={["tk-reply", drag && "drag", onToggleFocus && "has-expand", c.state.text !== "" && "typed"].filter(Boolean).join(" ")}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
@@ -211,6 +213,20 @@ export function ComposerBox({
         c.addFiles([...e.dataTransfer.files]);
       }}
     >
+      {onToggleFocus ? (
+        // Shown while the composer has focus or text (CSS); the mouse press keeps the textarea focus and caret.
+        <button
+          className="ico-btn tk-expand"
+          type="button"
+          aria-pressed={Boolean(focusMode)}
+          aria-label={focusMode ? "Contraer" : "Expandir la conversación"}
+          title={focusMode ? "Contraer" : "Expandir la conversación"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggleFocus}
+        >
+          {focusMode ? <IcCollapse /> : <IcExpand />}
+        </button>
+      ) : null}
       {c.state.refs.length || c.state.files.length ? (
         <div className="tk-atts">
           {c.state.refs.map((r) => (
@@ -246,9 +262,7 @@ export function ComposerBox({
         }}
         onKeyDown={onKey}
         onClick={(e) => detect(e.currentTarget.value, e.currentTarget.selectionStart)}
-        onFocus={() => onFocusChange?.(true)}
         onBlur={() => {
-          onFocusChange?.(false);
           setTimeout(() => setMenu(null), 120);
         }}
         onPaste={(e) => {

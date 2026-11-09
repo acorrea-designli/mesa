@@ -27,29 +27,22 @@ interface Props {
   pick: PickTicket[];
   verbs: string[];
   onChanged: () => void;
-  /** True while the composer has focus or text: the screen shrinks the ticket list to a rail. */
-  onComposing?: (composing: boolean, refocus?: boolean) => void;
+  /** Focus mode (the screen shrinks the ticket list to a rail) and its toggle, shown in the composer. */
+  focusMode: boolean;
+  onToggleFocus: () => void;
 }
 
-export function Thread({ data, listening, pick, verbs, onChanged, onComposing }: Props) {
+export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onToggleFocus }: Props) {
   const { ticket: t } = data;
   const toast = useToast();
   const c = useComposer();
   // The unsent reply lives in the browser per ticket: a remount (tab or screen change, reload, a
-  // board restart under the open tab) brings it back, and it is composing again (the rail below).
+  // board restart under the open tab) brings it back.
   const draftId = t.id;
   const loadDraft = useCallback(() => loadReply(draftId), [draftId]);
   const saveDraft = useCallback((d: ReplyDraft) => saveReply(draftId, d), [draftId]);
   const draft = useMemo(() => ({ text: c.state.text, refs: c.state.refs }), [c.state.text, c.state.refs]);
   useDraft(loadDraft, saveDraft, c.restore, draft);
-  const [focused, setFocused] = useState(false);
-  // A closed ticket has no composer (an unmounted textarea never reports its blur).
-  const composing = t.status !== "closed" && (focused || c.state.text !== "");
-  useEffect(() => {
-    onComposing?.(composing);
-  }, [composing, onComposing]);
-  // The thread goes away (another ticket opens): it is no longer being written.
-  useEffect(() => () => onComposing?.(false), [onComposing]);
   const [busy, setBusy] = useState(false);
   const ref = usePress<HTMLElement>(".btn, .tk-opt, .tk-verb");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -119,7 +112,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
     window.addEventListener("scroll", on, { passive: true });
     return () => window.removeEventListener("scroll", on);
   }, []);
-  // Staying at the bottom when sizes change under him (the list rail opening or closing re-wraps
+  // Staying at the bottom when sizes change under him (focus mode opening or closing re-wraps
   // the text and resizes the composer; the thread appearing on the phone): re-pin if he was there.
   const resizes = useRef<ResizeObserver | null>(null);
   useEffect(() => {
@@ -315,10 +308,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
               label="Respuesta"
               placeholder={openMsg?.options?.length ? `Responde, elige ${openMsg.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
               onSubmit={() => void send()}
-              onFocusChange={(on) => {
-                setFocused(on);
-                if (on) onComposing?.(true, true);
-              }}
+              focusMode={focusMode}
+              onToggleFocus={onToggleFocus}
               menuAbove
             >
               <button className="btn sm perm" type="button" disabled={busy} onClick={() => transition(() => ticketApi.requestPermission(t.id), listening ? "Pedido enviado · Claude despierta para pedirte permiso" : "Pedido guardado · lo lee la próxima sesión")} title="Claude pide el permiso de la llamada bloqueada y verás la tarjeta aquí">

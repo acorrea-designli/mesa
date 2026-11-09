@@ -19,6 +19,16 @@ export const IcBack = (p: P) => (
     <path d="M10 3L5 8l5 5" />
   </svg>
 );
+export const IcExpand = (p: P) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" {...base} strokeWidth={1.7} {...p}>
+    <path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9" />
+  </svg>
+);
+export const IcCollapse = (p: P) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" {...base} strokeWidth={1.7} {...p}>
+    <path d="M13.5 6.5h-4v-4M9.5 6.5L14 2M2.5 9.5h4v4M6.5 9.5L2 14" />
+  </svg>
+);
 export const IcPencil = (p: P) => (
   <svg width="14" height="14" viewBox="0 0 14 14" {...base} strokeWidth={1.6} {...p}>
     <path d="M9.5 2.5l2 2L5 11H3V9z" />
