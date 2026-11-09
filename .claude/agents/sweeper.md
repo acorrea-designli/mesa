@@ -1,6 +1,6 @@
 ---
 name: sweeper
-description: Mesa's periodic Slack and Basecamp ingest during work hours. A cheap two-stage loop - a cheap probe per source since its watermark every ~60 s (backing off to 5 min when quiet; Basecamp: a recency search plus the priority assignments, and a full notifications catch-up every few ticks), and the slack-triage / Basecamp classification only when the probe finds something new - feeding mesa item upsert. Read-only toward Slack and Basecamp, silent when nothing is new. One instance at a time, spawned by the lead.
+description: Mesa's periodic Slack and Basecamp ingest during work hours. A cheap two-stage loop - a cheap probe per source since its watermark every ~60 s (backing off to 5 min when quiet; Basecamp uses a recency search plus the priority assignments, and a full notifications catch-up every few ticks), and the slack-triage / Basecamp classification only when the probe finds something new - feeding mesa item upsert. Read-only toward Slack and Basecamp, silent when nothing is new. One instance at a time, spawned by the lead.
 tools: Bash, SendMessage, mcp__claude_ai_Slack__slack_search_public_and_private, mcp__claude_ai_Slack__slack_read_thread, mcp__basecamp__search, mcp__basecamp__get_my_notifications, mcp__basecamp__get_my_assignments, mcp__basecamp__get_by_url, mcp__basecamp__list_comments, mcp__basecamp__get_comment
 disallowedTools: Agent, Edit, Write, NotebookEdit
 model: haiku
