@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
-import { TransitionError } from "../db/util";
+import { NotFoundError, TransitionError } from "../db/util";
 import { UNDO_WINDOW_MS } from "../domain/salida-machine";
 import { eventsAfter, waitForEvents } from "../wake/wake";
 import { createRepos, type Repos } from "./index";
@@ -270,6 +270,18 @@ describe("ticket flow", () => {
         }
       });
 
+      it("approve, revoke, then a running mark is refused and the step stays planned", () => {
+        const { t, merge } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.revokeActions(t.id, [merge.id], at(2));
+        for (const state of ["running", "done", "failed"] as const) {
+          expect(() => r.tickets.setActionState(merge.id, state, at(3))).toThrow(TransitionError);
+          expect(() => r.tickets.setActionState(merge.id, state, at(3))).toThrow(/took it back/);
+        }
+        expect(r.tickets.detail(t.id).actions[0]!.state).toBe("planned");
+        expect(r.tickets.detail(t.id).actions[0]!.updatedAt).not.toBe(at(3).toISOString());
+      });
+
       it("refuses a step that is planned, rejected, direct, of another ticket, unknown, or an empty list", () => {
         const { t, merge, direct } = planned();
         const other = planned();
@@ -294,6 +306,59 @@ describe("ticket flow", () => {
         r.tickets.transition(c.t.id, { type: "close", by: "andres" });
         expect(() => r.tickets.revokeActions(c.t.id, [c.merge.id])).toThrow(/closed/);
         expect(r.tickets.detail(c.t.id).actions[0]!.state).toBe("approved");
+      });
+    });
+
+    describe("a session reporting a step (setActionState)", () => {
+      const state = (id: string, i: number) => r.tickets.detail(id).actions[i]!.state;
+
+      it("a planned or rejected needs_ok step refuses running, done and failed and stays as it was", () => {
+        const { t, move } = planned();
+        r.tickets.approvePlan(t.id, [move.id], at(1)); // merge approved, move rejected
+        const p = planned();
+        for (const target of ["running", "done", "failed"] as const) {
+          expect(() => r.tickets.setActionState(p.merge.id, target, at(2))).toThrow(/not approved/);
+          expect(() => r.tickets.setActionState(move.id, target, at(2))).toThrow(/not approved/);
+        }
+        expect(state(p.t.id, 0)).toBe("planned");
+        expect(state(t.id, 1)).toBe("rejected");
+      });
+
+      it("approved -> running -> done passes, and approved -> failed too", () => {
+        const { t, merge, move } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.approveActions(t.id, [move.id], at(2));
+        expect(r.tickets.setActionState(merge.id, "running", at(3)).state).toBe("running");
+        expect(r.tickets.setActionState(merge.id, "done", at(4)).state).toBe("done");
+        expect(r.tickets.setActionState(move.id, "failed", at(5)).state).toBe("failed");
+      });
+
+      it("a failed or done needs_ok step cannot be re-marked running without a new approval", () => {
+        const { t, merge } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.setActionState(merge.id, "failed", at(2));
+        expect(() => r.tickets.setActionState(merge.id, "running", at(3))).toThrow(TransitionError);
+        expect(state(t.id, 0)).toBe("failed");
+      });
+
+      it("direct steps move from planned without approval", () => {
+        const { t, direct } = planned();
+        expect(r.tickets.setActionState(direct.id, "running", at(1)).state).toBe("running");
+        expect(r.tickets.setActionState(direct.id, "done", at(2)).state).toBe("done");
+        expect(state(t.id, 2)).toBe("done");
+      });
+
+      it("repeating the current state is a no-op that keeps updatedAt", () => {
+        const { t, merge } = planned();
+        r.tickets.approveActions(t.id, [merge.id], at(1));
+        r.tickets.setActionState(merge.id, "done", at(2));
+        const again = r.tickets.setActionState(merge.id, "done", at(9));
+        expect(again.state).toBe("done");
+        expect(again.updatedAt).toBe(at(2).toISOString());
+      });
+
+      it("an unknown id is a 404", () => {
+        expect(() => r.tickets.setActionState("pa_nope", "running")).toThrow(NotFoundError);
       });
     });
   });

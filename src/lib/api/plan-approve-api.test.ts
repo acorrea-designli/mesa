@@ -119,11 +119,37 @@ describe("POST /api/tickets/:id/plan/approve { revoke }", () => {
 describe("PATCH /api/actions/:id (sessions)", () => {
   const patch = (state: string) => PATCH_ACTION(req("PATCH", "/x", { state }), ctx({ id: ids[0]! }));
 
-  it("accepts running, done and failed", async () => {
+  it("accepts running, done and failed for an approved step", async () => {
+    await approve({ only: [ids[0]] });
+    await approve({ only: [ids[1]] });
+    expect((await patch("running")).status).toBe(200);
+    expect((await patch("done")).status).toBe(200);
+    expect((await PATCH_ACTION(req("PATCH", "/x", { state: "failed" }), ctx({ id: ids[1]! }))).status).toBe(200);
+    expect(states()).toEqual(["done", "failed"]);
+  });
+
+  it("refuses running, done and failed with 409 for a needs_ok step that is not approved", async () => {
     for (const state of ["running", "done", "failed"]) {
-      expect((await patch(state)).status).toBe(200);
-      expect(r.tickets.detail(ref).actions[0]!.state).toBe(state);
+      const res = await patch(state);
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/not approved/);
     }
+    expect(states()).toEqual(["planned", "planned"]);
+  });
+
+  it("approve, revoke, then running is a 409 and the step stays planned", async () => {
+    await approve({ only: [ids[0]] });
+    expect((await approve({ revoke: [ids[0]] })).status).toBe(200);
+    expect((await patch("running")).status).toBe(409);
+    expect(states()).toEqual(["planned", "planned"]);
+  });
+
+  it("repeating the step's current state is a 200 no-op, and an unknown id is 404", async () => {
+    await approve({ only: [ids[0]] });
+    expect((await patch("done")).status).toBe(200);
+    expect((await patch("done")).status).toBe(200);
+    expect(states()).toEqual(["done", "planned"]);
+    expect((await PATCH_ACTION(req("PATCH", "/x", { state: "running" }), ctx({ id: "pa_nope" }))).status).toBe(404);
   });
 
   it("refuses approved, rejected and planned with 400: a session cannot approve its own step", async () => {

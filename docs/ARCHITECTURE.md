@@ -237,7 +237,7 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/tickets/:id/unfold` | `{ ticket: id\|ref }` | `TicketDetail` (the reopened ticket); emits `ticket.created { …, splitFrom }`; 409 when it was not folded into `:id` |
 | POST `/api/tickets/:id/transition` | `{ event: claim\|close\|reopen, by?, session? }` | `TicketDetail` |
 | POST `/api/tickets/:id/attachments` | multipart `file`, `messageId?` | `Attachment` 201 |
-| PATCH `/api/actions/:id` | `{ state: running\|done\|failed }` | `PlannedAction`; 400 for any other state. A needs_ok step in state `approved` was pre-approved by Andrés, so the owner runs it without asking again |
+| PATCH `/api/actions/:id` | `{ state: running\|done\|failed }` | `PlannedAction`; 400 for any other state. A needs_ok step in state `approved` was pre-approved by Andrés, so the owner runs it without asking again. 409 `invalid_transition` (`step is not approved; Andres took it back or never approved it`) when a needs_ok step is not `approved` or `running` (planned, rejected, or already done/failed: a retry needs a new approval); the check is part of the UPDATE, so a concurrent revoke and a running mark cannot both win. Direct steps move from any state; repeating the current state is a 200 no-op; unknown id 404 |
 | GET `/api/handoffs` | `?agent=&ticket=&limit=` | `{ handoffs }` newest first |
 | GET/POST `/api/team` | `?status=live\|retired&ticket=` / `{ ticketRef, agent, role, owner? }` | `{ agents }` / `{ agent }` 201 |
 | POST `/api/team/:name/retire` | | `{ agent }` |
