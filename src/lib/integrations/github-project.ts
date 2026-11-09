@@ -5,6 +5,11 @@
 //   its Status; the write is acked with markSync(synced) and the card loses "Sin sincronizar".
 // - pull: Status changes made in GitHub move the task in Mesa, unless a local move is still
 //   pending (a pending local move wins until acked). Items added in GitHub become tasks.
+// Drafts only, never linked content: every item Mesa creates is a draft (`gh project item-create`,
+// title + a plain-text body); a PR or issue URL goes in the body as text, never as the item's content.
+// Linking a PR or issue (`item-add`, addProjectV2ItemById) writes an event to that PR's timeline on
+// every card move, and the PRs are clients'. guardProjectGh refuses those calls before gh runs, and
+// pull imports only DraftIssue items; PR/issue items added by hand in GitHub are left alone.
 // Only Project field writes happen here; Mesa never writes reviews or comments.
 import type { Db } from "../db/sqlite";
 import type { Repos } from "../repo";
@@ -14,6 +19,26 @@ import { GhError, ghGraphql, ghJson, type GhRunner } from "./gh";
 import { publishChange } from "../live/bus";
 
 export const PROJECT_TITLE = process.env.MESA_GH_PROJECT_TITLE ?? "Mesa";
+
+// ---------- guard ----------
+
+const LINKING_MUTATION = /addProjectV2ItemById|linkProjectV2/i;
+
+/**
+ * The runner every Project call goes through: refuses `gh project item-add` and any call whose
+ * arguments or GraphQL body name addProjectV2ItemById or linkProjectV2*, with a thrown error before
+ * gh runs. Drafts are the only way an item gets into the Project.
+ */
+export function guardProjectGh(gh: GhRunner): GhRunner {
+  return async (args, opts) => {
+    if (args[0] === "project" && args[1] === "item-add") {
+      throw new GhError("other", "Mesa never links content to the Project: `gh project item-add` is refused (drafts only)");
+    }
+    const hit = LINKING_MUTATION.exec(`${args.join("\n")}\n${opts?.input ?? ""}`);
+    if (hit) throw new GhError("other", `Mesa never links content to the Project: ${hit[0]} is refused (drafts only)`);
+    return gh(args, opts);
+  };
+}
 
 // ---------- mapping ----------
 
@@ -126,7 +151,8 @@ const UPDATE_FIELD = `mutation($fieldId: ID!, $opts: [ProjectV2SingleSelectField
  * Inbox, Todo, In Progress, Waiting, Done (existing options keep their ids), and record the
  * ids in settings. Returns the settings and whether the Project was created.
  */
-export async function ensureProject(db: Db, gh: GhRunner, owner: string): Promise<{ project: ProjectSettings; created: boolean }> {
+export async function ensureProject(db: Db, runner: GhRunner, owner: string): Promise<{ project: ProjectSettings; created: boolean }> {
+  const gh = guardProjectGh(runner);
   const list = await ghJson<{ projects: GhProject[] }>(gh, ["project", "list", "--owner", owner, "--format", "json", "--limit", "100"]);
   let p = list.projects.find((x) => x.title === PROJECT_TITLE && !x.closed);
   let created = false;
@@ -174,36 +200,39 @@ export interface PushResult {
   errors: string[];
 }
 
-const prUrl = (t: Task) => t.items?.find((i) => i.source === "github" && /\/pull\/\d+/.test(i.url ?? ""))?.url ?? null;
+/** The GitHub PR or issue a task links, shown as plain text in the draft body. */
+const linkedUrl = (t: Task) => t.items?.find((i) => i.source === "github" && /\/(pull|issues)\/\d+/.test(i.url ?? ""))?.url ?? null;
 
-/** Push every pending task (sample tasks never leave Mesa). */
-export async function pushPending(r: Repos, gh: GhRunner, p: ProjectSettings, now = () => new Date()): Promise<PushResult> {
+/** Body of a draft item: excerpt, project, the linked PR/issue URL as text, and the task id. */
+export const draftBody = (t: Task): string =>
+  [t.excerpt, t.project ? `Proyecto: ${t.project}` : "", linkedUrl(t) ? `GitHub: ${linkedUrl(t)}` : "", `Mesa: ${t.id}`].filter(Boolean).join("\n\n");
+
+/** Push every pending task (sample tasks never leave Mesa). Every new item is a draft. */
+export async function pushPending(r: Repos, runner: GhRunner, p: ProjectSettings, now = () => new Date()): Promise<PushResult> {
+  const gh = guardProjectGh(runner);
   const out: PushResult = { pushed: 0, failed: 0, errors: [] };
   for (const pending of r.tasks.pendingSync()) {
     if (pending.isSample) continue;
     const before = r.tasks.get(pending.id);
     try {
-      let itemId = before.ghItemId;
-      let contentUrl = before.ghContentUrl;
+      // A task still holding a content-linked item (gh_content_url set, from before drafts only) never
+      // edits it: it gets a fresh draft instead. The 0320 migration clears these rows; this is the backstop.
+      let itemId = before.ghContentUrl ? null : before.ghItemId;
       if (!itemId) {
-        const url = prUrl(before);
-        const made = url
-          ? await ghJson<{ id: string }>(gh, ["project", "item-add", String(p.number), "--owner", p.owner, "--url", url, "--format", "json"])
-          : await ghJson<{ id: string }>(gh, [
-              "project",
-              "item-create",
-              String(p.number),
-              "--owner",
-              p.owner,
-              "--title",
-              before.title,
-              "--body",
-              [before.excerpt, before.project ? `Proyecto: ${before.project}` : "", `Mesa: ${before.id}`].filter(Boolean).join("\n\n"),
-              "--format",
-              "json",
-            ]);
+        const made = await ghJson<{ id: string }>(gh, [
+          "project",
+          "item-create",
+          String(p.number),
+          "--owner",
+          p.owner,
+          "--title",
+          before.title,
+          "--body",
+          draftBody(before),
+          "--format",
+          "json",
+        ]);
         itemId = made.id;
-        contentUrl = url;
       }
       const option = p.statusOptions[stationToStatus(before.station)];
       if (!option) throw new GhError("other", `Status option "${stationToStatus(before.station)}" is missing`);
@@ -223,10 +252,10 @@ export async function pushPending(r: Repos, gh: GhRunner, p: ProjectSettings, no
       ]);
       const after = r.tasks.get(pending.id);
       if (after.updatedAt === before.updatedAt && after.station === before.station) {
-        r.tasks.markSync(pending.id, { syncState: "synced", ghItemId: itemId, ghContentUrl: contentUrl }, now());
+        r.tasks.markSync(pending.id, { syncState: "synced", ghItemId: itemId, ghContentUrl: null }, now());
       } else {
         // Moved again while the write was in flight: keep it pending, remember the item.
-        r.db.prepare("UPDATE tasks SET gh_item_id = ?, gh_content_url = COALESCE(?, gh_content_url) WHERE id = ?").run(itemId, contentUrl, pending.id);
+        r.db.prepare("UPDATE tasks SET gh_item_id = ?, gh_content_url = NULL WHERE id = ?").run(itemId, pending.id);
       }
       out.pushed++;
       publishChange({ entityType: "task", entityId: pending.id, kind: "sync" });
@@ -259,7 +288,11 @@ export interface PullResult {
   moved: number;
   imported: number;
   kept: number; // remote change ignored: a local move is pending
+  skipped: number; // PR/issue items added by hand in GitHub: never imported nor edited
 }
+
+/** Only items that live in the Project itself (drafts) are Mesa's to import. */
+const isDraft = (it: GhProjectItem) => it.content?.type === "DraftIssue";
 
 /** Apply a GitHub-side Status change to a synced task without marking it pending. */
 function applyRemoteStation(db: Db, taskId: string, station: Station, ts: string): void {
@@ -276,23 +309,27 @@ export function planPull(
   const byItem = new Map(tasks.filter((t) => t.ghItemId).map((t) => [t.ghItemId!, t]));
   const moves: { taskId: string; station: Station }[] = [];
   const imports: { item: GhProjectItem; station: Station }[] = [];
+  const skipped: string[] = [];
   let kept = 0;
   for (const it of items) {
     const station = statusToStation(it.status) ?? "inbox";
     const t = byItem.get(it.id);
     if (!t) {
-      // Items seen before belong to tasks deleted in Mesa: never re-import them.
-      if (!known.has(it.id)) imports.push({ item: it, station });
+      // Items seen before belong to tasks deleted in Mesa (or were already skipped): never retry them.
+      if (known.has(it.id)) continue;
+      if (isDraft(it)) imports.push({ item: it, station });
+      else skipped.push(it.id); // a PR or issue linked by hand: not imported, never edited
       continue;
     }
     if (t.isSample || t.station === station) continue;
     if (t.syncState === "synced") moves.push({ taskId: t.id, station });
     else kept++;
   }
-  return { moves, imports, kept };
+  return { moves, imports, kept, skipped };
 }
 
-export async function pullProject(r: Repos, gh: GhRunner, p: ProjectSettings, now = () => new Date()): Promise<PullResult> {
+export async function pullProject(r: Repos, runner: GhRunner, p: ProjectSettings, now = () => new Date()): Promise<PullResult> {
+  const gh = guardProjectGh(runner);
   const list = await ghJson<{ items: GhProjectItem[] }>(gh, ["project", "item-list", String(p.number), "--owner", p.owner, "--format", "json", "--limit", "1000"]);
   const all = r.db.prepare("SELECT id, gh_item_id AS ghItemId, station, sync_state AS syncState, is_sample AS isSample FROM tasks").all() as unknown as Pick<
     Task,
@@ -308,19 +345,17 @@ export async function pullProject(r: Repos, gh: GhRunner, p: ProjectSettings, no
   }
   for (const { item, station } of plan.imports) {
     const c = item.content ?? {};
-    const isPr = c.type === "PullRequest";
     const t = r.tasks.create({
       title: item.title ?? c.title ?? "Sin título",
-      excerpt: isPr ? "" : (c.body ?? "").split(/\r?\n/)[0]?.slice(0, 200) ?? "",
-      project: c.repository?.replace(/^https:\/\/github\.com\//, "") ?? "",
+      excerpt: (c.body ?? "").split(/\r?\n/)[0]?.slice(0, 200) ?? "",
       source: "github",
       station,
     });
-    r.tasks.markSync(t.id, { syncState: "synced", ghItemId: item.id, ghContentUrl: c.url ?? null }, now());
+    r.tasks.markSync(t.id, { syncState: "synced", ghItemId: item.id, ghContentUrl: null }, now());
     publishChange({ entityType: "task", entityId: t.id, kind: "created" });
   }
   for (const it of list.items) known.add(it.id);
   setSetting(r.db, K.knownItems, JSON.stringify([...known]));
   setSetting(r.db, K.lastPullAt, ts);
-  return { moved: plan.moves.length, imported: plan.imports.length, kept: plan.kept };
+  return { moved: plan.moves.length, imported: plan.imports.length, kept: plan.kept, skipped: plan.skipped.length };
 }

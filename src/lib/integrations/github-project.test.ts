@@ -1,9 +1,14 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it } from "vitest";
-import { openDb } from "../db/sqlite";
+import { MIGRATIONS_DIR, migrate, openDb } from "../db/sqlite";
 import { createRepos, type Repos } from "../repo";
 import { STATIONS } from "../domain/types";
 import {
   ensureProject,
+  guardProjectGh,
   planPull,
   pullProject,
   pushPending,
@@ -120,7 +125,7 @@ describe("push and pull", () => {
     expect(r.tasks.get(t.id).syncState).toBe("synced");
   });
 
-  it("adds a PR as the item content when the task links a GitHub PR", async () => {
+  it("creates a draft with the PR URL as plain text in the body when the task links a GitHub PR", async () => {
     const { item } = r.items.upsert({
       source: "github",
       externalId: "pr:acme/api#7",
@@ -128,13 +133,44 @@ describe("push and pull", () => {
       title: "api#7",
       url: "https://github.com/acme/api/pull/7",
     });
-    r.tasks.create({ title: "api#7", source: "github", itemIds: [item.id] });
+    const t = r.tasks.create({ title: "api#7", source: "github", project: "acme/api", excerpt: "Review pedido", itemIds: [item.id] });
     const gh = fakeGh(
-      (a) => (is("project", "item-add")(a) ? ok({ id: "PVTI_pr" }) : undefined),
+      (a) => (is("project", "item-create")(a) ? ok({ id: "PVTI_draft" }) : undefined),
       (a) => (is("project", "item-edit")(a) ? ok({}) : undefined),
     );
     await pushPending(r, gh.run, P);
-    expect(gh.calls[0]!.args).toEqual(expect.arrayContaining(["--url", "https://github.com/acme/api/pull/7"]));
+    const create = gh.calls[0]!.args;
+    expect(create.slice(0, 2)).toEqual(["project", "item-create"]);
+    expect(create[create.indexOf("--title") + 1]).toBe("api#7");
+    expect(create[create.indexOf("--body") + 1]).toBe(
+      `Review pedido\n\nProyecto: acme/api\n\nGitHub: https://github.com/acme/api/pull/7\n\nMesa: ${t.id}`,
+    );
+    expect(gh.calls.some((c) => c.args.includes("item-add") || c.args.includes("--url"))).toBe(false);
+    expect(r.tasks.get(t.id)).toMatchObject({ syncState: "synced", ghItemId: "PVTI_draft", ghContentUrl: null });
+  });
+
+  it("links an issue the same way: a draft, URL in the body", async () => {
+    const { item } = r.items.upsert({ source: "github", externalId: "issue:acme/api#9", kind: "mention", title: "api#9", url: "https://github.com/acme/api/issues/9" });
+    r.tasks.create({ title: "api#9", source: "github", itemIds: [item.id] });
+    const gh = fakeGh(
+      (a) => (is("project", "item-create")(a) ? ok({ id: "PVTI_i" }) : undefined),
+      (a) => (is("project", "item-edit")(a) ? ok({}) : undefined),
+    );
+    await pushPending(r, gh.run, P);
+    expect(gh.calls[0]!.args[gh.calls[0]!.args.indexOf("--body") + 1]).toContain("GitHub: https://github.com/acme/api/issues/9");
+    expect(gh.calls.some((c) => c.args.includes("item-add"))).toBe(false);
+  });
+
+  it("never edits a content-linked item a task still holds: it gets a fresh draft", async () => {
+    const t = r.tasks.create({ title: "viejo", source: "github" });
+    r.tasks.markSync(t.id, { syncState: "pending", ghItemId: "PVTI_pr", ghContentUrl: "https://github.com/acme/api/pull/7" });
+    const gh = fakeGh(
+      (a) => (is("project", "item-create")(a) ? ok({ id: "PVTI_new" }) : undefined),
+      (a) => (is("project", "item-edit")(a) ? ok({}) : undefined),
+    );
+    await pushPending(r, gh.run, P);
+    expect(gh.calls.some((c) => c.args.includes("PVTI_pr"))).toBe(false);
+    expect(r.tasks.get(t.id)).toMatchObject({ syncState: "synced", ghItemId: "PVTI_new", ghContentUrl: null });
   });
 
   it("marks a task error on a failed write", async () => {
@@ -157,8 +193,10 @@ describe("push and pull", () => {
       { id: "A", status: "Done" },
       { id: "B", status: "Waiting" },
       { id: "C", status: "Todo" },
-      { id: "D", status: "Todo", title: "New in GitHub" },
-      { id: "E", status: "Inbox" },
+      { id: "D", status: "Todo", title: "New in GitHub", content: { type: "DraftIssue" } },
+      { id: "E", status: "Inbox", content: { type: "DraftIssue" } },
+      { id: "F", status: "Todo", title: "Client PR", content: { type: "PullRequest", url: "https://github.com/acme/api/pull/7" } },
+      { id: "G", status: "Todo", title: "Client issue", content: { type: "Issue", url: "https://github.com/acme/api/issues/9" } },
     ];
     const tasks = [
       { id: "ta", ghItemId: "A", station: "doing" as const, syncState: "synced" as const, isSample: false },
@@ -169,6 +207,25 @@ describe("push and pull", () => {
     expect(plan.moves).toEqual([{ taskId: "ta", station: "done" }]);
     expect(plan.kept).toBe(1);
     expect(plan.imports.map((i) => i.item.id)).toEqual(["D"]);
+    expect(plan.skipped).toEqual(["F", "G"]);
+  });
+
+  it("pulls only drafts: PR and issue items added by hand are counted, recorded as known, never imported or edited", async () => {
+    const items = [
+      { id: "PVTI_draft", status: "Todo", title: "Borrador", content: { type: "DraftIssue", body: "nota" } },
+      { id: "PVTI_pr", status: "Todo", title: "Client PR", content: { type: "PullRequest", url: "https://github.com/acme/api/pull/7", repository: "https://github.com/acme/api" } },
+      { id: "PVTI_issue", status: "Done", title: "Client issue", content: { type: "Issue", url: "https://github.com/acme/api/issues/9" } },
+    ];
+    const gh = fakeGh((a) => (is("project", "item-list")(a) ? ok({ items }) : undefined));
+    expect(await pullProject(r, gh.run, P)).toEqual({ moved: 0, imported: 1, kept: 0, skipped: 2 });
+    expect(r.tasks.list().map((x) => x.ghItemId)).toEqual(["PVTI_draft"]);
+    expect(r.tasks.list().every((x) => x.ghContentUrl === null)).toBe(true);
+    expect(JSON.parse(r.db.prepare("SELECT value FROM settings WHERE key = 'gh_project.known_items'").get()!.value as string)).toEqual(
+      expect.arrayContaining(["PVTI_pr", "PVTI_issue", "PVTI_draft"]),
+    );
+    // Not retried on the next pull, and Mesa wrote nothing to GitHub.
+    expect(await pullProject(r, gh.run, P)).toEqual({ moved: 0, imported: 0, kept: 0, skipped: 0 });
+    expect(gh.calls.every((c) => c.args[1] === "item-list")).toBe(true);
   });
 
   it("pulls: moves a synced task and its items, imports a new item once", async () => {
@@ -185,7 +242,7 @@ describe("push and pull", () => {
           })
         : undefined,
     );
-    expect(await pullProject(r, gh.run, P)).toEqual({ moved: 1, imported: 1, kept: 0 });
+    expect(await pullProject(r, gh.run, P)).toEqual({ moved: 1, imported: 1, kept: 0, skipped: 0 });
     expect(r.tasks.get(t.id)).toMatchObject({ station: "waiting", syncState: "synced" });
     expect(r.items.get(item.id).station).toBe("waiting");
     const imported = r.tasks.list().find((x) => x.ghItemId === "PVTI_new")!;
@@ -194,5 +251,90 @@ describe("push and pull", () => {
     // Deleted in Mesa: never re-imported.
     r.tasks.remove(imported.id);
     expect((await pullProject(r, gh.run, P)).imported).toBe(0);
+  });
+});
+
+describe("drafts only guard", () => {
+  let r: Repos;
+  beforeEach(() => {
+    r = createRepos(openDb(":memory:"));
+  });
+
+  it("refuses `project item-add` before gh runs", async () => {
+    const gh = fakeGh(() => ok({ id: "x" }));
+    const guarded = guardProjectGh(gh.run);
+    await expect(guarded(["project", "item-add", "3", "--owner", OWNER, "--url", "https://github.com/acme/api/pull/7"])).rejects.toThrow(/item-add/);
+    expect(gh.calls).toHaveLength(0);
+  });
+
+  it("refuses a GraphQL body (stdin or argument) naming addProjectV2ItemById or linkProjectV2*", async () => {
+    const gh = fakeGh(() => ok({ data: {} }));
+    const guarded = guardProjectGh(gh.run);
+    const mutation = "mutation($p: ID!, $c: ID!) { addProjectV2ItemById(input: { projectId: $p, contentId: $c }) { item { id } } }";
+    await expect(guarded(["api", "graphql", "--input", "-"], { input: JSON.stringify({ query: mutation }) })).rejects.toThrow(/addProjectV2ItemById/);
+    await expect(guarded(["api", "graphql", "-f", `query=${mutation}`])).rejects.toThrow(/addProjectV2ItemById/);
+    await expect(guarded(["api", "graphql", "--input", "-"], { input: JSON.stringify({ query: "mutation { linkProjectV2ToRepository(input: {}) { clientMutationId } }" }) })).rejects.toThrow(/linkProjectV2/);
+    expect(gh.calls).toHaveLength(0);
+  });
+
+  it("lets the draft, field and list calls through", async () => {
+    const gh = fakeGh(() => ok({}));
+    const guarded = guardProjectGh(gh.run);
+    await guarded(["project", "item-create", "3", "--title", "t"]);
+    await guarded(["project", "item-edit", "--id", "I"]);
+    await guarded(["api", "graphql", "--input", "-"], { input: JSON.stringify({ query: "mutation { updateProjectV2Field(input: {}) { clientMutationId } }" }) });
+    expect(gh.calls).toHaveLength(3);
+  });
+
+  it("push, pull and ensure run behind the guard: a runner-level item-add never reaches gh", async () => {
+    const t = r.tasks.create({ title: "x", source: "claude" });
+    const gh = fakeGh(
+      (a) => (is("project", "item-create")(a) ? ok({ id: "PVTI_1" }) : undefined),
+      (a) => (is("project", "item-edit")(a) ? ok({}) : undefined),
+    );
+    await pushPending(r, gh.run, P);
+    expect(r.tasks.get(t.id).syncState).toBe("synced");
+    expect(gh.calls.every((c) => !c.args.includes("item-add"))).toBe(true);
+  });
+
+  it("no source file under src/ calls item-add or addProjectV2ItemById (the guard in github-project.ts only names them)", () => {
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(ts|tsx|mjs)$/.test(e.name) && !/\.test\.(ts|tsx|mjs)$/.test(e.name)) files.push(p);
+      }
+    };
+    walk(path.join(process.cwd(), "src"));
+    const offenders = files.filter((f) => {
+      const text = fs.readFileSync(f, "utf8");
+      if (path.basename(f) === "github-project.ts") return /\[[^\]]*"item-add"/.test(text) || /mutation[^`]*(addProjectV2ItemById|linkProjectV2)/.test(text);
+      return /item-add|addProjectV2ItemById|linkProjectV2/.test(text);
+    });
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("migration 0320: legacy content links", () => {
+  it("clears gh_item_id and gh_content_url and re-queues tasks that held a content-linked item; drafts are untouched", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesa-mig-"));
+    for (const f of fs.readdirSync(MIGRATIONS_DIR)) if (f !== "0320_project_drafts_only.sql") fs.copyFileSync(path.join(MIGRATIONS_DIR, f), path.join(dir, f));
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON;");
+    migrate(db, dir);
+    const old = createRepos(db);
+    const linked = old.tasks.create({ title: "PR enlazada", source: "github", station: "done" });
+    old.tasks.markSync(linked.id, { syncState: "synced", ghItemId: "PVTI_pr", ghContentUrl: "https://github.com/acme/api/pull/7" });
+    const failed = old.tasks.create({ title: "PR con error", source: "github" });
+    old.tasks.markSync(failed.id, { syncState: "error", syncError: "boom", ghItemId: "PVTI_pr2", ghContentUrl: "https://github.com/acme/api/pull/8" });
+    const draft = old.tasks.create({ title: "Borrador", source: "claude" });
+    old.tasks.markSync(draft.id, { syncState: "synced", ghItemId: "PVTI_draft", ghContentUrl: null });
+
+    expect(migrate(db)).toEqual(["0320_project_drafts_only.sql"]);
+    expect(old.tasks.get(linked.id)).toMatchObject({ ghItemId: null, ghContentUrl: null, syncState: "pending", station: "done" });
+    expect(old.tasks.get(failed.id)).toMatchObject({ ghItemId: null, ghContentUrl: null, syncState: "pending", syncError: null });
+    expect(old.tasks.get(draft.id)).toMatchObject({ ghItemId: "PVTI_draft", ghContentUrl: null, syncState: "synced" });
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

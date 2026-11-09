@@ -82,7 +82,6 @@ describe("GitHub Project push skips ignored projects", () => {
     const ig = r.ignored.add({ source: "github", project: "designli/prospec-admin" });
     const gh = fakeGh(
       (a) => (is("project", "item-create")(a) ? ok({ id: "PVTI_x" }) : undefined),
-      (a) => (is("project", "item-add")(a) ? ok({ id: "PVTI_pr" }) : undefined),
       (a) => (is("project", "item-edit")(a) ? ok({}) : undefined),
     );
     expect(await pushPending(r, gh.run, P)).toMatchObject({ pushed: 1 });
