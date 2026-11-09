@@ -71,9 +71,17 @@ export function SettingsSheet({ open, onClose, counts, health }: { open: boolean
         {/* Web Push (t33). The desktop browser-notification toggle is not here: on a phone it only ends in "bloqueadas". */}
         <PushRow className="nav theme" onOpen={() => closeThen(() => router.push("/telefono"))} />
         <ThemeToggle className="theme" />
-        <span className="nav foot">
+        <Link
+          href="/semana"
+          className="nav foot"
+          aria-current={path.startsWith("/semana") ? "page" : undefined}
+          onClick={(e) => {
+            e.preventDefault();
+            closeThen(() => router.push("/semana"));
+          }}
+        >
           Hecho hoy <b>{counts.doneToday}</b>
-        </span>
+        </Link>
       </div>
       <SourceHealthList health={health} />
     </Sheet>

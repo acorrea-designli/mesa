@@ -366,3 +366,9 @@ export const sandboxPushInput = z.object({
   ref: z.string().trim().min(1),
   sha: z.string().trim().min(1).optional(),
 });
+
+/** GET /api/semana and /semana: any day of the week (YYYY-MM-DD, normalized to its Monday), one project by its shown name. */
+export const weekQuery = z.object({
+  semana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").optional(),
+  proyecto: z.string().trim().min(1).max(120).optional(),
+});

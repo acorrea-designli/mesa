@@ -45,9 +45,9 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
       </nav>
       <div className="rail-foot">
         <SourceHealthList health={health} />
-        <span className="nav foot">
+        <Link href="/semana" className="nav foot" aria-current={path.startsWith("/semana") ? "page" : undefined}>
           Hecho hoy <b>{counts.doneToday}</b>
-        </span>
+        </Link>
         <Link href="/telefono" className="nav theme" aria-current={path.startsWith("/telefono") ? "page" : undefined}>
           Teléfono
         </Link>
