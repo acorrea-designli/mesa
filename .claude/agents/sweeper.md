@@ -38,7 +38,7 @@ on Mesa's Hoy and Andrés decides.
 > 1. `mcp__basecamp__search` with `{query: "Andres", sort: "recency", limit: 3}`. New = hits whose `created_at` is after the probe watermark and not written by Andrés. If all 3 hits are new, repeat the call once with `{query: "Andres", sort: "recency", limit: 10}`. The probe watermark advances to the newest `created_at` seen.
 > 2. `mcp__basecamp__get_my_assignments` with `{group: "priorities"}`. New = assignments this instance has not upserted yet.
 >
-> **Basecamp catch-up** (client comments that do not name him): `mcp__basecamp__get_my_notifications` with no parameters, on this instance's first Basecamp tick and then every `fullScanEveryTicks`-th Basecamp tick. `fullScanEveryTicks` and `scanSince.basecamp` come from the `sweep-tick.mjs wait` output, never from prose. New = notifications with `unread_at` after `scanSince.basecamp` (null: all). Its window is kept apart from the probe watermark: the report carries `--scan-since <newest unread_at seen>`.
+> **Basecamp catch-up** (client comments that do not name him): `mcp__basecamp__get_my_notifications` with no parameters, on this instance's first Basecamp tick and then every `fullScanEveryTicks`-th Basecamp tick. `fullScanEveryTicks` and `scanSince.basecamp` come from the `sweep-tick.mjs wait` output, never from prose. New = notifications with `unread_at` after `scanSince.basecamp` (it falls back to the probe watermark while no catch-up window is stored; null only before the first probe, then all). Its window is kept apart from the probe watermark: the report carries `--scan-since <newest unread_at seen>`.
 >
 > Ignored projects (`mesa-sweep` § 0b) are dropped from the probe hits and from the catch-up before any `get_by_url`.
 

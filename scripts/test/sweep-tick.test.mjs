@@ -248,8 +248,13 @@ test("wait carries fullScanEveryTicks and the catch-up window for Basecamp, and 
   assert.deepEqual(r.scanSince, { basecamp: "S" });
 
   const fresh = await wait(config, memStore({ sources: {}, lastInteractionAt: iso(tue10) }), { now: () => tue10 });
-  assert.deepEqual(fresh.scanSince, { basecamp: null }); // never scanned: the instance's first tick reads everything
+  assert.deepEqual(fresh.scanSince, { basecamp: null }); // never probed: the instance's first tick reads everything
   assert.equal(fresh.watermarks.basecamp, null);
+
+  // probed before the catch-up window existed: the first catch-up falls back to the probe watermark, not "all unread"
+  const probeOnly = await wait(config, memStore({ sources: { basecamp: { lastChecked: iso(tue10 - 120_000), watermark: "P" } }, lastInteractionAt: iso(tue10) }), { now: () => tue10 });
+  assert.deepEqual(probeOnly.scanSince, { basecamp: "P" });
+  assert.equal(probeOnly.watermarks.basecamp, "P");
 
   const slackOnly = await wait(config, memStore({ sources: { slack: { lastChecked: iso(tue10 - 120_000) }, basecamp: { lastChecked: iso(tue10) } }, lastInteractionAt: iso(tue10) }), { now: () => tue10 });
   assert.deepEqual(slackOnly.sources, ["slack"]);

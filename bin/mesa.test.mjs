@@ -226,6 +226,48 @@ describe("mesa CLI", () => {
     expect(requests[0]).toMatchObject({ method: "POST", path: "/api/items/upsert", body: item });
   });
 
+  it("finding upsert stores JSON-escaped backslashes and quotes verbatim", async () => {
+    handler = () => ({ body: { finding: { n: 1 } } });
+    const f = { repo: "acme/api", pr: 5, label: "nit", summary: 'a\\b \\d+ "x" C:\\dir\\new', ghCommentId: 3254 };
+    const r = await mesa(["finding", "upsert", "t22", "--json", "-"], { stdin: `${JSON.stringify(f)}\n` });
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t22/findings", body: f });
+  });
+
+  it("finding upsert repairs lone backslashes a shell left behind (\\d from \\\\d)", async () => {
+    handler = () => ({ body: { finding: { n: 1 } } });
+    const r = await mesa(["finding", "upsert", "t22", "--json", "-"], { stdin: '{"repo":"acme/api","pr":5,"label":"nit","summary":"a \\d+ \\"x\\" \\\\ok"}' });
+    expect(r.code).toBe(0);
+    expect(requests[0].body.summary).toBe('a \\d+ "x" \\ok');
+  });
+
+  it("invalid --json prints JSON.parse's own message, for finding, item and --dest", async () => {
+    const bad = '{"repo": "a/b", "pr": }';
+    for (const args of [
+      ["finding", "upsert", "t22", "--json", "-"],
+      ["item", "upsert", "--json", "-"],
+    ]) {
+      const r = await mesa(args, { stdin: bad });
+      expect(r.code).toBe(2);
+      expect(r.stderr).toMatch(/--json must be JSON: Unexpected token '\}'/); // the engine's own message (position or context)
+    }
+    const d = await mesa(["salida", "propose", "--source", "slack", "--dest", '{"kind": ', "--body", "x"]);
+    expect(d.code).toBe(2);
+    expect(d.stderr).toMatch(/--dest must be JSON: /);
+    expect(requests).toHaveLength(0);
+  });
+
+  it("salida propose passes --ticket through as given (the server resolves a ref or an id)", async () => {
+    handler = () => ({ status: 201, body: { id: "sa_1", status: "pending" } });
+    const r = await mesa(["salida", "propose", "--source", "slack", "--dest", '{"kind":"slack_channel","workspace":"w","channel":"c","postAs":"Andrés"}', "--body", "hola", "--ticket", "t22"]);
+    expect(r.code).toBe(0);
+    expect(requests[0].body.ticketId).toBe("t22");
+  });
+
+  it("help says a state-only finding upsert needs only {repo, pr, n, state}", async () => {
+    expect((await mesa(["help"])).stdout).toMatch(/state-only upsert needs only \{repo, pr, n, state\}/);
+  });
+
   it("ignore list --json prints the rows as JSON for the sweeper", async () => {
     const rows = [{ id: "ig_1", source: "slack", project: "C0DEPLOY", label: "#deploys", hidden: { items: 2, tasks: 0 } }];
     handler = () => ({ body: rows });

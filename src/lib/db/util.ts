@@ -82,6 +82,14 @@ export class NotFoundError extends Error {
   }
 }
 
+/** A request the repo cannot accept because of its content (HTTP 400). */
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
 export class TransitionError extends Error {
   constructor(message: string) {
     super(message);

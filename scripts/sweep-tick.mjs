@@ -251,10 +251,14 @@ export async function wait(config, store, { now = Date.now, maxSec = config.wait
 
 const marks = (state, names) => Object.fromEntries(names.map((n) => [n, splitMark(state.sources?.[n]?.watermark).probe]));
 
-// Basecamp catch-up info for the sweeper: how often to run it and the "since" of the previous one (null = never).
-// Only when Basecamp is among `names`.
-const scanInfo = (config, state, names) =>
-  names.includes("basecamp") ? { fullScanEveryTicks: fullScanEveryTicks(config), scanSince: { basecamp: splitMark(state.sources?.basecamp?.watermark).scan } } : {};
+// Basecamp catch-up info for the sweeper: how often to run it and the "since" of the previous one: the scan part
+// of the watermark, else the probe part (so the first catch-up after the scan window existed does not read every
+// unread as new), else null (Basecamp never probed). Only when Basecamp is among `names`.
+const scanInfo = (config, state, names) => {
+  if (!names.includes("basecamp")) return {};
+  const { scan, probe } = splitMark(state.sources?.basecamp?.watermark);
+  return { fullScanEveryTicks: fullScanEveryTicks(config), scanSince: { basecamp: scan ?? probe ?? null } };
+};
 
 export async function report(config, store, name, rep, { now = Date.now } = {}) {
   if (!config.sources[name]) throw new Error(`unknown source ${name}`);

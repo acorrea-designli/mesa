@@ -12,4 +12,9 @@ export const GET = route((req, r) => {
 });
 
 /** POST /api/salidas SalidaInput -> SalidaDetail (201) with v1 */
-export const POST = route(async (req, r) => json(withDestinationUrl(r.salidas.create(await body(req, salidaInput))), { status: 201 }));
+export const POST = route(async (req, r) => {
+  const input = await body(req, salidaInput);
+  // ticketId is an id or a ref (t22); store the id. An unknown one is a 404, not a FOREIGN KEY 500.
+  const ticketId = input.ticketId ? r.tickets.get(input.ticketId).id : undefined;
+  return json(withDestinationUrl(r.salidas.create({ ...input, ticketId })), { status: 201 });
+});

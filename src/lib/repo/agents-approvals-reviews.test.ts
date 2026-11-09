@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
-import { TransitionError } from "../db/util";
+import { TransitionError, ValidationError } from "../db/util";
 import { UNDO_WINDOW_MS } from "../domain/salida-machine";
 import { eventsAfter } from "../wake/wake";
 import { createRepos, type Repos } from "./index";
@@ -78,6 +78,22 @@ describe("reviews", () => {
   it("numbers findings and upserts by n", () => {
     const f = r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, n: 1, label: "blocker", at: "src/a.ts:42", summary: "Null deref", explanation: "x can be null" });
     expect(f).toMatchObject({ n: 1, explanation: "x can be null" });
+    expect(r.reviews.findings(ref).map((x) => x.n)).toEqual([1, 2]);
+  });
+
+  it("a state-only upsert changes only the state and keeps every stored field", () => {
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, n: 1, label: "blocker", summary: "Null deref", anchor: "x.y", explanation: "x can be null", ghCommentId: "99" });
+    const before = r.reviews.findings(ref).find((x) => x.n === 1)!;
+    const f = r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, n: 1, state: "fixed" }, at(5));
+    expect(f).toMatchObject({ n: 1, state: "fixed", label: "blocker", at: "src/a.ts:42", anchor: "x.y", summary: "Null deref", explanation: "x can be null", sha: "abc", ghCommentId: "99" });
+    expect(f.createdAt).toBe(before.createdAt);
+    expect(r.reviews.findings(ref).find((x) => x.n === 2)).toMatchObject({ state: "open", summary: "Naming" });
+  });
+
+  it("a new finding still needs label and summary", () => {
+    expect(() => r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, state: "fixed" })).toThrow(ValidationError);
+    expect(() => r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, n: 9, state: "fixed" })).toThrow(/label and summary are required/);
+    expect(() => r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, label: "nit" })).toThrow(ValidationError);
     expect(r.reviews.findings(ref).map((x) => x.n)).toEqual([1, 2]);
   });
 

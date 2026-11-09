@@ -277,6 +277,35 @@ describe("drafts only guard", () => {
     expect(gh.calls).toHaveLength(0);
   });
 
+  it("scans only the GraphQL document: a draft's title and body, and a variable value, may name the mutations", async () => {
+    const gh = fakeGh(() => ok({ id: "x" }));
+    const guarded = guardProjectGh(gh.run);
+    const text = "Card about addProjectV2ItemById and linkProjectV2ToRepository";
+    await guarded(["project", "item-create", "3", "--owner", OWNER, "--title", text, "--body", `${text}\nhttps://github.com/acme/api/pull/7`]);
+    await guarded(["api", "graphql", "--input", "-"], { input: JSON.stringify({ query: "query($t: String!) { viewer { login } }", variables: { t: text } }) });
+    await guarded(["api", "graphql", "-f", "query=query { viewer { login } }", "-f", `note=${text}`, "-F", `t=${text}`]);
+    expect(gh.calls).toHaveLength(3);
+  });
+
+  it("refuses a query= field in every spelling, and a batch with one bad document", async () => {
+    const gh = fakeGh(() => ok({ data: {} }));
+    const guarded = guardProjectGh(gh.run);
+    const m = "mutation { addProjectV2ItemById(input: {}) { clientMutationId } }";
+    for (const extra of [["-F", `query=${m}`], ["--raw-field", `query=${m}`], ["--field", `query=${m}`], ["-fquery=" + m], [`--raw-field=query=${m}`]]) {
+      await expect(guarded(["api", "graphql", ...extra])).rejects.toThrow(/addProjectV2ItemById/);
+    }
+    await expect(guarded(["api", "graphql", "--input", "-"], { input: JSON.stringify([{ query: "{ viewer { login } }" }, { query: m }]) })).rejects.toThrow(/addProjectV2ItemById/);
+    expect(gh.calls).toHaveLength(0);
+  });
+
+  it("stdin that is not JSON is scanned whole (fail safe)", async () => {
+    const gh = fakeGh(() => ok({}));
+    const guarded = guardProjectGh(gh.run);
+    await expect(guarded(["api", "graphql", "--input", "-"], { input: "mutation { linkProjectV2ToTeam(input: {}) { clientMutationId } }" })).rejects.toThrow(/linkProjectV2/);
+    await expect(guarded(["api", "graphql", "--input", "-"], { input: '"addProjectV2ItemById"' })).rejects.toThrow(/addProjectV2ItemById/);
+    expect(gh.calls).toHaveLength(0);
+  });
+
   it("lets the draft, field and list calls through", async () => {
     const gh = fakeGh(() => ok({}));
     const guarded = guardProjectGh(gh.run);

@@ -288,14 +288,15 @@ export const findingInput = z.object({
   repo: z.string().regex(REPO),
   pr: z.number().int().positive(),
   n: z.number().int().positive().optional(),
-  label: z.enum(["blocker", "nit", "comment"]),
+  // label and summary are required for a new finding (the repo checks, 400); an update may omit any field
+  label: z.enum(["blocker", "nit", "comment"]).optional(),
   at: z.string().optional(),
   anchor: z.string().optional(),
-  summary: z.string().min(1),
+  summary: z.string().min(1).optional(),
   explanation: z.string().optional(),
   state: z.enum(["open", "fixed", "waived", "dismissed"]).optional(),
   sha: z.string().optional(),
-  ghCommentId: z.string().nullable().optional(),
+  ghCommentId: z.union([z.string(), z.number().int()]).transform(String).nullable().optional(),
 });
 export const reviewOpenInput = z.object({
   repo: z.string().regex(REPO),

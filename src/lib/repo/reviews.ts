@@ -5,7 +5,7 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
-import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError } from "../db/util";
+import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
 import type { Finding, FindingState, Review, ReviewAction } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { salidasRepo } from "./salidas";
@@ -18,10 +18,11 @@ export interface FindingInput {
   repo: string;
   pr: number;
   n?: number;
-  label: Finding["label"];
+  /** Required for a new finding; an update of an existing n may omit any field and keeps the stored value. */
+  label?: Finding["label"];
   at?: string;
   anchor?: string;
-  summary: string;
+  summary?: string;
   explanation?: string;
   state?: FindingState;
   sha?: string;
@@ -204,6 +205,16 @@ export function reviewsRepo(db: Db) {
         const n =
           i.n ??
           (db.prepare("SELECT COALESCE(MAX(n), 0) + 1 AS n FROM review_findings WHERE review_id = ?").get(reviewId) as { n: number }).n;
+        // An update names the fields it changes; the others keep their stored values. A new finding
+        // (no n, or an n that is not stored yet) needs label and summary.
+        const prev = i.n === undefined ? undefined : (db.prepare("SELECT * FROM review_findings WHERE review_id = ? AND n = ?").get(reviewId, n) as Record<string, string | null> | undefined);
+        const label = i.label ?? (prev?.label as Finding["label"] | undefined);
+        const summary = i.summary ?? prev?.summary;
+        if (!label || !summary) {
+          throw new ValidationError(
+            `finding ${i.repo}#${i.pr}${i.n === undefined ? "" : ` n=${i.n}`} is new: label and summary are required (a state-only update needs an existing n)`,
+          );
+        }
         db.prepare(
           `INSERT INTO review_findings (id, review_id, n, label, at, anchor, summary, explanation, state, sha, gh_comment_id, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -214,13 +225,13 @@ export function reviewsRepo(db: Db) {
           newId("fd"),
           reviewId,
           n,
-          i.label,
-          i.at ?? "",
-          i.anchor ?? "",
-          i.summary,
-          i.explanation ?? "",
-          i.state ?? "open",
-          i.sha ?? "",
+          label,
+          i.at ?? prev?.at ?? "",
+          i.anchor ?? prev?.anchor ?? "",
+          summary,
+          i.explanation ?? prev?.explanation ?? "",
+          i.state ?? prev?.state ?? "open",
+          i.sha ?? prev?.sha ?? "",
           i.ghCommentId ?? null,
           ts,
           ts,

@@ -24,18 +24,59 @@ export const PROJECT_TITLE = process.env.MESA_GH_PROJECT_TITLE ?? "Mesa";
 
 const LINKING_MUTATION = /addProjectV2ItemById|linkProjectV2/i;
 
+const FIELD_FLAGS = new Set(["-f", "-F", "--raw-field", "--field"]);
+
+/** The `query=` values of a `gh api graphql` call's field arguments (-f/-F/--raw-field/--field, spaced or attached). */
+function queryFieldArgs(args: string[]): string[] {
+  const out: string[] = [];
+  const take = (field: string) => {
+    if (field.startsWith("query=")) out.push(field.slice("query=".length));
+  };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (FIELD_FLAGS.has(a)) take(args[++i] ?? "");
+    else if (a.startsWith("--raw-field=") || a.startsWith("--field=")) take(a.slice(a.indexOf("=") + 1));
+    else if (/^-[fF]./.test(a)) take(a.slice(2));
+  }
+  return out;
+}
+
+/** The GraphQL documents in a JSON stdin body ({query, variables} or a batch of them); the whole text when it is not JSON of that shape (fail safe). */
+function stdinDocuments(input: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return [input];
+  }
+  const bodies = Array.isArray(parsed) ? parsed : [parsed];
+  const docs: string[] = [];
+  for (const b of bodies) {
+    if (!b || typeof b !== "object" || Array.isArray(b)) return [input];
+    const q = (b as { query?: unknown }).query;
+    if (typeof q === "string") docs.push(q);
+  }
+  return docs;
+}
+
 /**
- * The runner every Project call goes through: refuses `gh project item-add` and any call whose
- * arguments or GraphQL body name addProjectV2ItemById or linkProjectV2*, with a thrown error before
- * gh runs. Drafts are the only way an item gets into the Project.
+ * The runner every Project call goes through: refuses `gh project item-add` and any GraphQL document
+ * (the `query` of the JSON on stdin, or a `query=` field of `gh api graphql`) that names
+ * addProjectV2ItemById or linkProjectV2*, with a thrown error before gh runs. Drafts are the only way
+ * an item gets into the Project. Only the document is scanned: a draft's --title and --body, GraphQL
+ * variables and other arguments are free text and may name those mutations. Stdin that is not JSON is
+ * scanned whole.
  */
 export function guardProjectGh(gh: GhRunner): GhRunner {
   return async (args, opts) => {
     if (args[0] === "project" && args[1] === "item-add") {
       throw new GhError("other", "Mesa never links content to the Project: `gh project item-add` is refused (drafts only)");
     }
-    const hit = LINKING_MUTATION.exec(`${args.join("\n")}\n${opts?.input ?? ""}`);
-    if (hit) throw new GhError("other", `Mesa never links content to the Project: ${hit[0]} is refused (drafts only)`);
+    const docs = [...(args[0] === "api" && args.includes("graphql") ? queryFieldArgs(args) : []), ...(opts?.input === undefined ? [] : stdinDocuments(opts.input))];
+    for (const doc of docs) {
+      const hit = LINKING_MUTATION.exec(doc);
+      if (hit) throw new GhError("other", `Mesa never links content to the Project: ${hit[0]} is refused (drafts only)`);
+    }
     return gh(args, opts);
   };
 }

@@ -61,7 +61,9 @@ Agents (ephemeral: everything they need lives on the ticket)
   mesa team list [--status live|retired] [--ticket ref]
 
 Reviews and approvals
-  mesa finding upsert <ref> --json -           {repo, pr, n?, label, at, anchor, summary, explanation, state, sha, ghCommentId}
+  mesa finding upsert <ref> --json -           {repo, pr, n?, label, at, anchor, summary, explanation, state, sha, ghCommentId};
+                  a new finding needs label and summary; a state-only upsert needs only {repo, pr, n, state}
+                  (omitted fields keep their stored values)
   mesa finding list <ref>
   mesa review open <ref> --repo owner/name --pr N --sha <head>   open/refresh the review card (also with 0 findings; new head reopens an approved one)
   mesa review list [--ticket ref] | show <reviewId>
@@ -130,6 +132,22 @@ const usage = (msg) => {
   process.exit(2);
 };
 const need = (v, name) => (v === undefined || v === true || v === "" ? usage(`missing ${name}`) : v);
+
+// JSON option value. Some shells (the Bash tool on Windows) strip one level of backslashes from a
+// heredoc, so "\\d" arrives as "\d", which is not valid JSON. When the strict parse fails, retry once
+// with each lone backslash (not a valid JSON escape) doubled; valid JSON is always parsed as written.
+// On a second failure the error is the strict parser's message, which names the position.
+function parseJsonOpt(raw, flag) {
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    try {
+      return JSON.parse(raw.replace(/\\([\s\S]?)/g, (m, c) => (c !== "" && '"\\/bfnrtu'.includes(c) ? m : `\\\\${c}`)));
+    } catch {
+      return usage(`${flag} must be JSON: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
 
 let stdinCache;
 function text(v, name) {
@@ -366,12 +384,7 @@ async function main() {
     case "salida":
       switch (cmd) {
         case "propose": {
-          let destination;
-          try {
-            destination = JSON.parse(need(opt.dest, "--dest"));
-          } catch {
-            usage("--dest must be JSON");
-          }
+          const destination = parseJsonOpt(String(need(opt.dest, "--dest")), "--dest");
           const created = await call("POST", "/api/salidas", {
             source: need(opt.source, "--source"),
             destination,
@@ -470,12 +483,7 @@ async function main() {
     case "finding":
       switch (cmd) {
         case "upsert": {
-          let f;
-          try {
-            f = JSON.parse(text(opt.json, "--json"));
-          } catch {
-            usage("--json must be JSON");
-          }
+          const f = parseJsonOpt(text(opt.json, "--json"), "--json");
           return out(await call("POST", `/api/tickets/${enc(need(id, "<ref>"))}/findings`, f));
         }
         case "list":
@@ -562,12 +570,7 @@ async function main() {
 
     case "item":
       if (cmd !== "upsert") return usage(`unknown item command "${cmd ?? ""}"`);
-      try {
-        return out(await call("POST", "/api/items/upsert", JSON.parse(text(opt.json, "--json"))));
-      } catch (err) {
-        if (err instanceof SyntaxError) usage("--json must be JSON");
-        throw err;
-      }
+      return out(await call("POST", "/api/items/upsert", parseJsonOpt(text(opt.json, "--json"), "--json")));
 
     case "ignore": {
       if (cmd === "list") return out(await call("GET", "/api/ignored-projects"));
