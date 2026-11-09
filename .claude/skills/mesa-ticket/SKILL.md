@@ -55,6 +55,9 @@ hook files them to that ticket.
 
 Answer first, then evidence (one line each, linked), then what you could not check. At most 6 lines. Long output
 (logs, diffs, tables) goes in a file attached to the ticket or in the PR, never pasted in the reply.
+Andrés, 2026-11-09 (t21: "que es esto, mucho texto"): aim for 2-3 short lines in plain Spanish, one line per point.
+Keep run numbers, ids, sha and file:line out of the body. Put them behind a link or in the attached file. If the
+6 lines are not enough, the reply is still too long: cut it, do not split it into more messages.
 
 ## The plan: "Claude va a hacer"
 
@@ -121,5 +124,9 @@ the ticket already holds. English, no secrets.
 
 ## Closing
 
-Only Andrés closes a ticket he asked (`Marcar hecho`). The owner closes its own `claude_asks` tickets with
-`MESA ticket close <ref>` once acted on, after the final handoff and the `mesa/<ref>` upsert.
+When the work is finished, the lead closes the ticket and moves its card to done, whether Andrés asked for the work
+or Claude did. Andrés, 2026-11-09 (t19): "¿por qué dejaste esto abierto? cierra los tickets terminados". Finished
+means: the owner sent DONE, nothing waits on Andrés, the result is posted in the ticket in 2-3 lines, and the
+`mesa/<ref>` upsert and the final handoff are written. A ticket is NOT finished while it is only an open
+conversation in which he keeps asking for things (t3 was one): leave that kind open. If he reopens a ticket,
+it was not finished; work it again.
