@@ -119,7 +119,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
   return {
     dayLong: `${longDay(now)} · ${clock(now)}`,
     dayShort: shortDay(now),
-    stations: { ...counts.stations, done: counts.doneToday },
+    stations: { ...counts.stations, done: counts.itemsDoneToday },
     rows,
     details,
     band: items.map((i) => ({ id: i.id, source: i.source, station: i.station, taskId: i.taskId })),
@@ -127,7 +127,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
     leadFocus: leadFocus ? { ticketRef: leadFocus.ticketRef, title: leadFocus.title, until: clock(new Date(leadFocus.expiresAt)) } : null,
     health,
     done,
-    doneToday: counts.doneToday,
+    doneToday: counts.itemsDoneToday,
     checkedAt: clock(checked ?? now),
     nextCheckAt: next ? clock(new Date(next)) : null,
     firstRun: all.length === 0 && r.tasks.list().length === 0 && !setup.every((s) => s.connected),

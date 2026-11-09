@@ -3,7 +3,7 @@
 import type { Db } from "../db/sqlite";
 import { fromRows } from "../db/util";
 import { SIMULATED_SCHEME } from "../domain/sandbox";
-import type { DoneRows } from "../domain/week";
+import { countOn, groupWeek, localDay, weekOf, type DoneRows } from "../domain/week";
 import { TASK_IGNORED } from "./ignored";
 
 export interface DoneQuery {
@@ -15,8 +15,22 @@ export interface DoneQuery {
   includeSamples?: boolean;
 }
 
+/**
+ * Sample rows ("Datos de muestra.") show only on a board that has nothing real yet (the seeded board);
+ * once a real ticket exists they are left out.
+ */
+export const showSamples = (db: Db): boolean => (db.prepare("SELECT COUNT(*) AS n FROM tickets WHERE is_sample = 0").get() as { n: number }).n === 0;
+
 export function weekRepo(db: Db) {
   return {
+    /** Whether sample rows count (see showSamples). */
+    showSamples: () => showSamples(db),
+    /** "Hecho hoy": what the page's week shows for today, deduped the same way (rail, Ajustes and /semana agree). */
+    doneToday(now: Date = new Date()): number {
+      const week = weekOf(now);
+      const groups = groupWeek(this.done({ start: week.startIso, end: week.endIso, includeSamples: showSamples(db) }));
+      return countOn(groups, localDay(now));
+    },
     done(q: DoneQuery): DoneRows {
       const sample = (a: string) => (q.includeSamples ? "" : ` AND ${a}.is_sample = 0`);
       const win = [q.start, q.end];
@@ -63,7 +77,7 @@ export function weekRepo(db: Db) {
       const tasks = fromRows<DoneRows["tasks"][number]>(
         db
           .prepare(
-            `SELECT a.id, a.title, a.project, a.updated_at AS at, a.ticket_id, a.is_sample,
+            `SELECT a.id, a.title, a.project, a.source, a.updated_at AS at, a.ticket_id, a.is_sample,
                     COALESCE((SELECT li.url FROM items li WHERE li.task_id = a.id AND li.url IS NOT NULL ORDER BY li.received_at LIMIT 1), a.gh_content_url) AS url,
                     t.ref AS ticket_ref, t.project AS ticket_project
                FROM tasks a LEFT JOIN tickets t ON t.id = a.ticket_id

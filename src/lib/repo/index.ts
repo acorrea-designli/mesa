@@ -88,7 +88,8 @@ function counts(db: Db, now = new Date()): Counts {
     tickets: n("SELECT COUNT(*) AS n FROM tickets WHERE status <> 'closed'"),
     salidas: n("SELECT COUNT(*) AS n FROM salidas WHERE status IN ('pending','scheduled','queued_until_back')"),
     approvals: n("SELECT COUNT(*) AS n FROM approvals WHERE status = 'pending'"),
-    doneToday: n(`SELECT COUNT(*) AS n FROM items WHERE station = 'done' AND updated_at >= ? AND NOT ${ITEM_IGNORED("items")}`, dayStart.toISOString()),
+    doneToday: weekRepo(db).doneToday(now),
+    itemsDoneToday: n(`SELECT COUNT(*) AS n FROM items WHERE station = 'done' AND updated_at >= ? AND NOT ${ITEM_IGNORED("items")}`, dayStart.toISOString()),
     stations,
   };
 }

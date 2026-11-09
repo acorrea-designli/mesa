@@ -319,6 +319,13 @@ Every number that matters has a mark; the screen is never a table of text.
 - **History chart:** % used across the window as a 2px ink line (round joins) over hairline gridlines at 0, 50 and 100, with a dashed `dim` straight pace line from 0 at the start to 100 at the reset. A crosshair and a dot read the nearest point's exact time and %; the arrow keys walk the points. No history yet: the axes with a dotted line and one line of copy.
 - **Tokens nuevos** (input + cache writes + output) are the hero number; cache reads appear once, in `mute`. Billions read "1.310 M", never "G".
 
+### Semana (/semana, opened from "Hecho hoy")
+The same drawn idiom as Uso, in ink only (the kinds and projects are not sources). Every class is `hc-`-prefixed, the page root included, so nothing collides with the global modifiers (`.btn.sm`, `.dot.sm`).
+- **Hero:** the week's total as a 56px tabular number (44px on the phone) with "en la semana", and "N hoy" in `mute` on the current week. N is the rail's "Hecho hoy" number: both come from the same domain function (`countOn` over the week's deduped groups), so they cannot disagree.
+- **Day columns (Semana, por día):** Monday to Sunday in Bogota, ink columns with the count on top, empty and future days a dotted baseline, today's label in ink. A column with work is a link that narrows the page to that day (the selected one is underlined, the others step back to `dim`, "Ver la semana completa" returns); the default is the whole week.
+- **Ranked bars (Qué se hizo, Por proyecto):** 6px round-capped ink bars, biggest first, a tabular ink value, zero kinds omitted. The project rows are the filter: each is a link, the active one is underlined, "Todos" stays beside the title. On the phone a row is its name and value over a full-width bar, so a label never clips.
+- **Detail by project:** name, count and the mix in `mute` ("20 tickets · 13 reviews"), then up to six rows, newest first: the short date (the time when one day is shown), a 16px source line stub (tickets Claude, reviews GitHub, messages their destination, cards their own line), the ticket ref or kind in `mute`, the title, Ticket or Abrir. "+N más" opens the rest in place.
+
 ## Do's and Don'ts
 
 ### Do:

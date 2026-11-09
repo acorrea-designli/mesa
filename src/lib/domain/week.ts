@@ -1,6 +1,6 @@
 // /semana: the week's done work (pure). Week range in America/Bogota, project normalization, grouping,
 // dedupe and the plain-text copy. Facts from the DB only; nothing here reads a clock or the database.
-import type { Destination } from "./types";
+import type { Destination, Source } from "./types";
 
 // ---------- week range ----------
 
@@ -84,6 +84,13 @@ export function normalizeProject(raw: string | null | undefined, grouping: "clie
   return p;
 }
 
+/** A sent message belongs to the line of the place it went to. */
+export function destinationSource(d: Destination): Source {
+  if (d.kind === "slack_thread" || d.kind === "slack_channel") return "slack";
+  if (d.kind === "github_review" || d.kind === "github_comment") return "github";
+  return "basecamp";
+}
+
 /** A salida carries no project of its own: the repo or Basecamp project it goes to stands in. */
 export function destinationProject(d: Destination): string {
   if (d.kind === "github_review" || d.kind === "github_comment") return d.repo;
@@ -131,6 +138,8 @@ export interface DoneRows {
     title: string;
     project: string;
     url: string | null;
+    /** The line the card came from. */
+    source: Source;
     at: string;
     ticketId: string | null;
     ticketRef: string | null;
@@ -144,7 +153,14 @@ export interface Entry {
   kind: Kind;
   /** ISO instant. */
   at: string;
+  /** The copy line: tickets carry their ref ("t62 · Release"). */
   title: string;
+  /** The title alone, for rows that show the tag apart. */
+  name: string;
+  /** The row's own label: a ticket's ref, else the kind in singular ("review", "mensaje", "tarjeta"). */
+  tag: string;
+  /** The line the work belongs to: tickets are Claude's, reviews GitHub's, messages their destination's, cards their own. */
+  source: Source;
   /** Where the line points: a Mesa path (`/tickets?t=t36`) or an external URL; null when there is nothing to open. */
   href: string | null;
   external: boolean;
@@ -180,7 +196,7 @@ export function groupWeek(rows: DoneRows, grouping: "client" | "repo" = GROUPING
   };
 
   for (const t of rows.tickets) {
-    add(t.project, { id: t.id, kind: "tickets", at: t.closedAt, title: `${t.ref} · ${t.title}`, href: ticketHref(t.ref), external: false, isSample: t.isSample });
+    add(t.project, { id: t.id, kind: "tickets", at: t.closedAt, title: `${t.ref} · ${t.title}`, name: t.title, tag: t.ref, source: "claude", href: ticketHref(t.ref), external: false, isSample: t.isSample });
   }
   for (const s of rows.salidas) {
     if (s.reviewId) continue;
@@ -190,18 +206,21 @@ export function groupWeek(rows: DoneRows, grouping: "client" | "repo" = GROUPING
       kind: "mensajes",
       at: s.sentAt,
       title: s.title || "(sin título)",
+      name: s.title || "(sin título)",
+      tag: "mensaje",
+      source: destinationSource(s.destination),
       href: link,
       external: Boolean(s.permalink),
       isSample: s.isSample,
     });
   }
   for (const v of rows.reviews) {
-    add(inherit(v.ticketProject, v.repo), { id: v.id, kind: "reviews", at: v.at, title: `${v.repo}#${v.pr}`, href: prUrl(v.repo, v.pr), external: true, isSample: v.isSample });
+    add(inherit(v.ticketProject, v.repo), { id: v.id, kind: "reviews", at: v.at, title: `${v.repo}#${v.pr}`, name: `${v.repo}#${v.pr}`, tag: "review", source: "github", href: prUrl(v.repo, v.pr), external: true, isSample: v.isSample });
   }
   for (const c of rows.tasks) {
     if (c.ticketId && closedIds.has(c.ticketId)) continue;
     const href = c.url ?? (c.ticketRef ? ticketHref(c.ticketRef) : null);
-    add(inherit(c.ticketProject, c.project), { id: c.id, kind: "tarjetas", at: c.at, title: c.title, href, external: Boolean(c.url), isSample: c.isSample });
+    add(inherit(c.ticketProject, c.project), { id: c.id, kind: "tarjetas", at: c.at, title: c.title, name: c.title, tag: "tarjeta", source: c.source, href, external: Boolean(c.url), isSample: c.isSample });
   }
 
   const groups: ProjectGroup[] = [];
@@ -220,6 +239,78 @@ export function groupWeek(rows: DoneRows, grouping: "client" | "repo" = GROUPING
 /** Keep one project (by its normalized name), or all of them. An unknown name yields []. */
 export const filterGroups = (groups: ProjectGroup[], project: string | null): ProjectGroup[] => (project ? groups.filter((g) => g.name === project) : groups);
 
+// ---------- the page's numbers ----------
+
+/** The Bogota calendar day an entry falls on. */
+export const entryDay = (e: Entry): string => localDay(new Date(e.at));
+
+const entriesOf = (groups: ProjectGroup[]): Entry[] => groups.flatMap((g) => g.sections.flatMap((s) => s.entries));
+
+/** Everything done in these groups. */
+export const doneTotal = (groups: ProjectGroup[]): number => groups.reduce((n, g) => n + g.count, 0);
+
+/** Done on one Bogota day. With the week's groups and today's date this is "Hecho hoy" (rail, Ajustes and the page). */
+export const countOn = (groups: ProjectGroup[], day: string): number => entriesOf(groups).filter((e) => entryDay(e) === day).length;
+
+/** The groups narrowed to one Bogota day: empty sections and projects drop out, counts are recomputed. */
+export function onDay(groups: ProjectGroup[], day: string): ProjectGroup[] {
+  const out: ProjectGroup[] = [];
+  for (const g of groups) {
+    const sections = g.sections
+      .map((s) => ({ ...s, entries: s.entries.filter((e) => entryDay(e) === day) }))
+      .filter((s) => s.entries.length > 0);
+    if (sections.length) out.push({ name: g.name, count: sections.reduce((n, s) => n + s.entries.length, 0), sections });
+  }
+  return out;
+}
+
+export interface DayCount {
+  /** YYYY-MM-DD. */
+  day: string;
+  count: number;
+  /** After today: nothing can have been done yet. */
+  future: boolean;
+  today: boolean;
+}
+
+/** Monday to Sunday of the week starting `monday`, with what was done each day. */
+export function dayCounts(groups: ProjectGroup[], monday: string, today: string): DayCount[] {
+  const per = new Map<string, number>();
+  for (const e of entriesOf(groups)) per.set(entryDay(e), (per.get(entryDay(e)) ?? 0) + 1);
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = addDays(monday, i);
+    return { day, count: per.get(day) ?? 0, future: day > today, today: day === today };
+  });
+}
+
+export interface KindCount {
+  kind: Kind;
+  label: string;
+  count: number;
+}
+
+/** Done per kind, biggest first (ties keep the fixed kind order); kinds with nothing are left out. */
+export function kindCounts(groups: ProjectGroup[]): KindCount[] {
+  const n = new Map<Kind, number>();
+  for (const g of groups) for (const s of g.sections) n.set(s.kind, (n.get(s.kind) ?? 0) + s.entries.length);
+  return KINDS.filter((k) => (n.get(k) ?? 0) > 0)
+    .map((k) => ({ kind: k, label: KIND_LABEL[k], count: n.get(k)! }))
+    .sort((a, b) => b.count - a.count);
+}
+
+const KIND_ONE: Record<Kind, [string, string]> = {
+  tickets: ["ticket", "tickets"],
+  mensajes: ["mensaje", "mensajes"],
+  reviews: ["review", "reviews"],
+  tarjetas: ["tarjeta", "tarjetas"],
+};
+
+/** "20 tickets · 13 reviews · 1 mensaje": a project's mix, in the fixed kind order. */
+export const breakdownLabel = (g: ProjectGroup): string => g.sections.map((s) => `${s.entries.length} ${KIND_ONE[s.kind][s.entries.length === 1 ? 0 : 1]}`).join(" · ");
+
+/** A project's entries as one list, newest first. */
+export const newestFirst = (g: ProjectGroup): Entry[] => g.sections.flatMap((s) => s.entries).sort((a, b) => b.at.localeCompare(a.at) || a.title.localeCompare(b.title));
+
 // ---------- copy ----------
 
 /**
@@ -227,7 +318,7 @@ export const filterGroups = (groups: ProjectGroup[], project: string | null): Pr
  * its external link (a Mesa path means nothing to a client, so tickets carry none).
  */
 export function weekText(groups: ProjectGroup[], range: { from: string; to: string }, fmtDate: (iso: string) => string): string {
-  const out: string[] = [`Semana del ${range.from} al ${range.to}`];
+  const out: string[] = [range.from === range.to ? `Día ${range.from}` : `Semana del ${range.from} al ${range.to}`];
   for (const g of groups) {
     out.push("", g.name);
     for (const s of g.sections) {

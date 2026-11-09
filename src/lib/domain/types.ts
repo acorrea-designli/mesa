@@ -436,7 +436,10 @@ export interface Counts {
   tickets: number;
   salidas: number;
   approvals: number; // pending permission approvals
+  /** Everything done today as /semana counts it (tickets closed, messages sent, reviews approved, cards done). */
   doneToday: number;
+  /** Items in station done since midnight: Hoy's own "Hecho hoy" figure. */
+  itemsDoneToday: number;
   stations: Record<Station, number>;
 }
 

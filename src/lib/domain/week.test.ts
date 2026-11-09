@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Destination } from "./types";
-import { filterGroups, groupWeek, mondayOf, normalizeProject, NO_PROJECT, weekOf, weekText, type DoneRows } from "./week";
+import { breakdownLabel, countOn, dayCounts, destinationSource, doneTotal, filterGroups, groupWeek, kindCounts, mondayOf, newestFirst, normalizeProject, NO_PROJECT, onDay, weekOf, weekText, type DoneRows } from "./week";
 
 describe("week range (America/Bogota)", () => {
   it("runs Monday 00:00 to the next Monday 00:00 Bogota", () => {
@@ -74,6 +74,7 @@ const task = (id: string, o: Partial<DoneRows["tasks"][number]> = {}): DoneRows[
   title: `Tarjeta ${id}`,
   project: "",
   url: null,
+  source: "claude",
   at: "2026-11-10T17:00:00.000Z",
   ticketId: null,
   ticketRef: null,
@@ -182,5 +183,103 @@ describe("weekText", () => {
         "- mar 10 nov · Mensaje s1 — https://example.test/s1",
       ].join("\n"),
     );
+  });
+});
+
+// Week of Mon 9 Nov 2026 (Bogota is UTC-5). Tue 10: 10:00, 11:00, 13:00, 12:00 Bogota; Wed 11: 00:30 Bogota.
+const busy = () =>
+  groupWeek(
+    rows({
+      tickets: [ticket("t1", "mesa"), ticket("t2", "mesa", "2026-11-11T05:30:00.000Z")],
+      salidas: [salida("s1", { destination: gh("mesa") })],
+      reviews: [review("r1", "o/mesa"), review("r2", "o/mesa", { at: "2026-11-10T03:30:00.000Z" })],
+      tasks: [task("c1", { project: "mesa", source: "basecamp" })],
+    }),
+  );
+
+describe("the page's numbers", () => {
+  it("dayCounts: Monday to Sunday in Bogota, with future and today flagged", () => {
+    const d = dayCounts(busy(), "2026-11-09", "2026-11-11");
+    expect(d.map((x) => x.day)).toEqual(["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"]);
+    // r2 at 03:30Z is Mon 22:30 Bogota; t2 at 05:30Z is Wed 00:30 Bogota.
+    expect(d.map((x) => x.count)).toEqual([1, 4, 1, 0, 0, 0, 0]);
+    expect(d.map((x) => x.future)).toEqual([false, false, false, true, true, true, true]);
+    expect(d.filter((x) => x.today).map((x) => x.day)).toEqual(["2026-11-11"]);
+    expect(d.reduce((n, x) => n + x.count, 0)).toBe(doneTotal(busy()));
+  });
+
+  it("dayCounts: an empty week is seven zeros", () => {
+    expect(dayCounts([], "2026-11-09", "2026-11-09").map((x) => x.count)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it("kindCounts: biggest first, ties in the fixed kind order, empty kinds left out", () => {
+    expect(kindCounts(busy()).map((k) => [k.kind, k.label, k.count])).toEqual([
+      ["tickets", "Tickets cerrados", 2],
+      ["reviews", "Reviews aprobadas", 2],
+      ["mensajes", "Mensajes enviados", 1],
+      ["tarjetas", "Tarjetas hechas", 1],
+    ]);
+    expect(kindCounts(groupWeek(rows({ tickets: [ticket("t1", "mesa")] })))).toHaveLength(1);
+    expect(kindCounts([])).toEqual([]);
+  });
+
+  it("countOn and onDay agree: today's total is the day's slice of the week, deduped like the week", () => {
+    const g = groupWeek(
+      rows({
+        tickets: [ticket("tk1", "mesa", "2026-11-09T15:00:00.000Z")],
+        // Closed Monday, done Tuesday: a card of a ticket closed this week is that ticket, so it is not counted again.
+        tasks: [task("c1", { ticketId: "tk1", ticketRef: "tk1", ticketProject: "mesa" }), task("c2")],
+      }),
+    );
+    expect(countOn(g, "2026-11-09")).toBe(1);
+    expect(countOn(g, "2026-11-10")).toBe(1);
+    const tue = onDay(busy(), "2026-11-10");
+    expect(doneTotal(tue)).toBe(countOn(busy(), "2026-11-10"));
+    expect(tue.every((x) => x.count === x.sections.reduce((n, s) => n + s.entries.length, 0))).toBe(true);
+    expect(onDay(busy(), "2026-11-13")).toEqual([]);
+  });
+
+  it("onDay drops the projects and kinds that have nothing that day", () => {
+    const g = groupWeek(rows({ tickets: [ticket("t1", "mesa"), ticket("t2", "prospec-admin", "2026-11-11T15:00:00.000Z")], reviews: [review("r1", "o/mesa", { at: "2026-11-11T15:00:00.000Z" })] }));
+    expect(onDay(g, "2026-11-10").map((x) => [x.name, x.sections.map((s) => s.kind)])).toEqual([["Mesa", ["tickets"]]]);
+  });
+
+  it("each entry carries its line and tag: tickets Claude, reviews GitHub, messages by destination, cards by source", () => {
+    const sl: Destination = { kind: "slack_thread", workspace: "w", channel: "#c", postAs: "x" };
+    const bc: Destination = { kind: "basecamp_comment", project: "P", postAs: "x" };
+    expect(destinationSource(sl)).toBe("slack");
+    expect(destinationSource(bc)).toBe("basecamp");
+    expect(destinationSource(gh("a/b"))).toBe("github");
+    const g = groupWeek(
+      rows({
+        tickets: [ticket("t1", "mesa")],
+        salidas: [salida("s1", { destination: sl, ticketProject: "mesa", ticketRef: "t1" }), salida("s2", { destination: bc, ticketProject: "mesa" })],
+        reviews: [review("r1", "o/mesa")],
+        tasks: [task("c1", { project: "mesa", source: "slack" })],
+      }),
+    );
+    const by = Object.fromEntries(newestFirst(g[0]!).map((e) => [e.id, [e.source, e.tag, e.name]]));
+    expect(by).toEqual({
+      t1: ["claude", "t1", "Hacer t1"],
+      s1: ["slack", "mensaje", "Mensaje s1"],
+      s2: ["basecamp", "mensaje", "Mensaje s2"],
+      r1: ["github", "review", "o/mesa#7"],
+      c1: ["slack", "tarjeta", "Tarjeta c1"],
+    });
+  });
+
+  it("newestFirst lists a project's entries across kinds, latest first", () => {
+    const g = groupWeek(rows({ tickets: [ticket("t1", "mesa")], reviews: [review("r1", "o/mesa")], salidas: [salida("s1", { destination: gh("mesa") })] }));
+    expect(newestFirst(g[0]!).map((e) => e.id)).toEqual(["r1", "s1", "t1"]);
+  });
+
+  it("breakdownLabel: counts per kind, singular at one", () => {
+    const g = groupWeek(rows({ tickets: [ticket("t1", "mesa"), ticket("t2", "mesa")], reviews: [review("r1", "o/mesa")] }));
+    expect(breakdownLabel(g[0]!)).toBe("2 tickets · 1 review");
+  });
+
+  it("weekText names the day when the selection is one day", () => {
+    const g = groupWeek(rows({ tickets: [ticket("t1", "mesa")] }));
+    expect(weekText(g, { from: "mar 10 nov", to: "mar 10 nov" }, () => "mar 10 nov").split(String.fromCharCode(10))[0]).toBe("Día mar 10 nov");
   });
 });

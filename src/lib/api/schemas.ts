@@ -375,6 +375,8 @@ export const sandboxPushInput = z.object({
 export const weekQuery = z.object({
   semana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").optional(),
   proyecto: z.string().trim().min(1).max(120).optional(),
+  /** One day of the week (YYYY-MM-DD) to narrow the page to; a day outside the week is ignored. */
+  dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD").optional(),
 });
 
 const rateWindow = z.object({
