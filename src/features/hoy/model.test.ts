@@ -85,6 +85,14 @@ describe("rows", () => {
     expect(r.excerpt).toMatch(/^Último dato \d\d:\d\d · Slack no responde$/);
   });
 
+  it("carries the files chip of an item with meta.files, and none otherwise", () => {
+    expect(itemRow(base, "09:02").files).toBeNull();
+    const img = { ...base, source: "slack" as const, meta: { files: [{ id: "F0CG7DCM8KC", name: "image.png", mime: "image/png" }] } };
+    expect(itemRow(img, "09:02").files?.label).toBe("imagen");
+    const two = { ...img, meta: { files: [{ id: "a", name: "a", mime: "image/png" }, { id: "b", name: "b", mime: "application/pdf" }] } };
+    expect(itemRow(two, "09:02").files?.label).toBe("adjunto · 2");
+  });
+
   it("keeps the tag but notes the pause for a degraded source", () => {
     const h = mapHealth(state("github", "degraded", { backoffUntil: "2026-11-03T16:05:00.000Z" }));
     const r = itemRow(base, "09:02", h);

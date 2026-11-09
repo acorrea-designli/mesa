@@ -33,6 +33,15 @@ describe("cards", () => {
     expect(c.sources).toEqual(["github", "basecamp"]);
   });
 
+  it("shows a files chip when a linked item carries meta.files", () => {
+    const slack = { id: "i1", source: "slack" as const, title: "x", url: null, project: "Sebastián", meta: { files: [{ id: "F1", name: "image.png", mime: "image/png" }] } };
+    expect(toCard(task({ source: "slack" }), "09:02", [slack]).files).toEqual({ kind: "imagen", label: "imagen", count: 1 });
+    const pdf = { ...slack, id: "i2", meta: { files: [{ id: "F2", name: "a.pdf", mime: "application/pdf" }] } };
+    expect(toCard(task({ source: "slack" }), "09:02", [slack, pdf]).files?.label).toBe("adjunto · 2");
+    expect(toCard(task({ source: "slack" }), "09:02", [{ ...slack, meta: {} }]).files).toBeNull();
+    expect(toCard(task(), "09:02").files).toBeNull();
+  });
+
   it("names Slack channels and Claude tickets", () => {
     expect(chipLabel({ id: "a", source: "slack", title: "", url: null, project: "", meta: { channel: "#scout-dev" } })).toBe("Slack #scout-dev");
     expect(chipLabel({ id: "a", source: "claude", title: "", url: null, project: "", meta: { ticketRef: "b14" } })).toBe("Ticket b14");

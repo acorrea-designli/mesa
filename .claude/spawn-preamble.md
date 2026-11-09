@@ -73,3 +73,12 @@ no `&&`, no pipes), so it matches the allow rule.
     spawned you without a named team), send the message to `main` with its first line starting `TO <name>:`, e.g.
     `TO tl-t10: READY t10 ...`. The lead relays it as is and sends the reply back the same way. Never stall waiting
     on a name that does not resolve.
+18. **Read every attachment before you draft or answer** (t41: a DM carried a screenshot nobody opened and the draft
+    was wrong). Before you draft, answer, summarize or plan from a Slack or Basecamp message: (a) read the source
+    message in detailed mode (`slack_read_thread` or `slack_read_channel` with `response_format: "detailed"`; search
+    output omits files) plus the 3-5 messages before it; (b) open every file it lists: Slack
+    `slack_read_file <file id>`; Basecamp `get_upload` for an upload record, `download_file` for the content of a
+    `<bc-attachment>` or upload found with `get_by_url`; (c) a short message that says "aquí", "esto", "esta", "this"
+    or "here" points at an attachment or a link, so open it; (d) a file you cannot open (no tool, an error, a type
+    you cannot read): send `BLOCKED <ticket> cannot read <name> (<why>)` to your owner instead of guessing. Say in
+    your draft or reply what you read from each file.

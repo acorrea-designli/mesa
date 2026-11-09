@@ -3,6 +3,7 @@
 import type { StatusTone } from "@/components/ui/primitives";
 import type { Approval, Destination, Item, Salida, Source, Station, WaitOn } from "@/lib/domain/types";
 import { STATION_LABEL } from "@/lib/domain/types";
+import { chipOfMeta, type FilesChip } from "@/lib/domain/files";
 import type { SourceHealth } from "@/components/shell/health";
 import type { IgnoredRow, IgnoreTarget } from "../ignore/model";
 
@@ -28,6 +29,8 @@ export interface HoyRow {
   stale: boolean;
   waitsOnYou: boolean;
   taskId: string | null;
+  /** "imagen" / "adjunto" when the message carries files (meta.files); items only. */
+  files?: FilesChip | null;
   /** The project "Ignorar proyecto «X»" would ignore (items only; never salidas). */
   ignore?: IgnoreTarget | null;
   /** What "Saltar" skips and what Deshacer restores; null for done items and samples (items only). */
@@ -192,6 +195,7 @@ export function itemRow(i: Item, time: string, health?: SourceHealth): HoyRow {
     stale,
     waitsOnYou: i.waitOn === "you" && i.station !== "done",
     taskId: i.taskId,
+    files: chipOfMeta(i.meta),
   };
 }
 

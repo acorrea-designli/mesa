@@ -49,7 +49,12 @@ on Mesa's Hoy and Andrés decides.
    dropped; Basecamp: add `--scan-since <newest unread_at seen>` after a catch-up), back to 1. No message, no summary.
 4. **Stage 2, the triage**, only for the new messages or notifications that survived step 3: classify them with `mesa-sweep` § 2 / § 3
    (for Slack: read the thread when the ask is unclear and check whether Andrés already answered in that
-   conversation), then one `MESA item upsert --json -` per item that waits on him. The dedupe key is the
+   conversation). **Files**: search output omits them, so every Slack message you classify "Te esperan" is read once
+   with `slack_read_thread` and `response_format: "detailed"`; a `Files: name (ID: F…, mime, size)` line puts
+   `[imagen] ` (all `image/*`) or `[adjunto] ` at the start of the excerpt and `meta.files = [{id, name, mime}]` on
+   the item. A Basecamp recording or comment whose content has `<bc-attachment>` or uploads gets the same marker and
+   `meta.files = [{id or sgid, name, mime, url}]`, from the content you already read (`mesa-sweep` § 2 and § 3 "Files").
+   You record files, you never open them. Then one `MESA item upsert --json -` per item that waits on him. The dedupe key is the
    `externalId`: Slack `<channelId>:<ts>`, Basecamp `<recordingId>` or `<recordingId>#<commentId>` (an assignment: its recording id); upserts are
    idempotent, so a repeat is harmless. Then `TICK report <source> --new <items upserted> --watermark <newest ts or
    ISO seen, noise included>` (Basecamp: the newest probe `created_at`; after a catch-up also `--scan-since <newest

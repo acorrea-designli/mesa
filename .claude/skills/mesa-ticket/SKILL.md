@@ -105,6 +105,12 @@ wake `ticket.reopened { ref, repo, pr, oldHead, newHead }`; pushes by Andrés or
 
 - Reference another ticket with `--ref <ref>` on ask, or `@t12` in the body; reference a PR, recording or thread
   by URL. The lead resolves `@` refs to the live owner of that ticket when work spans both.
+- **Read every attachment before you draft or answer** (preamble rule 18). A Slack or Basecamp message that is the
+  source of a ticket, a draft or an answer is read in detailed mode (`slack_read_thread` / `slack_read_channel` with
+  `response_format: "detailed"`) with the 3-5 messages before it, and every file it lists is opened (`slack_read_file`;
+  Basecamp `get_upload`, `download_file`). An item with `meta.files` (Hoy shows an "imagen" or "adjunto" chip) always
+  has files to open. "Aquí", "esto", "esta" points at an attachment or a link. A file that cannot be opened is
+  `BLOCKED <ticket> cannot read <name>` to the owner, never a guess.
 - Files Andrés attaches arrive in `ticket context` as attachments with a local path; read them by path. Files you
   produce (PDFs, plans) live in your scratch folder and are named in the reply by absolute path.
 

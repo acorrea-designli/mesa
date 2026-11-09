@@ -62,6 +62,16 @@ export function LinkChip({ source, children, href }: { source?: Source; children
   );
 }
 
+/** "imagen" / "adjunto" (count when more than one): the message carries files Claude must open. Neutral chip, text only. */
+export function FilesBadge({ chip, className }: { chip: { label: string } | null | undefined; className?: string }) {
+  if (!chip) return null;
+  return (
+    <Chip variant="plain" className={cx("files", className)}>
+      {chip.label}
+    </Chip>
+  );
+}
+
 // ---------- Status tag ----------
 /** you = solid ink ("Te espera" / "Por enviar" only). ok = clean. cl = waits on Claude. off = offline. */
 export type StatusTone = "you" | "ok" | "cl" | "off" | "plain";

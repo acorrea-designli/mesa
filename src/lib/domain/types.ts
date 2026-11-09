@@ -84,7 +84,7 @@ export interface Task {
   /** The ticket Claude works this card in ("Dárselo a Claude"); null for a note-only card. */
   ticketId: string | null;
   /** Items linked to this task (chips on the card). Filled by the repository. */
-  items?: Pick<Item, "id" | "source" | "title" | "url" | "project">[];
+  items?: Pick<Item, "id" | "source" | "title" | "url" | "project" | "meta">[];
   /** Who works the linked ticket (the owner chip). Filled by the repository; null without a ticket. */
   owner?: TaskOwner | null;
 }

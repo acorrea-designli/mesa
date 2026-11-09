@@ -116,6 +116,19 @@
   --c: var(--ink);
   --t: var(--raise);
 }
+/* "imagen" / "adjunto": the message carries files (meta.files). Neutral, 22px like the link chips. */
+.chip.files {
+  height: 22px;
+  padding: 0 7px;
+  margin-right: 8px;
+  font-size: 12px;
+  vertical-align: 1px;
+  color: var(--mute);
+}
+.tb-foot .chip.files,
+.kind .chip.files {
+  margin-right: 0;
+}
 
 /* Link chip on cards (22px) */
 .lk {

@@ -5,7 +5,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Attachment, PlannedAction, TicketMessage, TicketRef } from "@/lib/domain/types";
-import { Alert, Chip, srcClass } from "@/components/ui/primitives";
+import { Alert, Chip, FilesBadge, srcClass } from "@/components/ui/primitives";
+import { chipOfMeta } from "@/lib/domain/files";
 import { useToast } from "@/components/ui/interactive";
 import { arrive, confirmPick, usePress } from "@/lib/motion";
 import { ApprovalCard } from "@/features/approvals/ApprovalCard";
@@ -206,6 +207,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, onComposing }:
           <div className="kind">
             <DirLine direction={t.direction} />
             {t.ref} · {dirLabel(t.direction)} · {hm(t.createdAt)}
+            <FilesBadge chip={chipOfMeta(data.item?.meta)} />
           </div>
           <h2>{t.title}</h2>
           {first?.body && first.body !== t.title ? <div className="ctx">{first.body}</div> : null}

@@ -29,7 +29,7 @@ export interface ThreadData {
   handoffs: Handoff[];
   approvals: Approval[];
   reviews: Review[];
-  item: Pick<Item, "id" | "source" | "title" | "excerpt" | "url" | "project"> | null;
+  item: Pick<Item, "id" | "source" | "title" | "excerpt" | "url" | "project" | "meta"> | null;
   salidas: (Pick<Salida, "id" | "status" | "source" | "title"> & { simulated?: boolean })[];
   refTitles: Record<string, string>;
 }
@@ -101,7 +101,7 @@ export function threadData(r: Repos, idOrRef: string): ThreadData {
     ? (() => {
         try {
           const it = r.items.list().find((x) => x.id === ticket.itemId);
-          return it ? { id: it.id, source: it.source, title: it.title, excerpt: it.excerpt, url: it.url, project: it.project } : null;
+          return it ? { id: it.id, source: it.source, title: it.title, excerpt: it.excerpt, url: it.url, project: it.project, meta: it.meta } : null;
         } catch {
           return null;
         }

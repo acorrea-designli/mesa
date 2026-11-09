@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BrokenLine, SourceDot } from "@/components/line/Line";
-import { Alert, Btn, LinkChip, StatusTag } from "@/components/ui/primitives";
+import { Alert, Btn, FilesBadge, LinkChip, StatusTag } from "@/components/ui/primitives";
 import { Sheet, Tabs, useToast } from "@/components/ui/interactive";
 import { SOURCE_LABEL, STATION_LABEL, STATIONS, type Source, type Station } from "@/lib/domain/types";
 import { confirmPick, useArrive, useLift, usePress } from "@/lib/motion";
@@ -149,6 +149,7 @@ function CardView({
       <h2 className="tb-t">{c.title}</h2>
       {done ? null : (
         <div className="tb-foot">
+          <FilesBadge chip={c.files} />
           {c.chips.map((x) => (
             <LinkChip key={x.label} source={x.source} href={x.url ?? undefined}>
               {x.label}
@@ -687,7 +688,7 @@ export function TableroView({ data }: { data: TableroData }) {
                       >
                         {selecting ? <span className={on ? "tb-ph-box on" : "tb-ph-box"} aria-hidden="true" /> : null}
                         <b>{c.title}</b>
-                        <small>{[...c.chips.map((x) => x.label), c.time].join(" · ")}</small>
+                        <small>{[...(c.files ? [c.files.label] : []), ...c.chips.map((x) => x.label), c.time].join(" · ")}</small>
                         {c.wait || c.owner || (!data.sandbox && c.syncState !== "synced") ? (
                           <span className="tb-ph-tags">
                             {c.owner ? <span className="lk src-claude tb-owner">{c.owner.label}</span> : null}

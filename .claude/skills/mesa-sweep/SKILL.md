@@ -121,6 +121,14 @@ notification: read its recording or comment (`get_by_url`) and apply the three r
 is upserted as it is (`kind: "assignment"`, no `get_by_url`). The probe watermark advances to the newest hit's
 `created_at`, the catch-up window to the newest notification's `unread_at`; they never share a value.
 
+**Files (t41).** A recording or comment whose content (the `get_by_url` result, HTML) has a `<bc-attachment>` tag
+or lists uploads carries files. Its `excerpt` starts with `[imagen] ` when every file is an image
+(`content_type` `image/*`), else `[adjunto] `, then the ask in one line, and `meta.files` =
+`[{"id":"<sgid, or the upload id when there is no sgid>","name":"<filename>","mime":"<content_type>","url":"<the attachment or upload URL>"}]`,
+one entry per file. Take them from the content you already read; no extra call, and the sweeper never opens the
+files (`get_upload`, `download_file` belong to the agents that draft or answer, preamble rule 18). A Basecamp-hosted
+image with no `content_type` in the tag: judge by the filename extension (png, jpg, jpeg, gif, webp, heic).
+
 ## 3. Slack: who is waiting on him (slack-triage logic)
 
 Source of truth: `C:/Users/z4yross/.claude-work/commands/slack-triage.md` (read it; never edit it). His user id is
@@ -134,12 +142,25 @@ Source of truth: `C:/Users/z4yross/.claude-work/commands/slack-triage.md` (read 
 Group by conversation, keep the last incoming message, classify hard: **Te esperan** (an explicit ask AND he did not
 write in that conversation afterwards; in a group DM it must be addressed to him) → upsert
 `{"source":"slack","externalId":"<channelId>:<ts>","kind":"message","title":"<person> · <one-line ask>","url":"<permalink>","project":"<#channel-name, or the person for a DM>","meta":{"channel":"<#channel-name or DM person>"},"waitOn":"you"}`
-(`project` and `meta.channel` are what "Ignorar proyecto «X»" shows; the ignore key is the channel id).
+(`project` and `meta.channel` are what "Ignorar proyecto «X»" shows; the ignore key is the channel id). With files,
+`excerpt` and `meta.files` are added (§ Files below).
 **Ya respondiste** and **Ruido** are not upserted; give their counts in the summary line only. Names, never user ids.
+
+**Files (t41).** Search output omits attached files (a DM with a screenshot looked like plain text). So every
+message classified **Te esperan** is read once more, before its upsert, with `slack_read_thread` and
+`response_format: "detailed"` (its channel id and its own `ts`); noise and "Ya respondiste" are never read
+this way. When the detailed read lists `Files: image.png (ID: F0CG7DCM8KC, image/png, 153.1 KB)`:
+- `excerpt` starts with `[imagen] ` when every file is `image/*`, else `[adjunto] `, then the ask in one line;
+- `meta.files` = `[{"id":"F0CG7DCM8KC","name":"image.png","mime":"image/png"}]`, one entry per file (id, name, mime
+  from that line). Mesa shows an "imagen" or "adjunto" chip from it. The sweeper only detects and records files; it
+  never opens them (`slack_read_file` belongs to the agents that draft or answer, preamble rule 18).
+No `Files:` line: no marker and no `meta.files`. The extra read costs one call per "Te esperan" message, never one per
+message probed.
 
 In the periodic triage the input is only the new messages from the probe (ts above the watermark): group them by
 conversation and apply the same rule; checking "he wrote afterwards" uses `slack_read_thread` or the conversation's
-latest messages, not the three full searches. The `externalId` is `<channelId>:<ts>`, so a message seen again
+latest messages, not the three full searches; the detailed `slack_read_thread` of each **Te esperan** message is also
+the file check above (one read serves both). The `externalId` is `<channelId>:<ts>`, so a message seen again
 upserts the same item. The watermark advances to the newest ts seen, noise included.
 
 ## 4. Close (on-demand pass only)

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { BrandMark, BrokenLine, SourceDot } from "@/components/line/Line";
-import { Btn } from "@/components/ui/primitives";
+import { Btn, FilesBadge } from "@/components/ui/primitives";
 import { Tabs, useToast } from "@/components/ui/interactive";
 import { STATION_LABEL, STATIONS, type Source, type Station } from "@/lib/domain/types";
 import { useArrive, usePress } from "@/lib/motion";
@@ -110,6 +110,7 @@ function Row({ r, selected, onOpen, menu, pick }: { r: HoyRow; selected: boolean
         <span className="src-name">{NAME[r.source]}</span>
       </span>
       <span className="subj">
+        <FilesBadge chip={r.files} />
         {r.subject}
         <small>{r.excerpt}</small>
       </span>

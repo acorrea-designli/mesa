@@ -1,6 +1,7 @@
 // Tablero B view model (pure, unit tested): lanes by source, five station columns,
 // card chips and wait tags, caps with "+N más", and the GitHub Project sync summary.
 import type { StatusTone } from "@/components/ui/primitives";
+import { chipOfMeta, type FilesChip } from "@/lib/domain/files";
 import { ignoreTarget, type IgnoreTarget } from "../ignore/model";
 import { SOURCES, STATIONS, type Item, type Source, type Station, type SyncState, type Task, type TaskOwner, type TicketStatus, type WaitOn } from "@/lib/domain/types";
 
@@ -33,6 +34,8 @@ export interface Card {
   /** Distinct sources of the linked items: two or more draws an interchange. */
   sources: Source[];
   chips: Chip[];
+  /** "imagen" / "adjunto" when a linked item's message carries files (meta.files). */
+  files?: FilesChip | null;
   wait: { tone: StatusTone; label: string } | null;
   syncState: SyncState;
   isSample: boolean;
@@ -121,6 +124,7 @@ export function toCard(t: Task, time: string, linked: LinkedItem[] = t.items ?? 
     time,
     sources,
     chips,
+    files: chipOfMeta(...linked.map((i) => i.meta)),
     wait: cardWait(t.waitOn, t.station),
     syncState: t.syncState,
     isSample: t.isSample,

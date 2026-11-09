@@ -30,6 +30,10 @@ test("merge keeps existing keys and adds every Mesa hook once", () => {
   assert.deepEqual(again.settings, settings);
 });
 
+test("allow list opens attachments (t41): Slack files and Basecamp uploads", () => {
+  for (const t of ["mcp__claude_ai_Slack__slack_read_file", "mcp__basecamp__get_upload", "mcp__basecamp__download_file"]) assert.ok(ALLOW.includes(t), t);
+});
+
 test("merge without --allow touches no permissions", () => {
   const { settings } = mergeSettings({}, { hooks, env: ENV, allow: [] });
   assert.equal(settings.permissions, undefined);

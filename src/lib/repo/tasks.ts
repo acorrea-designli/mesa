@@ -54,8 +54,9 @@ export function tasksRepo(db: Db) {
   };
 
   const linked = (taskId: string) =>
-    fromRows<Pick<Item, "id" | "source" | "title" | "url" | "project">>(
-      db.prepare("SELECT id, source, title, url, project FROM items WHERE task_id = ? ORDER BY received_at").all(taskId),
+    fromRows<Pick<Item, "id" | "source" | "title" | "url" | "project" | "meta">>(
+      db.prepare("SELECT id, source, title, url, project, meta FROM items WHERE task_id = ? ORDER BY received_at").all(taskId),
+      { json: ["meta"] },
     );
 
   const get = (id: string): Task => {
