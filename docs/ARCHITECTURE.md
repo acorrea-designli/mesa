@@ -249,6 +249,8 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 
 Salida events over HTTP: `propose`, `approve {version}`, `undo`, `sent {permalink?}`, `failed {error}`, `retry`, `deny`, `schedule {at, version}`, `unschedule`, `request_delete`, `deleted`, `request_restore`, `restored`, `hold {reason}`, `unqueue`, `bounce {reason}`. `release`, `expire` and `resume` are internal (sweeper, health).
 
+Browser notifications (`src/features/notify/`, no server part): the `Notifier` mounted in `AppShell` listens to `/api/stream` (`useLive`, ticket, salida, review, approval; its 5 s poll fallback too) and re-reads `GET /api/tickets?status=waiting_andres`, `/api/salidas?status=pending` and `/api/approvals?status=pending`, because frames carry no state. The pure `decide()` turns that set plus the seen keys into the notifications to show (`ticket:<id>` while it waits, `salida:<id>:v<n>`, `approval:<id>`), so an undo (same version), a reload or a second tab never repeats one. The seen keys live in localStorage (bounded); one tab notifies (`navigator.locks`, a heartbeat without it) and none while a visible, focused tab is looking. The permission is asked only from the rail control "Activar avisos".
+
 ## 9. Wake protocol and CLI
 
 **Wake (long-poll):** the lead blocks on `mesa wait` (`GET /api/wait?session=lead`). The server answers as soon as there are events after the session's cursor (targeted or broadcast), or with `[]` after `timeout`.

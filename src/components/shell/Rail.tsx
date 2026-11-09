@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Counts } from "@/lib/domain/types";
 import { BrandMark, BrokenLine, LineStub } from "../line/Line";
+import { NotifyToggle } from "@/features/notify/NotifyToggle";
 import { ThemeToggle } from "../ui/interactive";
 import { usePress } from "@/lib/motion";
 import type { SourceHealth } from "./health";
@@ -60,6 +61,7 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
         <span className="nav foot">
           Hecho hoy <b>{counts.doneToday}</b>
         </span>
+        <NotifyToggle className="nav theme" />
         <ThemeToggle className="theme" />
       </div>
     </aside>

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Counts } from "@/lib/domain/types";
+import { Notifier } from "@/features/notify/Notifier";
 import { getSourceHealth } from "@/lib/integrations/health";
 import type { SourceHealth } from "./health";
 import { PhoneTabs } from "./PhoneTabs";
@@ -33,6 +34,7 @@ export function AppShell({
         {children}
       </main>
       <PhoneTabs counts={counts} />
+      <Notifier />
     </div>
   );
 }
