@@ -68,10 +68,13 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 ## Ask (reviewer → Andrés)
 
 The findings are the ask: Mesa renders them on the ticket's review card with pr-monitor's buttons, so there is no
-A/B question. Post one ticket reply as the summary, first line in Spanish with the counts, then the findings in
-English, numbered, in pr-review's candidate format (`[blocker|nit] path:line`, the one-line problem, `fix:`).
-Incremental passes start with `re-review <sha7>..<sha7> · K fixed · M pending · P new`; verification passes with
-`verification · K fixed · M pending`. A clean pass says so and recommends Approve. Then wait, handoff written.
+A/B question. Post one ticket reply as the summary: ONE line in Spanish with the counts and, if there is one, what
+the blocker is in plain words (e.g. `1 blocker, 1 nit: el permiso por tipo de evaluación solo lo aplica el selector.`).
+Never repeat the findings, paths, line numbers or sha in the reply: they are already on the review card. Andrés,
+2026-11-09 (t3): "en los tickets de pr hay como mucho ruido". Add a second line only for something the card cannot
+show (e.g. a merge order: "no mergear antes de be#473"). Incremental passes say `re-review: K arreglados · M
+pendientes · P nuevos`; verification passes `verificación: K arreglados · M pendientes`. A clean pass says
+`Sin hallazgos, recomiendo Approve.` Then wait, handoff written.
 
 `--ask` only on a review Andrés requested (his decision is pending on the card): that summary reply goes with `--ask`,
 so the ticket moves to "Te espera"; a reply without `--ask` or options leaves the status alone. A team review for a

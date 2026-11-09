@@ -56,11 +56,10 @@ export interface BatchTicket {
 type Linked = Pick<Item, "id" | "source" | "title" | "url" | "project">;
 
 function ticketBody(t: Task, items: Linked[]): string {
-  const lines = [t.excerpt.trim()];
-  const links = items.filter((i) => i.url).map((i) => `- ${i.title}: ${i.url}`);
-  if (links.length) lines.push(`Enlaces:\n${links.join("\n")}`);
-  lines.push(`Tarjeta del tablero: ${t.id}`);
-  return lines.filter(Boolean).join("\n\n");
+  // Short on purpose (Andrés, t3: "en los tickets de pr hay como mucho ruido"): the excerpt and the bare links.
+  // The title already names the item and the ticket carries taskId, so neither is repeated here.
+  const links = [...new Set(items.map((i) => i.url).filter((u): u is string => Boolean(u)))];
+  return [t.excerpt.trim(), links.join("\n")].filter(Boolean).join("\n\n");
 }
 
 export function dispatchRepo(db: Db) {
