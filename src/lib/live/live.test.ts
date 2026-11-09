@@ -32,6 +32,8 @@ describe("changeFromRequest", () => {
     expect(changeFromRequest("GET", "http://x/api/tasks")).toBeNull();
     expect(changeFromRequest("POST", "http://x/api/wait/ack")).toBeNull();
     expect(changeFromRequest("POST", "http://x/api/sessions")).toBeNull();
+    expect(changeFromRequest("POST", "http://x/api/push/looking")).toBeNull();
+    expect(changeFromRequest("POST", "http://x/api/push/subscription")).toBeNull();
   });
   it("publishes only successful requests", () => {
     const seen: LiveChange[] = [];

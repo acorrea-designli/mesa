@@ -15,6 +15,7 @@
     "build": "next build",
     "start": "node scripts/serve.mjs start",
     "tunnel": "node scripts/tunnel.mjs",
+    "push:keys": "node scripts/push-keys.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && pnpm test:team",
@@ -32,12 +33,14 @@
     "qrcode-generator": "2.0.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "web-push": "4.0.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/web-push": "3.6.4",
     "eslint": "10.14.0",
     "eslint-config-next": "16.4.5",
     "typescript": "6.0.3",
