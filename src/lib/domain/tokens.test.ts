@@ -125,5 +125,8 @@ describe("compactTokens", () => {
     expect(compactTokens(1234)).toBe("1,2 k");
     expect(compactTokens(42_000)).toBe("42 k");
     expect(compactTokens(4_250_000)).toBe("4,3 M");
+    expect(compactTokens(999_000_000)).toBe("999 M");
+    expect(compactTokens(1_268_300_000)).toBe("1,3 G");
+    expect(compactTokens(12_000_000_000)).toBe("12 G");
   });
 });

@@ -159,9 +159,10 @@ export function summarize(b: Buckets, now: Date): TokenSummary {
   return { day, weekStart, today: slice(b, day, day), week: slice(b, weekStart, day) };
 }
 
-/** 1 234 -> "1,2 k"; 4 200 000 -> "4,2 M" (es decimal comma). */
+/** 1 234 -> "1,2 k"; 4 200 000 -> "4,2 M"; 1 268 300 000 -> "1,3 G" (es decimal comma; a week of cache reads reaches G). */
 export function compactTokens(n: number): string {
   const f = (v: number, unit: string) => `${(Math.round(v * 10) / 10).toString().replace(".", ",")} ${unit}`;
+  if (n >= 1_000_000_000) return f(n / 1_000_000_000, "G");
   if (n >= 1_000_000) return f(n / 1_000_000, "M");
   if (n >= 1_000) return f(n / 1_000, "k");
   return String(n);
