@@ -60,10 +60,17 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap; /* the pane is narrow beside the thread: the actions drop to a second line instead of overflowing */
   margin-bottom: 12px;
 }
 .tk-tools .tabs {
   flex-wrap: nowrap;
+}
+.tk-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }
 .tk-new {
   margin-left: auto;
@@ -1205,7 +1212,14 @@
     scrollbar-width: none;
     width: 100%;
   }
-  .tk-new {
+  .tk-acts {
+    flex-direction: column;
+    align-items: stretch;
+    margin-left: 0;
+    width: 100%;
+  }
+  .tk-new,
+  .tk-readall {
     margin-left: 0;
     width: 100%;
     height: 44px;

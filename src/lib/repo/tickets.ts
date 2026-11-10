@@ -252,6 +252,23 @@ export function ticketsRepo(db: Db) {
         .get(t.id, nowIso(now)) as { ticketId: string; seenAt: string };
     },
 
+    /**
+     * "Marcar todo como leído": every ticket that is unread right now gets seen_at = now (same
+     * MAX rule as markSeen), in one transaction. A message that lands later is newer and flags again.
+     */
+    markAllSeen(now = new Date()): { count: number; seenAt: string } {
+      const seenAt = nowIso(now);
+      return tx(db, () => {
+        const ids = [...this.unreadIds()];
+        const upsert = db.prepare(
+          `INSERT INTO ticket_reads (ticket_id, seen_at) VALUES (?, ?)
+           ON CONFLICT(ticket_id) DO UPDATE SET seen_at = MAX(seen_at, excluded.seen_at)`,
+        );
+        for (const id of ids) upsert.run(id, seenAt);
+        return { count: ids.length, seenAt };
+      });
+    },
+
     list(f: { status?: TicketStatus; open?: boolean } = {}): Ticket[] {
       const where: string[] = [];
       const args: string[] = [];

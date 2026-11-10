@@ -49,6 +49,8 @@ export const ticketApi = {
   },
   /** Andrés has the ticket open: clears its "new" flag server side. */
   seen: (id: string) => call<{ ticketId: string; seenAt: string }>(`${T(id)}/seen`, { body: {} }),
+  /** "Marcar todo como leído": clears the "new" flag of every unread ticket server side. */
+  seenAll: () => call<{ count: number; seenAt: string }>("/api/tickets/seen", { body: {} }),
   close: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "close", by: "andres" } }),
   reopen: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "reopen", by: "andres" } }),
   /** "Pídeme permiso": posts the marked message and wakes the owner (ticket.permission_requested). */

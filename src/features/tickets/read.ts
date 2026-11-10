@@ -47,6 +47,8 @@ export interface TicketsData {
   selected: ThreadData | null;
   /** The selected ticket has a message Andrés has not seen: opening it marks it seen. */
   selectedUnread: boolean;
+  /** Unread tickets across all tickets, not only the current tab: "Marcar todo como leído" shows while it is above 0. */
+  unreadCount: number;
   listening: { owner: string; listening: boolean; label: string };
   pick: PickTicket[];
   verbs: string[];
@@ -264,6 +266,7 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
     rows: rows.map(row),
     closedToday: tab === "open" ? closedToday.map(row) : [],
     selectedUnread: Boolean(selected && unread.has(selected.ticket.id)),
+    unreadCount: unread.size,
     counts: { open: open.length, you: waitsOnYou.length, closedToday: closedToday.length },
     selected,
     listening,
