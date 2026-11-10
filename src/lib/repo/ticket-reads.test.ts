@@ -58,6 +58,43 @@ describe("ticket read state", () => {
     expect(r.tickets.unreadIds().has(t.id)).toBe(false); // older than what he saw
   });
 
+  it("markAllSeen clears every flag and counts the tickets it cleared", () => {
+    const a = claudeAsks("A", at(1));
+    const b = claudeAsks("B", at(2));
+    const mine = andresAsks("C", at(3));
+    r.tickets.markSeen(a.id, at(500));
+    r.tickets.addMessage(a.id, { author: "claude", body: "otra" }, at(1000));
+    expect(r.tickets.unreadIds()).toEqual(new Set([a.id, b.id]));
+    expect(r.tickets.markAllSeen(at(2000))).toEqual({ count: 2, seenAt: at(2000).toISOString() });
+    expect(r.tickets.unreadIds().size).toBe(0);
+    expect(r.db.prepare("SELECT ticket_id FROM ticket_reads WHERE ticket_id = ?").get(mine.id)).toBeUndefined(); // never unread: untouched
+  });
+
+  it("markAllSeen with nothing unread returns count 0", () => {
+    expect(r.tickets.markAllSeen(at(1000)).count).toBe(0);
+    const t = claudeAsks("A");
+    r.tickets.markSeen(t.id, at(1000));
+    expect(r.tickets.markAllSeen(at(2000))).toEqual({ count: 0, seenAt: at(2000).toISOString() });
+  });
+
+  it("a message created after markAllSeen makes that ticket unread again, and the others stay seen", () => {
+    const a = claudeAsks("A", at(1));
+    const b = claudeAsks("B", at(2));
+    r.tickets.markAllSeen(at(1000));
+    r.tickets.addMessage(a.id, { author: "claude", body: "nuevo" }, at(2000));
+    expect(r.tickets.unreadIds()).toEqual(new Set([a.id]));
+    expect(r.tickets.unreadIds().has(b.id)).toBe(false);
+  });
+
+  it("markAllSeen never moves a seen-at back", () => {
+    const a = claudeAsks("A", at(1));
+    r.tickets.markSeen(a.id, at(5000));
+    r.tickets.addMessage(a.id, { author: "claude", body: "x" }, at(6000));
+    r.tickets.markAllSeen(at(3000)); // older than the message and than seen-at: the ticket stays unread
+    expect(r.tickets.unreadIds().has(a.id)).toBe(true);
+    expect(r.db.prepare("SELECT seen_at AS s FROM ticket_reads WHERE ticket_id = ?").get(a.id)).toEqual({ s: at(5000).toISOString() });
+  });
+
   it("survives a reload: the state is in the database, not in memory", () => {
     const t = claudeAsks("A");
     r.tickets.markSeen(t.id, at(1000));

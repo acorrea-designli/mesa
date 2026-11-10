@@ -136,6 +136,17 @@ describe("loadTickets read state", () => {
     expect(d.selectedUnread).toBe(true);
   });
 
+  it("unreadCount counts unread tickets across every tab and drops to 0 after markAllSeen", () => {
+    const a = claudeAsks("A", at(1000));
+    claudeAsks("B", at(2000));
+    r.tickets.transition(a.id, { type: "close", by: "andres" }, undefined, at(2500)); // closed: not in the Abiertos tab
+    const d = loadTickets(r, {}, now);
+    expect(d.counts.open).toBe(1);
+    expect(d.unreadCount).toBe(2);
+    r.tickets.markAllSeen(at(3000));
+    expect(loadTickets(r, {}, now).unreadCount).toBe(0);
+  });
+
   it("his own reply never flags the ticket", () => {
     const a = claudeAsks("A", at(1000));
     r.tickets.markSeen(a.ref, at(2000));

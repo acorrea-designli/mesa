@@ -57,6 +57,21 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [selId, unreadOpen, open]);
 
+  // "Marcar todo como leído": the server clears every flag, then the view reloads. A failure changes nothing on screen.
+  const toast = useToast();
+  const [markingAll, setMarkingAll] = useState(false);
+  const markAll = async () => {
+    setMarkingAll(true);
+    try {
+      await ticketApi.seenAll();
+      refresh();
+    } catch (e) {
+      toast({ text: e instanceof Error ? e.message : "No se pudo marcar como leído" });
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
   // Focus mode (explicit, sticky): the composer's expand control shrinks the list to a rail. Writing alone never does.
   // It ends with that same control, the rail's own button, when the ticket closes or when "Nuevo" opens.
   const [focusMode, setFocusMode] = useState(false);
@@ -118,10 +133,17 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
                 Cerrados hoy {data.counts.closedToday}
               </Link>
             </div>
-            <Link className="btn sm tk-new" href={href({ tab, new: "1" })}>
-              <IcPlus />
-              Nuevo pedido para Claude
-            </Link>
+            <div className="tk-acts">
+              {data.unreadCount > 0 ? (
+                <button className="btn sm tk-readall" type="button" disabled={markingAll} onClick={() => void markAll()}>
+                  Marcar todo como leído
+                </button>
+              ) : null}
+              <Link className="btn sm tk-new" href={href({ tab, new: "1" })}>
+                <IcPlus />
+                Nuevo pedido para Claude
+              </Link>
+            </div>
           </div>
           <div className="tk-cols" aria-hidden="true">
             <span>ID</span>
