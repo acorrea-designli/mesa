@@ -1218,8 +1218,7 @@
     margin-left: 0;
     width: 100%;
   }
-  .tk-new,
-  .tk-readall {
+  .tk-acts .btn.sm {
     margin-left: 0;
     width: 100%;
     height: 44px;

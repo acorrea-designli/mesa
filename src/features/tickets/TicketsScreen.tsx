@@ -60,17 +60,26 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
   // "Marcar todo como leído": the server clears every flag, then the view reloads. A failure changes nothing on screen.
   const toast = useToast();
   const [markingAll, setMarkingAll] = useState(false);
+  const newRef = useRef<HTMLAnchorElement>(null);
+  const refocus = useRef(false); // the button had focus: it unmounts once the flags are gone, so focus moves to "Nuevo pedido"
   const markAll = async () => {
+    refocus.current = document.activeElement?.classList.contains("tk-readall") ?? false;
     setMarkingAll(true);
     try {
       await ticketApi.seenAll();
       refresh();
     } catch (e) {
+      refocus.current = false;
       toast({ text: e instanceof Error ? e.message : "No se pudo marcar como leído" });
     } finally {
       setMarkingAll(false);
     }
   };
+  useEffect(() => {
+    if (data.unreadCount > 0 || !refocus.current) return;
+    refocus.current = false;
+    newRef.current?.focus();
+  }, [data.unreadCount]);
 
   // Focus mode (explicit, sticky): the composer's expand control shrinks the list to a rail. Writing alone never does.
   // It ends with that same control, the rail's own button, when the ticket closes or when "Nuevo" opens.
@@ -139,7 +148,7 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
                   Marcar todo como leído
                 </button>
               ) : null}
-              <Link className="btn sm tk-new" href={href({ tab, new: "1" })}>
+              <Link ref={newRef} className="btn sm tk-new" href={href({ tab, new: "1" })}>
                 <IcPlus />
                 Nuevo pedido para Claude
               </Link>
