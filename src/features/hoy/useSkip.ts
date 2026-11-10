@@ -6,7 +6,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { useToast } from "@/components/ui/interactive";
-import type { SkipTarget } from "./model";
+import { skipToast, type SkipTarget } from "./model";
 
 async function send(url: string, body?: unknown) {
   const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -43,5 +43,33 @@ export function useSkip() {
     [router, toast],
   );
 
-  return { skip };
+  /** The batch bar's Saltar: one skip call per item (no batch route), then one toast whose Deshacer restores each skipped item. */
+  const skipMany = useCallback(
+    async (targets: SkipTarget[]) => {
+      const res = await Promise.allSettled(targets.map((t) => send(`/api/items/${encodeURIComponent(t.id)}/skip`)));
+      const done = targets.filter((_, i) => res[i]?.status === "fulfilled");
+      const failed = targets.length - done.length;
+      if (done.length) router.refresh();
+      toast({
+        text: skipToast(done.length, failed),
+        duration: 8000,
+        action: done.length
+          ? {
+              label: "Deshacer",
+              onClick: () =>
+                void Promise.all(done.map((t) => send(`/api/items/${encodeURIComponent(t.id)}/unskip`, { station: t.station, waitOn: t.waitOn })))
+                  .then(() => router.refresh())
+                  .catch(() => {
+                    router.refresh();
+                    toast({ text: "No se pudo deshacer" });
+                  }),
+            }
+          : undefined,
+      });
+      return { ok: done.length, failed };
+    },
+    [router, toast],
+  );
+
+  return { skip, skipMany };
 }

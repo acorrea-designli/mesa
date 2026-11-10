@@ -5,7 +5,22 @@ import { useEffect, useRef } from "react";
 import { riseBar } from "@/lib/motion";
 import { selectedLabel } from "./model";
 
-export function BatchBar({ count, busy, onDispatch, onCancel }: { count: number; busy: boolean; onDispatch: () => void; onCancel: () => void }) {
+export function BatchBar({
+  count,
+  skippable,
+  busy,
+  onDispatch,
+  onSkip,
+  onCancel,
+}: {
+  count: number;
+  /** How many of the selected items Saltar applies to (open, non-sample); 0 disables the button. */
+  skippable: number;
+  busy: boolean;
+  onDispatch: () => void;
+  onSkip: () => void;
+  onCancel: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) riseBar(ref.current);
@@ -19,6 +34,9 @@ export function BatchBar({ count, busy, onDispatch, onCancel }: { count: number;
       <div className="tb-batch-acts">
         <button type="button" className="btn sm p" disabled={busy} onClick={onDispatch}>
           Abrir tarea y pasar a Claude
+        </button>
+        <button type="button" className="btn sm hy-batch-skip" disabled={busy || skippable === 0} onClick={onSkip}>
+          Saltar{skippable && skippable !== count ? ` (${skippable})` : ""}
         </button>
       </div>
       <button type="button" className="btn sm tb-batch-x" onClick={onCancel}>
