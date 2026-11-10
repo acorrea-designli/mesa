@@ -5,6 +5,7 @@ import type { Counts } from "@/lib/domain/types";
 import { BrandMark } from "../line/Line";
 import { NotifyToggle, SoundToggle } from "@/features/notify/NotifyToggle";
 import { ThemeToggle } from "../ui/interactive";
+import { DeckLine } from "@/features/deck/DeckLine";
 import { UsageLine } from "@/features/usage/UsageLine";
 import { usePress } from "@/lib/motion";
 import type { SourceHealth } from "./health";
@@ -46,6 +47,7 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
       </nav>
       <div className="rail-foot">
         <UsageLine />
+        <DeckLine />
         <SourceHealthList health={health} />
         <Link href="/semana" className="nav foot" aria-current={path.startsWith("/semana") ? "page" : undefined}>
           Hecho hoy <b>{counts.doneToday}</b>

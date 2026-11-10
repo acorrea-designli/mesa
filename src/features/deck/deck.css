@@ -1,0 +1,129 @@
+/*
+ * Deck (t93): the Stream Deck GitHub key's number in the rail / Ajustes, and the panel that explains it. Ink and mute
+ * only (lines carry source, never state): "Nos interesa" is ink, the rest is mute.
+ */
+.rl-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 10px 10px;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+  color: inherit;
+}
+.rl-deck:hover {
+  background: var(--raise);
+}
+.dk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.dk-row b {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.dk-row small {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.dk-age {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.rl-deck.stale .dk-row,
+.rl-deck.stale .dk-row b {
+  color: var(--mute);
+}
+.sheet .rl-deck {
+  padding: 14px 12px 8px;
+  border-radius: var(--r-control);
+}
+.sheet .dk-row {
+  font-size: 14px;
+}
+.sheet .dk-row b {
+  font-size: 17px;
+}
+.sheet .dk-row small,
+.sheet .dk-age {
+  font-size: 13px;
+}
+
+/* ---------- panel ---------- */
+.dk-panel {
+  display: grid;
+  gap: 10px;
+}
+.dk-sum {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.dk-note {
+  font-size: 13px;
+  color: var(--mute);
+}
+.dk-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dk-pr {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+}
+.dk-ref {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.dk-ref a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dk-ref small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.dk-title {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink2);
+}
+.dk-line {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--mute);
+}
+.dk-line .k {
+  margin-right: 4px;
+}
+.dk-verdict b {
+  color: var(--mute);
+}
+.dk-pr.interesa .dk-verdict b {
+  color: var(--ink);
+}
+.dk-diff {
+  color: var(--ink2);
+}

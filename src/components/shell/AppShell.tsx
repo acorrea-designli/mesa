@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Counts } from "@/lib/domain/types";
+import { DeckPanel } from "@/features/deck/DeckPanel";
 import { Notifier } from "@/features/notify/Notifier";
 import { PushSync } from "@/features/push/PushSync";
 import { InstallPrompt } from "@/features/phone/InstallPrompt";
@@ -45,6 +46,7 @@ export function AppShell({
       <PhoneTabs counts={counts} health={sources} />
       <InstallPrompt />
       <VersionBanner />
+      <DeckPanel />
       <PwaBoot />
       <Notifier />
       <PushSync />
