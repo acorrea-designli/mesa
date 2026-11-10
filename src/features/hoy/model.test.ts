@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Salida } from "@/lib/domain/types";
 import { mapHealth, railHealth } from "@/components/shell/health";
-import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, skipTarget, sourceCounts, visibleRows, waitTag, withTicketNeed } from "./model";
+import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, skipTarget, skipTargets, skipToast, sourceCounts, visibleRows, waitTag, withTicketNeed } from "./model";
 
 const base: Item = {
   id: "it_1",
@@ -61,6 +61,29 @@ describe("labels", () => {
     expect(skipTarget(open)).toEqual({ id: "it_1", station: "waiting", waitOn: "client" });
     expect(skipTarget(skipped)).toBeNull();
     expect(skipTarget({ ...open, isSample: true })).toBeNull();
+  });
+
+  it("batch Saltar sends only the selected items with a skip target, each with its own station and waitOn", () => {
+    const open = { ...base, isSample: false, station: "waiting" as const, waitOn: "client" as const };
+    const a = { kind: "item" as const, skip: skipTarget(open) };
+    const b = { kind: "item" as const, skip: skipTarget({ ...open, id: "it_2", station: "doing" as const, waitOn: "claude" as const }) };
+    const sample = { kind: "item" as const, skip: skipTarget(base) };
+    const done = { kind: "item" as const, skip: skipTarget({ ...open, station: "done" as const }) };
+    const salida = { kind: "salida" as const, skip: skipTarget(open) };
+    expect(skipTargets([a, sample, b, done, salida])).toEqual([
+      { id: "it_1", station: "waiting", waitOn: "client" },
+      { id: "it_2", station: "doing", waitOn: "claude" },
+    ]);
+    expect(skipTargets([sample, done])).toEqual([]);
+  });
+
+  it("words the batch Saltar toast, with failures", () => {
+    expect(skipToast(1, 0)).toBe("Saltado: sale de Hoy");
+    expect(skipToast(3, 0)).toBe("Saltados: 3 salen de Hoy");
+    expect(skipToast(2, 1)).toBe("Saltados: 2 salen de Hoy · No se pudo saltar 1");
+    expect(skipToast(1, 2)).toBe("Saltado: sale de Hoy · No se pudieron saltar 2");
+    expect(skipToast(0, 3)).toBe("No se pudieron saltar 3");
+    expect(skipToast(0, 1)).toBe("No se pudo saltar 1");
   });
 
   it("prefixes the project except for Claude questions", () => {

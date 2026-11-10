@@ -49,6 +49,18 @@ export interface SkipTarget {
 export const skipTarget = (i: Pick<Item, "id" | "station" | "waitOn" | "isSample">): SkipTarget | null =>
   i.station === "done" || i.isSample ? null : { id: i.id, station: i.station, waitOn: i.waitOn };
 
+/** The selected rows Saltar applies to (open, non-sample items), each with the station and waitOn Deshacer restores. */
+export const skipTargets = (rows: Pick<HoyRow, "kind" | "skip">[]): SkipTarget[] =>
+  rows.flatMap((r) => (r.kind === "item" && r.skip ? [r.skip] : []));
+
+/** The one toast after skipping a batch: "Saltados: N salen de Hoy", plus "No se pudieron saltar N" for failures. */
+export function skipToast(ok: number, failed: number): string {
+  const done = ok === 1 ? "Saltado: sale de Hoy" : `Saltados: ${ok} salen de Hoy`;
+  const fail = failed === 1 ? "No se pudo saltar 1" : `No se pudieron saltar ${failed}`;
+  if (!ok) return fail;
+  return failed ? `${done} · ${fail}` : done;
+}
+
 export interface ItemDetail {
   id: string;
   source: Source;

@@ -14,7 +14,7 @@ import { LineBand } from "../band/LineBand";
 import { BatchBar } from "./BatchBar";
 import { DonePane, FirstRunPane, ItemDetailPane, SetupList } from "./HoyDetail";
 import { hoyApi } from "./api";
-import { isCalm, sourceCounts, visibleRows, type HoyData, type HoyRow } from "./model";
+import { isCalm, skipTargets, sourceCounts, visibleRows, type HoyData, type HoyRow } from "./model";
 import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { SalidaApproval } from "@/features/salidas/SalidaApproval";
 import { clock } from "./format";
@@ -158,7 +158,7 @@ export function HoyView({ data }: { data: HoyData }) {
   const pressRef = usePress<HTMLDivElement>(".hy-row", true);
   const menu = useActionMenu();
   const { ignore } = useIgnore();
-  const { skip } = useSkip();
+  const { skip, skipMany } = useSkip();
 
   // ---------- selection (item rows only) ----------
   const picked = useMemo(() => items.filter((r) => sel.has(r.id)), [items, sel]);
@@ -285,13 +285,28 @@ export function HoyView({ data }: { data: HoyData }) {
     }
   };
 
-  // Close the phone detail if its row went away (sent, moved).
+  // Batch Saltar: only the picked items that have a skip target are sent; the selection clears once they are skipped.
+  const skippable = useMemo(() => skipTargets(picked), [picked]);
+  const skipSel = async () => {
+    if (!skippable.length) return;
+    setBusy(true);
+    try {
+      const out = await skipMany(skippable);
+      if (!out.failed) clear(); // on a partial failure the failed rows stay selected so they can be retried
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Close the phone detail if its row went away (sent, moved, skipped). `selected` falls back to the first row, so
+  // the opened row's own key is what tells that it is gone.
+  const rowGone = !selected || (selKey !== null && !all.some((r) => r.key === selKey));
   useEffect(() => {
-    if (open && !selected) {
+    if (open && rowGone) {
       const id = window.setTimeout(() => setOpen(false), 0);
       return () => window.clearTimeout(id);
     }
-  }, [open, selected]);
+  }, [open, rowGone]);
 
   const openRow = (r: HoyRow) => {
     setSelKey(r.key);
@@ -479,7 +494,7 @@ export function HoyView({ data }: { data: HoyData }) {
           {detail}
         </fieldset>
       </aside>
-      {selecting ? <BatchBar count={picked.length} busy={busy || live.offline} onDispatch={() => void dispatchSel()} onCancel={clear} /> : null}
+      {selecting ? <BatchBar count={picked.length} skippable={skippable.length} busy={busy || live.offline} onDispatch={() => void dispatchSel()} onSkip={() => void skipSel()} onCancel={clear} /> : null}
       {menu.node}
     </div>
   );

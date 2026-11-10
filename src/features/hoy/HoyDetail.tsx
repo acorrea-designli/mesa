@@ -135,6 +135,20 @@ export function ItemDetailPane({ d, health }: { d: ItemDetail; health?: SourceHe
             Crear tarea
           </Btn>
         )}
+        {d.skip ? (
+          // Phone only (hoy.css hides it above 720px, where the small link below stays): a real button in the docked bar.
+          <Btn
+            className="hy-skip"
+            disabled={busy}
+            onClick={() => {
+              if (!d.skip) return;
+              setBusy(true);
+              void skip(d.skip).finally(() => setBusy(false));
+            }}
+          >
+            Saltar
+          </Btn>
+        ) : null}
         {!d.ticketRef && !d.isSample ? (
           <Btn className="hy-go" disabled={busy} onClick={() => void handToClaude()}>
             Abrir tarea y pasar a Claude
@@ -150,7 +164,7 @@ export function ItemDetailPane({ d, health }: { d: ItemDetail; health?: SourceHe
           {d.skip ? (
             <button
               type="button"
-              className="ig-link"
+              className="ig-link hy-skip-link"
               disabled={busy}
               onClick={() => {
                 if (!d.skip) return;
