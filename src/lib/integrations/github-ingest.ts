@@ -87,6 +87,9 @@ export interface PrDetail {
   /** Andrés's latest review on the PR, if any: APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED. */
   myReview: string | null;
   myReviewHead: string | null;
+  /** Same pulls/<n> read: draft flag and author, for the deck panel's verdict (absent when GitHub did not send them). */
+  draft?: boolean;
+  author?: string;
 }
 
 export async function fetchPrDetail(gh: GhRunner, repo: string, n: number, login: string): Promise<PrDetail> {
@@ -95,6 +98,8 @@ export async function fetchPrDetail(gh: GhRunner, repo: string, n: number, login
     deletions: number;
     head: { sha: string; ref?: string };
     base?: { ref?: string };
+    draft?: boolean;
+    user?: { login?: string } | null;
   };
   const reviews = JSON.parse((await ghApi(gh, `repos/${repo}/pulls/${n}/reviews?per_page=100`)).body) as {
     state: string;
@@ -110,6 +115,8 @@ export async function fetchPrDetail(gh: GhRunner, repo: string, n: number, login
     baseRef: pr.base?.ref ?? null,
     myReview: mine?.state ?? null,
     myReviewHead: mine?.commit_id ?? null,
+    draft: Boolean(pr.draft),
+    author: pr.user?.login ?? "",
   };
 }
 
