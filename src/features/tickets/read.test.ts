@@ -136,15 +136,25 @@ describe("loadTickets read state", () => {
     expect(d.selectedUnread).toBe(true);
   });
 
-  it("unreadCount counts unread tickets across every tab and drops to 0 after markAllSeen", () => {
+  it("unreadCount counts the unread tickets some tab shows, whatever the tab, and drops to 0 after markAllSeen", () => {
     const a = claudeAsks("A", at(1000));
     claudeAsks("B", at(2000));
-    r.tickets.transition(a.id, { type: "close", by: "andres" }, undefined, at(2500)); // closed: not in the Abiertos tab
+    r.tickets.transition(a.id, { type: "close", by: "andres" }, undefined, at(2500)); // closed today: only in Cerrados hoy
     const d = loadTickets(r, {}, now);
     expect(d.counts.open).toBe(1);
     expect(d.unreadCount).toBe(2);
+    expect(loadTickets(r, { tab: "closed" }, now).unreadCount).toBe(2);
     r.tickets.markAllSeen(at(3000));
     expect(loadTickets(r, {}, now).unreadCount).toBe(0);
+  });
+
+  it("an old closed ticket that is unread is in no tab, so it does not count; markAllSeen still clears it", () => {
+    const old = claudeAsks("Viejo", new Date("2026-10-01T10:00:00Z"));
+    r.tickets.transition(old.ref, { type: "close", by: "claude" }, undefined, new Date("2026-10-01T11:00:00Z"));
+    expect(r.tickets.unreadIds().has(old.id)).toBe(true);
+    expect(loadTickets(r, {}, now).unreadCount).toBe(0);
+    expect(r.tickets.markAllSeen(at(3000)).count).toBe(1);
+    expect(r.tickets.unreadIds().size).toBe(0);
   });
 
   it("his own reply never flags the ticket", () => {
