@@ -180,3 +180,52 @@ test("G5: another calendar than the approved one is refused; primary passes", as
   assert.equal(await rule(run(lead, CREATE, { ...call, calendarId: "team@group.calendar.google.com" }, other.fetchImpl)), null);
   assert.equal((await run(lead, CREATE, { ...call, calendarId: "primary" }, other.fetchImpl))?.rule, "G5");
 });
+
+test("G5: an empty first alias never hides a second one", async () => {
+  const mesa = mesaWith(salida());
+  const hidden = [
+    [{ ...call, attendees: [], guests: ["boss@example.com"] }, /invitees/],
+    [{ ...call, description: [], notes: "surprise" }, /description/],
+    [{ ...call, calendarId: [], calendar_id: "boss@example.com" }, /calendar: approved primary/],
+    [{ ...call, summary: "", title: "Otro" }, /title/],
+  ];
+  for (const [input, re] of hidden) {
+    const r = await run(lead, CREATE, input, mesa.fetchImpl);
+    assert.equal(r?.rule, "G5", JSON.stringify(input));
+    assert.match(r.reason, re);
+  }
+  // an empty alias next to the right one is still a pass
+  assert.equal(await rule(run(lead, CREATE, { ...call, guests: [], notes: "", calendar_id: [] }, mesa.fetchImpl)), null);
+});
+
+test("G5: only the real Meet keys count as the Meet flag; the conferenceDataVersion companion is allowed", async () => {
+  const mesa = mesaWith(salida());
+  const r = await run(lead, CREATE, { ...call, meetingNotes: "bring slides" }, mesa.fetchImpl);
+  assert.equal(r?.rule, "G5");
+  assert.match(r.reason, /parameter not in the approved event: meetingNotes/);
+  const noFlag = await run(lead, CREATE, { ...call, addGoogleMeet: undefined, meetingNotes: "x" }, mesa.fetchImpl);
+  assert.match(noFlag.reason, /Google Meet: approved yes, call no/);
+  for (const k of ["addGoogleMeet", "add_google_meet", "withMeet", "createMeetingRoom", "google_meet", "conferenceData", "meet"]) {
+    assert.equal(eventFromCall({ title: "x", [k]: true }).meet, true, k);
+  }
+  const api = { ...call, addGoogleMeet: undefined, conferenceData: { createRequest: { requestId: "r1" } }, conferenceDataVersion: 1 };
+  assert.equal(await rule(run(lead, CREATE, api, mesa.fetchImpl)), null);
+});
+
+test("G5: the approved time zone is compared when the call names one", async () => {
+  const mesa = mesaWith(salida());
+  const r = await run(lead, CREATE, { ...call, start: "2026-11-12T10:00:00-05:00", end: "2026-11-12T10:30:00-05:00", timeZone: "America/New_York" }, mesa.fetchImpl);
+  assert.equal(r?.rule, "G5");
+  assert.match(r.reason, /time zone: approved America\/Bogota, call America\/New_York/);
+  const utcTimes = { ...call, start: "2026-11-12T15:00:00Z", end: "2026-11-12T15:30:00Z" };
+  delete utcTimes.timeZone;
+  assert.equal(await rule(run(lead, CREATE, utcTimes, mesa.fetchImpl)), null); // no zone named: the instants decide
+});
+
+test("G5: an unknown parameter set to false is still a setting and is refused", async () => {
+  const mesa = mesaWith(salida());
+  const r = await run(lead, CREATE, { ...call, guestsCanInviteOthers: false }, mesa.fetchImpl);
+  assert.equal(r?.rule, "G5");
+  assert.match(r.reason, /guestsCanInviteOthers/);
+  assert.equal(await rule(run(lead, CREATE, { ...call, guestsCanInviteOthers: null, extra: "", more: [] }, mesa.fetchImpl)), null);
+});

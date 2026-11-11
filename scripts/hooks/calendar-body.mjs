@@ -65,8 +65,9 @@ export function parseEventBody(body) {
 
 // ---------- the connector call ----------
 
+// The first alias that SAYS something: it skips exactly what isEmpty skips, so an empty alias never hides a second one.
 const pick = (o, ...keys) => {
-  for (const k of keys) if (o?.[k] !== undefined && o[k] !== null && o[k] !== "") return o[k];
+  for (const k of keys) if (!isEmpty(o?.[k])) return o[k];
   return undefined;
 };
 
@@ -120,10 +121,18 @@ const GROUPS = {
   calendar: ["calendarId", "calendar_id", "calendar"],
 };
 const KNOWN = new Set(Object.values(GROUPS).flat());
-const MEET_KEY = /meet|conference/i;
+// The Google Meet flag under the names a connector may use (addGoogleMeet, add_google_meet, withMeet, conferenceData,
+// createMeetingRoom, ...). Anchored: a key that merely contains "meet" (meetingNotes) is an unknown parameter.
+const MEET_KEY = /^(?:(?:add|with|create|include|enable|has)[_-]?)?(?:google[_-]?)?(?:meet|meeting[_-]?room|conference)(?:[_-]?(?:data|link|solution|request))?$/i;
+// The Google API's conferenceDataVersion (0/1) only enables conferenceData: it neither adds nor duplicates a Meet.
+const CONFERENCE_VERSION = /^conference[_-]?data[_-]?version$/i;
 
 // A parameter that says nothing (absent, null, "", [], {}, false) does not count as present.
 const isEmpty = (v) => v === undefined || v === null || v === "" || v === false || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
+
+// For an UNKNOWN parameter `false` is a setting too (guestsCanInviteOthers: false changes the event), so only a value
+// that is unset counts as nothing.
+const isUnset = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
 
 /** The fields a create_event call is about to write, read tolerantly from the connector's parameter names, plus `problems`: anything the approved event cannot cover. */
 export function eventFromCall(ti) {
@@ -136,7 +145,7 @@ export function eventFromCall(ti) {
   }
   const meetKeys = Object.keys(call).filter((k) => MEET_KEY.test(k));
   if (meetKeys.filter((k) => !isEmpty(call[k])).length > 1) problems.push(`duplicate parameters for Google Meet: ${meetKeys.filter((k) => !isEmpty(call[k])).join(", ")}`);
-  for (const k of Object.keys(call)) if (!KNOWN.has(k) && !MEET_KEY.test(k) && !isEmpty(call[k])) problems.push(`parameter not in the approved event: ${k}`);
+  for (const k of Object.keys(call)) if (!KNOWN.has(k) && !MEET_KEY.test(k) && !CONFERENCE_VERSION.test(k) && !isUnset(call[k])) problems.push(`parameter not in the approved event: ${k}`);
 
   const startRaw = pick(call, ...GROUPS.start);
   const endRaw = pick(call, ...GROUPS.end);
@@ -151,6 +160,7 @@ export function eventFromCall(ti) {
     invitees: [...new Set(emailsOf(pick(call, ...GROUPS.attendees)))].sort(),
     meet: meetKeys.some((k) => truthyMeet(call[k])),
     description: String(pick(call, ...GROUPS.description) ?? "").trim(),
+    timeZone: tz ? String(tz) : null,
     calendar: pick(call, ...GROUPS.calendar) === undefined ? null : String(pick(call, ...GROUPS.calendar)),
     problems,
   };
@@ -159,6 +169,7 @@ export function eventFromCall(ti) {
 /** The differences between the approved event and the call: [] means the call is exactly the approved event. `destination` is the salida's (its calendar). */
 export function eventMismatches(approved, call, destination = {}) {
   const out = [...(call.problems ?? [])];
+  if (call.timeZone && call.timeZone !== approved.timeZone) out.push(`time zone: approved ${approved.timeZone}, call ${call.timeZone}`);
   const wantCal = destination?.calendar || "primary";
   if (call.calendar && call.calendar !== wantCal) out.push(`calendar: approved ${wantCal}, call ${call.calendar}`);
   if (call.title !== approved.title) out.push(`title: approved «${approved.title}», call «${call.title}»`);
