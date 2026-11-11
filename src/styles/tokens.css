@@ -4,7 +4,7 @@
  * ports without renaming. DESIGN.md name -> token:
  *   ground --gnd · deep --deep · porcelain --raise · rule --rule · rule-soft --rule2
  *   edge --edge · ink --ink · ink-soft --ink2 · need-ink --need · mute --mute · dim --dim
- *   line-<src> --gh/--sl/--cl/--bc · text-<src> --gh-ink/... · tint-<src> --gh-tint/...
+ *   line-<src> --gh/--sl/--cl/--bc/--ca · text-<src> --gh-ink/... · tint-<src> --gh-tint/... (--ca = Calendario, the fifth source)
  * Light "Tokio" is the default; dark "Grafito" is [data-theme="dark"].
  */
 :root {
@@ -22,19 +22,22 @@
   --mute: #5d5f68; /* all secondary text */
   --dim: #6f717a; /* non-text marks only: below AA for text */
 
-  /* Lines carry source and nothing else. */
+  /* Lines carry source and nothing else. Five sources: GitHub, Slack, Claude, Basecamp, Calendario. */
   --gh: #e60012;
   --sl: #00a3a8;
   --cl: #f39700;
   --bc: #00b07c;
+  --ca: #5b5bd6;
   --gh-ink: #b8000e;
   --sl-ink: #00777b;
   --cl-ink: #8a5300;
   --bc-ink: #006b4d;
+  --ca-ink: #3d3dab;
   --gh-tint: #fbe6e5;
   --sl-tint: #e6f6f5;
   --cl-tint: #fdf0dc;
   --bc-tint: #e2f5ed;
+  --ca-tint: #e9e8fb;
 
   /* Semáforo marks (Salidas). Shape carries meaning; text stays --ink on tints. */
   --keep-tint: #dcefc9;
@@ -98,14 +101,17 @@
   --sl: #2ec5c2;
   --cl: #ffb428;
   --bc: #3cc983;
+  --ca: #8a8aff;
   --gh-ink: #ff8f86;
   --sl-ink: #74dcd9;
   --cl-ink: #ffc965;
   --bc-ink: #7fdca4;
+  --ca-ink: #b3b3ff;
   --gh-tint: #3a1f1e;
   --sl-tint: #123130;
   --cl-tint: #3a2d14;
   --bc-tint: #15301f;
+  --ca-tint: #23233f;
 
   --keep-tint: #25371b;
   --keep-ink: #a8d98a;
