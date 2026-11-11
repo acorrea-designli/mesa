@@ -40,7 +40,7 @@ export function hookEntries(repo, node, env = "live") {
   return {
     PreToolUse: [
       {
-        matcher: "SendMessage|Bash|PowerShell|mcp__claude-in-chrome__navigate|mcp__claude_ai_Slack__.*|mcp__basecamp__.*",
+        matcher: "SendMessage|Bash|PowerShell|mcp__claude-in-chrome__navigate|mcp__claude_ai_Slack__.*|mcp__basecamp__.*|mcp__claude_ai_Google_Calendar__.*|mcp__google-calendar__.*",
         hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.rails), timeout: 15 }],
       },
     ],
@@ -115,7 +115,20 @@ export function mergeSettings(current, { hooks, env, allow, forceEnv = false, st
     s.hooks[event] ??= [];
     for (const entry of entries) {
       const script = entry.hooks[0].command.match(/scripts\/hooks\/[\w-]+\.mjs/)[0];
-      const there = s.hooks[event].some((e) => (e.hooks ?? []).some((h) => String(h.command ?? "").replace(/\\/g, "/").includes(script)));
+      const mine = (e) => (e.hooks ?? []).some((h) => String(h.command ?? "").replace(/\\/g, "/").includes(script));
+      const there = s.hooks[event].some(mine);
+      if (there && entry.matcher) {
+        // An older install lacks the tools added since (Google Calendar, t112): widen its matcher, never narrow it.
+        for (const e of s.hooks[event].filter(mine)) {
+          if (typeof e.matcher !== "string") continue;
+          const have = e.matcher.split("|");
+          const missing = entry.matcher.split("|").filter((alt) => !have.includes(alt));
+          if (missing.length) {
+            e.matcher = [...have, ...missing].join("|");
+            added.push(`hooks.${event}: matcher + ${missing.join("|")}`);
+          }
+        }
+      }
       if (!there) {
         s.hooks[event].push(entry);
         added.push(`hooks.${event}: ${script}`);

@@ -166,3 +166,15 @@ test("--dry-run plans the statusLine and writes nothing", () => {
   assert.ok(log.some((l) => l === "merge   statusLine: scripts/statusline.mjs"));
   assert.equal(readFileSync(join(target, ".claude", "settings.json"), "utf8"), "{}");
 });
+
+test("an older install gets the Google Calendar tools added to its rails matcher, never narrowed", () => {
+  const cmd = hooks.PreToolUse[0].hooks[0].command;
+  const old = { hooks: { PreToolUse: [{ matcher: "SendMessage|Bash|mcp__claude_ai_Slack__.*", hooks: [{ type: "command", command: cmd }] }] } };
+  const { settings, added } = mergeSettings(old, { hooks, env: ENV, allow: [] });
+  const m = settings.hooks.PreToolUse[0].matcher.split("|");
+  assert.deepEqual(m.slice(0, 3), ["SendMessage", "Bash", "mcp__claude_ai_Slack__.*"]);
+  assert.ok(m.includes("mcp__claude_ai_Google_Calendar__.*") && m.includes("mcp__google-calendar__.*"));
+  assert.equal(settings.hooks.PreToolUse.length, 1);
+  assert.ok(added.some((a) => a.includes("matcher +")));
+  assert.deepEqual(mergeSettings(settings, { hooks, env: ENV, allow: [] }).added.filter((a) => a.includes("matcher")), []);
+});

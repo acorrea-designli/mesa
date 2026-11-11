@@ -152,6 +152,24 @@ wake `ticket.reopened { ref, repo, pr, oldHead, newHead }`; pushes by Andrés or
 - Files Andrés attaches arrive in `ticket context` as attachments with a local path; read them by path. Files you
   produce (PDFs, plans) live in your scratch folder and are named in the reply by absolute path.
 
+## Meeting requests (Calendario)
+
+A ticket whose first message begins with the line `Pedido de reunión (Calendario)` and whose title starts with
+`Reunión:` comes from the Calendario screen ("Pedir a Claude"; his own words follow the marker line). It is a request
+for ONE calendar event, always proposed as a salida (`mesa-salida` § Calendar events), never created directly:
+
+1. Read what he asked (who, which day, how long, with or without Meet). Dates are Bogota; "el jueves" is the next
+   Thursday; a missing duration is 30 minutes, a missing time means you pick a free slot.
+2. `MESA calendar free --day <YYYY-MM-DD> --minutes <n>` for the slot (from the stored events; `mesa calendar status`
+   says whether the calendar is connected, and without it there are no events to check: say so in the proposal).
+3. `MESA calendar people` for each guest's address; also the ticket, Slack or Basecamp. An address you cannot find is ONE
+   question card to Andrés (A: the address, B: without that guest), never a guess.
+4. `MESA calendar propose ... --ticket <ref> --context "<slot checked, where the addresses came from>"` and answer
+   the ticket in one or two lines in Spanish: what you proposed (title, day and hour, guests) and that it waits in
+   Salidas for his signature. Plan the action as `create_event:calendar:needs_ok` when you use a plan.
+5. On `salida.released` the lead creates the event (`mesa-salida` § Send, Calendar) and closes the loop on the ticket
+   with the event link.
+
 ## Brief and handoff discipline
 
 - **Brief** (owner writes it, `MESA ticket brief <ref> --body -`, replaced in full each time): the ask in one line,
