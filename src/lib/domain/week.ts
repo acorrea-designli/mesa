@@ -1,6 +1,6 @@
 // /semana: the week's done work (pure). Week range in America/Bogota, project normalization, grouping,
 // dedupe and the plain-text copy. Facts from the DB only; nothing here reads a clock or the database.
-import type { Destination, Source } from "./types";
+import type { Destination, LineSource, Source } from "./types";
 
 // ---------- week range ----------
 
@@ -85,7 +85,8 @@ export function normalizeProject(raw: string | null | undefined, grouping: "clie
 }
 
 /** A sent message belongs to the line of the place it went to. */
-export function destinationSource(d: Destination): Source {
+export function destinationSource(d: Destination): LineSource {
+  if (d.kind === "calendar_event") return "calendar";
   if (d.kind === "slack_thread" || d.kind === "slack_channel") return "slack";
   if (d.kind === "github_review" || d.kind === "github_comment") return "github";
   return "basecamp";
@@ -94,7 +95,7 @@ export function destinationSource(d: Destination): Source {
 /** A salida carries no project of its own: the repo or Basecamp project it goes to stands in. */
 export function destinationProject(d: Destination): string {
   if (d.kind === "github_review" || d.kind === "github_comment") return d.repo;
-  if (d.kind === "slack_thread" || d.kind === "slack_channel") return "";
+  if (d.kind === "slack_thread" || d.kind === "slack_channel" || d.kind === "calendar_event") return "";
   return "project" in d ? d.project : "";
 }
 
@@ -160,7 +161,7 @@ export interface Entry {
   /** The row's own label: a ticket's ref, else the kind in singular ("review", "mensaje", "tarjeta"). */
   tag: string;
   /** The line the work belongs to: tickets are Claude's, reviews GitHub's, messages their destination's, cards their own. */
-  source: Source;
+  source: LineSource;
   /** Where the line points: a Mesa path (`/tickets?t=t36`) or an external URL; null when there is nothing to open. */
   href: string | null;
   external: boolean;

@@ -1,5 +1,6 @@
 // Pure helpers for Salidas: version stepper collapse, undo countdown, word diff,
 // schedule choices, destination route stops and short labels. Unit tested.
+import { eventWhen, parseEventBody } from "@/lib/domain/calendar-event";
 import type { ConversationLinks, Destination, Salida, SalidaDetail, SalidaVersion } from "@/lib/domain/types";
 
 // ---------- version stepper ----------
@@ -205,6 +206,15 @@ export function routeStops(d: Destination): RouteStop[] {
     if (names.length) stops.push({ label: "Menciona a", value: names.join(", ") });
     return stops;
   }
+  if (d.kind === "calendar_event") {
+    const n = d.invitees?.length ?? 0;
+    return [
+      { label: "Calendario", value: d.calendar === "primary" ? "Tu calendario principal" : d.calendar },
+      { label: "Google Meet", value: d.meet ? "Sí, se crea con el evento" : "No" },
+      { label: "Invita a", value: n ? `${n} ${n === 1 ? "persona" : "personas"}` : "Nadie: solo tú", ...(n ? { note: d.invitees!.join(", ") } : {}) },
+      { label: "Publica como", value: d.postAs },
+    ];
+  }
   const stops: RouteStop[] = [
     { label: "Repositorio", value: d.repo },
     { label: "Pull request", value: `#${d.pr}` },
@@ -226,6 +236,10 @@ export function destShort(d: Destination): string {
   if (isBasecamp(d)) {
     if (d.kind === "basecamp_campfire") return `${d.project} · Campfire`;
     return d.recordingTitle ? `${d.project} · «${d.recordingTitle}»` : d.project;
+  }
+  if (d.kind === "calendar_event") {
+    const n = d.invitees?.length ?? 0;
+    return n ? `Calendario · ${n} ${n === 1 ? "invitado" : "invitados"}` : "Calendario · solo tú";
   }
   return `${d.repo}#${d.pr}`;
 }
@@ -306,6 +320,8 @@ export function destinationUrl(s: Pick<Salida, "destination" | "permalink" | "li
       const seg = d.kind === "basecamp_campfire" ? "chats" : "recordings";
       return `https://3.basecamp.com/${basecamp}/buckets/${d.projectId}/${seg}/${d.recordingId}`;
     }
+    case "calendar_event":
+      return null; // the event link is the permalink the lead reports once it exists
     case "github_review":
     case "github_comment": {
       if (!REPO.test(d.repo) || !Number.isInteger(d.pr) || d.pr <= 0) return null;
@@ -359,7 +375,7 @@ export const conversationHref = (c: ConversationLinks | null | undefined): strin
 /** Aria label for the "Abrir destino" link: names the place it opens. */
 export const destinationLinkLabel = (d: Destination) => `Abrir destino: ${destShort(d)}`;
 
-export const sourceLabel = (s: Salida["source"]) => (s === "slack" ? "Slack" : s === "basecamp" ? "Basecamp" : "GitHub");
+export const sourceLabel = (s: Salida["source"]) => (s === "slack" ? "Slack" : s === "basecamp" ? "Basecamp" : s === "calendar" ? "Calendario" : "GitHub");
 
 /** The exact text of a version, as it will be sent. GitHub batched reviews carry it in comments. */
 export function exactBody(s: Pick<SalidaDetail, "destination">, v: SalidaVersion | undefined): string {
@@ -380,3 +396,9 @@ export function shownText(s: Pick<SalidaDetail, "status" | "currentVersion" | "a
 export const SLACK_QUICK_STATUSES: ReadonlySet<Salida["status"]> = new Set(["pending", "scheduled", "sending", "queued_until_back", "draft_created", "failed"]);
 
 export const firstLine = (s: string) => (s.split("\n").find((l) => l.trim()) ?? "").trim();
+
+/** The one line a calendar salida shows in lists: "Meet con Matt · jueves 12 nov · 10:00–10:30" (its body is the event, one field per line). */
+export function calendarLine(body: string): string {
+  const p = parseEventBody(body);
+  return p.ok ? `${p.fields.title} · ${eventWhen(p.fields)}` : firstLine(body);
+}

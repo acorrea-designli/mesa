@@ -74,7 +74,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
           <div className="k">Tu versión</div>
           <textarea className="sa-edit" value={draft} aria-label="Tu versión del texto" onChange={(e) => setDraft(e.target.value)} autoFocus />
           <div className="acts">
-            <SplitApprove slack={isSlack} version={s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : "Aprobar y enviar mi versión"} disabled={!draft.trim() || draft === text || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
+            <SplitApprove slack={isSlack} version={s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : s.source === "calendar" ? "Aprobar y crear mi versión" : "Aprobar y enviar mi versión"} disabled={!draft.trim() || draft === text || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
             {isSlack ? (
               <button className="btn" type="button" disabled={!draft.trim() || draft === text || c.busy} onClick={() => c.approveText(draft, "send")}>
                 Aprobar y que Claude lo envíe
@@ -88,7 +88,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
       ) : (
         <>
           <div className="k">
-            Texto exacto que se enviará{s.versions.length > 1 ? ` · v${s.currentVersion} de ${s.versions.length}` : ""}
+            {s.source === "calendar" ? "Evento exacto que se creará" : "Texto exacto que se enviará"}{s.versions.length > 1 ? ` · v${s.currentVersion} de ${s.versions.length}` : ""}
           </div>
           <ExactBlock s={s} text={text} marks={[]} />
           {isSlack && SLACK_QUICK_STATUSES.has(s.status) ? <SlackQuick s={s} /> : null}
@@ -98,7 +98,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
       {s.status === "pending" && c.mode === "view" ? (
         // In Hoy (compact) the row docks at the bottom of the phone detail via .hy-acts.
         <div className={compact ? "acts hy-acts" : "acts"}>
-          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button
             className="btn"
             type="button"

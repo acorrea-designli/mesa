@@ -4,7 +4,9 @@
 // decide() as the desktop which entries are new. It scans on every relevant change (debounced) and every 30 s.
 // The seen keys and the time of the last scan are persisted, so a restart within 10 minutes scans normally (what
 // entered waiting meanwhile is news) and an older one is a silent baseline (nothing floods after a long outage).
-// While any Mesa tab reports looking, new keys are remembered and nothing is sent. Never started in the sandbox.
+// While any Mesa tab reports looking, new keys are remembered and nothing is sent, except a meeting reminder (t112: ten
+// minutes before a meeting he has not declined; it carries the meeting's title and ignores the quiet rule and the
+// baseline). Never started in the sandbox.
 import { decide, HOY_TAG, shouldBaseline } from "@/features/notify/decide";
 import { isSandbox } from "../env";
 import { subscribeChanges } from "../live/bus";
@@ -17,7 +19,7 @@ import { deliver, webPushSender, type DeliverResult, type Sender } from "./send"
 
 export const SCAN_DEBOUNCE_MS = 400;
 export const TICK_MS = 30_000;
-const TYPES = new Set(["ticket", "salida", "review", "approval", "item"]);
+const TYPES = new Set(["ticket", "salida", "review", "approval", "item", "calendar"]);
 
 export interface ScanDeps {
   repos: Repos;
@@ -48,7 +50,8 @@ export async function scanOnce(deps: ScanDeps, now = Date.now()): Promise<ScanRe
   const delivery: DeliverResult = { sent: 0, removed: 0, failed: 0 };
   for (const s of d.show) {
     // What arrived in Hoy is one push per scan (the decision already batched it) under one tag, so a newer one alerts again.
-    const res = await deliver(r.push, sender, r.push.list(), { title: s.title, url: s.url, tag: s.hoy ? HOY_TAG : s.key }, new Date(now));
+    const payload = { title: s.title, url: s.url, tag: s.hoy ? HOY_TAG : s.key, ...(s.meeting ? { body: s.body } : {}) };
+    const res = await deliver(r.push, sender, r.push.list(), payload, new Date(now));
     delivery.sent += res.sent;
     delivery.removed += res.removed;
     delivery.failed += res.failed;

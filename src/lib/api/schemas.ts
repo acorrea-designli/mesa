@@ -217,11 +217,19 @@ const githubDest = z.object({
     .optional(),
   postAs: z.string().min(1),
 });
-export const destination = z.union([slackDest, basecampDest, githubDest]);
+/** A Google Calendar event (t112). The event's fields live in the version body (calendar-event.ts); this is where it goes. */
+const calendarDest = z.object({
+  kind: z.literal("calendar_event"),
+  calendar: z.string().min(1),
+  invitees: z.array(z.string().min(3)).max(50).optional(),
+  meet: z.boolean().optional(),
+  postAs: z.string().min(1),
+});
+export const destination = z.union([slackDest, basecampDest, githubDest, calendarDest]);
 
 export const salidaInput = z
   .object({
-    source: z.enum(["slack", "basecamp", "github"]),
+    source: z.enum(["slack", "basecamp", "github", "calendar"]),
     destination,
     body: z.string(),
     title: z.string().optional(),
@@ -380,7 +388,7 @@ export const reviewActionInput = z.object({
 });
 
 // ---------- sources and sweep ----------
-export const healthSource = z.enum(["github", "github_project", "slack", "basecamp", "engram"]);
+export const healthSource = z.enum(["github", "github_project", "slack", "basecamp", "engram", "calendar"]);
 const isoOrNull = isoDate.nullable();
 export const sourcePatch = z.object({
   health: z.enum(["ok", "degraded", "down"]).optional(),

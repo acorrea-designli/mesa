@@ -90,7 +90,19 @@ self.addEventListener("message", (event) => {
 
 // ---------- Web Push (t33) ----------
 // The server sends { title, url, tag } and nothing else (no ticket or salida text): the body is this fixed line.
+// The one exception (t112, 6C): a meeting reminder also sends `body` (the meeting's title) and may send a Google Meet
+// link as `url`; that is the only absolute URL a tap may open.
 const PUSH_BODY = "Toca para abrir Mesa.";
+
+/** A Google Meet link (https://meet.google.com/...): what a meeting reminder may open outside Mesa. */
+function meetUrl(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname === "meet.google.com" && u.pathname.length > 1 ? u.href : null;
+  } catch {
+    return null;
+  }
+}
 
 /** A same-origin path, never an absolute or protocol-relative URL. */
 function safePath(url) {
@@ -105,7 +117,10 @@ self.addEventListener("push", (event) => {
     data = {};
   }
   const title = typeof data.title === "string" && data.title ? data.title.slice(0, 120) : "Mesa";
-  const options = { body: PUSH_BODY, data: { url: safePath(data.url) } };
+  // Only a meeting reminder (a Meet link or its own title) may stray from the fixed body; others never carry `body`.
+  const external = meetUrl(data.url);
+  const meetingBody = typeof data.body === "string" && data.body ? data.body.slice(0, 140) : null;
+  const options = { body: meetingBody || PUSH_BODY, data: { url: external || safePath(data.url) } };
   if (typeof data.tag === "string" && data.tag) {
     options.tag = data.tag.slice(0, 120);
     // A newer push under the same tag (the Hoy batch, "mesa-hoy") alerts again instead of replacing the old one silently.
@@ -117,7 +132,10 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = safePath(event.notification.data && event.notification.data.url);
+  const raw = event.notification.data && event.notification.data.url;
+  const external = meetUrl(raw);
+  if (external) return void event.waitUntil(self.clients.openWindow(external)); // a meeting: straight to the Meet
+  const url = safePath(raw);
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (wins) => {
       const win = wins.find((c) => new URL(c.url).origin === self.location.origin);

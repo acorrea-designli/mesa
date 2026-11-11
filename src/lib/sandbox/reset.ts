@@ -107,11 +107,13 @@ export function scrubForSandbox(db: Db, now = new Date()): ScrubReport {
 
 /**
  * Sample rows ("Datos de muestra.") can never be sent or released. On the sandbox the whole board
- * is dummy data, so the seed's rows become ordinary rows and the full salida flow works on them.
+ * is dummy data, so the seed's rows become ordinary rows and the full salida flow works on them. Calendar events are
+ * the exception (t112): they are only ever read, never sent, and the sandbox never fetches the feed, so the seeded
+ * ones stay "Datos de muestra." on Calendario.
  */
 function unflagSamples(db: Db): number {
   let n = 0;
-  for (const t of tables(db)) if (hasColumn(db, t, "is_sample")) n += Number(db.prepare(`UPDATE ${t} SET is_sample = 0 WHERE is_sample = 1`).run().changes);
+  for (const t of tables(db)) if (t !== "calendar_events" && hasColumn(db, t, "is_sample")) n += Number(db.prepare(`UPDATE ${t} SET is_sample = 0 WHERE is_sample = 1`).run().changes);
   return n;
 }
 

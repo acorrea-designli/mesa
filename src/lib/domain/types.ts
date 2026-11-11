@@ -4,6 +4,13 @@
 export const SOURCES = ["github", "slack", "basecamp", "claude"] as const;
 export type Source = (typeof SOURCES)[number];
 
+/**
+ * A source line colour: the four item sources plus Calendario, the fifth. Calendar events are not items (no station,
+ * no band tick); the extra line colour is used on the Calendario screen, the Próxima reunión strip, its source-health
+ * row and the calendar salida chips.
+ */
+export type LineSource = Source | "calendar";
+
 /** Stations of the line: the kanban statuses, in order. */
 export const STATIONS = ["inbox", "todo", "doing", "waiting", "done"] as const;
 export type Station = (typeof STATIONS)[number];
@@ -249,7 +256,7 @@ export type SalidaStatus =
   | "draft_created" // Slack, mode draft: the text waits as a draft in Andrés's Slack ("Borrador en Slack · envíalo tú") until "Ya lo envié"
   | "deleted";
 
-export type SalidaSource = "slack" | "basecamp" | "github";
+export type SalidaSource = "slack" | "basecamp" | "github" | "calendar";
 
 /**
  * How a Slack salida goes out, chosen by Andrés with his approval click: "draft" (default) leaves the text as a draft in
@@ -297,6 +304,19 @@ export type Destination =
       /** github_review: inline comments posted as ONE batched review. Their bodies are the exact text. */
       comments?: GithubReviewComment[];
       postAs: string;
+    }
+  | {
+      /**
+       * A Google Calendar event created by the lead through the Google Calendar connector (t112). The event's exact
+       * fields are the approved version's body (src/lib/domain/calendar-event.ts: título, inicio, fin, zona,
+       * invitados, Meet, descripción), so editing the text edits the event; the destination names only where it goes.
+       */
+      kind: "calendar_event";
+      calendar: string; // "primary" or a calendar id/name, shown as the chip "Tu calendario principal"
+      /** Invitee addresses at proposal time, for the chips; the body is the truth the guard compares. */
+      invitees?: string[];
+      meet?: boolean;
+      postAs: string;
     };
 
 export interface BasecampMention {
@@ -323,6 +343,7 @@ export const DELETE_POLICY: Record<DestinationKind, "trash" | "permanent" | "non
   basecamp_campfire: "permanent",
   github_review: "none", // a submitted review cannot be deleted
   github_comment: "permanent",
+  calendar_event: "none", // the connector has no delete tool wired here; Andrés removes it in Google Calendar
 };
 
 export interface SalidaLink {
@@ -480,6 +501,8 @@ export interface Counts {
   doneToday: number;
   /** Items in station done since midnight: Hoy's own "Hecho hoy" figure. */
   itemsDoneToday: number;
+  /** Calendario: meetings left today (not over, not declined, not all-day); 0 on a board without the feed. */
+  calendar: number;
   stations: Record<Station, number>;
 }
 
@@ -591,7 +614,7 @@ export type ReviewAction = "approve" | "approve_anyway" | "post" | "dismiss" | "
 
 // ---------- sources: sweep state and health ----------
 
-export type HealthSource = "github" | "github_project" | "slack" | "basecamp" | "engram";
+export type HealthSource = "github" | "github_project" | "slack" | "basecamp" | "engram" | "calendar";
 /** Per-source sweep state and health (one row per source). */
 export interface SourceState {
   source: HealthSource;
@@ -638,3 +661,51 @@ export interface TicketContext {
 
 /** Engram topic key for a ticket: every ticket thread is saved under it. */
 export const ticketTopicKey = (ref: string) => `mesa/${ref}`;
+
+// ---------- Calendario (t112) ----------
+
+export type CalendarResponse = "accepted" | "declined" | "tentative" | "needs_action" | "none";
+
+export interface CalendarAttendee {
+  email: string;
+  name: string | null;
+  response: CalendarResponse;
+}
+
+/** One occurrence of a meeting, read from Andrés's private iCal feed (read only). Times are UTC ISO strings. */
+export interface CalendarEvent {
+  id: string;
+  uid: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  /** All-day: drawn from the Bogota midnight of its first day to the Bogota midnight after its last; never reminded. */
+  allDay: boolean;
+  timeZone: string | null;
+  location: string | null;
+  meetUrl: string | null;
+  attendees: CalendarAttendee[];
+  attendeesCount: number;
+  organizer: string | null;
+  /** Andrés's own answer (PARTSTAT); `none` when the feed does not say. */
+  response: CalendarResponse;
+  status: "confirmed" | "tentative";
+  recurring: boolean;
+  isSample: boolean;
+  fetchedAt: string;
+}
+
+/** GET /api/calendar: the window's events plus the connection and health the screen shows. */
+export interface CalendarPayload {
+  now: string;
+  /** MESA_GCAL_ICS_URL is set. The address itself never leaves the server. */
+  configured: boolean;
+  sandbox: boolean;
+  health: SourceState["health"] | "none";
+  note: string;
+  lastRefresh: string | null;
+  lastError: string | null;
+  events: CalendarEvent[];
+  /** The next meeting (or the one in progress) as the "Próxima reunión" strip shows it. */
+  next: CalendarEvent | null;
+}

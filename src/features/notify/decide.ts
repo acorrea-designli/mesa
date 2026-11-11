@@ -15,10 +15,16 @@
 //                          on Andrés (station not done, waitOn you); when it leaves that set the key is dropped,
 //                          so an item that comes back (a PR review re-requested) notifies again, while a sweeper
 //                          refresh of an item that never left does not
-import { SOURCE_LABEL, SOURCES, type Approval, type Item, type Salida, type Source, type Ticket } from "@/lib/domain/types";
+//   meeting:<id>:<start>   a meeting reminder (t112): once per event start (a moved meeting is a new key). Meetings are the
+//                          one kind that ignores the quiet rule and the baseline: a meeting in ten minutes is news even
+//                          while a Mesa tab is focused, and it carries the meeting's title (the t33 "no titles" rule is
+//                          kept for every other entry)
+import { clockOf, meetingKey } from "@/lib/domain/calendar";
+import { SOURCE_LABEL, SOURCES, type Approval, type CalendarEvent, type Item, type Salida, type Source, type Ticket } from "@/lib/domain/types";
+import { localDay } from "@/lib/domain/week";
 import { destShort } from "@/features/salidas/model";
 
-export type WaitingKind = "ticket" | "salida" | "approval" | "item";
+export type WaitingKind = "ticket" | "salida" | "approval" | "item" | "meeting";
 
 export interface Waiting {
   key: string;
@@ -33,6 +39,8 @@ export interface Waiting {
   own?: boolean;
   /** Only on Hoy items: where it came from. */
   source?: Source;
+  /** A meeting reminder: shown even while Mesa is being looked at, and even on a baseline scan. */
+  meeting?: true;
 }
 
 export interface Shown {
@@ -44,6 +52,8 @@ export interface Shown {
   hoy?: true;
   /** Only on a single Hoy item. */
   source?: Source;
+  /** A meeting reminder: its body is the meeting's title (the one place a title travels), its url the Meet link or the event in Mesa. */
+  meeting?: true;
 }
 
 /** key -> last time it was seen waiting (epoch ms). */
@@ -134,6 +144,31 @@ export function approvalWaiting(a: Pick<Approval, "id" | "agent" | "summary" | "
   };
 }
 
+/** Google Meet is the only conference link that leaves Mesa from a notification; any other opens the event in Mesa. */
+export function meetLink(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname === "meet.google.com" && u.pathname.length > 1 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A meeting that starts within ten minutes. Title "Reunión en 10 min · 15:00", body the meeting's title (6C), a tap opens the Meet or the event. */
+export function meetingWaiting(e: Pick<CalendarEvent, "id" | "title" | "startsAt" | "meetUrl" | "isSample">, now: Date): Waiting {
+  const min = Math.max(1, Math.ceil((Date.parse(e.startsAt) - now.getTime()) / 60_000));
+  return {
+    key: meetingKey(e),
+    kind: "meeting",
+    title: `Reunión en ${min} min · ${clockOf(e.startsAt)}`,
+    body: e.title,
+    url: meetLink(e.meetUrl) ?? `/calendario?dia=${localDay(new Date(e.startsAt))}`,
+    sample: e.isSample,
+    meeting: true,
+  };
+}
+
 // ---------- decision ----------
 
 /** Keys in `waiting` that `seen` does not know yet (what the collector enriches before deciding). */
@@ -195,8 +230,10 @@ export function decide({ seen, waiting, now, baseline = false, quiet = false, sa
   for (const w of live) {
     const isNew = !(w.key in seen);
     next[w.key] = now; // still waiting: the key stays fresh
-    if (isNew && !baseline && !quiet && !w.own && !(hoyBaseline && w.kind === "item")) {
-      show.push({ key: w.key, title: prefix + w.title, body: w.body, url: w.url, ...(w.kind === "item" ? { hoy: true as const, source: w.source } : {}) });
+    // A meeting reminder ignores the quiet rule and the baseline (it is about the clock, not about what is new).
+    const urgent = w.meeting === true;
+    if (isNew && (urgent || (!baseline && !quiet && !w.own && !(hoyBaseline && w.kind === "item")))) {
+      show.push({ key: w.key, title: prefix + w.title, body: w.body, url: w.url, ...(w.kind === "item" ? { hoy: true as const, source: w.source } : {}), ...(urgent ? { meeting: true as const } : {}) });
     }
   }
 

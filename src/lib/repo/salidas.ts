@@ -9,7 +9,9 @@ import {
   nowIso,
   toAssignments,
   TransitionError,
+  ValidationError,
 } from "../db/util";
+import { eventBodyProblem } from "../domain/calendar-event";
 import {
   canAddVersion,
   dueEvent,
@@ -106,8 +108,17 @@ export function salidasRepo(db: Db) {
       db.prepare("SELECT 1 FROM salida_turns WHERE salida_id = ? AND author = 'andres' AND state = 'open' LIMIT 1").get(id),
     );
 
+  // The calendar's health is about READING the feed; creating an event goes through the connector, so a feed outage
+  // never parks a calendar salida in "Aprobar al volver".
   const sourceDown = (source: string) =>
+    source !== "calendar" &&
     Boolean(db.prepare("SELECT 1 FROM source_state WHERE source = ? AND health = 'down'").get(source));
+
+  // A calendar salida's body IS the event (src/lib/domain/calendar-event.ts): every version must be a complete, valid one.
+  const checkBody = (source: string, body: string) => {
+    const problem = source === "calendar" ? eventBodyProblem(body) : null;
+    if (problem) throw new ValidationError(`calendar salida body: ${problem}`);
+  };
 
   const insertVersion = (salidaId: string, v: VersionInput, ts: string): number => {
     const n = versionCount(salidaId) + 1;
@@ -157,6 +168,7 @@ export function salidasRepo(db: Db) {
     create(input: SalidaInput, now = new Date()): SalidaDetail {
       const id = newId("sa");
       const ts = nowIso(now);
+      checkBody(input.source, input.body);
       return tx(db, () => {
         ensureSession(db, input.ownerSession, now);
         const { sql, values } = insertSql(
@@ -190,6 +202,7 @@ export function salidasRepo(db: Db) {
       return tx(db, () => {
         const s = get(id);
         if (!canAddVersion(s.status)) throw new TransitionError(`cannot add a version to a salida that is ${s.status}`);
+        checkBody(s.source, v.body);
         const ts = nowIso(now);
         let turnId = v.turnId;
         if (!turnId && v.author === "claude") {

@@ -24,6 +24,8 @@ const SCAN_KEY = "mesa.notify.lastScan";
 const SEEN_LOCK = "mesa-notify-seen";
 const DEBOUNCE_MS = 400;
 const BEAT_MS = 2000;
+/** Meetings are about the clock, not about a change: rescan every 30 s so a reminder fires at ten minutes (t112). */
+const CLOCK_MS = 30_000;
 const STALE_MS = 6000;
 
 const store = {
@@ -97,8 +99,12 @@ export function startNotifier(navigate: (url: string) => void): Engine {
       const n = new window.Notification(s.title, { body: s.body, tag: s.key, requireInteraction: false, silent });
       window.setTimeout(() => n.close(), 10_000);
       n.onclick = () => {
-        window.focus();
-        navigate(s.url);
+        // A meeting reminder opens the Meet link in its own tab; everything else navigates the Mesa tab.
+        if (/^https:/i.test(s.url)) window.open(s.url, "_blank", "noopener");
+        else {
+          window.focus();
+          navigate(s.url);
+        }
         n.close();
       };
     } catch {
@@ -126,7 +132,7 @@ export function startNotifier(navigate: (url: string) => void): Engine {
         // One sound per batch, from the tab that showed it (every tab scans; the seen lock lets one show each entry):
         // the Hoy sound when something arrived in Hoy, the short chime otherwise. Banners are made silent only when
         // Mesa's sound actually started; with Sonido off or audio blocked the OS sound plays as before.
-        const played = d.show.length > 0 && !stopped && soundOn() && canShow() ? await chime(d.show.some((s) => s.hoy) ? "hoy" : "chime") : false;
+        const played = d.show.length > 0 && !stopped && soundOn() && canShow() ? await chime(d.show.some((s) => s.hoy && !s.meeting) ? "hoy" : "chime") : false;
         d.show.forEach((s) => show(s, played));
       });
     } catch {
@@ -160,6 +166,9 @@ export function startNotifier(navigate: (url: string) => void): Engine {
     if (healthy) store.set(SCAN_KEY, String(Date.now()));
   };
   const beatTimer = setInterval(beat, BEAT_MS);
+  const clockTimer = setInterval(() => {
+    if (!stopped) void run();
+  }, CLOCK_MS);
   window.addEventListener("focus", beat);
   window.addEventListener("blur", beat);
   document.addEventListener("visibilitychange", beat);
@@ -179,6 +188,7 @@ export function startNotifier(navigate: (url: string) => void): Engine {
       stopped = true;
       if (timer) clearTimeout(timer);
       clearInterval(beatTimer);
+      clearInterval(clockTimer);
       unprime();
       window.removeEventListener("focus", beat);
       window.removeEventListener("blur", beat);

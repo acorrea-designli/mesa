@@ -3,6 +3,9 @@ import { STATIONS, type Counts, type Station } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { agentsRepo } from "./agents";
 import { approvalsRepo } from "./approvals";
+import { calendarRepo } from "./calendar";
+import { bogotaStart, meetingsLeft } from "../domain/calendar";
+import { addDays, localDay } from "../domain/week";
 import { chipsRepo } from "./chips";
 import { dispatchRepo } from "./dispatch";
 import { engramRepo } from "./engram";
@@ -36,6 +39,7 @@ export function createRepos(db: Db) {
     engram: engramRepo(db),
     agents: agentsRepo(db),
     approvals: approvalsRepo(db),
+    calendar: calendarRepo(db),
     focus: leadFocusRepo(db),
     reviews: reviewsRepo(db),
     sources: sourcesRepo(db),
@@ -91,6 +95,7 @@ function counts(db: Db, now = new Date()): Counts {
     salidas: n("SELECT COUNT(*) AS n FROM salidas WHERE status IN ('pending','scheduled','queued_until_back')"),
     approvals: n("SELECT COUNT(*) AS n FROM approvals WHERE status = 'pending'"),
     doneToday: weekRepo(db).doneToday(now),
+    calendar: meetingsLeft(calendarRepo(db).list({ from: new Date(bogotaStart(localDay(now))), to: new Date(bogotaStart(addDays(localDay(now), 1))) }), now),
     itemsDoneToday: n(`SELECT COUNT(*) AS n FROM items WHERE station = 'done' AND updated_at >= ? AND NOT ${ITEM_IGNORED("items")}`, dayStart.toISOString()),
     stations,
   };

@@ -12,7 +12,9 @@
 // - source_state is never written.
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
+import { formatEventBody } from "../domain/calendar-event";
 import type { Destination, Mark, MarkKind, SalidaLink, Source, Station, SyncState } from "../domain/types";
+import { addDays, localDay, mondayOf } from "../domain/week";
 import type { Repos } from "../repo";
 import type { SalidaInput } from "../repo/salidas";
 
@@ -63,6 +65,7 @@ function purgeSampleWakes(db: Db): number {
 }
 
 export interface ResetResult {
+  calendarEvents: number;
   wakeEvents: number;
   reviews: number;
   approvals: number;
@@ -84,6 +87,7 @@ export function resetSamples(db: Db): ResetResult {
          UNION SELECT id FROM salidas WHERE is_sample = 1 UNION SELECT id FROM tasks WHERE is_sample = 1)`,
     );
     const out: ResetResult = {
+      calendarEvents: del("DELETE FROM calendar_events WHERE is_sample = 1"),
       wakeEvents,
       reviews: del("DELETE FROM reviews WHERE is_sample = 1"), // findings cascade
       approvals: del("DELETE FROM approvals WHERE is_sample = 1"),
@@ -102,6 +106,7 @@ export function resetSamples(db: Db): ResetResult {
 // ---------- seed ----------
 
 export interface SeedResult {
+  calendarEvents: number;
   items: number;
   tasks: number;
   tickets: number;
@@ -163,6 +168,7 @@ export function seedSamples(repos: Repos, now: Date = new Date()): SeedResult {
     seedAgents(repos, now, tk);
     const engramIds = seedEngram(repos, now, tk);
     seedChips(db, now);
+    seedCalendar(repos, now);
 
     const flag = (table: string, ids: string[]) => {
       for (const id of ids) db.prepare(`UPDATE ${table} SET is_sample = 1 WHERE id = ?`).run(id);
@@ -186,6 +192,7 @@ export function sampleCounts(db: Db): SeedResult {
   const onSampleTicket = (table: string) =>
     n(`SELECT COUNT(*) AS n FROM ${table} WHERE ticket_id IN (SELECT id FROM tickets WHERE is_sample = 1)`);
   return {
+    calendarEvents: n("SELECT COUNT(*) AS n FROM calendar_events WHERE is_sample = 1"),
     items: n("SELECT COUNT(*) AS n FROM items WHERE is_sample = 1"),
     tasks: n("SELECT COUNT(*) AS n FROM tasks WHERE is_sample = 1"),
     tickets: n("SELECT COUNT(*) AS n FROM tickets WHERE is_sample = 1"),
@@ -690,6 +697,75 @@ function seedBoard(repos: Repos, now: Date, tk: SampleTickets): void {
   const b15Item = createItem(claude(tk.b15, "b15", "¿Le contesto a Matt por escrito o pido llamada?", `Ticket ${tk.b15.ref} · hilo de deploy en #scout-dev`, "scout", -20), "inbox", "you");
   db.prepare("UPDATE tickets SET item_id = ? WHERE id = ?").run(b15Item.id, tk.b15.id);
   createItem(bc(5006, "Scout · te mencionaron en «Reporte semanal»", '"Andrés, ¿lo vemos el lunes en el correo de las 8?"', "scout", -15, "mention"), "inbox", "you");
+}
+
+// ---------- calendar (t112) ----------
+
+/**
+ * A fictional week of meetings around `now` (Bogota days) and one calendar salida waiting for a signature, so Calendario,
+ * the "Próxima reunión" strip and the calendar salida card show in the sandbox without any read of Google.
+ * Meeting times are fixed clock times of each day, so the "next meeting" depends on when the seed runs.
+ */
+function seedCalendar(repos: Repos, now: Date): void {
+  const mon = mondayOf(localDay(now));
+  const att = (...p: [string, string, "accepted" | "declined" | "needs_action"][]) => p.map(([email, name, response]) => ({ email, name, response }));
+  const ME_ATT = ["andres@example.com", "Andrés", "accepted"] as [string, string, "accepted"];
+  const people = att(ME_ATT, ["laura@example.com", "Laura", "accepted"], ["matt.r@scoutapp.example", "Matt", "accepted"], ["sofia@example.com", "Sofía", "needs_action"]);
+  const make = (dayN: number, from: string, to: string, title: string, o: { n?: number; meet?: boolean; declined?: boolean; allDay?: boolean; recurring?: boolean } = {}) => {
+    const day = addDays(mon, dayN);
+    const start = new Date(`${day}T${from}:00-05:00`).toISOString();
+    const end = new Date(o.allDay ? `${addDays(day, 1)}T00:00:00-05:00` : `${day}T${to}:00-05:00`).toISOString();
+    return {
+      uid: `sample-${day}-${from}-${title}`,
+      occurrenceKey: start,
+      title,
+      startsAt: start,
+      endsAt: end,
+      allDay: Boolean(o.allDay),
+      timeZone: "America/Bogota",
+      location: null,
+      meetUrl: o.meet === false ? null : `https://meet.google.com/sample-${(dayN * 7 + from.length + title.length).toString(36)}-demo`,
+      attendees: people.slice(0, Math.max(1, o.n ?? 2)).map((a) => (o.declined && a.email === ME_ATT[0] ? { ...a, response: "declined" as const } : a)),
+      organizer: "matt.r@scoutapp.example",
+      response: o.declined ? ("declined" as const) : ("accepted" as const),
+      status: "confirmed" as const,
+      recurring: Boolean(o.recurring),
+    };
+  };
+  const events: ReturnType<typeof make>[] = [];
+  for (let d = 0; d < 5; d++) events.push(make(d, "09:00", "09:15", "Standup Designli", { n: 4, recurring: true }));
+  events.push(
+    make(0, "11:00", "12:00", "Planning semanal", { n: 4 }),
+    make(0, "15:00", "15:45", "Review buckhub", { n: 3 }),
+    make(1, "10:00", "10:30", "Sync Bseen"),
+    make(1, "14:00", "15:00", "Demo Scout", { n: 4 }),
+    make(2, "10:30", "11:00", "Sync Scout con Matt"),
+    make(2, "14:00", "14:45", "Demo Freightmate", { n: 3, declined: true }),
+    make(2, "15:00", "15:30", "Revisión de onboarding Bseen", { n: 4 }),
+    make(2, "16:30", "17:00", "1:1 con Laura"),
+    make(2, "17:30", "18:00", "Planning prospec-admin", { n: 4 }),
+    make(2, "00:00", "00:00", "Cumpleaños de Laura", { allDay: true, meet: false, n: 1 }),
+    make(3, "11:00", "11:45", "Demo Freightmate", { n: 3 }),
+    make(3, "14:00", "14:30", "Review buckhub", { n: 3 }),
+    make(4, "10:00", "11:00", "Retro semanal", { n: 4, recurring: true }),
+  );
+  repos.calendar.replaceSamples(events, now);
+
+  // One event waiting for his signature (the card of Salidas): Thursday 10:00, Matt, with Meet.
+  const thu = addDays(mon, 3);
+  const body = formatEventBody({ title: "Meet con Matt", start: `${thu}T10:00:00-05:00`, end: `${thu}T10:30:00-05:00`, timeZone: "America/Bogota", invitees: ["matt.r@scoutapp.example"], meet: true });
+  repos.salidas.create(
+    {
+      source: "calendar",
+      destination: { kind: "calendar_event", calendar: "primary", invitees: ["matt.r@scoutapp.example"], meet: true, postAs: ME },
+      body,
+      title: "Evento: Meet con Matt",
+      context: 'Tú: "meet con Matt el jueves 30 min". Claude: el jueves 10:00 está libre; el correo de Matt viene del hilo de Slack del 09:31.',
+      ownerSession: SAMPLE_SESSION,
+      isSample: true,
+    },
+    at(now, -3),
+  );
 }
 
 // ---------- salidas and reviews ----------

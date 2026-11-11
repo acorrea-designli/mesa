@@ -50,7 +50,7 @@ Tickets
   mesa ticket list [--open]
 
 Salidas (outgoing messages; nothing is sent without Andrés's approval)
-  mesa salida propose --source slack|basecamp|github --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
+  mesa salida propose --source slack|basecamp|github|calendar --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
                   [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired (exit 3)
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
   mesa salida sent <id> [--permalink URL]          only after salida.released, for a Slack salida in mode send ("Claude lo envía"),
@@ -93,12 +93,25 @@ Lead (the lead session only)
                                                    no argument prints the current focus; --clear removes it; it lapses
                                                    2 h after the last set (run it again to renew)
 
-Sources and sweep (github|github_project|slack|basecamp|engram)
+Sources and sweep (github|github_project|slack|basecamp|engram|calendar)
   mesa source get [<source>]                    sweep state + health (all sources without <source>)
   mesa source set <source> [--health ok|degraded|down] [--note N] [--watermark W] [--checked ISO|now]
                   [--new ISO|now] [--backoff-until ISO|none] [--cadence SECONDS]
                   [--error-count N] [--last-error MSG|none]
   mesa sweep [--source slack|basecamp|github]...        same as "Barrer ahora"
+
+Calendario (Andrés's Google Calendar, read only: the server polls his private iCal feed; creating is a salida)
+  mesa calendar list [--from YYYY-MM-DD] [--to YYYY-MM-DD]   stored events (Bogota days, default this week and the next) + health
+  mesa calendar next                               the next meeting (or the one in progress), null when none
+  mesa calendar status                             connected?, health, last refresh (no events)
+  mesa calendar free [--day YYYY-MM-DD] [--minutes 30] [--open 08:00] [--close 19:00]
+                                                   free gaps of a Bogota day inside working hours (today starts now)
+  mesa calendar people                             people on the stored events (email, name, shared meetings): find an invitee's address
+  mesa calendar refresh                            read the feed now (409 in sandbox or without MESA_GCAL_ICS_URL)
+  mesa calendar propose --title T --start ISO --end ISO [--zone America/Bogota] [--invitee EMAIL]... [--no-meet]
+                  [--description D] [--calendar primary] [--ticket ID] [--context C] [--wait-release [--timeout S]]
+                                                   the exact event as a salida (source calendar); times carry their offset,
+                                                   e.g. 2026-11-12T10:00:00-05:00. The lead creates it after Andrés approves.
 
 GitHub (server side, with the gh login; Mesa never writes reviews or comments)
   mesa github sync                                 poll notifications + review requests, push/pull the Project now
@@ -598,6 +611,47 @@ async function main() {
 
     case "sweep":
       return out(await call("POST", "/api/sweep", opt.source ? { sources: list(opt.source) } : {}));
+
+    case "calendar": {
+      const q = (o) => Object.entries(o).filter(([, v]) => v !== undefined && v !== true).map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
+      const qs = (o) => (q(o) ? `?${q(o)}` : "");
+      switch (cmd) {
+        case "list":
+          return out(await call("GET", `/api/calendar${qs({ from: opt.from, to: opt.to })}`));
+        case "next":
+          return out({ next: (await call("GET", "/api/calendar")).next });
+        case "status": {
+          const { events, ...rest } = await call("GET", "/api/calendar");
+          return out({ ...rest, events: events.length });
+        }
+        case "free":
+          return out(await call("GET", `/api/calendar/free${qs({ day: opt.day, minutes: opt.minutes, open: opt.open, close: opt.close })}`));
+        case "people":
+          return out(await call("GET", "/api/calendar/people"));
+        case "refresh":
+          return out(await call("POST", "/api/calendar/refresh", {}));
+        case "propose": {
+          const invitees = list(opt.invitee).map((e) => String(e).trim().toLowerCase()).filter(Boolean);
+          const meet = !opt["no-meet"];
+          const lines = [`Título: ${String(need(opt.title, "--title"))}`, `Inicio: ${String(need(opt.start, "--start"))}`, `Fin: ${String(need(opt.end, "--end"))}`, `Zona: ${String(opt.zone ?? "America/Bogota")}`];
+          if (invitees.length) lines.push(`Invitados: ${invitees.join(", ")}`);
+          lines.push(`Meet: ${meet ? "sí" : "no"}`);
+          if (opt.description && opt.description !== true) lines.push(`Descripción: ${String(opt.description).trim()}`);
+          const created = await call("POST", "/api/salidas", {
+            source: "calendar",
+            destination: { kind: "calendar_event", calendar: String(opt.calendar ?? "primary"), invitees, meet, postAs: "Andrés Correa" },
+            body: lines.join("\n"),
+            title: `Evento: ${String(opt.title)}`,
+            context: opt.context,
+            ticketId: opt.ticket,
+            ownerSession: needSession(),
+          });
+          if (!opt["wait-release"]) return out(created);
+          return out(await waitRelease(created, needSession(), Number(opt.timeout ?? 0)));
+        }
+      }
+      return usage(`unknown calendar command "${cmd ?? ""}"`);
+    }
 
     case "github":
       if (cmd === "sync") return out(await call("POST", "/api/github/sync", {}));

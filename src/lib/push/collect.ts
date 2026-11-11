@@ -1,9 +1,11 @@
 // The waiting set, read straight from the repositories (the server twin of src/features/notify/collect.ts).
 // It reuses the desktop entry builders (keys, sample and own flags) and swaps the display text for the minimal
-// push labels: kind + ref, never titles.
+// push labels: kind + ref, never titles (a meeting reminder is the one exception: it keeps the meeting's title, 6C).
+import { remindersDue } from "@/lib/domain/calendar";
 import {
   approvalWaiting,
   itemWaiting,
+  meetingWaiting,
   salidaKey,
   salidaWaiting,
   ticketKey,
@@ -21,7 +23,7 @@ const NO_BODY = "";
  * The whole waiting set. Costlier lookups (the open review, the own-version check) only run for keys not in `seen`;
  * pass `seen = null` for a baseline read, which needs none.
  */
-export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals" | "reviews" | "items">, seen: Seen | null, now = new Date()): Waiting[] {
+export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals" | "reviews" | "items" | "calendar">, seen: Seen | null, now = new Date()): Waiting[] {
   const fresh = (key: string) => seen !== null && !(key in seen);
   const out: Waiting[] = [];
 
@@ -50,6 +52,11 @@ export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals
   // Hoy (t63): "Nuevo en Hoy · <Source>" is already source-only; the item's title never leaves the PC.
   for (const i of r.items.list({ open: "you", includeSamples: false, ignored: "exclude" })) {
     out.push({ ...itemWaiting(i), body: NO_BODY });
+  }
+
+  // Meetings (t112, 6C): the one entry that keeps its title as the body. Samples never notify (`sample`).
+  for (const e of remindersDue(r.calendar.list({ from: now, to: new Date(now.getTime() + 11 * 60_000) }), now)) {
+    out.push(meetingWaiting(e, now));
   }
   return out;
 }

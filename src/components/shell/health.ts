@@ -9,7 +9,7 @@ import { clock } from "@/features/hoy/format";
 export type HealthLevel = "ok" | "degraded" | "down";
 
 export interface SourceHealth {
-  source: Source | "github_project";
+  source: Source | "github_project" | "calendar";
   state: HealthLevel;
   /** Short rail note: "al día", "sin conexión", "pausa 11:05". */
   note: string;
@@ -27,6 +27,7 @@ const NAME: Record<HealthSource | "claude", string> = {
   slack: "Slack",
   basecamp: "Basecamp",
   engram: "engram",
+  calendar: "Calendario",
   claude: "Claude",
 };
 
@@ -68,8 +69,8 @@ export function mapHealth(s: SourceState): SourceHealth {
 
 /**
  * The rail block: only when some source is not ok (the calm rail stays quiet).
- * Lists GitHub, Slack, Basecamp, GitHub Project when it is the one failing, and
- * Claude (listening or not).
+ * Lists GitHub, Slack, Basecamp, GitHub Project when it is the one failing, Calendario
+ * once it has reported (a board without the feed never lists it), and Claude (listening or not).
  */
 export function railHealth(states: SourceState[], claudeListening: boolean): (SourceHealth & { name: string })[] {
   const by = new Map(states.map((s) => [s.source, s]));
@@ -83,6 +84,8 @@ export function railHealth(states: SourceState[], claudeListening: boolean): (So
   }
   const gp = by.get("github_project");
   if (gp && gp.health !== "ok") rows.splice(1, 0, { ...mapHealth(gp), name: NAME.github_project });
+  const cal = by.get("calendar");
+  if (cal) rows.push({ ...mapHealth(cal), name: NAME.calendar });
   rows.push({
     source: "claude",
     state: "ok",
