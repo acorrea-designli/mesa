@@ -1,6 +1,6 @@
 ---
 name: mesa-ticket
-description: The Mesa ticket protocol for the lead and every teammate - how to ask Andrés (A/B options plus a recommendation), how to reply, the "Claude va a hacer" plan with the / action catalogue and its directo vs "te pide OK" gates, @ ticket refs, files, brief and handoff discipline, and what goes to engram. Use whenever you open, answer, plan, reference or close a Mesa ticket, or when Andrés writes a new request ("pídele a Claude", "nuevo ticket", "ticket").
+description: The Mesa ticket protocol for the lead and every teammate - how to ask Andrés (a question card: 1-6 questions with options and a recommendation each), how to reply, the "Claude va a hacer" plan with the / action catalogue and its directo vs "te pide OK" gates, @ ticket refs, files, brief and handoff discipline, and what goes to engram. Use whenever you open, answer, plan, reference or close a Mesa ticket, or when Andrés writes a new request ("pídele a Claude", "nuevo ticket", "ticket").
 ---
 
 # Mesa tickets
@@ -12,17 +12,30 @@ heredoc so text never passes through shell quoting).
 
 ## Asking (the only way to ask Andrés anything)
 
-- One question per reply. First line = the question, naming the options (`¿A o B?`); then one line per option; then
-  the recommendation with its reason in one line. Spanish, at most 3 lines of body besides the options.
-- Always options when the answer is a choice: `--option "A:<label>[:<detail>]" --option "B:<label>"`, and
-  `--recommend <key> --why "<one line>"`. The recommended option is the one you would pick if he said "tú decide".
+- Every question is a card. One decision: `ticket reply --option` makes a 1-step card. Several decisions: bundle them
+  into ONE card with `ticket questions` (up to 6 questions, each with 2-6 options, keys A-F). Never several messages
+  with one question each.
+- Each question: the question in one line naming the choice, one option per line (`label`, optional `detail`), the
+  recommended key (the one you would pick if he said "tú decide") and its reason in one line. Spanish. The message
+  body is the context, at most 3 lines.
 - Quote the client's own words when the question is about what the client wants.
 - Never ask what the code, the thread or engram already answers. Never ask in chat or by message: the lead's chat
   is not where his decisions live.
+- One open card per ticket at a time (Andrés, 2026-11-11, t107: "como mandas otro mensaje anulas la anterior").
+  Each question now stays open until he answers it or you withdraw it, but a second card on top of an open one
+  still splits his attention: with a card pending, post nothing else in that ticket (no new card, no `--ask`
+  nudge, no FYI) until `ticket.answered` arrives. Ask the next decisions after, or bundle them into the first card.
+- He may answer part of a card: `ticket.answered` carries `openLeft`, the questions still open. Those stay open; do
+  not ask them again. Work on what he answered; a later reply of his may answer the rest.
+- A question that became moot (he answered it in his own words, or the plan changed) is withdrawn, with the reason:
+  `MESA ticket question withdraw <tq id> --why "<one line>"`. Never leave a dead question open, never re-ask it in a
+  new card without withdrawing the old one. Closing the ticket withdraws whatever is still open.
 - A message that asks nothing starts with `FYI:` so he can skip it, and it does not put the ticket in "Te espera":
-  a reply only goes to him with `--option` (options imply a question) or `--ask` (a question without options, e.g.
-  `ticket reply <ref> --ask --body "¿Lo cierro?"`). A reply without either is informational: the status stays as it
-  is (a pending plan or question stays pending; an unclaimed request becomes "Claude trabaja"). Plans keep their rule.
+  a reply only goes to him with a card (`--option` or `ticket questions`) or `--ask` (a question without options,
+  e.g. `ticket reply <ref> --ask --body "¿Lo cierro?"`). A reply without either is informational: the status stays as
+  it is (an open question stays open; an unclaimed request becomes "Claude trabaja"). Plans keep their rule.
+
+One decision:
 
 ```
 node G:/WorkSpace/designli/ops/bin/mesa ticket reply t14 --body - --option "A:Bucket nuevo" --option "B:Reusar dre-staging-docs" --recommend A --why "aísla datos de prueba y el costo es mínimo" <<'EOF'
@@ -31,8 +44,24 @@ Matt: "we just need somewhere private to drop test files".
 EOF
 ```
 
-His answer arrives as `ticket.answered`; the lead relays `ANSWER <ref> <message id>` to the owner, who reads it with
-`MESA ticket context <ref>`. Picking an option fills his reply with that option.
+Several decisions, one card (`recommend` and `why` per question; `refs` optional):
+
+```
+node G:/WorkSpace/designli/ops/bin/mesa ticket questions t14 --json - <<'EOF'
+{"body": "Antes de cortar la release 2.4 necesito tres decisiones.",
+ "questions": [
+  {"text": "¿Cuándo corto la release?", "options": [{"key": "A", "label": "Hoy 17:00"}, {"key": "B", "label": "Mañana 09:00", "detail": "entra el fix de Laura"}], "recommend": "B", "why": "el fix cierra el bug que vio Matt"},
+  {"text": "¿Quién avisa al cliente?", "options": [{"key": "A", "label": "Yo por Slack"}, {"key": "B", "label": "Tú en la llamada"}], "recommend": "A", "why": "Matt pidió el aviso por escrito"}
+ ]}
+EOF
+```
+
+The board shows the card as a stepper: one step per question with its state (abierta, elegida, respondida,
+retirada), the options as buttons with the recommended one marked, "Otra respuesta" for his own words, and "Enviar
+respuestas (n de k)". He can also type `1A 2C` (or `1: B, 2-A`); a bare `B` answers only when exactly one question is
+open. His answer arrives as `ticket.answered { messageId, answers: [{questionId, n, chosen, label, text}], openLeft }`;
+the lead relays `ANSWER <ref> <message id>` with the answers inline to the owner, who reads the rest with
+`MESA ticket context <ref>` (its `questions` list every question with its state).
 
 ## "Pídeme permiso" (a blocked call)
 

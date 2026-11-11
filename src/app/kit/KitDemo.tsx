@@ -3,10 +3,12 @@ import { useState } from "react";
 import { BrokenLine, DirectionMarker, Interchange, LineStub, Ring, SourceDot } from "@/components/line/Line";
 import { Sheet, SplitApprove, Tabs, useToast } from "@/components/ui/interactive";
 import { Btn, Chip, ContextQuote, ExactText, Kind, Label, LinkChip, StatusTag } from "@/components/ui/primitives";
+import { QuestionCard } from "@/features/tickets/QuestionCard";
+import type { Picks } from "@/features/tickets/card";
 import { UsageBlock } from "@/features/usage/UsageBlock";
 import { UsoView } from "@/features/usage/UsoView";
 import { addUsage, summarize, type Buckets, type Role } from "@/lib/domain/tokens";
-import { SOURCES, type Source } from "@/lib/domain/types";
+import { SOURCES, type Source, type TicketQuestion } from "@/lib/domain/types";
 import { usageView, type UsagePoint, type UsageSnapshot } from "@/lib/domain/usage";
 import { useArrive, useLayLines, usePress } from "@/lib/motion";
 
@@ -63,6 +65,68 @@ const USO_TOKENS = (() => {
 const USO_EMPTY_TOKENS = summarize({}, USO_NOW);
 
 const usoData = (view: typeof USO_FRESH, tokens: typeof USO_TOKENS | null, history: UsagePoint[]) => ({ now: USO_NOW.toISOString(), view, tokens, history });
+
+// A question card in every step state: answered, picked (in the draft), withdrawn and open.
+const KIT_Q = (n: number, text: string, extra: Partial<TicketQuestion>): TicketQuestion => ({
+  id: `tq_kit${n}`,
+  ticketId: "tk_kit",
+  messageId: "m_kit",
+  n,
+  text,
+  options: [
+    { key: "A", label: "Hoy a las 17:00", detail: "Con lo que está en main" },
+    { key: "B", label: "Mañana 09:00", detail: "Entra el fix de Laura" },
+    { key: "C", label: "El lunes" },
+  ],
+  recommended: "B",
+  recommendation: "el fix de Laura cierra el bug que vio Matt.",
+  state: "open",
+  chosen: null,
+  answerText: null,
+  answerMessageId: null,
+  answeredAt: null,
+  withdrawReason: null,
+  createdAt: "2026-11-11T15:00:00.000Z",
+  ...extra,
+});
+const KIT_CARD = [
+  KIT_Q(1, "¿Cuándo corto la release?", { state: "answered", chosen: "B", answerMessageId: "m_kit2", answeredAt: "2026-11-11T15:04:00.000Z" }),
+  KIT_Q(2, "¿Quién avisa al cliente?", {
+    options: [
+      { key: "A", label: "Yo por Slack", detail: "Pasa por Salidas" },
+      { key: "B", label: "Tú en la llamada del jueves" },
+    ],
+    recommended: "A",
+    recommendation: "Matt pidió el aviso por escrito.",
+  }),
+  KIT_Q(3, "¿Subo también el changelog?", { state: "withdrawn", withdrawReason: "ya lo pidió Matt en el hilo" }),
+  KIT_Q(4, "¿Qué hago con el flag de exportar?", {
+    options: [
+      { key: "A", label: "Dejarlo apagado" },
+      { key: "B", label: "Encenderlo solo para Scout" },
+      { key: "C", label: "Encenderlo para todos" },
+      { key: "D", label: "Quitarlo del código" },
+    ],
+  }),
+];
+const KIT_ONE = [KIT_Q(1, "", { id: "tq_kit_one", messageId: "m_kit_one" })];
+
+function KitQuestions() {
+  const toast = useToast();
+  const [picks, setPicks] = useState<Picks>({ tq_kit2: { chosen: "A" } });
+  const [one, setOne] = useState<Picks>({});
+  const sent = () => toast({ text: "Respuestas enviadas (muestra)" });
+  return (
+    <div className="kit-line" style={{ alignItems: "flex-start" }}>
+      <div className="kit-card">
+        <QuestionCard questions={KIT_CARD} picks={picks} onPicks={setPicks} onSend={sent} disabled={false} />
+      </div>
+      <div className="kit-card">
+        <QuestionCard questions={KIT_ONE} picks={one} onPicks={setOne} onSend={sent} disabled={false} />
+      </div>
+    </div>
+  );
+}
 
 export function KitDemo() {
   const [tab, setTab] = useState<Filter>("all");
@@ -159,6 +223,11 @@ export function KitDemo() {
           <circle cx="100" cy="44" r="5" className="f-sl sv-tick" />
           <circle cx="240" cy="64" r="8.5" className="sv-ring" />
         </svg>
+      </section>
+
+      <section>
+        <Label>Tarjeta de preguntas: respondida, elegida, retirada y abierta; y una de un paso</Label>
+        <KitQuestions />
       </section>
 
       <section>

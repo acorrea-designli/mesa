@@ -335,6 +335,54 @@ function seedTickets(repos: Repos, now: Date): SampleTickets {
     ),
   );
 
+  // Waiting on Andrés: a card of three questions; he answered the first one, the other two stay open.
+  const b16 = pick(
+    T.create(
+      {
+        ...own,
+        direction: "claude_asks",
+        title: "Release de Scout: tres decisiones",
+        project: "scout",
+        body: "Antes de cortar la release 2.4 de Scout necesito tres decisiones.",
+        questions: [
+          {
+            text: "¿Cuándo corto la release?",
+            options: [
+              { key: "A", label: "Hoy a las 17:00", detail: "Con lo que está en main" },
+              { key: "B", label: "Mañana 09:00", detail: "Entra el fix de Laura" },
+              { key: "C", label: "El lunes", detail: "Con el QA completo" },
+            ],
+            recommended: "B",
+            recommendation: "el fix de Laura cierra el bug que vio Matt.",
+          },
+          {
+            text: "¿Quién avisa al cliente?",
+            options: [
+              { key: "A", label: "Yo por Slack", detail: "Pasa por Salidas" },
+              { key: "B", label: "Tú en la llamada del jueves" },
+            ],
+            recommended: "A",
+            recommendation: "Matt pidió el aviso por escrito.",
+          },
+          {
+            text: "¿Qué hago con el flag de exportar?",
+            options: [
+              { key: "A", label: "Dejarlo apagado" },
+              { key: "B", label: "Encenderlo solo para Scout" },
+              { key: "C", label: "Encenderlo para todos" },
+              { key: "D", label: "Quitarlo del código" },
+            ],
+            recommended: "B",
+            recommendation: "Scout lo pidió y nadie más lo ha probado.",
+          },
+        ],
+      },
+      at(now, -14),
+    ),
+  );
+  const [b16q1] = T.detail(b16.id).questions;
+  T.addMessage(b16.id, { author: "andres", body: "", answers: [{ questionId: b16q1!.id, chosen: "B" }] }, at(now, -12));
+
   // Waiting on Andrés: a request whose plan has direct actions and one that needs his OK.
   const a22 = pick(
     T.create(

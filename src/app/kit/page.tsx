@@ -1,6 +1,7 @@
 // Design system gallery for the lanes: every shared component in one place.
 import type { Metadata } from "next";
 import { ScreenFrame } from "@/components/shell/ScreenFrame";
+import "@/features/tickets/tickets.css";
 import { KitDemo } from "./KitDemo";
 import "./kit.css";
 

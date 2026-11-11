@@ -58,13 +58,19 @@ describe("seedSamples", () => {
     const st = groups("SELECT status AS k, COUNT(*) AS n FROM tickets GROUP BY status");
     expect(Object.keys(st).sort()).toEqual(["closed", "waiting_andres", "waiting_claude", "working"]);
     expect(count("SELECT COUNT(*) AS n FROM tickets WHERE status = 'working' AND woke_at IS NOT NULL")).toBeGreaterThan(0);
-    // An open A/B question with a recommendation.
+    // An open A/B question with a recommendation, and a card of several questions answered in part.
     expect(
       count(
-        `SELECT COUNT(*) AS n FROM ticket_messages m JOIN tickets t ON t.id = m.ticket_id
-         WHERE t.status = 'waiting_andres' AND m.options IS NOT NULL AND m.recommended IS NOT NULL AND m.recommendation IS NOT NULL`,
+        `SELECT COUNT(*) AS n FROM ticket_questions q JOIN tickets t ON t.id = q.ticket_id
+         WHERE t.status = 'waiting_andres' AND q.state = 'open' AND q.recommended IS NOT NULL AND q.recommendation IS NOT NULL`,
       ),
     ).toBeGreaterThan(0);
+    expect(
+      groups(
+        `SELECT q.state AS k, COUNT(*) AS n FROM ticket_questions q
+         WHERE q.message_id IN (SELECT message_id FROM ticket_questions GROUP BY message_id HAVING COUNT(*) >= 3) GROUP BY q.state`,
+      ),
+    ).toEqual({ answered: 1, open: 2 });
     // A plan with direct and needs_ok actions waiting for the OK.
     expect(
       groups(

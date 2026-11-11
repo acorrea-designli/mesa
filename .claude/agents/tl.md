@@ -57,6 +57,8 @@ the client; ask Andrés in chat; approve your own plan; spawn agents; take a sec
 node G:/WorkSpace/designli/ops/bin/mesa ticket context <ticket>
 node G:/WorkSpace/designli/ops/bin/mesa ticket brief <ticket> --body - <<'EOF'
 node G:/WorkSpace/designli/ops/bin/mesa ticket reply <ticket> --body - --option "A:<label>" --option "B:<label>" --recommend B --why "<one line>" <<'EOF'
+node G:/WorkSpace/designli/ops/bin/mesa ticket questions <ticket> --json - <<'EOF'
+node G:/WorkSpace/designli/ops/bin/mesa ticket question withdraw <tq id> --why "<one line>"
 node G:/WorkSpace/designli/ops/bin/mesa ticket plan <ticket> --action "<kind>:<source>:<direct|needs_ok>:<label>"
 node G:/WorkSpace/designli/ops/bin/mesa ticket action <actionId> --state running|done|failed
 node G:/WorkSpace/designli/ops/bin/mesa handoff <ticket> --agent tl-<ticket> --status paused|blocked|done --body - <<'EOF'

@@ -131,6 +131,43 @@ export interface TicketMessage {
   createdAt: string;
 }
 
+export type QuestionState = "open" | "answered" | "withdrawn";
+
+/**
+ * One question of a question card (t108): a Claude message carries 1-6 of them, each with 2-6 options (keys A-F).
+ * The state is explicit: open until Andrés answers it (a pick or his own words) or Claude withdraws it.
+ */
+export interface TicketQuestion {
+  id: string; // tq_*
+  ticketId: string;
+  /** The Claude message that asked it (the card). */
+  messageId: string;
+  /** Step in its card, from 1. */
+  n: number;
+  /** The question; '' on a 1-step card whose message body is the question. */
+  text: string;
+  options: TicketOption[];
+  recommended: string | null;
+  recommendation: string | null;
+  state: QuestionState;
+  /** The key he picked; null when he answered in his own words or has not answered. */
+  chosen: string | null;
+  /** His own words ("Otra respuesta"). */
+  answerText: string | null;
+  /** The Andrés message that answered it. */
+  answerMessageId: string | null;
+  answeredAt: string | null;
+  withdrawReason: string | null;
+  createdAt: string;
+}
+
+/** One answer inside an Andrés message: a pick, his own words, or both. */
+export interface QuestionAnswer {
+  questionId: string;
+  chosen?: string;
+  text?: string;
+}
+
 export interface Attachment {
   id: string;
   ticketId: string;
@@ -189,6 +226,8 @@ export interface Ticket {
 
 export interface TicketDetail extends Ticket {
   messages: TicketMessage[];
+  /** Every question card row of the ticket, in card order then step order. */
+  questions: TicketQuestion[];
   attachments: Attachment[];
   refs: TicketRef[];
   actions: PlannedAction[];
@@ -582,7 +621,10 @@ export interface TicketContext {
   brief: Brief | null;
   plan: PlannedAction[];
   messages: TicketMessage[]; // last N, oldest first
+  /** The brief's open questions plus every open card question. */
   openQuestions: string[];
+  /** Every card question of the ticket with its state (open, answered, withdrawn). */
+  questions: TicketQuestion[];
   team: TeamAgent[];
   handoffs: Handoff[]; // latest per agent, newest first
   latestHandoff: Handoff | null;

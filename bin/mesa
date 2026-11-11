@@ -27,7 +27,13 @@ Tickets
   mesa ticket ask --title T [--body B] [--option "A:label[:detail]"]... [--recommend A --why W] [--project P] [--ref t12]...
                   [--wait [--timeout S]]       --wait blocks until Andrés answers and prints { ticket, answer }
   mesa ticket reply <id|ref> --body B [--ask] [--option ...] [--recommend A --why W]
-                  a reply is informational unless it has options or --ask: only then does the ticket go to "Te espera"
+                  a reply is informational unless it has options or --ask: only then does the ticket go to "Te espera";
+                  --option makes a 1-step question card (2-6 options, keys A-F)
+  mesa ticket questions <id|ref> --json -      one question card: {body, questions:[{text, options:[{key,label,detail?}],
+                  recommend, why}]} from stdin; 1-6 questions of 2-6 options (keys A-F); the ticket goes to "Te espera".
+                  Each question stays open until Andrés answers it or you withdraw it (ticket.answered carries
+                  answers [{questionId, n, chosen, label, text}] and openLeft)
+  mesa ticket question withdraw <tq id> --why W  withdraw an open question (moot, or his words already answered it); 409 if not open
   mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
   mesa ticket claim <id|ref>      take an Andrés request and start work
   mesa ticket close <id|ref>
@@ -257,7 +263,12 @@ async function waitAnswer(ticket, sessionId, timeoutS) {
   const res = await peekLoop(sessionId, timeoutS, async () => {
     const t = await call("GET", `/api/tickets/${enc(ticket.id)}`);
     const answer = t.messages.filter((m) => m.author === "andres" && m.createdAt >= asked).at(-1);
-    if (answer) return { ticket: head(t), answer: { body: answer.body, chosen: answer.chosen, at: answer.createdAt } };
+    if (answer) {
+      const answers = (t.questions ?? [])
+        .filter((q) => q.answerMessageId === answer.id)
+        .map((q) => ({ questionId: q.id, n: q.n, chosen: q.chosen, text: q.answerText }));
+      return { ticket: head(t), answer: { body: answer.body, chosen: answer.chosen, answers, at: answer.createdAt } };
+    }
     if (t.status === "closed") return { ticket: head(t), answer: null, closed: true };
     return null;
   });
@@ -350,6 +361,31 @@ async function main() {
               session,
             }),
           );
+        case "questions": {
+          const raw = parseJsonOpt(text(opt.json, "--json"), "--json");
+          if (!raw || typeof raw !== "object" || !Array.isArray(raw.questions)) usage('--json wants {body, questions:[{text, options:[{key,label}], recommend, why}]}');
+          const questions = raw.questions.map((q) => ({
+            text: q?.text,
+            options: q?.options,
+            recommended: q?.recommend ?? q?.recommended,
+            recommendation: q?.why ?? q?.recommendation,
+          }));
+          return out(
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/messages`, {
+              author: "claude",
+              body: typeof raw.body === "string" ? raw.body : undefined,
+              questions,
+              refs: Array.isArray(raw.refs) ? raw.refs.map((r) => ({ refType: "ticket", target: String(r) })) : undefined,
+              session,
+            }),
+          );
+        }
+        case "question": {
+          if (id !== "withdraw") usage(`unknown ticket question command "${id ?? ""}" (want withdraw)`);
+          return out(
+            await call("POST", `/api/questions/${enc(need(pos[3], "<tq id>"))}/withdraw`, { reason: text(opt.why, "--why"), session }),
+          );
+        }
         case "plan": {
           const actions = list(opt.action).map((a) => {
             const [kind, source, mode, ...label] = String(a).split(":");

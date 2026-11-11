@@ -93,6 +93,8 @@ describe("mesa CLI", () => {
       "mesa task dispatch",
       "mesa task move",
       "mesa lead focus",
+      "mesa ticket questions",
+      "mesa ticket question withdraw",
     ]) {
       expect(r.stdout).toContain(c);
     }
@@ -145,13 +147,20 @@ describe("mesa CLI", () => {
       if (q.path === "/api/tickets/tk_1") {
         polls++;
         const messages = [{ author: "claude", body: "?", createdAt: "2026-11-03T10:00:00.000Z" }];
-        if (polls > 1) messages.push({ author: "andres", body: "Opción A", chosen: "A", createdAt: "2026-11-03T10:01:00.000Z" });
-        return { body: { id: "tk_1", ref: "t1", status: polls > 1 ? "waiting_claude" : "waiting_andres", messages } };
+        if (polls > 1) messages.push({ id: "m2", author: "andres", body: "Opción A", chosen: "A", createdAt: "2026-11-03T10:01:00.000Z" });
+        const questions = [{ id: "tq_1", n: 1, chosen: polls > 1 ? "A" : null, answerText: null, answerMessageId: polls > 1 ? "m2" : null }];
+        return { body: { id: "tk_1", ref: "t1", status: polls > 1 ? "waiting_claude" : "waiting_andres", messages, questions } };
       }
     };
     const r = await mesa(["ticket", "ask", "--title", "x", "--wait"]);
     expect(r.code).toBe(0);
-    expect(r.json()).toEqual({ ticket: { id: "tk_1", ref: "t1", status: "waiting_claude" }, answer: { body: "Opción A", chosen: "A", at: "2026-11-03T10:01:00.000Z" } });
+    expect(r.json()).toEqual({ ticket: { id: "tk_1", ref: "t1", status: "waiting_claude" }, answer: {
+        body: "Opción A",
+        chosen: "A",
+        answers: [{ questionId: "tq_1", n: 1, chosen: "A", text: null }],
+        at: "2026-11-03T10:01:00.000Z",
+      },
+    });
     const waits = requests.filter((q) => q.path === "/api/wait");
     expect(waits.length).toBe(1);
     expect(waits[0].query).toMatchObject({ session: "lead", peek: "1" });
@@ -219,6 +228,49 @@ describe("mesa CLI", () => {
     expect(requests[0]).toMatchObject({ method: "PATCH", path: "/api/sources/slack" });
     expect(b).toMatchObject({ health: "down", note: "sin conexión", watermark: "1730650000.0001", backoffUntil: null, cadenceS: 120, errorCount: 2, lastError: null });
     expect(Date.parse(b.lastChecked)).toBeGreaterThan(0);
+  });
+
+  it("ticket questions posts one card from stdin, mapping recommend/why to the API fields", async () => {
+    handler = () => ({ body: { id: "tk_1", ref: "t1", questions: [] } });
+    const card = {
+      body: "Tres decisiones",
+      questions: [
+        { text: "¿Cuándo?", options: [{ key: "A", label: "Hoy" }, { key: "B", label: "Mañana", detail: "con el fix" }], recommend: "B", why: "entra el fix" },
+        { text: "¿Quién?", options: [{ key: "A", label: "Yo" }, { key: "B", label: "Tú" }] },
+      ],
+      refs: ["t3"],
+    };
+    const r = await mesa(["ticket", "questions", "t1", "--json", "-"], { stdin: JSON.stringify(card) });
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({
+      method: "POST",
+      path: "/api/tickets/t1/messages",
+      body: {
+        author: "claude",
+        body: "Tres decisiones",
+        questions: [
+          { text: "¿Cuándo?", options: card.questions[0].options, recommended: "B", recommendation: "entra el fix" },
+          { text: "¿Quién?", options: card.questions[1].options },
+        ],
+        refs: [{ refType: "ticket", target: "t3" }],
+        session: "lead",
+      },
+    });
+    const bad = await mesa(["ticket", "questions", "t1", "--json", "-"], { stdin: JSON.stringify({ body: "x" }) });
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toMatch(/--json wants/);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("ticket question withdraw posts the reason; it needs the id and --why", async () => {
+    handler = () => ({ body: { id: "tq_1", state: "withdrawn" } });
+    const r = await mesa(["ticket", "question", "withdraw", "tq_1", "--why", "ya lo respondió en el hilo"]);
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/questions/tq_1/withdraw", body: { reason: "ya lo respondió en el hilo", session: "lead" } });
+    expect((await mesa(["ticket", "question", "withdraw", "tq_1"])).code).toBe(2);
+    expect((await mesa(["ticket", "question", "withdraw", "--why", "x"])).code).toBe(2);
+    expect((await mesa(["ticket", "question", "close", "tq_1", "--why", "x"])).code).toBe(2);
+    expect(requests).toHaveLength(1);
   });
 
   it("item upsert sends the JSON from stdin", async () => {

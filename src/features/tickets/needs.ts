@@ -23,6 +23,7 @@ export function loadTicketNeeds(r: Repos, details: TicketDetail[], now: Date): M
         {
           status: t.status,
           messages: t.messages,
+          questions: t.questions,
           actions: t.actions,
           approvals: approvals.get(t.id) ?? [],
           reviews: reviews.get(t.id) ?? [],

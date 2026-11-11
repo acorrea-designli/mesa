@@ -51,6 +51,7 @@ const ENTITY: Record<string, string> = {
   sweep: "sweep",
   github: "github",
   "ignored-projects": "ignored_project",
+  questions: "question",
 };
 
 // Plumbing that changes nothing a screen shows.

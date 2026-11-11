@@ -58,7 +58,21 @@ Contexto en dos líneas.
 EOF
 ```
 
-Add `--wait` to block until he answers (it prints `{ ticket, answer: { body, chosen, at } }`), with `--timeout S` to give up (exit 3). `--wait` polls in peek mode: it never acks, so the lead's own `mesa wait` still receives `ticket.answered`.
+Add `--wait` to block until he answers (it prints `{ ticket, answer: { body, chosen, answers, at } }`, `answers` one `{ questionId, n, chosen, text }` per question his message answered), with `--timeout S` to give up (exit 3). `--wait` polls in peek mode: it never acks, so the lead's own `mesa wait` still receives `ticket.answered`.
+
+`--option` makes a 1-step question card. Several decisions go in ONE card of up to 6 questions (2-6 options each, keys A-F) on an existing ticket:
+
+```
+node bin/mesa ticket questions t14 --json - <<'EOF'
+{"body": "Dos decisiones antes del deploy.",
+ "questions": [
+  {"text": "¿Cuándo?", "options": [{"key": "A", "label": "Hoy"}, {"key": "B", "label": "Mañana"}], "recommend": "B", "why": "entra el fix"},
+  {"text": "¿Quién avisa?", "options": [{"key": "A", "label": "Yo"}, {"key": "B", "label": "Tú"}], "recommend": "A", "why": "lo pidió por escrito"}
+ ]}
+EOF
+```
+
+Each question stays open until he answers it (a click, his own words, or typed `1A 2B`) or you withdraw it with `mesa ticket question withdraw <tq id> --why "<reason>"`; he may answer part of the card, and `ticket.answered` says how many stay open (`openLeft`). One open card per ticket at a time (`mesa-ticket` § Asking).
 
 Reply on an existing ticket with `mesa ticket reply <ref> --body -`, post a plan with `mesa ticket plan <ref> --action "kind:source:direct|needs_ok:label"`.
 
@@ -111,6 +125,8 @@ MESA_DB=data/try.db pnpm exec next dev --hostname 127.0.0.1 --port 8793
 export MESA_URL=http://127.0.0.1:8793 MESA_SESSION=lead
 node bin/mesa ticket ask --title "¿Seguimos?" --option "A:Sí" --option "B:No" --wait
 # answer in the UI (Tickets) → terminal 2 prints the answer
+node bin/mesa ticket questions <ref> --json - < card.json
+# answer one step of the card in the UI, then the rest → one ticket.answered per message, openLeft 1 then 0
 node bin/mesa salida propose --source slack --dest '{"kind":"slack_channel","workspace":"designli","channel":"#pruebas","postAs":"Andrés"}' --body "hola" --wait-release
 # approve in Salidas, wait 20 s → terminal 2 prints the released salida
 node bin/mesa salida sent <id> --permalink https://example.com

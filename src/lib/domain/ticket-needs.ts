@@ -3,8 +3,8 @@
 // The stored status drifts: a plan with needs_ok steps sets waiting_andres, but any later reply or claim
 // moves it to waiting_claude / working while the steps stay "planned". Salidas, permission approvals and
 // review cards never touched the status at all. So the list asks the facts. Pure: no IO, client safe.
-import { optionStates } from "./ticket-options";
-import type { Approval, PlannedAction, Review, Salida, TicketMessage, TicketStatus } from "./types";
+import { keysLine, openInOrder, recommendedLine } from "./ticket-questions";
+import type { Approval, PlannedAction, Review, Salida, TicketMessage, TicketQuestion, TicketStatus } from "./types";
 
 export type NeedKind = "permission" | "answer" | "plan" | "review" | "salida";
 
@@ -29,7 +29,9 @@ export const NEED_LABEL: Record<NeedKind, string> = {
 
 export interface TicketNeedsInput {
   status: TicketStatus;
-  messages: Pick<TicketMessage, "id" | "author" | "body" | "options" | "recommended" | "chosen">[];
+  messages: Pick<TicketMessage, "id" | "author" | "body">[];
+  /** The ticket's card questions, any state: every open one counts. */
+  questions: Pick<TicketQuestion, "messageId" | "n" | "options" | "recommended" | "state" | "createdAt">[];
   actions: Pick<PlannedAction, "state" | "mode">[];
   /** The ticket's approvals, any status: only the pending ones that have not lapsed count. */
   approvals: Pick<Approval, "status" | "agent" | "expiresAt">[];
@@ -72,13 +74,13 @@ export function ticketNeeds(t: TicketNeedsInput, now: Date = new Date()): Ticket
     add("salida", `${salidas[0]!.title}${more ? ` y ${more} más` : ""}`);
   }
 
-  // Responder: Claude's latest question with options he has not answered; or the status says it is his turn
-  // and neither the plan nor a review explains it (a question without options, a flagged ask).
-  const states = optionStates(t.messages);
-  const open = t.messages.find((m) => m.author === "claude" && states.get(m.id)?.actionable);
-  if (open) {
-    const parts = [`elige ${open.options!.map((o) => o.key).join(" o ")}`];
-    if (open.recommended) parts.push(`Claude recomienda ${open.recommended}`);
+  // Responder: every open card question counts ("3 preguntas abiertas · Claude recomienda 1A 2C 3B"); or the
+  // status says it is his turn and neither the plan nor a review explains it (a question without options, an --ask).
+  const open = openInOrder(t.questions, t.messages);
+  if (open.length) {
+    const rec = recommendedLine(open);
+    const parts = open.length === 1 ? [`elige ${keysLine(open[0]!.options)}`] : [`${open.length} preguntas abiertas`];
+    if (rec) parts.push(`Claude recomienda ${rec}`);
     add("answer", parts.join(" · "));
   } else if (t.status === "waiting_andres" && !out.has("plan") && !out.has("review")) {
     const last = [...t.messages].reverse().find((m) => m.author === "claude");
