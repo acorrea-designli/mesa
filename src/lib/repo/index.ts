@@ -8,6 +8,7 @@ import { dispatchRepo } from "./dispatch";
 import { engramRepo } from "./engram";
 import { leadFocusRepo } from "./focus";
 import { ignoredRepo, ITEM_IGNORED, TASK_IGNORED } from "./ignored";
+import { intakeRepo } from "./intake";
 import { lastInteractionAt, touchInteraction } from "./interaction";
 import { pairingRepo } from "./pairing";
 import { pushRepo } from "./push";
@@ -28,6 +29,7 @@ export function createRepos(db: Db) {
     tasks: tasksRepo(db),
     tickets: ticketsRepo(db),
     dispatch: dispatchRepo(db),
+    intake: intakeRepo(db),
     salidas: salidasRepo(db),
     chips: chipsRepo(db),
     sessions: sessionsRepo(db),

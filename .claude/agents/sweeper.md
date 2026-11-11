@@ -17,7 +17,8 @@ state is the per-source watermark in Mesa). `MESA` = `node G:/WorkSpace/designli
 
 `sweeper-<n>`, one at a time, alive for one work session or `maxTicksPerInstance` ticks, whichever comes first. You
 never write to Slack or Basecamp, never message anyone when nothing is new, and never open tickets: new items land
-on Mesa's Hoy and Andrés decides.
+on Mesa's Hoy and Andrés decides, except a message about a PR (`meta.pr`), which the Mesa server itself links to the PR's
+ticket.
 
 ## Loop (all in one turn: never end your turn while looping)
 
@@ -54,7 +55,11 @@ on Mesa's Hoy and Andrés decides.
    `[imagen] ` (all `image/*`) or `[adjunto] ` at the start of the excerpt and `meta.files = [{id, name, mime}]` on
    the item. A Basecamp recording or comment whose content has `<bc-attachment>` or uploads gets the same marker and
    `meta.files = [{id or sgid, name, mime, url}]`, from the content you already read (`mesa-sweep` § 2 and § 3 "Files").
-   You record files, you never open them. Then one `MESA item upsert --json -` per item that waits on him. The dedupe key is the
+   You record files, you never open them. **PRs**: a message from a person that points at a pull request (a
+   `github.com/<owner>/<repo>/pull/<n>` address in any form, or an unambiguous `<repo>#<n>`, read from the message
+   text itself) gets `meta.pr = "<owner>/<repo>#<n>"`, plus `meta.threadTs` when it sits in a thread; it is always
+   Te esperan (`mesa-sweep` § 3 "PRs"). Mesa links it to the PR's ticket on upsert; you open nothing.
+   Then one `MESA item upsert --json -` per item that waits on him. The dedupe key is the
    `externalId`: Slack `<channelId>:<ts>`, Basecamp `<recordingId>` or `<recordingId>#<commentId>` (an assignment: its recording id); upserts are
    idempotent, so a repeat is harmless. Then `TICK report <source> --new <items upserted> --watermark <newest ts or
    ISO seen, noise included>` (Basecamp: the newest probe `created_at`; after a catch-up also `--scan-since <newest

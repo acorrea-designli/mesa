@@ -73,6 +73,9 @@ export function itemPr(it: Pick<RelItem, "url" | "meta">): { repo: string; n: nu
   const repo = it.meta.repo;
   const n = it.meta.pr;
   if (typeof repo === "string" && repo.includes("/") && typeof n === "number" && Number.isInteger(n)) return { repo, n };
+  // A Slack message about a PR carries it as meta.pr "owner/repo#n" (mesa-sweep § 3, repo/intake.ts).
+  const tagged = typeof n === "string" ? /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(n.trim()) : null;
+  if (tagged) return { repo: tagged[1]!, n: Number(tagged[2]) };
   const l = it.url ? classify(it.url) : null;
   return l?.kind === "pr" && l.repo && l.n !== undefined ? { repo: l.repo, n: l.n } : null;
 }

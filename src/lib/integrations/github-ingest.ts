@@ -10,6 +10,7 @@ import type { Repos } from "../repo";
 import type { Item, SourceState } from "../domain/types";
 import { classify, ghApi, GhError, type GhRunner } from "./gh";
 import { publishChange } from "../live/bus";
+import { autoDispatchEnabled } from "../repo/intake";
 
 export const MIN_POLL_S = 60;
 const REVIEW_REFRESH_MS = 5 * 60_000;
@@ -165,6 +166,7 @@ export function toItemInput(rr: ReviewRequest, d: PrDetail | null): ItemInput {
       repo: rr.repo,
       pr: rr.number,
       author: rr.author,
+      title: rr.title,
       updatedAt: rr.updatedAt,
       ...(d ? { head: d.head, additions: d.additions, deletions: d.deletions, myReview: d.myReview } : {}),
     },
@@ -181,20 +183,32 @@ export interface ReviewSyncResult {
   skippedIgnored: number;
   /** Release-train PRs (auto-created "Create staging PR"): never upserted. */
   skippedRelease: number;
+  /** Auto-dispatch (repo/intake.ts), absent when it is off: refs of the review tickets opened and of the reused ones. */
+  intake?: { created: string[]; reused: string[]; reopened: string[]; batchId: string | null; error?: string };
 }
 
 /**
  * Upsert one item per open review request and move the ones that disappeared to Hecho.
  * Details (+/−, Andrés's review state) are fetched only when the PR changed since the
  * last sync (meta.updatedAt), so a steady state costs one search call.
+ * With `autoDispatch`, every item this sync creates or brings back from Hecho (a re-request) gets its review ticket
+ * (repo/intake.ts reviewItems): never the items that were already open, so nothing is back-filled.
  */
-export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, now = new Date()): Promise<ReviewSyncResult> {
+export async function syncReviewRequests(
+  r: Repos,
+  gh: GhRunner,
+  login: string,
+  now = new Date(),
+  o: { autoDispatch?: boolean } = {},
+): Promise<ReviewSyncResult> {
   const { requests, complete } = await fetchReviewRequests(gh);
   const ignored = r.ignored.list();
   // Items of ignored projects stay as they are (un-ignoring brings them back): they are
   // neither refreshed nor moved to Hecho here.
   const open = r.items.list({ source: "github", includeSamples: false, ignored: "exclude" }).filter((i) => i.kind === "pr_review");
-  const byExt = new Map<string, Item>(open.map((i) => [i.externalId, i]));
+  // Case-insensitive: an item made from a Slack link (repo/intake.ts) may not keep GitHub's casing.
+  const byExt = new Map<string, Item>(open.map((i) => [i.externalId.toLowerCase(), i]));
+  const fresh: string[] = [];
   const seen = new Set<string>();
   const out: ReviewSyncResult = { requests: requests.length, created: 0, updated: 0, done: 0, skippedDrafts: 0, skippedIgnored: 0, skippedRelease: 0 };
 
@@ -210,8 +224,8 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
     }
     // Andrés skipped this PR ("Saltar"): it stays done even if the review is requested again. No detail
     // read, no upsert, no reopen; Deshacer or a manual move out of Hecho brings it back.
-    if (byExt.get(ext)?.skippedAt) {
-      seen.add(ext);
+    if (byExt.get(ext.toLowerCase())?.skippedAt) {
+      seen.add(ext.toLowerCase());
       continue;
     }
     const readDetail = async (): Promise<PrDetail | null> => {
@@ -235,24 +249,39 @@ export async function syncReviewRequests(r: Repos, gh: GhRunner, login: string, 
         continue;
       }
     }
-    seen.add(ext);
-    const existing = byExt.get(ext);
-    const fresh = existing && existing.meta?.updatedAt === rr.updatedAt && existing.station !== "done";
-    if (fresh) continue;
+    seen.add(ext.toLowerCase());
+    const existing = byExt.get(ext.toLowerCase());
+    if (existing && existing.meta?.updatedAt === rr.updatedAt && existing.station !== "done") continue;
     if (!read) detail = await readDetail();
     const input = toItemInput(rr, detail);
+    if (existing) input.externalId = existing.externalId;
     // A request that came back (re-requested after a push) returns to the inbox.
-    if (existing?.station === "done") input.station = "inbox";
+    const back = existing?.station === "done";
+    if (back) input.station = "inbox";
     const { item, created } = r.items.upsert(input, now);
     if (created) out.created++;
     else out.updated++;
+    // A re-request is a done item whose PR moved since (requesting a reviewer bumps updated_at). A done item whose PR
+    // did not move only went to Hecho with its card (the review ticket closed): it comes back to Hoy as before, but
+    // reopening the ticket for it would loop (close, reopen, close).
+    if (created || (back && existing?.meta?.updatedAt !== rr.updatedAt)) fresh.push(item.id);
     publishChange({ entityType: "item", entityId: item.id, kind: created ? "created" : "updated" });
+  }
+
+  if (o.autoDispatch && fresh.length) {
+    try {
+      out.intake = r.intake.reviewItems(fresh, now);
+      for (const ref of [...out.intake.created, ...out.intake.reused]) publishChange({ entityType: "ticket", entityId: ref, kind: "intake" });
+    } catch (err) {
+      // The items are in Hoy either way; a failed dispatch is reported, never a failed sync.
+      out.intake = { created: [], reused: [], reopened: [], batchId: null, error: String(err) };
+    }
   }
 
   // Only trust absences when the search returned everything.
   if (complete) {
     for (const it of open) {
-      if (seen.has(it.externalId) || it.station === "done") continue;
+      if (seen.has(it.externalId.toLowerCase()) || it.station === "done") continue;
       r.items.update(it.id, { station: "done", waitOn: "none" }, now);
       out.done++;
       publishChange({ entityType: "item", entityId: it.id, kind: "done" });
@@ -341,7 +370,7 @@ export async function ingestTick(
   r: Repos,
   gh: GhRunner,
   st: IngestState,
-  o: { now?: Date; force?: boolean; login: string },
+  o: { now?: Date; force?: boolean; login: string; autoDispatch?: boolean },
 ): Promise<TickResult> {
   const now = o.now ?? new Date();
   const t = now.getTime();
@@ -361,7 +390,7 @@ export async function ingestTick(
     }
     let found = 0;
     if (changed || o.force || t >= st.nextReviewSyncAt) {
-      out.reviews = await syncReviewRequests(r, gh, o.login, now);
+      out.reviews = await syncReviewRequests(r, gh, o.login, now, { autoDispatch: o.autoDispatch ?? autoDispatchEnabled() });
       out.heads = await syncReviewHeads(r, gh, o.login, now);
       st.nextReviewSyncAt = t + REVIEW_REFRESH_MS;
       found = out.reviews.created;

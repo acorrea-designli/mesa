@@ -101,7 +101,10 @@ The Mesa server already upserts every open review request on its own (notificati
 `X-Poll-Interval`), so start with `MESA github sync` and only upsert by hand what the gate adds beyond plain review
 requests (open findings, a dismissed approval). Use the server's dedupe key so both paths hit the same item:
 `{"source":"github","externalId":"pr:<owner>/<repo>#<n>","kind":"pr_review","title":"<repo>#<n> <title>","url":"<url>","project":"<owner>/<repo>","need":"approve_pr","waitOn":"you","meta":{"head":"<sha>","author":"<login>"}}`.
-Then each entering PR gets (or keeps) its own review ticket and reviewer: `mesa-review` § Spawning.
+Each review request the server creates already gets its card and review ticket on its own (PR intake, `docs/TEAM.md`
+§ 4; switch `autoDispatch` in `config/sweep.json`), and the lead gets `ticket.created`/`ticket.batch`. What the gate adds
+by hand (open findings, a dismissed approval) and every PR while the switch is off gets (or keeps) its own review ticket
+and reviewer through `mesa-review` § Spawning.
 
 ## 2. Basecamp: assignments, mentions, client comments
 
@@ -144,6 +147,14 @@ write in that conversation afterwards; in a group DM it must be addressed to him
 `{"source":"slack","externalId":"<channelId>:<ts>","kind":"message","title":"<person> · <one-line ask>","url":"<permalink>","project":"<#channel-name, or the person for a DM>","meta":{"channel":"<#channel-name or DM person>"},"waitOn":"you"}`
 (`project` and `meta.channel` are what "Ignorar proyecto «X»" shows; the ignore key is the channel id). With files,
 `excerpt` and `meta.files` are added (§ Files below).
+
+**PRs (t107).** A message from a person (not a bot) that points at a pull request gets `meta.pr: "<owner>/<repo>#<n>"`:
+any `github.com/<owner>/<repo>/pull/<n>` address in the message itself (with `/files`, `/checks`, `/commits`, a
+fragment, `<…|label>` link markup or no scheme), or `<repo>#<n>` when exactly one repo of § 1 has that name. Read it
+from the message text of the detailed read, never from your one-line ask. Several PRs: the first one. A message in a
+thread also gets `meta.threadTs` (its `thread_ts`). A PR message is always **Te esperan**, even a bare link. Nothing else
+changes: Mesa links the item to the PR's ticket on upsert, opens one when the PR has none, and wakes the lead for a
+question (`docs/TEAM.md` § 4, PR intake). You never open or answer tickets.
 **Ya respondiste** and **Ruido** are not upserted; give their counts in the summary line only. Names, never user ids.
 
 **Files (t41).** Search output omits attached files (a DM with a screenshot looked like plain text). So every

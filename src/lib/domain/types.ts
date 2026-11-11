@@ -398,6 +398,7 @@ export type WakeKind =
   | "ticket.closed"
   | "ticket.reopened"
   | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
+  | "ticket.pr_question" // a Slack question about the ticket's PR (repo/intake.ts): { ref, ticketRef, messageId, itemId, repo, pr, who, url, channelId, ts, threadTs, intent }; the lead spawns writer-<ref>
   | "salida.turn" // Andrés asked for a change
   | "salida.released" // undo window over: send now. payload { version, status, mode, recheckThread }; mode (Slack only) "draft" = leave a Slack draft, "send" = send through the connector
   | "salida.undone"
