@@ -112,6 +112,8 @@ Items and memory
   mesa item upsert --json JSON                     ItemInput (source, externalId, kind, title, ...); an ignored project's
                                                    item is not stored and returns { ignored: true }
   mesa item skip <id>                              "Saltar": done, waitOn none, skippedAt set; no upsert reopens it
+  mesa item pr-notice <id>                         the writer's verdict on a Slack PR message: a notice, no reply
+                                                   (Hecho, one line on the PR ticket, no salida); idempotent
   mesa ignore list                                 ignored projects [{ id, source, project, label, hidden }] (sweeper: skip them)
   mesa ignore add <github|slack|basecamp|claude|*> <projectKey> [--label L]
                                                    projectKey: GitHub owner/repo, Slack channel id, Basecamp project name
@@ -595,6 +597,7 @@ async function main() {
 
     case "item":
       if (cmd === "skip") return out(await call("POST", `/api/items/${enc(need(id, "<id>"))}/skip`));
+      if (cmd === "pr-notice") return out(await call("POST", `/api/items/${enc(need(id, "<id>"))}/pr-notice`));
       if (cmd !== "upsert") return usage(`unknown item command "${cmd ?? ""}"`);
       return out(await call("POST", "/api/items/upsert", parseJsonOpt(text(opt.json, "--json"), "--json")));
 

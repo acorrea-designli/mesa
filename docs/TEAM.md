@@ -113,11 +113,12 @@ review row (`repo` + `pr`), then by the PR's item on a card, never by title.
 - *Slack messages about a PR.* The sweeper tags them with `meta.pr` (`mesa-sweep` § 3). On upsert Mesa links the item to
   the PR's ticket (`meta.ticketRef`, shown as "Ticket tN" in Hoy) and writes one line on it (who, what, the link);
   a PR with no ticket first gets its PR item (`pr:<owner>/<repo>#<n>`, so the later GitHub request lands on it), card
-  and review ticket (`ticket.created`, origin slack). A **question** (any message not marked `meta.intent: "notice"`)
-  reopens a closed PR ticket quietly and wakes the lead ONCE with `ticket.pr_question`; the lead spawns `writer-<ref>`
-  on that same ticket, which proposes a salida to the same Slack thread. The item stays in Hoy until that salida is sent
-  or denied. A **notice** gets the line only: no reply, no writer, and the item leaves Te esperan (Hecho; pending
-  Andrés's choice on t107). Re-reading the same message (same `externalId`) writes nothing new.
+  and review ticket (`ticket.created`, origin slack). Mesa does not judge the message: every new one reopens a closed
+  PR ticket quietly and wakes the lead ONCE with `ticket.pr_message`; the lead spawns or reuses `writer-<ref>` (Opus)
+  on that same ticket, which classifies it. A **question** (when in doubt, it is one) gets a salida to the same Slack
+  thread, and the item stays in Hoy until that salida is sent or denied. A **notice** gets
+  `mesa item pr-notice <itemId>`: one more line on the ticket, the item to Hecho, no salida (and a ticket the message
+  had reopened closes again). Re-reading the same message (same `externalId`) writes nothing new.
 - *The switch.* `autoDispatch` in `config/sweep.json` (default `true`; `MESA_AUTO_DISPATCH=on|off` overrides it for one
   server). Off, PRs and Slack items are ingested exactly as before and wait for "Dárselo a Claude".
 - A burst of PRs is a burst of review tickets: the lead keeps at most 5 reviewers working (§ 2) and the rest queue as
@@ -167,7 +168,7 @@ and `findings` keeps its state. `mesa ticket reopen <ref> [--reason R]` reopens 
 | **Internal tooling** | changes to Mesa itself or other dev tools for Andrés (not client code) | `tl-<ref>` | `dev-` only: no separate `reviewer-`, no re-review rounds. The dev runs tsc, the full vitest, test:team and its own Playwright; the tl checks the criteria from the handoff and a quick diff read; nits never block, a bug found later is a new improvement | each change is merged by the lead |
 | **Investigation** | "resume este hilo", "por qué falla el build", "qué pasó con X" | `researcher-<ref>` | `writer-` if a message comes out of it | Andrés closes it; escalates to a tl when it needs a change |
 | **Simple reply** | a message that only needs words: answer a question, confirm, follow up | `writer-<ref>` | none | the salida is sent or denied |
-| **PR question** | `ticket.pr_question`: a Slack question about a PR whose ticket exists (PR intake) | the PR ticket's owner (the reviewer, or none yet) | `writer-<ref>` on the same ticket | the salida to the same Slack thread is sent or denied; the review goes on as usual |
+| **PR message** | `ticket.pr_message`: a Slack message about a PR whose ticket exists (PR intake) | the PR ticket's owner (the reviewer, or none yet) | `writer-<ref>` on the same ticket: classifies it, answers a question, records a notice | a notice: `mesa item pr-notice`; a question: the salida to the same Slack thread is sent or denied. The review goes on as usual |
 
 Client technical request, step by step: tl validates and writes the brief → asks Andrés what only he can decide →
 posts the plan → on `ticket.plan_approved`, `NEED devops` → devops `READY` → tl `NEED reviewer` → reviewer `PASS`

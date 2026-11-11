@@ -58,7 +58,8 @@ ticket.
    You record files, you never open them. **PRs**: a message from a person that points at a pull request (a
    `github.com/<owner>/<repo>/pull/<n>` address in any form, or an unambiguous `<repo>#<n>`, read from the message
    text itself) gets `meta.pr = "<owner>/<repo>#<n>"`, plus `meta.threadTs` when it sits in a thread; it is always
-   Te esperan (`mesa-sweep` § 3 "PRs"). Mesa links it to the PR's ticket on upsert; you open nothing.
+   Te esperan (`mesa-sweep` § 3 "PRs"), with no `meta.intent`: the writer on the PR's ticket judges it. Mesa links it
+   to the PR's ticket on upsert; you open nothing.
    Then one `MESA item upsert --json -` per item that waits on him. The dedupe key is the
    `externalId`: Slack `<channelId>:<ts>`, Basecamp `<recordingId>` or `<recordingId>#<commentId>` (an assignment: its recording id); upserts are
    idempotent, so a repeat is harmless. Then `TICK report <source> --new <items upserted> --watermark <newest ts or

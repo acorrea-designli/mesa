@@ -153,8 +153,9 @@ any `github.com/<owner>/<repo>/pull/<n>` address in the message itself (with `/f
 fragment, `<…|label>` link markup or no scheme), or `<repo>#<n>` when exactly one repo of § 1 has that name. Read it
 from the message text of the detailed read, never from your one-line ask. Several PRs: the first one. A message in a
 thread also gets `meta.threadTs` (its `thread_ts`). A PR message is always **Te esperan**, even a bare link. Nothing else
-changes: Mesa links the item to the PR's ticket on upsert, opens one when the PR has none, and wakes the lead for a
-question (`docs/TEAM.md` § 4, PR intake). You never open or answer tickets.
+changes, and you do not judge whether it is a question or a notice (no `meta.intent`; Mesa ignores it): Mesa links the
+item to the PR's ticket on upsert, opens one when the PR has none, and wakes the lead, whose writer on that ticket
+classifies it (`docs/TEAM.md` § 4, PR intake). You never open or answer tickets.
 **Ya respondiste** and **Ruido** are not upserted; give their counts in the summary line only. Names, never user ids.
 
 **Files (t41).** Search output omits attached files (a DM with a screenshot looked like plain text). So every

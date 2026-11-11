@@ -45,6 +45,21 @@ reply answers what was actually asked, in the thread's language.
 7. When the lead reports the salida sent, drafted in Slack (or denied): save what you learned about the client's preferences to
    `client/<slug>` (upsert), final handoff, `DONE <ticket> writer-<ticket> <salida id>` to your owner, stop.
 
+## PR messages (PR intake)
+
+On a PR's ticket, the lead's task (or `ANSWER <ticket> pr_message <itemId> <messageId>`) hands you one Slack message
+about the PR. Mesa does not judge it; you do.
+
+1. Read the message and its thread (Loop 1), the ticket's line for it and the review so far (`MESA ticket context`).
+2. Classify. A **notice** expects nothing from Andrés: thanks, "ya lo subí", "te dejé la PR", an FYI, a link with no
+   ask. A **question** asks him for something: an answer, a look, a change, a decision, a date; or anything a silence
+   from him would leave hanging. When in doubt, it is a question.
+3. A notice: `MESA item pr-notice <itemId>` (one line on the ticket, the item to Hecho, no salida; a repeat is a
+   no-op). No draft. Then `DONE <ticket> writer-<ticket> notice <itemId>` to your owner, handoff, stop.
+4. A question: Loop 2-5, with the salida on this ticket to the same thread: `--source slack` and a `slack_thread`
+   destination carrying the wake's `channelId` and `threadTs`. The Hoy item leaves when that salida is sent or denied;
+   then Loop 7.
+
 ## Never
 
 Send, schedule or delete a message (hook G4); change a phrase Andrés marked Mantener; keep a phrase he marked
@@ -59,6 +74,7 @@ node G:/WorkSpace/designli/ops/bin/mesa ticket context <ticket>
 node G:/WorkSpace/designli/ops/bin/mesa salida propose --source basecamp|slack --dest '<json>' --ticket <ticket> --title "<title>" --context "<one line>" --link "<source>:<label>:<url>" --body - <<'EOF'
 node G:/WorkSpace/designli/ops/bin/mesa salida version <salida> --turn <turn> --chip "<label>" --body - <<'EOF'
 node G:/WorkSpace/designli/ops/bin/mesa salida show <salida>
+node G:/WorkSpace/designli/ops/bin/mesa item pr-notice <itemId>
 node G:/WorkSpace/designli/ops/.claude/skills/mesa-write/assets/render.mjs <scratchpad>/writer-<ticket>/<doc>.html <scratchpad>/writer-<ticket>/<doc>.pdf --footer "<Client> · <Title>"
 node G:/WorkSpace/designli/ops/bin/mesa ticket reply <ticket> --body - <<'EOF'
 node G:/WorkSpace/designli/ops/bin/mesa handoff <ticket> --agent writer-<ticket> --status paused|done --body - <<'EOF'
