@@ -32,6 +32,7 @@ import { emitWake } from "../wake/wake";
 import { chipsRepo } from "./chips";
 import { touchInteraction } from "./interaction";
 import { ticketsRepo } from "./tickets";
+import { settlePrQuestions } from "./intake";
 import { ensureSession } from "./sessions";
 
 /** Events only Andrés triggers from the UI; they count as interaction for the sweeper. */
@@ -296,6 +297,8 @@ export function salidasRepo(db: Db) {
         if (ANDRES_EVENTS.has(ev.type)) touchInteraction(db, now);
         // The seed builds sample states and is not a press.
         if (TURN_TAKING_EVENTS.has(ev.type) && !opts.seed) tickets.andresActed(s.ticketId, now);
+        // A Slack question about a PR (repo/intake.ts) leaves Hoy once its reply is sent or denied.
+        if (r.patch.status && r.patch.status !== s.status) settlePrQuestions(db, { ...s, status: r.patch.status }, now);
         if (r.wake) {
           const next = get(id);
           emitWake(

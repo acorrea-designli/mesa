@@ -88,8 +88,8 @@ The lead classifies each new ticket (or item worth a ticket) and spawns its owne
 **Tasks go straight to an agent.** Every card Andrés creates in Mesa (Tablero "+ Tarea", Nuevo pedido, `mesa task create`)
 and every "Dárselo a Claude" (one card or a batch, ingested PR/Basecamp/Slack cards included) becomes an `andres_asks`
 ticket linked to its card, owned by `lead`, and one `ticket.created` wake `{ ref, ticketRef, taskId, kind? }` (2+ new tickets in one call wake once with `ticket.batch`, see Batches below). Only
-"Solo anotar (sin agente)" / `--note-only` skips it; ingested items never dispatch on their own and sample cards never
-dispatch. On the wake the lead, idempotently (delivery is at least once):
+"Solo anotar (sin agente)" / `--note-only` skips it; sample cards never dispatch. Ingested items never dispatch on their
+own, except PRs (**PR intake** below). On the wake the lead, idempotently (delivery is at least once):
 
 1. `mesa ticket show <ticketRef>`: skip when it is closed, or already has a live owner in `mesa team list --ticket <ref>`.
 2. Triage by `kind`, else by the ticket and its card's links: `review` (a PR) → **Review**, owner `reviewer-<ref>`;
@@ -100,6 +100,28 @@ dispatch. On the wake the lead, idempotently (delivery is at least once):
    The card's owner chip switches from "Claude · por asignar" to "<name> · En curso" live.
 
 Dispatching never sends anything outward: every Slack, Basecamp or GitHub write is still a salida.
+
+**PR intake: PRs reach Claude without a click** (t107, `src/lib/repo/intake.ts`). One PR, one ticket, matched by the
+review row (`repo` + `pr`), then by the PR's item on a card, never by title.
+
+- *Review requests.* Every review request the GitHub sync creates (same gate as Hoy: no drafts, ignored projects,
+  skipped items, release-train PRs, samples) gets its card (`<owner/repo>#<n> · <author>: <title>`) and an
+  `andres_asks` review ticket (`Review <owner/repo>#<n> · <author>: <title>`) with the usual wakes: one
+  `ticket.created { kind: review }`, or ONE `ticket.batch { origin: github }` for 2+ in one sync. A re-request (the item
+  comes back from Hecho and the PR moved) reuses the PR's ticket and reopens it if closed (`ticket.reopened { repo, pr,
+  reason }`); a second sync of the same PR creates nothing. Items already in Hoy when this shipped are never back-filled.
+- *Slack messages about a PR.* The sweeper tags them with `meta.pr` (`mesa-sweep` § 3). On upsert Mesa links the item to
+  the PR's ticket (`meta.ticketRef`, shown as "Ticket tN" in Hoy) and writes one line on it (who, what, the link);
+  a PR with no ticket first gets its PR item (`pr:<owner>/<repo>#<n>`, so the later GitHub request lands on it), card
+  and review ticket (`ticket.created`, origin slack). A **question** (any message not marked `meta.intent: "notice"`)
+  reopens a closed PR ticket quietly and wakes the lead ONCE with `ticket.pr_question`; the lead spawns `writer-<ref>`
+  on that same ticket, which proposes a salida to the same Slack thread. The item stays in Hoy until that salida is sent
+  or denied. A **notice** gets the line only: no reply, no writer, and the item leaves Te esperan (Hecho; pending
+  Andrés's choice on t107). Re-reading the same message (same `externalId`) writes nothing new.
+- *The switch.* `autoDispatch` in `config/sweep.json` (default `true`; `MESA_AUTO_DISPATCH=on|off` overrides it for one
+  server). Off, PRs and Slack items are ingested exactly as before and wait for "Dárselo a Claude".
+- A burst of PRs is a burst of review tickets: the lead keeps at most 5 reviewers working (§ 2) and the rest queue as
+  `+N en cola`.
 
 **Batches.** Andrés selects several Hoy items ("Abrir tarea y pasar a Claude") or Tablero cards ("Dárselas a Claude") and
 hands them over together. Each card still gets its own `andres_asks` ticket (already open, owned by `lead`), but the lead is
@@ -140,11 +162,12 @@ and `findings` keeps its state. `mesa ticket reopen <ref> [--reason R]` reopens 
 
 | Template | When | Owner | Team | Ends when |
 |---|---|---|---|---|
-| **Review** | a PR that needs Andrés's review (`mesa-sweep` gate) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed (approve or post); then the lead closes the ticket, open findings included, and a new push from the PR author reopens that same ticket (`ticket.reopened`; `mesa ticket reopen` by hand) and brings `reviewer-<ref>-2` |
+| **Review** | a PR that needs Andrés's review (`mesa-sweep` gate; opened by PR intake on its own) or "haz un review pass" | `reviewer-<ref>` | none | his choice is executed (approve or post); then the lead closes the ticket, open findings included, and a new push from the PR author reopens that same ticket (`ticket.reopened`; `mesa ticket reopen` by hand) and brings `reviewer-<ref>-2` |
 | **Client technical request** | a client asks for a change (Basecamp, Slack, a forwarded email): "Matt asked for infra" | `tl-<ref>` | `devops-` or `dev-`, then `reviewer-`, then `writer-`; `researcher-` if the cause is unknown | the client reply is sent and Andrés closes it |
 | **Internal tooling** | changes to Mesa itself or other dev tools for Andrés (not client code) | `tl-<ref>` | `dev-` only: no separate `reviewer-`, no re-review rounds. The dev runs tsc, the full vitest, test:team and its own Playwright; the tl checks the criteria from the handoff and a quick diff read; nits never block, a bug found later is a new improvement | each change is merged by the lead |
 | **Investigation** | "resume este hilo", "por qué falla el build", "qué pasó con X" | `researcher-<ref>` | `writer-` if a message comes out of it | Andrés closes it; escalates to a tl when it needs a change |
 | **Simple reply** | a message that only needs words: answer a question, confirm, follow up | `writer-<ref>` | none | the salida is sent or denied |
+| **PR question** | `ticket.pr_question`: a Slack question about a PR whose ticket exists (PR intake) | the PR ticket's owner (the reviewer, or none yet) | `writer-<ref>` on the same ticket | the salida to the same Slack thread is sent or denied; the review goes on as usual |
 
 Client technical request, step by step: tl validates and writes the brief → asks Andrés what only he can decide →
 posts the plan → on `ticket.plan_approved`, `NEED devops` → devops `READY` → tl `NEED reviewer` → reviewer `PASS`
@@ -342,7 +365,8 @@ procedure and the lead's on-demand pass.
   key as `externalId` and the watermark advance. A quiet tick writes only `lastChecked` and says nothing.
 - **Cadence in config, not prose**: `config/sweep.json` holds work hours, the active interval (60 s), the idle
   interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit, the
-  ticks per instance and the Basecamp catch-up interval (`sources.basecamp.fullScanEveryTicks`). `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
+  ticks per instance, the Basecamp catch-up interval (`sources.basecamp.fullScanEveryTicks`) and `autoDispatch`, the PR
+  intake switch (§ 4). `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
   records a tick's outcome. Any new item or any interaction by Andrés snaps the cadence back to 60 s.
 - **Barrer ahora** (or `mesa sweep`) emits `sweep.requested` to the Mesa session `sweeper`
   (`MESA_SWEEPER_SESSION`); `sweep-tick.mjs wait` long-polls that session and returns at once with every listed
@@ -353,6 +377,9 @@ procedure and the lead's on-demand pass.
 - **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its health to
   `degraded`, or `down` after `downAfterErrors` consecutive failures that are not rate limits; the rail shows it
   (Estados B). The next good probe sets it back to `ok`, and leaving `down` resumes the salidas held for it.
+- **PRs in Slack.** A Slack message from a person that points at a PR (any `github.com/<owner>/<repo>/pull/<n>` address,
+  or an unambiguous `<repo>#<n>`) is upserted with `meta.pr: "<owner>/<repo>#<n>"` (and `meta.threadTs` when it sits in
+  a thread). The sweeper never opens tickets: the server links the item to the PR's ticket on upsert (§ 4, PR intake).
 - **Context.** The sweeper waits in the foreground, so its turn never ends between ticks: no idle notifications
   reach the lead and no tick costs the lead any context. After `maxTicksPerInstance` ticks it sends `DONE` and the
   lead spawns the next one; the watermarks carry over in Mesa.

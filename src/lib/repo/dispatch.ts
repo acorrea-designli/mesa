@@ -33,8 +33,8 @@ export interface DispatchResult {
   created: boolean;
 }
 
-/** Where a batch came from, carried on the ticket.batch wake. */
-export type BatchOrigin = "hoy" | "tablero" | "cli";
+/** Where a batch came from, carried on the ticket.batch wake. "github" and "slack": Mesa's own PR intake (repo/intake.ts). */
+export type BatchOrigin = "hoy" | "tablero" | "cli" | "github" | "slack";
 
 export interface BatchDispatchResult {
   /** The ticket.batch id ("bt_..."); null when no batch wake was sent (fewer than 2 new tickets). */
@@ -77,7 +77,12 @@ export function dispatchRepo(db: Db) {
    * Hand one card to Claude. Idempotent: a card with an open ticket returns it unchanged. `quiet` skips the
    * ticket.created wake (the caller sends one ticket.batch for the whole call); `made` is what that wake lists.
    */
-  const dispatchOne = (taskId: string, o: { kind?: DispatchKind } = {}, now = new Date(), quiet = false): { result: DispatchResult; made?: BatchTicket } => {
+  const dispatchOne = (
+    taskId: string,
+    o: { kind?: DispatchKind; title?: string } = {},
+    now = new Date(),
+    quiet = false,
+  ): { result: DispatchResult; made?: BatchTicket } => {
     const t = tasks.get(taskId);
     if (t.isSample) throw new TransitionError(SAMPLE_REFUSED);
     const existing = openTicket(t);
@@ -88,7 +93,7 @@ export function dispatchRepo(db: Db) {
     const d = tickets.create(
       {
         direction: "andres_asks",
-        title: t.title,
+        title: o.title ?? t.title,
         body: ticketBody(t, linked),
         project: t.project || linked[0]?.project || undefined,
         ownerSession: lead(),
@@ -102,7 +107,7 @@ export function dispatchRepo(db: Db) {
     );
     // The card now waits on Claude; its owner chip replaces the "Espera a Claude" tag.
     db.prepare("UPDATE tasks SET ticket_id = ?, wait_on = 'claude' WHERE id = ?").run(d.id, t.id);
-    const made: BatchTicket = { ticketRef: d.ref, taskId: t.id, title: t.title, urls: linked.filter((i) => i.url).map((i) => i.url!) };
+    const made: BatchTicket = { ticketRef: d.ref, taskId: t.id, title: o.title ?? t.title, urls: linked.filter((i) => i.url).map((i) => i.url!) };
     if (kind) made.kind = kind;
     return { result: { task: tasks.get(t.id), ticket: { id: d.id, ref: d.ref }, created: true }, made };
   };
@@ -114,7 +119,7 @@ export function dispatchRepo(db: Db) {
    */
   const dispatchCards = (
     ids: string[],
-    o: { kind?: DispatchKind; origin?: BatchOrigin },
+    o: { kind?: DispatchKind; origin?: BatchOrigin; titles?: ReadonlyMap<string, string> },
     now: Date,
     skipped: BatchDispatchResult["skipped"] = [],
   ): BatchDispatchResult => {
@@ -128,7 +133,7 @@ export function dispatchRepo(db: Db) {
     const results: DispatchResult[] = [];
     const made: BatchTicket[] = [];
     for (const t of live) {
-      const r = dispatchOne(t.id, o, now, quiet);
+      const r = dispatchOne(t.id, { kind: o.kind, title: o.titles?.get(t.id) }, now, quiet);
       results.push(r.result);
       if (r.made) made.push(r.made);
     }
@@ -183,6 +188,15 @@ export function dispatchRepo(db: Db) {
         touchInteraction(db, now);
         return out;
       });
+    },
+
+    /**
+     * Mesa's own intake (repo/intake.ts): hand cards to Claude inside the caller's transaction, each ticket titled
+     * as `titles` says (falls back to the card's title). Same wakes as "Dárselas a Claude": one new ticket is a
+     * ticket.created, 2+ are ONE ticket.batch with this origin. Not an Andrés interaction (no touchInteraction).
+     */
+    dispatchAuto(ids: string[], o: { kind?: DispatchKind; origin: BatchOrigin; titles?: ReadonlyMap<string, string> }, now = new Date()): BatchDispatchResult {
+      return tx(db, () => dispatchCards(ids, o, now));
     },
 
     /**

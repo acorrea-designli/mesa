@@ -550,13 +550,29 @@ export function ticketsRepo(db: Db) {
 
     /**
      * Reopen a closed ticket on Mesa's own account (a new PR head, see reviews.noteHead). It is not an
-     * Andrés interaction, so it does not touch the interaction clock. `payload` rides on the ticket.reopened wake.
+     * Andrés interaction, so it does not touch the interaction clock. `payload` rides on the ticket.reopened wake;
+     * `quiet` reopens without it (the caller sends its own, more specific wake).
      */
-    reopenBySystem(id: string, payload: Record<string, unknown>, now = new Date()): TicketDetail {
+    reopenBySystem(id: string, payload: Record<string, unknown>, now = new Date(), o: { quiet?: boolean } = {}): TicketDetail {
       return tx(db, () => {
         const t = get(id);
-        apply(t, { type: "reopen" }, now, payload);
+        apply(t, { type: "reopen" }, now, payload, o.quiet);
         return this.detail(t.id);
+      });
+    },
+
+    /**
+     * Mesa's own informational line on a ticket (repo/intake.ts: a Slack message about the ticket's PR). Written as
+     * Claude, it never changes the status (so an unclaimed request stays claimable and nothing lands in Te espera),
+     * never wakes and works on a closed ticket too. It does flag the ticket unread, like any message not by Andrés.
+     */
+    note(id: string, m: { body: string; refs?: RefInput[] }, now = new Date()): string {
+      return tx(db, () => {
+        const t = get(id);
+        const ts = nowIso(now);
+        const msgId = insertMessage(t.id, { author: "claude", body: m.body, refs: m.refs }, ts);
+        db.prepare("UPDATE tickets SET updated_at = ? WHERE id = ?").run(ts, t.id);
+        return msgId;
       });
     },
 

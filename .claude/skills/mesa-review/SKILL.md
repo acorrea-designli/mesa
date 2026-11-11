@@ -16,7 +16,15 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 ## Spawning (lead)
 
-- **Requested review**: one ticket per PR, titled `Review <owner/repo>#<n> · <author login>: <PR title>` (Andrés, 2026-11-09: he wants the author on every PR ticket). Find it by the PR, never by
+- **PR intake** (t107, `docs/TEAM.md` § 4; switch `autoDispatch` in `config/sweep.json`, default on): Mesa opens the
+  card and review ticket of every new review request by itself, reuses the PR's ticket on a re-request (reopened if
+  closed), and does the same for a PR a Slack message points at. The lead only routes the `ticket.created`
+  (`kind: review`) or `ticket.batch` (`origin: github|slack`): claim, brief, `team add --owner`, spawn `reviewer-<ref>`.
+  Never open a second ticket for such a PR by hand. Cap: at most 5 reviewers working (TEAM.md § 2); the rest wait as
+  `+N en cola` and start as slots free up, oldest first. A `ticket.pr_question` on the PR's ticket brings a
+  `writer-<ref>` next to the reviewer (`mesa-start` § 5); the reviewer keeps the review.
+
+- **Requested review** (by hand: intake off, or a PR the gate adds beyond plain requests): one ticket per PR, titled `Review <owner/repo>#<n> · <author login>: <PR title>` (Andrés, 2026-11-09: he wants the author on every PR ticket). Find it by the PR, never by
   the title (a renamed PR would not match): `MESA review list` (no `--ticket`), take the row with that `repo` and
   `pr`, and its `ticketId` is the PR's ticket, closed or not (`MESA ticket show <ticketId>` gives the `ref`). A closed
   one comes back with `MESA ticket reopen <ticketId> --reason "new push"` (Mesa also reopens it by itself on a new

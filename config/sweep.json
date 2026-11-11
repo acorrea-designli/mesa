@@ -1,5 +1,6 @@
 {
-  "$comment": "Cadence of the Slack/Basecamp sweep (scripts/sweep-tick.mjs, the sweeper role). Times are local to this PC.",
+  "$comment": "Cadence of the Slack/Basecamp sweep (scripts/sweep-tick.mjs, the sweeper role). Times are local to this PC. autoDispatch: Mesa hands new review requests and Slack messages about a PR to Claude on its own (src/lib/repo/intake.ts); false turns it off, MESA_AUTO_DISPATCH=on|off overrides it per server.",
+  "autoDispatch": true,
   "workHours": {
     "days": [
       1,
