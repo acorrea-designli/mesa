@@ -1,6 +1,7 @@
 // Request schemas for the REST API. The response types live in domain/types.ts.
 import { z } from "zod";
 import { SOURCES, STATIONS } from "../domain/types";
+import { cardProblem, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS } from "../domain/ticket-questions";
 
 export const source = z.enum(SOURCES);
 export const station = z.enum(STATIONS);
@@ -72,6 +73,28 @@ export const taskBatch = z.discriminatedUnion("action", [
 export const taskLink = z.object({ itemIds: z.array(z.string()).min(1) });
 
 const ticketOption = z.object({ key: z.string().min(1).max(3), label: z.string().min(1), detail: z.string().optional() });
+/** One question of a card (t108): its text, 2-6 options with keys A-F, the recommended key and why. */
+const questionInput = z.object({
+  text: z.string().optional(),
+  options: z.array(ticketOption).min(MIN_OPTIONS).max(MAX_OPTIONS),
+  recommended: z.string().optional(),
+  recommendation: z.string().optional(),
+});
+/** Andrés's answer to one open question: a pick, his own words, or both. */
+const questionAnswer = z
+  .object({ questionId: z.string().min(1), chosen: z.string().min(1).optional(), text: z.string().optional() })
+  .refine((a) => Boolean(a.chosen || a.text?.trim()), "an answer needs chosen or text");
+
+/** A card must be valid as a whole (cardProblem): unique keys A-F, the recommended key among them, text when 2+. */
+const checkCard = (
+  m: { questions?: z.infer<typeof questionInput>[]; options?: z.infer<typeof ticketOption>[]; recommended?: string; recommendation?: string },
+  ctx: z.RefinementCtx,
+) => {
+  const card = m.questions?.length ? m.questions : m.options?.length ? [{ text: "", options: m.options, recommended: m.recommended }] : null;
+  const problem = card ? cardProblem(card, { requireText: card.length > 1 }) : null;
+  if (problem) ctx.addIssue({ code: "custom", message: problem, path: [m.questions?.length ? "questions" : "options"] });
+};
+
 const refInput = z.object({
   refType: z.enum(["ticket", "item", "url"]),
   target: z.string().min(1),
@@ -86,23 +109,36 @@ export const ticketInput = z.object({
   itemId: z.string().optional(),
   isSample: z.boolean().optional(),
   body: z.string().optional(),
+  questions: z.array(questionInput).min(1).max(MAX_QUESTIONS).optional(),
   options: z.array(ticketOption).optional(),
   recommended: z.string().optional(),
   recommendation: z.string().optional(),
   refs: z.array(refInput).optional(),
-});
+}).superRefine(checkCard);
 
-export const ticketMessage = z.object({
-  author: z.enum(["andres", "claude"]),
-  body: z.string().optional(),
-  options: z.array(ticketOption).optional(),
-  recommended: z.string().optional(),
-  recommendation: z.string().optional(),
-  chosen: z.string().optional(),
-  ask: z.boolean().optional(),
-  refs: z.array(refInput).optional(),
-  session: z.string().optional(),
-});
+/** Claude: body, a card (`questions`, or one question as `options`), ask. Andrés: body, `answers` (or `chosen`). */
+export const ticketMessage = z
+  .object({
+    author: z.enum(["andres", "claude"]),
+    body: z.string().optional(),
+    questions: z.array(questionInput).min(1).max(MAX_QUESTIONS).optional(),
+    answers: z.array(questionAnswer).min(1).max(MAX_QUESTIONS * 10).optional(),
+    options: z.array(ticketOption).optional(),
+    recommended: z.string().optional(),
+    recommendation: z.string().optional(),
+    chosen: z.string().optional(),
+    ask: z.boolean().optional(),
+    refs: z.array(refInput).optional(),
+    session: z.string().optional(),
+  })
+  .superRefine((m, ctx) => {
+    if (m.author === "andres" && (m.questions?.length || m.options?.length)) ctx.addIssue({ code: "custom", message: "only Claude asks questions", path: ["questions"] });
+    if (m.author === "claude" && (m.answers?.length || m.chosen)) ctx.addIssue({ code: "custom", message: "only Andrés answers questions", path: ["answers"] });
+    checkCard(m, ctx);
+  });
+
+/** Claude withdraws an open question (mesa ticket question withdraw <tq id> --why W). */
+export const questionWithdraw = z.object({ reason: z.string().trim().min(1), session: z.string().optional() });
 
 export const plannedAction = z.object({
   kind: z.string().min(1),

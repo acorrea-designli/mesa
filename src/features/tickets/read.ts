@@ -82,14 +82,15 @@ function excerpt(t: TicketDetail, needs: TicketNeed[], now: Date): string {
   if (line) return line.lead + line.rest;
   const first = t.messages[0];
   const last = t.messages[t.messages.length - 1];
-  const opts = first?.options?.length;
+  const asked = first ? t.questions.filter((q) => q.messageId === first.id) : [];
+  const opts = asked.length === 1 ? asked[0]!.options : null;
   if (t.status === "closed") return last && last.author === "claude" ? `Hecho por Claude · ${clip(last.body, 60)}` : "Cerrado";
   if (t.status === "working") return `Claude trabaja desde las ${hm(t.wokeAt ?? t.updatedAt)}`;
   if (t.status === "waiting_claude" && last?.chosen) return `Respondiste ${last.chosen} · ${hm(last.createdAt)}`;
   if (t.actions.some((a) => a.state === "planned")) return "Claude va a hacer · te pide OK";
   const parts = [t.project];
-  if (opts) parts.push(`elige ${first!.options!.map((o) => o.key).join(" o ")}`);
-  if (first?.recommended) parts.push(`Claude recomienda ${first.recommended}`);
+  if (opts) parts.push(`elige ${opts.map((o) => o.key).join(" o ")}`);
+  if (opts && asked[0]!.recommended) parts.push(`Claude recomienda ${asked[0]!.recommended}`);
   if (!opts && first?.body) parts.push(clip(first.body, 70));
   void now;
   return parts.filter(Boolean).join(" · ");
@@ -113,7 +114,10 @@ const relTicket = (r: Repos, t: Ticket, reviews: Map<string, { repo: string; pr:
     ref: d.ref,
     title: d.title,
     itemId: d.itemId,
-    texts: d.messages.flatMap((m) => [m.body, m.recommendation ?? "", ...(m.options ?? []).flatMap((o) => [o.label, o.detail ?? ""])]),
+    texts: [
+      ...d.messages.map((m) => m.body),
+      ...d.questions.flatMap((q) => [q.text, q.recommendation ?? "", ...q.options.flatMap((o) => [o.label, o.detail ?? ""])]),
+    ],
     refUrls: d.refs.filter((x) => x.refType === "url").map((x) => x.target),
     reviews: reviews.get(d.id) ?? [],
   };

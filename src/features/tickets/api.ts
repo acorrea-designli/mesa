@@ -1,5 +1,5 @@
 // Client calls for Tickets A.
-import type { TicketDetail } from "@/lib/domain/types";
+import type { QuestionAnswer, TicketDetail } from "@/lib/domain/types";
 import { call } from "@/features/salidas/api";
 import type { ComposerState } from "./Composer";
 
@@ -20,10 +20,15 @@ const refsOf = (s: ComposerState, extra: { refType: "url" | "ticket" | "item"; t
 ];
 
 export const ticketApi = {
-  /** Andrés answers (wakes the owner with ticket.answered). Files attach to the new message. */
-  async reply(id: string, s: ComposerState, chosen?: string): Promise<TicketDetail> {
+  /**
+   * Andrés answers (wakes the owner with ticket.answered): his words plus the answers to any open card questions, in
+   * one message. Files attach to the new message.
+   */
+  async reply(id: string, s: ComposerState, answers: QuestionAnswer[] = []): Promise<TicketDetail> {
     const body = s.text.trim();
-    const d = await call<TicketDetail>(`${T(id)}/messages`, { body: { author: "andres", body: body || undefined, chosen, refs: refsOf(s) } });
+    const d = await call<TicketDetail>(`${T(id)}/messages`, {
+      body: { author: "andres", body: body || undefined, answers: answers.length ? answers : undefined, refs: refsOf(s) },
+    });
     const msg = [...d.messages].reverse().find((m) => m.author === "andres");
     if (s.files.length) await upload(d.id, s.files, msg?.id);
     return d;

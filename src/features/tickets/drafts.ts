@@ -1,6 +1,6 @@
 // Unsent text on Tickets, kept in the browser so a remount (a tab or screen change, a reload, the
 // board restarting under an open tab) never loses it. One localStorage key holds every draft:
-// the reply of each ticket (by ticket id: text and @refs) and the new-request form (text, @refs,
+// the reply of each ticket (by ticket id: text, @refs and the picks on its question cards) and the new-request form (text, @refs,
 // Relacionar con, Proyecto). Nothing else is stored: no files, no ticket content.
 // Pure over a `DraftStore`, so it is tested without a browser; every storage access is guarded.
 
@@ -8,11 +8,20 @@ export interface DraftRef {
   target: string;
   label: string;
 }
+/** What he picked or wrote on one open card question, not sent yet. */
+export interface DraftPick {
+  chosen?: string;
+  text?: string;
+}
 export interface ReplyDraft {
   text: string;
   refs: DraftRef[];
+  /** Question card picks by question id (t108); absent or empty when none. */
+  picks?: Record<string, DraftPick>;
 }
-export interface RequestDraft extends ReplyDraft {
+export interface RequestDraft {
+  text: string;
+  refs: DraftRef[];
   link: string;
   project: string;
 }
@@ -30,6 +39,7 @@ export const MAX_AGE_MS = 14 * 86_400_000;
 const MAX_REPLIES = 50;
 const MAX_TEXT = 50_000;
 const MAX_REFS = 20;
+const MAX_PICKS = 36;
 
 interface Stamped<T> {
   d: T;
@@ -56,16 +66,35 @@ function readRefs(v: unknown): DraftRef[] | null {
   return out;
 }
 
+/** Picks by question id; a malformed entry is dropped, never the whole draft. */
+function readPicks(v: unknown): Record<string, DraftPick> {
+  const out: Record<string, DraftPick> = {};
+  if (!isRecord(v)) return out;
+  for (const [id, p] of Object.entries(v).slice(0, MAX_PICKS)) {
+    if (id === "__proto__" || id.length > 40 || !isRecord(p)) continue;
+    const chosen = str(p.chosen, 3);
+    const text = str(p.text, 2000);
+    if (!chosen && !text) continue;
+    out[id] = { ...(chosen ? { chosen } : {}), ...(text ? { text } : {}) };
+  }
+  return out;
+}
+
+const hasPicks = (p: Record<string, DraftPick> | undefined) => Boolean(p && Object.keys(p).length);
+
 function readReply(v: unknown): ReplyDraft | null {
   if (!isRecord(v)) return null;
   const text = str(v.text, MAX_TEXT);
   const refs = readRefs(v.refs);
-  return text === null || !refs ? null : { text, refs };
+  if (text === null || !refs) return null;
+  const picks = readPicks(v.picks);
+  return hasPicks(picks) ? { text, refs, picks } : { text, refs };
 }
 
 function readRequest(v: unknown): RequestDraft | null {
   const base = readReply(v);
   if (!base || !isRecord(v)) return null;
+  delete base.picks;
   const link = str(v.link, 2000);
   const project = str(v.project, 200);
   return link === null || project === null ? null : { ...base, link, project };
@@ -130,7 +159,7 @@ export function browserStore(): DraftStore | null {
   }
 }
 
-const emptyReply = (d: ReplyDraft) => d.text === "" && d.refs.length === 0;
+const emptyReply = (d: ReplyDraft) => d.text === "" && d.refs.length === 0 && !hasPicks(d.picks);
 
 export function loadReply(ticketId: string, store: DraftStore | null = browserStore(), now = Date.now()): ReplyDraft | null {
   const replies = read(store, now).replies;
@@ -144,7 +173,10 @@ export function saveReply(ticketId: string, draft: ReplyDraft, store: DraftStore
     if (!drafts.replies[ticketId]) return;
     delete drafts.replies[ticketId];
   } else {
-    drafts.replies[ticketId] = { d: { text: draft.text.slice(0, MAX_TEXT), refs: draft.refs.slice(0, MAX_REFS) }, at: now };
+    const picks = readPicks(draft.picks);
+    const d: ReplyDraft = { text: draft.text.slice(0, MAX_TEXT), refs: draft.refs.slice(0, MAX_REFS) };
+    if (hasPicks(picks)) d.picks = picks;
+    drafts.replies[ticketId] = { d, at: now };
   }
   write(store, drafts);
 }

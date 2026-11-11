@@ -15,6 +15,18 @@ describe("reply drafts", () => {
     expect(loadReply("tk_a", s, NOW + 1000)).toEqual({ text: "voy escribiendo", refs: [ref] });
   });
 
+  it("keeps the question card picks with the reply, alone too, and drops malformed ones", () => {
+    const s = memory();
+    const picks = { tq_1: { chosen: "B" }, tq_2: { text: "con mis palabras" }, tq_3: { chosen: "A", text: "y algo" } };
+    saveReply("tk_a", { text: "", refs: [], picks }, s, NOW);
+    expect(loadReply("tk_a", s, NOW + 1000)).toEqual({ text: "", refs: [], picks });
+    const raw = JSON.parse(s.data.get(DRAFTS_KEY)!);
+    raw.replies.tk_a.d.picks = { ...picks, tq_bad: 5, tq_empty: {}, tq_num: { chosen: 3 } };
+    expect(parseDrafts(JSON.stringify(raw), NOW).replies.tk_a?.d.picks).toEqual(picks);
+    saveReply("tk_a", { text: "", refs: [], picks: {} }, s, NOW);
+    expect(loadReply("tk_a", s, NOW)).toBeNull();
+  });
+
   it("keeps one draft per ticket", () => {
     const s = memory();
     saveReply("tk_a", { text: "uno", refs: [] }, s, NOW);

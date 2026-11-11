@@ -1,10 +1,10 @@
 "use client";
-// Thread pane (520 px): the question, A/B options, Claude's recommendation, the
+// Thread pane (520 px): the question cards (QuestionCard.tsx), Claude's recommendation, the
 // client's words, sources, Claude's plan, permission approvals, reviews, the
 // messages, the agents on the ticket and the reply composer.
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Attachment, PlannedAction, TicketMessage, TicketRef } from "@/lib/domain/types";
+import type { Attachment, PlannedAction, QuestionAnswer, TicketMessage, TicketQuestion, TicketRef } from "@/lib/domain/types";
 import { Alert, Chip, FilesBadge, srcClass } from "@/components/ui/primitives";
 import { chipOfMeta } from "@/lib/domain/files";
 import { useToast } from "@/components/ui/interactive";
@@ -19,7 +19,9 @@ import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
-import { optionStates, optionText, type OptionState } from "@/lib/domain/ticket-options";
+import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
+import { QuestionCard } from "./QuestionCard";
+import { answersOf, livePicks, type Picks } from "./card";
 import { firstLine, repeatsReviewCard } from "@/lib/domain/review-repeat";
 import { clearReply, loadReply, saveReply, type ReplyDraft } from "./drafts";
 import { useDraft } from "./useDraft";
@@ -46,8 +48,15 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   const draftId = t.id;
   const loadDraft = useCallback(() => loadReply(draftId), [draftId]);
   const saveDraft = useCallback((d: ReplyDraft) => saveReply(draftId, d), [draftId]);
-  const draft = useMemo(() => ({ text: c.state.text, refs: c.state.refs }), [c.state.text, c.state.refs]);
-  useDraft(loadDraft, saveDraft, c.restore, draft);
+  // Picks on the question cards travel with the reply draft, so a reload keeps them.
+  const [picks, setPicks] = useState<Picks>({});
+  const { restore } = c;
+  const restoreDraft = useCallback((d: ReplyDraft) => {
+    restore(d);
+    setPicks(d.picks ?? {});
+  }, [restore]);
+  const draft = useMemo(() => ({ text: c.state.text, refs: c.state.refs, picks }), [c.state.text, c.state.refs, picks]);
+  useDraft(loadDraft, saveDraft, restoreDraft, draft);
   const [busy, setBusy] = useState(false);
   const ref = usePress<HTMLElement>(".btn, .tk-opt, .tk-verb");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -214,24 +223,31 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
 
   const first = t.messages[0];
   const rest = t.messages.slice(1);
-  // Every message with options gets buttons; only the latest one Andrés has not answered is live.
-  const optStates = optionStates(t.messages);
-  const openMsg = t.messages.find((m) => optStates.get(m.id)?.actionable);
+  // Every question card keeps its own live buttons until each question is answered or withdrawn (t108).
+  const openQs = t.questions.filter((q) => q.state === "open");
+  const cardFor = (m: TicketMessage | undefined) => (m ? cardOf(t.questions, m.id) : []);
+  const firstCard = cardFor(first);
   const closed = t.status === "closed";
   // Claude replies that repeat the review card (older ones, from before hook G12) fold under it.
   const cardFindings = data.reviews.flatMap((r) => r.findings);
   const pending = data.approvals.filter((a) => a.status === "pending");
   const pastApprovals = data.approvals.filter((a) => a.status !== "pending").slice(-3);
 
-  const send = async (chosenKey?: string, from?: TicketMessage) => {
+  /**
+   * One reply: his words plus the answers to open card questions. `answers` comes from a card (its own picks, or the
+   * click on a 1-step card); the composer's Responder sends every pick on every card.
+   */
+  const send = async (answers?: QuestionAnswer[]) => {
     if (busy) return;
-    if (!chosenKey && !c.state.text.trim() && !c.state.files.length && !c.state.refs.length) return;
+    const all = answers ?? answersOf(t.questions, livePicks(t.questions, picks));
+    if (!all.length && !c.state.text.trim() && !c.state.files.length && !c.state.refs.length) return;
     setBusy(true);
     try {
-      const state = chosenKey && !c.state.text.trim() ? { ...c.state, text: optionText(from ?? openMsg, chosenKey) } : c.state;
-      await ticketApi.reply(t.id, state, chosenKey);
+      await ticketApi.reply(t.id, c.state, all);
       clearReply(t.id); // sent: the draft must not come back (a failed send keeps it)
       c.reset();
+      // What was sent leaves; picks on other cards stay (the draft saves them again).
+      setPicks((p) => Object.fromEntries(Object.entries(p).filter(([id]) => !all.some((a) => a.questionId === id))));
       toast({ text: listening ? "Respuesta enviada · Claude despierta" : "Respuesta guardada · la lee la próxima sesión" });
       onChanged();
     } catch (e) {
@@ -308,10 +324,10 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           <h2>{t.title}</h2>
           {first?.body && first.body !== t.title ? <div className="ctx"><Linked text={first.body} /></div> : null}
 
-          {first?.options?.length ? (
+          {firstCard.length ? (
             <>
-              <div className="k">{optStates.get(first.id)?.actionable ? "Elige" : "Opciones"}</div>
-              <Options m={first} state={optStates.get(first.id)} disabled={busy || closed} onPick={(key) => send(key, first)} />
+              <div className="k">{firstCard.some((q) => q.state === "open") ? (firstCard.length > 1 ? "Responde" : "Elige") : firstCard.length > 1 ? "Preguntas" : "Opciones"}</div>
+              <QuestionCard questions={firstCard} picks={picks} onPicks={setPicks} onSend={(a) => void send(a)} disabled={busy || closed} />
             </>
           ) : null}
 
@@ -357,7 +373,22 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           {rest.length ? (
             <div className="tk-msgs">
               {rest.map((m) => (
-                <Message key={m.id} m={m} fold={repeatsReviewCard(m, cardFindings, data.reviews.length > 0)} options={optStates.get(m.id)} disabled={busy || closed} onPick={(key) => send(key, m)} atts={t.attachments.filter((a) => a.messageId === m.id)} refs={t.refs.filter((r) => r.messageId === m.id)} ticketId={t.id} titles={data.refTitles} />
+                <Message
+                  key={m.id}
+                  m={m}
+                  fold={repeatsReviewCard({ ...m, options: cardFor(m).length ? cardFor(m) : m.options }, cardFindings, data.reviews.length > 0)}
+                  card={cardFor(m)}
+                  answered={t.questions.filter((q) => q.answerMessageId === m.id)}
+                  all={t.questions}
+                  picks={picks}
+                  onPicks={setPicks}
+                  disabled={busy || closed}
+                  onSend={(a) => void send(a)}
+                  atts={t.attachments.filter((a) => a.messageId === m.id)}
+                  refs={t.refs.filter((r) => r.messageId === m.id)}
+                  ticketId={t.id}
+                  titles={data.refTitles}
+                />
               ))}
             </div>
           ) : null}
@@ -425,7 +456,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
               pick={pick.filter((p) => p.ref !== t.ref)}
               actions={actions}
               label="Respuesta"
-              placeholder={openMsg?.options?.length ? `Responde, elige ${openMsg.options.map((o) => o.key).join(" o ")}, o pide algo más` : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
+              placeholder={openQs.length === 1 ? `Responde, elige ${keysLine(openQs[0]!.options)}, o pide algo más` : openQs.length ? "Responde con la tarjeta o escribe 1A 2C, o pide algo más" : t.status === "waiting_andres" ? "Responde a Claude" : "Añade algo más (opcional)"}
               onSubmit={() => void send()}
               focusMode={focusMode}
               onToggleFocus={onToggleFocus}
@@ -471,44 +502,6 @@ const SAL_STATUS: Record<string, string> = {
   deleted: "eliminada",
   draft: "borrador",
 };
-
-/** A/B choices of one message as real buttons: the recommended one marked, the picked one pressed. */
-function Options({ m, state, disabled, onPick }: { m: TicketMessage; state?: OptionState; disabled: boolean; onPick: (key: string) => void }) {
-  const live = Boolean(state?.actionable);
-  return (
-    <>
-      <div className={live ? "tk-opts" : "tk-opts ro"} role="group" aria-label="Opciones">
-        {m.options?.map((o) => (
-          <button
-            key={o.key}
-            type="button"
-            className={["tk-opt", m.recommended === o.key && "rec", state?.chosen === o.key && "pick"].filter(Boolean).join(" ")}
-            disabled={!live || disabled}
-            aria-pressed={state?.chosen === o.key}
-            onClick={(e) => {
-              confirmPick(e.currentTarget);
-              onPick(o.key);
-            }}
-          >
-            <b>{o.key}</b>
-            <span>
-              <Linked text={o.label} inButton />
-              {o.detail ? <small><Linked text={o.detail} inButton /></small> : null}
-            </span>
-          </button>
-        ))}
-      </div>
-      {m.recommended ? (
-        <div className="tk-rec">
-          <span className="ln src-claude" style={{ background: "var(--c)" }} />
-          <span>
-            <b>Claude recomienda {m.recommended}:</b> <Linked text={m.recommendation ?? ""} />
-          </span>
-        </div>
-      ) : null}
-    </>
-  );
-}
 
 function Sources({ refs, titles, owner, item, related }: { refs: TicketRef[]; titles: Record<string, string>; owner: string | null; item: ThreadData["item"]; related: Related[] }) {
   if (!refs.length && !owner && !item && !related.length) return null;
@@ -575,14 +568,23 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   );
 }
 
-function Message({ m, fold, options, disabled, onPick, atts, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; options?: OptionState; disabled: boolean; onPick: (key: string) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+/** "eligió 1A · 2C", "eligió B", "respondió 2" (his own words): what an answer message of his closed. */
+const answeredTag = (qs: TicketQuestion[], all: TicketQuestion[]) => {
+  if (!qs.length) return null;
+  const many = qs.length > 1 || multiStep(qs[0]!, all);
+  const parts = qs.map((q) => (q.chosen ? `${many ? q.n : ""}${q.chosen}` : `${q.n}`));
+  return qs.every((q) => q.chosen) ? `eligió ${parts.join(" · ")}` : `respondió ${parts.join(" · ")}`;
+};
+
+function Message({ m, fold, card, answered, all, picks, onPicks, disabled, onSend, atts, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; card: TicketQuestion[]; answered: TicketQuestion[]; all: TicketQuestion[]; picks: Picks; onPicks: (p: Picks) => void; disabled: boolean; onSend: (a: QuestionAnswer[]) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+  const tag = answeredTag(answered, all) ?? (m.chosen ? `eligió ${m.chosen}` : null);
   return (
     <div className="tk-msg">
       <div className="tk-who">
         {m.author === "claude" ? <span className="ln src-claude" style={{ width: 14, background: "var(--c)" }} /> : null}
         {m.author === "claude" ? "Claude" : "Tú"}
         <time>{hm(m.createdAt)}</time>
-        {m.chosen ? <span className="tk-chose">eligió {m.chosen}</span> : null}
+        {tag ? <span className="tk-chose">{tag}</span> : null}
         {m.kind === "permission_request" ? <span className="tk-chose">pedido de permiso</span> : null}
       </div>
       {m.body && fold ? (
@@ -594,7 +596,7 @@ function Message({ m, fold, options, disabled, onPick, atts, refs, ticketId, tit
           </details>
         </>
       ) : m.body ? <p><Linked text={m.body} /></p> : null}
-      {m.options?.length ? <Options m={m} state={options} disabled={disabled} onPick={onPick} /> : null}
+      {card.length ? <QuestionCard questions={card} picks={picks} onPicks={onPicks} onSend={onSend} disabled={disabled} /> : null}
       {refs.length ? (
         <div className="tk-files">
           {refs.map((r) => (

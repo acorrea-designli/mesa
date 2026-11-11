@@ -1486,3 +1486,174 @@
   cursor: pointer;
   position: relative;
 }
+
+/* ---------- question card (t108): a stepper of 1-6 questions ---------- */
+.tk-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.tk-msg .tk-card {
+  margin-top: 8px;
+}
+.tk-card:not(.one) {
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--gnd);
+}
+.tk-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tk-stepb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px 0 4px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-pill);
+  background: var(--raise);
+  color: var(--ink2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.tk-stepb b {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--edge);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tk-stepb.picked b {
+  border-color: var(--ink);
+}
+.tk-stepb.answered b {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--gnd);
+}
+.tk-stepb.withdrawn {
+  color: var(--mute);
+}
+.tk-stepb.withdrawn b {
+  border-style: dashed;
+  color: var(--mute);
+}
+.tk-stepb[aria-current="step"] {
+  border-color: var(--ink);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.tk-stepb:hover {
+  border-color: var(--ink);
+}
+.tk-step-k {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.tk-q {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.tk-step .tk-opts {
+  margin-top: 8px;
+}
+.tk-opt .tk-opt-rec {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--cl-ink);
+}
+.tk-step.withdrawn .tk-opt {
+  opacity: 0.5;
+}
+.tk-other {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.tk-other textarea {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--raise);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  padding: 8px 10px;
+  min-height: 38px;
+  resize: vertical;
+  field-sizing: content;
+}
+.tk-other textarea:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.tk-step-done {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink2);
+}
+.tk-card-f {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tk-card-f .btn.p {
+  margin-left: auto;
+}
+@media (max-width: 720px) {
+  .tk-card:not(.one) {
+    padding: 10px;
+  }
+  .tk-steps {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tk-steps li {
+    flex: none;
+  }
+  .tk-stepb {
+    height: 40px;
+    white-space: nowrap;
+  }
+  /* Six steps fit a phone: the other steps show their state by the circle alone (filled, ringed, dashed); the
+     current one keeps its words. */
+  .tk-stepb:not([aria-current="step"]) {
+    padding-right: 4px;
+  }
+  .tk-stepb:not([aria-current="step"]) small {
+    display: none;
+  }
+  .tk-card-f .btn {
+    height: 40px;
+  }
+  .tk-card-f .btn.p {
+    flex: 1 0 100%;
+    margin-left: 0;
+    justify-content: center;
+  }
+}

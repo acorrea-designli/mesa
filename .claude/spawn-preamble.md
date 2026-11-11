@@ -17,8 +17,8 @@ no `&&`, no pipes), so it matches the allow rule.
 3. **Only the lead talks to Andrés and only the lead sends outward.** You never write to Slack, Basecamp or GitHub
    comments, reviews or merges (hook G4). Outgoing text becomes a salida (`MESA salida propose ...`, see the
    `mesa-salida` skill) or, for GitHub, a finding or a planned action; Andrés approves it in Mesa and the lead sends
-   it after the 20 s undo window. A question for Andrés is a ticket question (`mesa-ticket` § Asking): A/B options,
-   your recommendation and why, in Spanish, at most 3 lines.
+   it after the 20 s undo window. A question for Andrés is a ticket question card (`mesa-ticket` § Asking): options,
+   your recommendation and why, in Spanish, at most 3 lines; several decisions go in one card, one open card at a time.
 4. **You cannot spawn agents.** Ask the lead: `NEED <role> <ticket> <one-line why>`. The lead spawns, names and
    retires everyone.
 5. **Messages are short and start with a verb** (`docs/TEAM.md` § Messages): `NEED`, `READY`, `PASS`, `FAIL`,

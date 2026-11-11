@@ -9,16 +9,24 @@ const msg = (id: string, author: "claude" | "andres", extra: Partial<TicketNeeds
   id,
   author,
   body: id,
-  options: null,
-  recommended: null,
-  chosen: null,
   ...extra,
 });
 const AB = [
   { key: "A", label: "Sí" },
   { key: "B", label: "No" },
 ];
-const input = (o: Partial<TicketNeedsInput> = {}): TicketNeedsInput => ({ status: "working", messages: [], actions: [], approvals: [], reviews: [], salidas: [], ...o });
+const ABC = [...AB, { key: "C", label: "Otra" }];
+type Q = TicketNeedsInput["questions"][number];
+const q = (messageId: string, n: number, extra: Partial<Q> = {}): Q => ({
+  messageId,
+  n,
+  options: AB,
+  recommended: null,
+  state: "open",
+  createdAt: "2026-11-09T10:00:00.000Z",
+  ...extra,
+});
+const input = (o: Partial<TicketNeedsInput> = {}): TicketNeedsInput => ({ status: "working", messages: [], questions: [], actions: [], approvals: [], reviews: [], salidas: [], ...o });
 const kinds = (o: Partial<TicketNeedsInput>) => ticketNeeds(input(o), NOW).map((n) => n.kind);
 
 describe("ticketNeeds", () => {
@@ -65,21 +73,33 @@ describe("ticketNeeds", () => {
     expect(kinds({ salidas: [{ status: "draft", title: "x" }] })).toEqual([]);
   });
 
-  it("Responder: the latest Claude options message with no Andrés message after it, from any status", () => {
-    const q = msg("q", "claude", { options: AB, recommended: "B" });
+  it("Responder: one open card question, from any status", () => {
+    const messages = [msg("m0", "andres"), msg("q", "claude")];
     for (const status of ["waiting_andres", "waiting_claude", "working"] as const) {
-      expect(ticketNeeds(input({ status, messages: [msg("m0", "andres"), q] }), NOW)).toEqual([
+      expect(ticketNeeds(input({ status, messages, questions: [q("q", 1, { recommended: "B" })] }), NOW)).toEqual([
         { kind: "answer", label: "Responder", detail: "elige A o B · Claude recomienda B" },
       ]);
     }
-    expect(ticketNeeds(input({ messages: [msg("q", "claude", { options: AB })] }), NOW)[0]?.detail).toBe("elige A o B");
-    expect(kinds({ messages: [q, msg("a", "andres", { chosen: "A" })] })).toEqual([]);
+    expect(ticketNeeds(input({ messages, questions: [q("q", 1, { options: ABC })] }), NOW)[0]?.detail).toBe("elige A, B o C");
+    expect(kinds({ messages: [...messages, msg("a", "andres")], questions: [q("q", 1, { state: "answered" })] })).toEqual([]);
+    expect(kinds({ messages, questions: [q("q", 1, { state: "withdrawn" })] })).toEqual([]);
   });
 
-  it("Responder uses the open question, not the first message", () => {
-    const old = msg("old", "claude", { options: [{ key: "X", label: "x" }, { key: "Y", label: "y" }], recommended: "X" });
-    const open = msg("open", "claude", { options: AB, recommended: "A" });
-    expect(ticketNeeds(input({ messages: [old, msg("a", "andres"), open] }), NOW)[0]?.detail).toBe("elige A o B · Claude recomienda A");
+  it("Responder counts every open question, across cards, with the recommended picks by step", () => {
+    const messages = [msg("c1", "claude"), msg("a", "andres"), msg("c2", "claude")];
+    const questions = [
+      q("c1", 1, { recommended: "A", state: "answered" }),
+      q("c1", 2, { recommended: "C", options: ABC }),
+      q("c2", 1, { recommended: "B", createdAt: "2026-11-09T10:05:00.000Z" }),
+      q("c2", 3, { recommended: null, createdAt: "2026-11-09T10:05:00.000Z" }),
+    ];
+    expect(ticketNeeds(input({ messages, questions }), NOW)).toEqual([
+      { kind: "answer", label: "Responder", detail: "3 preguntas abiertas · Claude recomienda 2C 1B" },
+    ]);
+    // an Andrés message after a card does not close it: only the question rows say what is open
+    expect(ticketNeeds(input({ messages: [msg("c", "claude"), msg("x", "andres")], questions: [q("c", 1), q("c", 2), q("c", 3, { recommended: "A" })] }), NOW)[0]?.detail).toBe(
+      "3 preguntas abiertas · Claude recomienda 3A",
+    );
   });
 
   it("waiting_andres that nothing else explains is Responder, with Claude's last words", () => {
@@ -106,7 +126,8 @@ describe("ticketNeeds", () => {
     expect(
       kinds({
         status: "waiting_andres",
-        messages: [msg("q", "claude", { options: AB })],
+        messages: [msg("q", "claude")],
+        questions: [q("q", 1)],
         actions: [{ state: "planned", mode: "needs_ok" }],
         approvals: [{ status: "pending", agent: "a", expiresAt: later }],
         reviews: [{ state: "open", findings: [] }],

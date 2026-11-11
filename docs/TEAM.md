@@ -150,8 +150,10 @@ same transaction as every ticket status change (through `tasks.move`, so the Pro
 `waiting_claude` → En curso, `waiting_andres` → Esperando, `closed` → Hecho. Owners and the lead never run
 `mesa task move` for that; a card Andrés drags himself stays where he put it until the ticket's next status change.
 
-**A reply asks only when it says so.** `mesa ticket reply` puts the ticket in "Te espera" only with `--option` or
-`--ask`; a plain reply is informational and leaves the status as it is (an unclaimed request becomes "Claude trabaja").
+**A reply asks only when it says so.** `mesa ticket reply` puts the ticket in "Te espera" only with `--option` (a
+1-step question card), `mesa ticket questions` (a card of up to 6) or `--ask`; a plain reply is informational and
+leaves the status as it is (an unclaimed request becomes "Claude trabaja"). Each question stays open until Andrés
+answers it or its owner withdraws it (`mesa ticket question withdraw`); one open card per ticket at a time.
 
 **A finished review ticket closes, and a new push reopens it.** After an approve or a post, with nothing depending on
 us, the lead closes the review ticket, open findings included. When the PR gets a new head from its author (not Andrés,

@@ -8,10 +8,11 @@ import {
   NotFoundError,
   nowIso,
   TransitionError,
+  ValidationError,
 } from "../db/util";
 import { inferKind } from "../domain/dispatch-kind";
 import { initialTicketStatus, transitionTicket, type TicketEvent } from "../domain/ticket-machine";
-import { matchOptionKey, openOptions } from "../domain/ticket-options";
+import { answersBody, cardProblem, optionLabel, parseShorthand, type QuestionInput } from "../domain/ticket-questions";
 import type {
   ActionMode,
   ActionState,
@@ -19,6 +20,7 @@ import type {
   Author,
   EngramLink,
   PlannedAction,
+  QuestionAnswer,
   RefType,
   Source,
   Station,
@@ -27,6 +29,7 @@ import type {
   TicketDirection,
   TicketMessage,
   TicketOption,
+  TicketQuestion,
   TicketRef,
   TicketStatus,
 } from "../domain/types";
@@ -44,6 +47,10 @@ export const PERMISSION_REQUEST_BODY = "Pídeme permiso";
 const T_SPEC = { bool: ["is_sample"] };
 const M_SPEC = { json: ["options"] };
 const A_SPEC = { json: ["target"] };
+const Q_SPEC = { json: ["options"] };
+
+/** Reason a question gets when its ticket closes with it still open. */
+export const CLOSED_WITHDRAW_REASON = "Ticket cerrado";
 
 export interface RefInput {
   refType: RefType;
@@ -54,6 +61,11 @@ export interface RefInput {
 export interface MessageInput {
   author: Author;
   body?: string;
+  /** A question card (Claude): 1-6 questions of 2-6 options. Wins over the single-question `options`. */
+  questions?: QuestionInput[];
+  /** Andrés answers open card questions: a pick, his own words, or both, for any subset. */
+  answers?: QuestionAnswer[];
+  /** One question as before: becomes a 1-step card (with `recommended` and `recommendation`). */
   options?: TicketOption[];
   recommended?: string;
   recommendation?: string;
@@ -83,6 +95,7 @@ export interface TicketInput {
   isSample?: boolean;
   /** First message. Its author follows the direction. */
   body?: string;
+  questions?: QuestionInput[];
   options?: TicketOption[];
   recommended?: string;
   recommendation?: string;
@@ -139,8 +152,55 @@ export function ticketsRepo(db: Db) {
     }
   };
 
+  /** The card a message asks, or null: `questions` as given, or the single `options` question as a 1-step card. */
+  const cardInput = (m: Pick<MessageInput, "questions" | "options" | "recommended" | "recommendation">): QuestionInput[] | null => {
+    if (m.questions?.length) return m.questions;
+    if (m.options?.length) return [{ text: "", options: m.options, recommended: m.recommended ?? null, recommendation: m.recommendation ?? null }];
+    return null;
+  };
+
+  const insertQuestions = (ticketId: string, messageId: string, card: QuestionInput[], ts: string) => {
+    card.forEach((q, i) => {
+      const { sql, values } = insertSql(
+        "ticket_questions",
+        {
+          id: newId("tq"),
+          ticketId,
+          messageId,
+          n: i + 1,
+          text: q.text?.trim() ?? "",
+          options: q.options.map((o) => (o.detail ? { key: o.key, label: o.label, detail: o.detail } : { key: o.key, label: o.label })),
+          recommended: q.recommended ?? null,
+          recommendation: q.recommendation ?? null,
+          state: "open",
+          createdAt: ts,
+        },
+        Q_SPEC,
+      );
+      db.prepare(sql).run(...values);
+    });
+  };
+
+  const questionsOf = (ticketId: string): TicketQuestion[] =>
+    fromRows<TicketQuestion>(
+      db
+        .prepare(
+          `SELECT q.* FROM ticket_questions q JOIN ticket_messages m ON m.id = q.message_id
+            WHERE q.ticket_id = ? ORDER BY m.created_at, m.rowid, q.n`,
+        )
+        .all(ticketId),
+      Q_SPEC,
+    );
+
   const insertMessage = (ticketId: string, m: MessageInput, ts: string): string => {
     const id = newId("tm");
+    const card = cardInput(m);
+    if (card) {
+      if (m.author !== "claude") throw new ValidationError("only Claude asks questions");
+      const problem = cardProblem(card, { requireText: card.length > 1 });
+      if (problem) throw new ValidationError(problem);
+    }
+    // The card lives in ticket_questions; the message keeps only its words (the legacy option columns stay NULL).
     const { sql, values } = insertSql(
       "ticket_messages",
       {
@@ -148,9 +208,9 @@ export function ticketsRepo(db: Db) {
         ticketId,
         author: m.author,
         body: m.body ?? "",
-        options: m.options ?? null,
-        recommended: m.recommended ?? null,
-        recommendation: m.recommendation ?? null,
+        options: null,
+        recommended: null,
+        recommendation: null,
         chosen: m.chosen ?? null,
         kind: m.kind ?? null,
         aboutMessageId: m.aboutMessageId ?? null,
@@ -160,7 +220,36 @@ export function ticketsRepo(db: Db) {
     );
     db.prepare(sql).run(...values);
     insertRefs(ticketId, id, m.refs ?? [], ts);
+    if (card) insertQuestions(ticketId, id, card, ts);
     return id;
+  };
+
+  /**
+   * The answers an Andrés message carries, checked against the ticket's open questions: explicit `answers`, a
+   * `chosen` key (only with exactly one open question), or typed shorthand in the body ("1A 2C", a bare "A" with
+   * exactly one open). A question outside the ticket, a key it does not have or a repeated question is a
+   * ValidationError (400); a question that is not open a TransitionError (409). The caller's transaction rolls back.
+   */
+  const resolveAnswers = (ticketId: string, m: MessageInput): { answers: QuestionAnswer[]; qs: TicketQuestion[] } => {
+    const qs = questionsOf(ticketId);
+    const open = qs.filter((q) => q.state === "open");
+    let answers: QuestionAnswer[] = [];
+    if (m.answers?.length) answers = m.answers;
+    else if (m.chosen) {
+      if (open.length !== 1) throw new ValidationError(open.length ? "chosen needs exactly one open question; send answers" : "there is no open question to choose for");
+      answers = [{ questionId: open[0]!.id, chosen: m.chosen }];
+    } else if (m.body) answers = parseShorthand(m.body, open);
+    const seen = new Set<string>();
+    for (const a of answers) {
+      const q = qs.find((x) => x.id === a.questionId);
+      if (!q) throw new ValidationError(`question ${a.questionId} is not in this ticket`);
+      if (seen.has(q.id)) throw new ValidationError(`question ${q.id} is answered twice`);
+      seen.add(q.id);
+      if (q.state !== "open") throw new TransitionError(`question ${q.id} is ${q.state}`);
+      if (a.chosen && !q.options.some((o) => o.key === a.chosen)) throw new ValidationError(`question ${q.id} has no option ${a.chosen}`);
+      if (!a.chosen && !a.text?.trim()) throw new ValidationError(`the answer to ${q.id} needs a chosen key or a text`);
+    }
+    return { answers, qs };
   };
 
   /**
@@ -183,6 +272,10 @@ export function ticketsRepo(db: Db) {
          woke_at = CASE WHEN ? THEN ? ELSE woke_at END
        WHERE id = ?`,
     ).run(r.status, ts, r.status, ts, r.wake && !quiet ? 1 : 0, ts, t.id);
+    // Closing withdraws what is still open; a reopen does not bring it back (Claude asks again if it still matters).
+    if (r.status === "closed") {
+      db.prepare("UPDATE ticket_questions SET state = 'withdrawn', withdraw_reason = ? WHERE ticket_id = ? AND state = 'open'").run(CLOSED_WITHDRAW_REASON, t.id);
+    }
     // The cards follow the ticket, in the same transaction and through tasks.move (so the Project sync fires).
     // Only a status change moves them, and only the ones that are elsewhere: a manual move stands until the next change.
     // A primary ticket moves every card grouped into it; a folded ticket moves none (its card points at the primary).
@@ -213,6 +306,7 @@ export function ticketsRepo(db: Db) {
           db.prepare("SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at, rowid").all(t.id),
           M_SPEC,
         ),
+        questions: questionsOf(t.id),
         attachments: fromRows<Attachment>(
           db.prepare("SELECT * FROM attachments WHERE ticket_id = ? ORDER BY created_at").all(t.id),
         ),
@@ -316,6 +410,7 @@ export function ticketsRepo(db: Db) {
           {
             author: input.direction === "claude_asks" ? "claude" : "andres",
             body: input.body,
+            questions: input.questions,
             options: input.options,
             recommended: input.recommended,
             recommendation: input.recommendation,
@@ -342,24 +437,57 @@ export function ticketsRepo(db: Db) {
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(m.session, t.id);
           t = get(t.id);
         }
-        // His habit of typing the letter counts as picking it: a reply that is just an option key
-        // of the latest options message he has not answered records chosen = that key.
-        if (m.author === "andres" && !m.chosen && m.body) {
-          const prior = fromRows<TicketMessage>(
-            db.prepare("SELECT * FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at, rowid").all(t.id),
-            M_SPEC,
-          );
-          const key = matchOptionKey(m.body, openOptions(prior));
-          if (key) m = { ...m, chosen: key };
+        if (m.author === "claude" && (m.answers?.length || m.chosen)) throw new ValidationError("only Andrés answers questions");
+        // His answers: explicit, a lone chosen key, or typed shorthand ("1A 2C"; a bare "A" with one open question).
+        // A reply that answers nothing closes nothing: every open question stays open until answered or withdrawn.
+        const { answers, qs } = m.author === "andres" ? resolveAnswers(t.id, m) : { answers: [], qs: [] };
+        if (answers.length) {
+          const one = answers.length === 1 ? answers[0]! : null;
+          m = { ...m, body: m.body?.trim() ? m.body : answersBody(answers, questionsOf(t.id)), chosen: one?.chosen ?? undefined };
         }
-        const msgId = insertMessage(t.id, m, nowIso(now));
-        if (m.author === "andres") touchInteraction(db, now);
-        const ev: TicketEvent = m.author === "andres" ? { type: "andres_reply" } : { type: "claude_reply", asks: Boolean(m.ask || m.options?.length) };
-        apply(t, ev, now, {
-          messageId: msgId,
-          chosen: m.chosen ?? null,
+        const ts = nowIso(now);
+        const msgId = insertMessage(t.id, { ...m, answers: undefined }, ts);
+        const answered = answers.map((a) => {
+          const q = qs.find((x) => x.id === a.questionId)!;
+          const text = a.text?.trim() || null;
+          db.prepare(
+            "UPDATE ticket_questions SET state = 'answered', chosen = ?, answer_text = ?, answer_message_id = ?, answered_at = ? WHERE id = ? AND state = 'open'",
+          ).run(a.chosen ?? null, text, msgId, ts, q.id);
+          return { questionId: q.id, n: q.n, chosen: a.chosen ?? null, label: optionLabel(q, a.chosen) || null, text };
         });
+        if (m.author === "andres") touchInteraction(db, now);
+        const ev: TicketEvent = m.author === "andres" ? { type: "andres_reply" } : { type: "claude_reply", asks: Boolean(m.ask || cardInput(m)) };
+        // ticket.answered { ref, messageId, chosen, answers: [{ questionId, n, chosen, label, text }], openLeft }
+        const payload: Record<string, unknown> = { messageId: msgId, chosen: m.chosen ?? null };
+        if (m.author === "andres") {
+          payload.answers = answered;
+          payload.openLeft = (db.prepare("SELECT COUNT(*) AS n FROM ticket_questions WHERE ticket_id = ? AND state = 'open'").get(t.id) as { n: number }).n;
+        }
+        apply(t, ev, now, payload);
         return this.detail(t.id);
+      });
+    },
+
+    /** Every card question of a ticket, in card then step order. */
+    questions(id: string): TicketQuestion[] {
+      return questionsOf(get(id).id);
+    },
+
+    /**
+     * Claude withdraws an open question (moot, or his own words already answered it): it shows "retirada" with the
+     * reason and stops counting as open. Never wakes, never changes the status. 404 unknown id, 409 not open.
+     */
+    withdrawQuestion(questionId: string, reason: string, now = new Date()): TicketQuestion {
+      return tx(db, () => {
+        const why = reason.trim();
+        if (!why) throw new ValidationError("a withdrawal needs a reason");
+        const row = db.prepare("SELECT * FROM ticket_questions WHERE id = ?").get(questionId);
+        if (!row) throw new NotFoundError("question", questionId);
+        const q = fromRow<TicketQuestion>(row, Q_SPEC);
+        if (q.state !== "open") throw new TransitionError(`question ${q.id} is ${q.state}`);
+        db.prepare("UPDATE ticket_questions SET state = 'withdrawn', withdraw_reason = ? WHERE id = ?").run(why, q.id);
+        db.prepare("UPDATE tickets SET updated_at = ? WHERE id = ?").run(nowIso(now), q.ticketId);
+        return fromRow<TicketQuestion>(db.prepare("SELECT * FROM ticket_questions WHERE id = ?").get(q.id), Q_SPEC);
       });
     },
 

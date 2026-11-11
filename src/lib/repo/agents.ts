@@ -19,6 +19,7 @@ import {
   type TicketContext,
   type TicketMessage,
 } from "../domain/types";
+import { questionText } from "../domain/ticket-questions";
 import { ticketsRepo } from "./tickets";
 
 const BRIEF_SPEC = { json: ["decisions", "open_questions"] };
@@ -207,15 +208,18 @@ export function agentsRepo(db: Db) {
         seen.add(h.agent);
         return true;
       });
-      // Unanswered Claude choice questions count as open questions too.
-      const last = msgs.at(-1);
-      const pendingChoice = last && last.author === "claude" && last.options?.length ? [last.body || "Claude espera una elección"] : [];
+      // Every open card question counts as an open question too: "<tq id> · <step>. <text>" (the id is what withdraw takes).
+      const questions = tickets.questions(t.id);
+      const open = questions.filter((q) => q.state === "open");
+      const bodyOf = (messageId: string) => (db.prepare("SELECT body FROM ticket_messages WHERE id = ?").get(messageId) as { body: string } | undefined)?.body ?? "";
+      const pendingChoice = open.map((q) => `${q.id} · ${q.n}. ${questionText(q, bodyOf(q.messageId))}`);
       return {
         ticket: t,
         brief: b,
         plan: fromRows<PlannedAction>(db.prepare("SELECT * FROM planned_actions WHERE ticket_id = ? ORDER BY seq").all(t.id), { json: ["target"] }),
         messages: msgs,
         openQuestions: [...(b?.openQuestions ?? []), ...pendingChoice],
+        questions,
         team: repo.team({ ticket: t.id }),
         handoffs,
         latestHandoff: all[0] ?? null,
