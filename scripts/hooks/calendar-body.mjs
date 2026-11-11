@@ -106,25 +106,61 @@ const truthyMeet = (v) => {
   return Boolean(v);
 };
 
-/** The fields a create_event call is about to write, read tolerantly from the connector's parameter names. */
+// The parameters of a create_event call that Mesa knows how to compare, grouped by what they mean. A call may use
+// ONE name per group; a second alias, or any parameter outside these groups (recurrence, reminders, another
+// calendar's guests alias, conference settings other than the Meet flag, ...) is refused: what is not in the approved
+// event must not be in the call.
+const GROUPS = {
+  title: ["summary", "title", "name", "subject"],
+  start: ["start", "startTime", "start_time", "startDateTime", "start_date_time", "start_datetime"],
+  end: ["end", "endTime", "end_time", "endDateTime", "end_date_time", "end_datetime"],
+  timeZone: ["timeZone", "timezone", "time_zone"],
+  attendees: ["attendees", "guests", "invitees", "attendee_emails", "attendeeEmails"],
+  description: ["description", "notes", "body"],
+  calendar: ["calendarId", "calendar_id", "calendar"],
+};
+const KNOWN = new Set(Object.values(GROUPS).flat());
+const MEET_KEY = /meet|conference/i;
+
+// A parameter that says nothing (absent, null, "", [], {}, false) does not count as present.
+const isEmpty = (v) => v === undefined || v === null || v === "" || v === false || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
+
+/** The fields a create_event call is about to write, read tolerantly from the connector's parameter names, plus `problems`: anything the approved event cannot cover. */
 export function eventFromCall(ti) {
-  const startRaw = pick(ti, "start", "startTime", "start_time", "startDateTime", "start_date_time", "start_datetime");
-  const endRaw = pick(ti, "end", "endTime", "end_time", "endDateTime", "end_date_time", "end_datetime");
-  const tz = pick(ti, "timeZone", "timezone", "time_zone") ?? (startRaw && typeof startRaw === "object" ? pick(startRaw, "timeZone", "time_zone", "timezone") : undefined);
-  const meetKeys = Object.keys(ti ?? {}).filter((k) => /meet|conference/i.test(k));
+  const call = ti ?? {};
+  const problems = [];
+  const present = (keys) => keys.filter((k) => !isEmpty(call[k]));
+  for (const [group, keys] of Object.entries(GROUPS)) {
+    const p = present(keys);
+    if (p.length > 1) problems.push(`duplicate parameters for ${group}: ${p.join(", ")}`);
+  }
+  const meetKeys = Object.keys(call).filter((k) => MEET_KEY.test(k));
+  if (meetKeys.filter((k) => !isEmpty(call[k])).length > 1) problems.push(`duplicate parameters for Google Meet: ${meetKeys.filter((k) => !isEmpty(call[k])).join(", ")}`);
+  for (const k of Object.keys(call)) if (!KNOWN.has(k) && !MEET_KEY.test(k) && !isEmpty(call[k])) problems.push(`parameter not in the approved event: ${k}`);
+
+  const startRaw = pick(call, ...GROUPS.start);
+  const endRaw = pick(call, ...GROUPS.end);
+  const tzTop = pick(call, ...GROUPS.timeZone);
+  const tzNested = [startRaw, endRaw].map((v) => (v && typeof v === "object" ? pick(v, "timeZone", "time_zone", "timezone") : undefined)).filter(Boolean);
+  if (new Set([tzTop, ...tzNested].filter(Boolean)).size > 1) problems.push("the call names different time zones for start, end or timeZone");
+  const tz = tzTop ?? tzNested[0];
   return {
-    title: String(pick(ti, "summary", "title", "name", "subject") ?? "").trim(),
+    title: String(pick(call, ...GROUPS.title) ?? "").trim(),
     start: instantOf(startRaw, tz),
     end: instantOf(endRaw, tz),
-    invitees: [...new Set(emailsOf(pick(ti, "attendees", "guests", "invitees", "attendee_emails", "attendeeEmails")))].sort(),
-    meet: meetKeys.some((k) => truthyMeet(ti[k])),
-    description: String(pick(ti, "description", "notes", "body") ?? "").trim(),
+    invitees: [...new Set(emailsOf(pick(call, ...GROUPS.attendees)))].sort(),
+    meet: meetKeys.some((k) => truthyMeet(call[k])),
+    description: String(pick(call, ...GROUPS.description) ?? "").trim(),
+    calendar: pick(call, ...GROUPS.calendar) === undefined ? null : String(pick(call, ...GROUPS.calendar)),
+    problems,
   };
 }
 
-/** The differences between the approved event and the call: [] means the call is exactly the approved event. */
-export function eventMismatches(approved, call) {
-  const out = [];
+/** The differences between the approved event and the call: [] means the call is exactly the approved event. `destination` is the salida's (its calendar). */
+export function eventMismatches(approved, call, destination = {}) {
+  const out = [...(call.problems ?? [])];
+  const wantCal = destination?.calendar || "primary";
+  if (call.calendar && call.calendar !== wantCal) out.push(`calendar: approved ${wantCal}, call ${call.calendar}`);
   if (call.title !== approved.title) out.push(`title: approved «${approved.title}», call «${call.title}»`);
   const a0 = Date.parse(approved.start);
   const a1 = Date.parse(approved.end);

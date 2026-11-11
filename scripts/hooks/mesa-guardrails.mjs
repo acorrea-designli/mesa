@@ -55,7 +55,8 @@ const LEAD_TEXT_SENDS = /^(mcp__basecamp__create_(comment|campfire_line|message|
 // Google Calendar through the claude.ai connector (mcp__claude_ai_Google_Calendar__<action>) or a self-hosted one
 // (mcp__google-calendar__<action>). Reads (list, get, find free time) are open; every other action writes.
 const GCAL = /^mcp__(?:claude_ai_)?google[_-]?calendar[^_]*__(.+)$/i;
-const GCAL_READ = /^(list|get|find|search|read|check|query|free|suggest|fetch|show|view|lookup)/i;
+// authenticate / complete_authentication are the connector's own sign-in (plan action 1): they write nothing to the calendar.
+const GCAL_READ = /^(list|get|find|search|read|check|query|free|suggest|fetch|show|view|lookup|authenticate|complete[_-]?authentication)/i;
 const GCAL_CREATE = /^(create|insert|add)[_-]?event$/i;
 const gcalAction = (tool) => GCAL.exec(tool)?.[1] ?? null;
 const isGcalWrite = (tool) => {
@@ -251,7 +252,7 @@ async function releasedCalendarSalida(ti, { fetchImpl, base }) {
     const body = approvedBody(s);
     const parsed = body === null ? null : parseEventBody(body);
     if (!parsed?.ok) continue;
-    const diff = eventMismatches(parsed.fields, call);
+    const diff = eventMismatches(parsed.fields, call, slackDestination(s));
     if (!diff.length) return { match: s, id: s.id };
     if (!near || diff.length < near.mismatches.length) near = { id: s.id, mismatches: diff };
   }

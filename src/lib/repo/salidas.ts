@@ -11,7 +11,7 @@ import {
   TransitionError,
   ValidationError,
 } from "../db/util";
-import { eventBodyProblem } from "../domain/calendar-event";
+import { eventBodyProblem, parseEventBody } from "../domain/calendar-event";
 import {
   canAddVersion,
   dueEvent,
@@ -120,6 +120,18 @@ export function salidasRepo(db: Db) {
     if (problem) throw new ValidationError(`calendar salida body: ${problem}`);
   };
 
+  // The destination of a calendar salida lists the invitees and the Meet for the chips and the queue line, but the
+  // version's body is the truth (it is what Aprobar signs and what hook G5 compares). Every time the current version
+  // changes (a new version, "Volver a vN") the destination is rewritten from that body, so it can never go stale.
+  const syncCalendarDestination = (salidaId: string, body: string) => {
+    const s = get(salidaId);
+    if (s.source !== "calendar" || s.destination.kind !== "calendar_event") return;
+    const p = parseEventBody(body);
+    if (!p.ok) return;
+    const d = { ...s.destination, invitees: p.fields.invitees, meet: p.fields.meet };
+    db.prepare("UPDATE salidas SET destination = ? WHERE id = ?").run(JSON.stringify(d), salidaId);
+  };
+
   const insertVersion = (salidaId: string, v: VersionInput, ts: string): number => {
     const n = versionCount(salidaId) + 1;
     const { sql, values } = insertSql(
@@ -129,6 +141,7 @@ export function salidasRepo(db: Db) {
     );
     db.prepare(sql).run(...values);
     db.prepare("UPDATE salidas SET current_version = ?, updated_at = ? WHERE id = ?").run(n, ts, salidaId);
+    syncCalendarDestination(salidaId, v.body);
     return n;
   };
 
@@ -238,6 +251,8 @@ export function salidasRepo(db: Db) {
       if (!canAddVersion(s.status)) throw new TransitionError(`cannot change the version of a salida that is ${s.status}`);
       if (n < 1 || n > versionCount(id)) throw new TransitionError(`version ${n} does not exist`);
       patch(id, { currentVersion: n }, nowIso(now));
+      const picked = db.prepare("SELECT body FROM salida_versions WHERE salida_id = ? AND n = ?").get(id, n) as { body: string } | undefined;
+      if (picked) syncCalendarDestination(id, picked.body);
       touchInteraction(db, now);
       return repo.detail(id);
     },

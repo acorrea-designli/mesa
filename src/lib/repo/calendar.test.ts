@@ -77,6 +77,15 @@ describe("calendar salidas", () => {
     expect(() => r.salidas.create({ source: "slack", destination: { kind: "slack_channel", workspace: "w", channel: "#c", postAs: "A" }, body: "hola", ownerSession: "lead" }, NOW)).not.toThrow();
   });
 
+  it("keeps the destination's invitees and Meet equal to the current version's body (never stale after an edit or a revert)", () => {
+    const s = propose();
+    const edited = formatEventBody({ ...fields, invitees: ["laura@example.com", "sofia@example.com"], meet: false });
+    const v2 = r.salidas.edit(s.id, edited, NOW);
+    expect(v2.destination).toMatchObject({ kind: "calendar_event", invitees: ["laura@example.com", "sofia@example.com"], meet: false });
+    const back = r.salidas.selectVersion(s.id, 1, NOW);
+    expect(back.destination).toMatchObject({ invitees: ["matt.r@scoutapp.example"], meet: true });
+  });
+
   it("goes out through the normal path even while the feed is down (reading is not creating)", () => {
     r.sources.set("calendar", { health: "down", note: "sin conexión con Google" }, NOW);
     const s = propose();

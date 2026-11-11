@@ -126,3 +126,57 @@ test("mismatches: an exact call has none", () => {
   const ok = parseEventBody(BODY).fields;
   assert.deepEqual(eventMismatches(ok, eventFromCall(call)), []);
 });
+
+test("G5: the connector's sign-in (authenticate, complete_authentication) is not a write", async () => {
+  for (const t of ["authenticate", "complete_authentication"]) {
+    assert.equal(await rule(run(lead, `mcp__claude_ai_Google_Calendar__${t}`, {}, unreachable)), null, t);
+    assert.equal(await rule(run(mate(), `mcp__claude_ai_Google_Calendar__${t}`, {}, unreachable)), null, `${t} (teammate)`);
+  }
+  assert.equal(sandboxBlock("mcp__claude_ai_Google_Calendar__authenticate", {}), null);
+});
+
+test("G5: a create_event with a parameter the approved event does not cover is refused", async () => {
+  const mesa = mesaWith(salida());
+  const extra = [
+    [{ ...call, recurrence: ["RRULE:FREQ=DAILY"] }, /parameter not in the approved event: recurrence/],
+    [{ ...call, reminders: { useDefault: false, overrides: [{ minutes: 5 }] } }, /reminders/],
+    [{ ...call, sendUpdates: "all" }, /sendUpdates/],
+    [{ ...call, location: "Sala 2" }, /location/],
+    [{ ...call, visibility: "private" }, /visibility/],
+  ];
+  for (const [input, re] of extra) {
+    const r = await run(lead, CREATE, input, mesa.fetchImpl);
+    assert.equal(r?.rule, "G5", JSON.stringify(Object.keys(input)));
+    assert.match(r.reason, re);
+  }
+  // empty values say nothing: the same call with empty extras passes
+  assert.equal(await rule(run(lead, CREATE, { ...call, recurrence: [], reminders: {}, location: "", sendUpdates: null }, mesa.fetchImpl)), null);
+});
+
+test("G5: two names for the same thing are refused, whatever the second says", async () => {
+  const mesa = mesaWith(salida());
+  const dups = [
+    [{ ...call, guests: ["boss@example.com"] }, /duplicate parameters for attendees: attendees, guests/],
+    [{ ...call, title: "Meet con Matt" }, /duplicate parameters for title/],
+    [{ ...call, startTime: "2026-11-12T10:00:00-05:00" }, /duplicate parameters for start/],
+    [{ ...call, timeZone: "America/New_York" }, /different time zones/],
+    [{ ...call, conferenceData: { createRequest: { requestId: "x" } } }, /duplicate parameters for Google Meet/],
+    [{ ...call, notes: "x", description: "y" }, /duplicate parameters for description/],
+  ];
+  for (const [input, re] of dups) {
+    const r = await run(lead, CREATE, input, mesa.fetchImpl);
+    assert.equal(r?.rule, "G5");
+    assert.match(r.reason, re);
+  }
+});
+
+test("G5: another calendar than the approved one is refused; primary passes", async () => {
+  const mesa = mesaWith(salida());
+  const r = await run(lead, CREATE, { ...call, calendarId: "boss@example.com" }, mesa.fetchImpl);
+  assert.equal(r?.rule, "G5");
+  assert.match(r.reason, /calendar: approved primary, call boss@example.com/);
+  assert.equal(await rule(run(lead, CREATE, { ...call, calendarId: "primary" }, mesa.fetchImpl)), null);
+  const other = mesaWith(salida({ destination: { kind: "calendar_event", calendar: "team@group.calendar.google.com", postAs: "Andrés" } }));
+  assert.equal(await rule(run(lead, CREATE, { ...call, calendarId: "team@group.calendar.google.com" }, other.fetchImpl)), null);
+  assert.equal((await run(lead, CREATE, { ...call, calendarId: "primary" }, other.fetchImpl))?.rule, "G5");
+});
