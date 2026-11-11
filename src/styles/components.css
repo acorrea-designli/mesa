@@ -78,11 +78,13 @@
 .s-sl { stroke: var(--sl); }
 .s-cl { stroke: var(--cl); }
 .s-bc { stroke: var(--bc); }
+.s-ca { stroke: var(--ca); }
 .s-ink { stroke: var(--ink); }
 .f-gh { fill: var(--gh); }
 .f-sl { fill: var(--sl); }
 .f-cl { fill: var(--cl); }
 .f-bc { fill: var(--bc); }
+.f-ca { fill: var(--ca); }
 .f-ink { fill: var(--ink); }
 .sv-cap { fill: var(--gnd); stroke: var(--ink); stroke-width: 2.5; }
 .sv-cap.on { fill: var(--raise); stroke-width: 3.5; }
@@ -151,6 +153,7 @@
 .src-slack { --c: var(--sl); --t: var(--sl-tint); --ci: var(--sl-ink); }
 .src-claude { --c: var(--cl); --t: var(--cl-tint); --ci: var(--cl-ink); }
 .src-basecamp { --c: var(--bc); --t: var(--bc-tint); --ci: var(--bc-ink); }
+.src-calendar { --c: var(--ca); --t: var(--ca-tint); --ci: var(--ca-ink); }
 
 /* ---------- status tag ---------- */
 .st {

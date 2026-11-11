@@ -76,3 +76,32 @@ test("ticket unfold posts the ticket to split out of the primary", async () => {
   assert.deepEqual(calls, [{ method: "POST", url: "/api/tickets/t24/unfold", body: { ticket: "t25" } }]);
   assert.equal((await run(["ticket", "unfold", "t24"])).code, 2);
 });
+
+test("calendar list, free, people and refresh make the read calls", async () => {
+  assert.deepEqual((await run(["calendar", "list", "--from", "2026-11-09", "--to", "2026-11-16"])).calls, [{ method: "GET", url: "/api/calendar?from=2026-11-09&to=2026-11-16", body: undefined }]);
+  assert.deepEqual((await run(["calendar", "list"])).calls[0].url, "/api/calendar");
+  assert.deepEqual((await run(["calendar", "free", "--day", "2026-11-12", "--minutes", "45"])).calls[0].url, "/api/calendar/free?day=2026-11-12&minutes=45");
+  assert.deepEqual((await run(["calendar", "people"])).calls[0].url, "/api/calendar/people");
+  assert.deepEqual((await run(["calendar", "refresh"])).calls, [{ method: "POST", url: "/api/calendar/refresh", body: {} }]);
+  assert.equal((await run(["calendar", "nope"])).code, 2);
+});
+
+test("calendar propose builds the exact event body and the calendar destination", async () => {
+  const { code, calls } = await run(["calendar", "propose", "--title", "Meet con Matt", "--start", "2026-11-12T10:00:00-05:00", "--end", "2026-11-12T10:30:00-05:00", "--invitee", "Matt.R@scoutapp.example", "--ticket", "t118", "--context", "libre el jueves"]);
+  assert.equal(code, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/api/salidas");
+  assert.deepEqual(calls[0].body, {
+    source: "calendar",
+    destination: { kind: "calendar_event", calendar: "primary", invitees: ["matt.r@scoutapp.example"], meet: true, postAs: "Andrés Correa" },
+    body: "Título: Meet con Matt\nInicio: 2026-11-12T10:00:00-05:00\nFin: 2026-11-12T10:30:00-05:00\nZona: America/Bogota\nInvitados: matt.r@scoutapp.example\nMeet: sí",
+    title: "Evento: Meet con Matt",
+    context: "libre el jueves",
+    ticketId: "t118",
+    ownerSession: "dev-test",
+  });
+  const solo = await run(["calendar", "propose", "--title", "Bloque", "--start", "2026-11-12T10:00:00-05:00", "--end", "2026-11-12T11:00:00-05:00", "--no-meet", "--description", "Foco"]);
+  assert.equal(solo.calls[0].body.body, "Título: Bloque\nInicio: 2026-11-12T10:00:00-05:00\nFin: 2026-11-12T11:00:00-05:00\nZona: America/Bogota\nMeet: no\nDescripción: Foco");
+  assert.deepEqual(solo.calls[0].body.destination.invitees, []);
+  assert.equal((await run(["calendar", "propose", "--title", "x"])).code, 2); // --start and --end are required
+});

@@ -246,6 +246,22 @@
         ],
         "theme": "tokio"
       },
+      "line-calendar": {
+        "role": "secondary",
+        "displayName": "Calendar Indigo (Calendario)",
+        "canonical": "#5b5bd6",
+        "tonalRamp": [
+          "#090915",
+          "#171736",
+          "#292960",
+          "#404096",
+          "#5b5bd6",
+          "#8484e0",
+          "#adadeb",
+          "#d6d6f5"
+        ],
+        "theme": "tokio"
+      },
       "text-github": {
         "role": "secondary",
         "displayName": "Text Github",
@@ -310,6 +326,22 @@
         ],
         "theme": "tokio"
       },
+      "text-calendar": {
+        "role": "secondary",
+        "displayName": "Text Calendario",
+        "canonical": "#3d3dab",
+        "tonalRamp": [
+          "#060611",
+          "#0f0f2b",
+          "#1b1b4d",
+          "#2b2b78",
+          "#3d3dab",
+          "#6e6ec0",
+          "#9e9ed5",
+          "#cfcfea"
+        ],
+        "theme": "tokio"
+      },
       "tint-github": {
         "role": "secondary",
         "displayName": "Tint Github",
@@ -371,6 +403,22 @@
           "#9aa9a3",
           "#bfcdc7",
           "#e6f2ed"
+        ],
+        "theme": "tokio"
+      },
+      "tint-calendar": {
+        "role": "secondary",
+        "displayName": "Tint Calendario",
+        "canonical": "#e9e8fb",
+        "tonalRamp": [
+          "#171719",
+          "#3a3a3f",
+          "#696871",
+          "#a3a2b0",
+          "#e9e8fb",
+          "#efeefc",
+          "#f4f4fd",
+          "#faf9fe"
         ],
         "theme": "tokio"
       },
@@ -616,6 +664,22 @@
         ],
         "theme": "grafito"
       },
+      "grafito-line-calendar": {
+        "role": "secondary",
+        "displayName": "Grafito Calendar Indigo (Calendario)",
+        "canonical": "#8a8aff",
+        "tonalRamp": [
+          "#0e0e1a",
+          "#232340",
+          "#3e3e73",
+          "#6161b3",
+          "#8a8aff",
+          "#a7a7ff",
+          "#c5c5ff",
+          "#e2e2ff"
+        ],
+        "theme": "grafito"
+      },
       "grafito-text-github": {
         "role": "secondary",
         "displayName": "Grafito Text Github",
@@ -677,6 +741,22 @@
           "#6bb98a",
           "#99dbb1",
           "#c7feda"
+        ],
+        "theme": "grafito"
+      },
+      "grafito-text-calendar": {
+        "role": "secondary",
+        "displayName": "Grafito Text Calendario",
+        "canonical": "#b3b3ff",
+        "tonalRamp": [
+          "#12121a",
+          "#2d2d40",
+          "#515173",
+          "#7d7db3",
+          "#b3b3ff",
+          "#c6c6ff",
+          "#d9d9ff",
+          "#ececff"
         ],
         "theme": "grafito"
       },
@@ -743,6 +823,22 @@
           "#e1f4e6"
         ],
         "theme": "grafito"
+      },
+      "grafito-tint-calendar": {
+        "role": "secondary",
+        "displayName": "Grafito Tint Calendario",
+        "canonical": "#23233f",
+        "tonalRamp": [
+          "#040406",
+          "#090910",
+          "#10101c",
+          "#19192c",
+          "#23233f",
+          "#5a5a6f",
+          "#91919f",
+          "#c8c8cf"
+        ],
+        "theme": "grafito"
       }
     },
     "themes": {
@@ -754,7 +850,7 @@
       "grafito": {
         "selector": "[data-theme=\"dark\"]",
         "colorScheme": "dark",
-        "note": "Same four hues brightened; Slack stays teal. Tokens with the grafito- prefix."
+        "note": "Same five hues brightened; Slack stays teal. Tokens with the grafito- prefix."
       }
     },
     "cssVariables": {
@@ -773,14 +869,17 @@
       "--sl": "line-slack",
       "--cl": "line-claude",
       "--bc": "line-basecamp",
+      "--ca": "line-calendar",
       "--gh-ink": "text-github",
       "--sl-ink": "text-slack",
       "--cl-ink": "text-claude",
       "--bc-ink": "text-basecamp",
+      "--ca-ink": "text-calendar",
       "--gh-tint": "tint-github",
       "--sl-tint": "tint-slack",
       "--cl-tint": "tint-claude",
       "--bc-tint": "tint-basecamp",
+      "--ca-tint": "tint-calendar",
       "--shade": "rgba(28,29,33,.10) in Tokio, rgba(0,0,0,.40) in Grafito"
     },
     "typographyMeta": {
@@ -946,10 +1045,10 @@
   ],
   "narrative": {
     "northStar": "Mapa de metro",
-    "overview": "The working day is a transit network. Each source is a coloured line (GitHub, Slack, Claude, Basecamp), each status is a station (Inbox, Todo, En curso, Esperando, Hecho), and each item is a tick riding its line. The signature is the line band across the top of the work area: picking a station or a source filter re-routes it, so the chosen line burns at full ink and the rest drop to about 35%. Everything below the band is a dense, calm operating surface: rows that read in one glance, a detail pane, and an approval that shows exact destination and exact text before anything is signed.\n\nThe material is signage, not software chrome. Grounds are warm paper greys in the light \"Tokio\" theme (the default) and graphite in the dark \"Grafito\" theme. Station capsules have a ground fill and an ink outline, interchanges are open rings, and lines bend only at 45 and 90 degrees. One humanist sans, Hanken Grotesk, carries everything at fixed sizes with tabular numerals, like a station board.\n\nColour is reserved for wayfinding. The four line inks identify a source and nothing else; state is carried by ink weight, fill, dashes and dotted lines, never by a semantic red or green.",
+    "overview": "The working day is a transit network. Each source is a coloured line (GitHub, Slack, Claude, Basecamp, Calendario), each status is a station (Inbox, Todo, En curso, Esperando, Hecho), and each item is a tick riding its line. The signature is the line band across the top of the work area: picking a station or a source filter re-routes it, so the chosen line burns at full ink and the rest drop to about 35%. Everything below the band is a dense, calm operating surface: rows that read in one glance, a detail pane, and an approval that shows exact destination and exact text before anything is signed.\n\nThe material is signage, not software chrome. Grounds are warm paper greys in the light \"Tokio\" theme (the default) and graphite in the dark \"Grafito\" theme. Station capsules have a ground fill and an ink outline, interchanges are open rings, and lines bend only at 45 and 90 degrees. One humanist sans, Hanken Grotesk, carries everything at fixed sizes with tabular numerals, like a station board.\n\nColour is reserved for wayfinding. The five line inks identify a source and nothing else; state is carried by ink weight, fill, dashes and dotted lines, never by a semantic red or green.",
     "keyCharacteristics": [
       "Two themes from one token set: Tokio light on `:root`, Grafito dark on `[data-theme=\"dark\"]`.",
-      "Four line inks that mean source only; Slack is teal in both themes.",
+      "Five line inks that mean source only; Slack is teal in both themes.",
       "Station capsules, open interchange rings, 45/90 degree bends, 6px round-capped strokes.",
       "One family, fixed sizes, tabular numerals for every count and time.",
       "Flat surfaces separated by hairline rules and tonal grounds; shadow only for floating layers."
@@ -982,7 +1081,7 @@
       }
     ],
     "dos": [
-      "**Do** use the four line inks only to identify a source, at full strength on the chosen line and about 35% on the rest.",
+      "**Do** use the five line inks only to identify a source, at full strength on the chosen line and about 35% on the rest.",
       "**Do** set secondary text in `mute`; keep `dim` for non-text marks.",
       "**Do** show the exact destination and the exact text in the same view as Aprobar, and mark the text block with a top line stub in the destination's ink.",
       "**Do** draw lines with 6px round-capped strokes that bend only at 45 or 90 degrees, with interchange rings for items linked to two sources.",

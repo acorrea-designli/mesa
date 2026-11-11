@@ -13,7 +13,7 @@ import type { DayView, EntryView, ProjectView, SemanaData } from "./read";
 
 export { semanaHref };
 
-const SOURCE_NAME = { claude: "Claude", github: "GitHub", slack: "Slack", basecamp: "Basecamp" } as const;
+const SOURCE_NAME = { claude: "Claude", github: "GitHub", slack: "Slack", basecamp: "Basecamp", calendar: "Calendario" } as const;
 /** Up to this many rows per project show; a project with a couple more than that shows them all. */
 const SHOWN = 6;
 const SLACK = 2;
@@ -266,7 +266,7 @@ export function SemanaView({ data }: { data: SemanaData }) {
               <Project key={g.name} g={g} time={data.showTime} />
             ))}
             <p className="hc-legend" aria-hidden="true">
-              {(["claude", "github", "slack", "basecamp"] as const).map((s) => (
+              {(["claude", "github", "slack", "basecamp", "calendar"] as const).map((s) => (
                 <span key={s}>
                   <i className={cx("hc-ln", srcClass(s))} /> {SOURCE_NAME[s]}
                 </span>

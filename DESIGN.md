@@ -17,14 +17,17 @@ colors:
   line-slack: "#00a3a8"
   line-claude: "#f39700"
   line-basecamp: "#00b07c"
+  line-calendar: "#5b5bd6"
   text-github: "#b8000e"
   text-slack: "#00777b"
   text-claude: "#8a5300"
   text-basecamp: "#006b4d"
+  text-calendar: "#3d3dab"
   tint-github: "#fbe6e5"
   tint-slack: "#e6f6f5"
   tint-claude: "#fdf0dc"
   tint-basecamp: "#e2f5ed"
+  tint-calendar: "#e9e8fb"
   grafito-ground: "#17191d"
   grafito-deep: "#111316"
   grafito-raise: "#20232a"
@@ -40,14 +43,17 @@ colors:
   grafito-line-slack: "#2ec5c2"
   grafito-line-claude: "#ffb428"
   grafito-line-basecamp: "#3cc983"
+  grafito-line-calendar: "#8a8aff"
   grafito-text-github: "#ff8f86"
   grafito-text-slack: "#74dcd9"
   grafito-text-claude: "#ffc965"
   grafito-text-basecamp: "#7fdca4"
+  grafito-text-calendar: "#b3b3ff"
   grafito-tint-github: "#3a1f1e"
   grafito-tint-slack: "#123130"
   grafito-tint-claude: "#3a2d14"
   grafito-tint-basecamp: "#15301f"
+  grafito-tint-calendar: "#23233f"
 typography:
   headline:
     fontFamily: "Hanken Grotesk, sans-serif"
@@ -185,31 +191,32 @@ components:
 
 **Creative North Star: "Mapa de metro"**
 
-The working day is a transit network. Each source is a coloured line (GitHub, Slack, Claude, Basecamp), each status is a station (Inbox, Todo, En curso, Esperando, Hecho), and each item is a tick riding its line. The signature is the line band across the top of the work area: picking a station or a source filter re-routes it, so the chosen line burns at full ink and the rest drop to about 35%. Everything below the band is a dense, calm operating surface: rows that read in one glance, a detail pane, and an approval that shows exact destination and exact text before anything is signed.
+The working day is a transit network. Each source is a coloured line (GitHub, Slack, Claude, Basecamp, and Calendario for the day's meetings), each status is a station (Inbox, Todo, En curso, Esperando, Hecho), and each item is a tick riding its line. The signature is the line band across the top of the work area: picking a station or a source filter re-routes it, so the chosen line burns at full ink and the rest drop to about 35%. Everything below the band is a dense, calm operating surface: rows that read in one glance, a detail pane, and an approval that shows exact destination and exact text before anything is signed.
 
 The material is signage, not software chrome. Grounds are warm paper greys in the light "Tokio" theme (the default) and graphite in the dark "Grafito" theme. Station capsules have a ground fill and an ink outline, interchanges are open rings, and lines bend only at 45 and 90 degrees. One humanist sans, Hanken Grotesk, carries everything at fixed sizes with tabular numerals, like a station board.
 
-Colour is reserved for wayfinding. The four line inks identify a source and nothing else; state is carried by ink weight, fill, dashes and dotted lines, never by a semantic red or green.
+Colour is reserved for wayfinding. The five line inks identify a source and nothing else; state is carried by ink weight, fill, dashes and dotted lines, never by a semantic red or green.
 
 **Key Characteristics:**
 - Two themes from one token set: Tokio light on `:root`, Grafito dark on `[data-theme="dark"]`.
-- Four line inks that mean source only; Slack is teal in both themes.
+- Five line inks that mean source only (Calendario is the fifth, indigo); Slack is teal in both themes.
 - Station capsules, open interchange rings, 45/90 degree bends, 6px round-capped strokes.
 - One family, fixed sizes, tabular numerals for every count and time.
 - Flat surfaces separated by hairline rules and tonal grounds; shadow only for floating layers.
 
 ## Colors
 
-A warm, near-neutral transit-map paper with four saturated line inks used strictly as source identity.
+A warm, near-neutral transit-map paper with five saturated line inks used strictly as source identity.
 
 ### Primary
 - **Station Ink** (Tokio `ink`, Grafito `grafito-ink`): text, capsule outlines, ring strokes, the primary button, the active tab and the "Te espera" tag. It is the only colour that means "this needs you".
 
-### Secondary (the four lines)
+### Secondary (the five lines)
 - **Metro Red / GitHub** (`line-github`, Grafito `grafito-line-github`): PR lines, ticks, source dots, chips.
 - **Canal Teal / Slack** (`line-slack`, Grafito `grafito-line-slack`): Slack lines and approvals into Slack. Teal in both themes.
 - **Signal Orange / Claude** (`line-claude`, Grafito `grafito-line-claude`): Claude's questions, the "Claude escuchando" indicator, the recommended ticket option outline.
 - **Platform Green / Basecamp** (`line-basecamp`, Grafito `grafito-line-basecamp`): Basecamp lines, and the "Limpio" / connected outline.
+- **Indigo / Calendario** (`line-calendar`, Grafito `grafito-line-calendar`): the Calendario screen (day band, agenda rows, the free-slot bar), the "Próxima reunión" strip, the calendar's source-health row and the chips and top stub of a calendar salida (`calendar` source). Indigo (hue 240) sits far from teal (182), green (162), red (355) and orange (37) in both themes; it is never an error or a "busy" colour, and it always travels with the word "Calendario" or a meeting's time so colour alone is never the only cue.
 - **Line text variants** (`text-*`): darker (Tokio) or lighter (Grafito) versions of each line ink for when a source colour has to be read as text, such as the "Limpio" tag label.
 - **Line tints** (`tint-*`): fills behind destination and link chips, the source colour at very low strength.
 
@@ -221,7 +228,7 @@ A warm, near-neutral transit-map paper with four saturated line inks used strict
 - **Dim** (`dim`): non-text only. It is 3.7:1 on `deep` and 4.0:1 on `ground`, below AA for text.
 
 ### Named Rules
-**The Lines Carry Source Rule.** A line ink identifies GitHub, Slack, Claude or Basecamp and nothing else. It is never an error, warning, success or diff colour; red is GitHub.
+**The Lines Carry Source Rule.** A line ink identifies GitHub, Slack, Claude, Basecamp or Calendario and nothing else. It is never an error, warning, success or diff colour; red is GitHub.
 
 **The Mute Is Text Rule.** Secondary copy uses `mute`. `dim` stays in the palette for non-text marks only, and station counts use `mute` rather than opacity.
 
@@ -299,7 +306,7 @@ Gentle, signage-like corners: 4px on tags and chips, 6px on buttons, tabs, nav i
 - **Phone tabs:** 82px bottom bar, each tab a short line stub at 30% that goes full ink when active.
 
 ### Line Band (signature)
-Four source lines run left to right through five station capsules, with items as source-coloured ticks. The selected station is drawn solid on `porcelain` with a 3.5px outline; everything past it drops to about 35%. A source filter burns its line and dims the others. Items linked to two sources are interchange rings joined by a 45 degree connector. When an item changes status its tick travels along its line (`cubic-bezier(.16,1,.3,1)`); under reduced motion it jumps.
+Four item-source lines (GitHub, Slack, Claude, Basecamp) run left to right through five station capsules, with items as source-coloured ticks. Calendario is not a band line: its events are not items and have no station. The selected station is drawn solid on `porcelain` with a 3.5px outline; everything past it drops to about 35%. A source filter burns its line and dims the others. Items linked to two sources are interchange rings joined by a 45 degree connector. When an item changes status its tick travels along its line (`cubic-bezier(.16,1,.3,1)`); under reduced motion it jumps.
 
 ### Exact-Text Block
 The outgoing message on `porcelain` with a 1px `rule` border and 6px corners at 16px / 1.5. The source line runs into the block from the top: a 30 x 7px stub in the destination's line ink sits across the top edge at 15px from the left. Above it, the destination is drawn as chips or a short route (workspace, channel, thread, posting identity for Slack; project, recording, form for Basecamp).
@@ -329,7 +336,7 @@ The same drawn idiom as Uso, in ink only (the kinds and projects are not sources
 ## Do's and Don'ts
 
 ### Do:
-- **Do** use the four line inks only to identify a source, at full strength on the chosen line and about 35% on the rest.
+- **Do** use the five line inks only to identify a source, at full strength on the chosen line and about 35% on the rest.
 - **Do** set secondary text in `mute`; keep `dim` for non-text marks.
 - **Do** show the exact destination and the exact text in the same view as Aprobar, and mark the text block with a top line stub in the destination's ink.
 - **Do** draw lines with 6px round-capped strokes that bend only at 45 or 90 degrees, with interchange rings for items linked to two sources.

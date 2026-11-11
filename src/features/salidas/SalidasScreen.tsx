@@ -7,7 +7,7 @@ import type { Mark } from "@/lib/domain/types";
 import { isSimulated } from "@/lib/domain/sandbox";
 import { useArrive, usePress } from "@/lib/motion";
 import { IcClock } from "./icons";
-import { ago, destShort, firstLine, hhmm, sourceLabel, undoOpen, whenLabel } from "./model";
+import { ago, calendarLine, destShort, firstLine, hhmm, sourceLabel, undoOpen, whenLabel } from "./model";
 import { cx } from "./parts";
 import { SalidaCard } from "./SalidaCard";
 import { useLiveRefresh, useNow } from "./live";
@@ -227,7 +227,7 @@ function QueueItem({ s, now, current, denied, onOpen, onSwipe }: { s: SalidaView
   }, [current]);
   const body = s.versions.find((v) => v.n === s.currentVersion)?.body || (s.destination.kind === "github_review" ? (s.destination.comments?.[0]?.body ?? "Aprobación sin comentario") : "");
   const decided = denied || isDecided(s);
-  const color = s.source === "slack" ? "var(--sl)" : s.source === "basecamp" ? "var(--bc)" : "var(--gh)";
+  const color = s.source === "slack" ? "var(--sl)" : s.source === "basecamp" ? "var(--bc)" : s.source === "calendar" ? "var(--ca)" : "var(--gh)";
   return (
     <button
       ref={ref}
@@ -250,7 +250,7 @@ function QueueItem({ s, now, current, denied, onOpen, onSwipe }: { s: SalidaView
         <span className="a">{ago(s.createdAt, now)}</span>
       </span>
       <span className="d">{destShort(s.destination)}</span>
-      <span className="x">{firstLine(body)}</span>
+      <span className="x">{s.source === "calendar" ? calendarLine(body) : firstLine(body)}</span>
       <span className="s">
         {s.status === "scheduled" ? <IcClock /> : null}
         {denied ? "Denegada" : stripStatus(s, now)}

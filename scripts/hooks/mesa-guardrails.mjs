@@ -22,6 +22,10 @@
 //                @Claude" and Andrés accepted that); either way with exactly the approved text and the salida's
 //                channelId (and threadTs when it has one) as channel_id / thread_ts. The wrong tool for the mode is
 //                refused with the right path: a draft is never sent, a direct send is never drafted.
+//                A Google Calendar create_event (the connector, t112) passes only for a released, unsent, non-sample
+//                `calendar` salida whose approved body (title, start, end, invitees, Meet, description: one field per
+//                line, scripts/hooks/calendar-body.mjs) is exactly what the call writes; any other Google Calendar write
+//                (update, delete, respond, move) is refused outright: Mesa only creates, and only from a released salida.
 //                Mesa unreachable = blocked (nothing goes out unseen).
 //   G10 (rule 3) Nobody approves (and so never picks the Slack mode), schedules, denies or undoes a salida, closes a
 //                Slack draft as sent ("Ya lo envié"), approves a plan or decides a permission card through the raw
@@ -38,6 +42,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { eventFromCall, eventMismatches, parseEventBody } from "./calendar-body.mjs";
 import { hookSandbox, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
@@ -47,6 +52,17 @@ const BASECAMP_WRITE =
   /^mcp__basecamp__(create|update|trash|delete|destroy|complete|uncomplete|move|archive|unarchive|pin|unpin|enable|disable|remove|reposition|reorder|subscribe|unsubscribe|watch|unwatch|toggle|pause|resume|copy|prioritize|deprioritize|set|mark|restore)_/;
 // Sends whose text the lead may only post from a released salida. (The two Slack message tools have their own check below.)
 const LEAD_TEXT_SENDS = /^(mcp__basecamp__create_(comment|campfire_line|message|ping)|mcp__basecamp__update_(comment|message))$/;
+// Google Calendar through the claude.ai connector (mcp__claude_ai_Google_Calendar__<action>) or a self-hosted one
+// (mcp__google-calendar__<action>). Reads (list, get, find free time) are open; every other action writes.
+const GCAL = /^mcp__(?:claude_ai_)?google[_-]?calendar[^_]*__(.+)$/i;
+// authenticate / complete_authentication are the connector's own sign-in (plan action 1): they write nothing to the calendar.
+const GCAL_READ = /^(list|get|find|search|read|check|query|free|suggest|fetch|show|view|lookup|authenticate|complete[_-]?authentication)/i;
+const GCAL_CREATE = /^(create|insert|add)[_-]?event$/i;
+const gcalAction = (tool) => GCAL.exec(tool)?.[1] ?? null;
+const isGcalWrite = (tool) => {
+  const a = gcalAction(tool);
+  return a !== null && !GCAL_READ.test(a);
+};
 const SLACK_SEND_MESSAGE = "mcp__claude_ai_Slack__slack_send_message";
 const SLACK_SEND_DRAFT = "mcp__claude_ai_Slack__slack_send_message_draft";
 
@@ -221,6 +237,28 @@ async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
   return { match: null, mismatch };
 }
 
+// The released calendar salida a create_event call is exactly: { match } or { mismatches } (the nearest one).
+async function releasedCalendarSalida(ti, { fetchImpl, base }) {
+  const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
+  const list = (data.salidas ?? data ?? []).filter((s) => s.source === "calendar" && (s.releasedAt ?? s.released_at) && !s.isSample && !(s.sentAt ?? s.sent_at));
+  const call = eventFromCall(ti);
+  let near = null;
+  for (const item of list) {
+    let s = item;
+    if (approvedBody(s) === null) {
+      const full = await mesaCall(`/api/salidas/${encodeURIComponent(item.id)}`, { fetchImpl, base, timeoutMs: 4000 });
+      s = full.salida ?? full;
+    }
+    const body = approvedBody(s);
+    const parsed = body === null ? null : parseEventBody(body);
+    if (!parsed?.ok) continue;
+    const diff = eventMismatches(parsed.fields, call, slackDestination(s));
+    if (!diff.length) return { match: s, id: s.id };
+    if (!near || diff.length < near.mismatches.length) near = { id: s.id, mismatches: diff };
+  }
+  return { match: null, near };
+}
+
 const slackDestination = (s) => {
   const d = s.destination ?? {};
   if (typeof d !== "string") return d;
@@ -308,6 +346,9 @@ const GH_WRITE =
 const GH_API_WRITE_FLAGS = /(?:^|\s)(?:-X|--method)[\s=]*(POST|PUT|PATCH|DELETE)\b|(?:^|\s)(?:-f|-F|--field|--raw-field|--input)\s/i;
 
 export function sandboxBlock(tool, ti) {
+  if (isGcalWrite(tool)) {
+    return `${NADA} ${tool} writes to Google Calendar. On salida.released, report the event as simulated ("mesa salida sent <id> --simulated") and never call the MCP tool; reads (list, free time) are fine.`;
+  }
   if (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool)) {
     return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`; a Slack salida in mode draft: \`mesa salida drafted <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
   }
@@ -381,6 +422,10 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     if (why) return block("G11", why);
   }
 
+  if (teammate && isGcalWrite(tool)) {
+    return block("G4", `rule 3: ${agent.name} cannot write to Google Calendar. Propose a calendar salida ("mesa salida propose --source calendar ...") and let the lead create the event after Andrés approves it.`);
+  }
+
   if (teammate && (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool))) {
     return block("G4", `rule 3: ${agent.name} cannot write to Slack or Basecamp. Propose a salida (\`mesa salida propose ...\`) or a planned action and let the lead send it after Andrés approves.`);
   }
@@ -411,6 +456,21 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     }
     if (!found.match) {
       return block("G5", "rule 3: no released salida in Mesa has exactly this text. Send only on `salida.released`, with the approved version's text unchanged (the 20 s undo window must be over).");
+    }
+  }
+  // Google Calendar: the lead creates an event only from a released calendar salida, with exactly its approved fields.
+  if (!teammate && isGcalWrite(tool)) {
+    if (!GCAL_CREATE.test(gcalAction(tool))) {
+      return block("G5", `rule 3: ${tool} changes Andrés's Google Calendar. Mesa only creates events, and only from a released calendar salida (create_event on salida.released). Updates, deletes and answers to invitations are his to make in Google Calendar.`);
+    }
+    let found;
+    try {
+      found = await releasedCalendarSalida(ti, { fetchImpl, base });
+    } catch (err) {
+      return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this event cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and create it on salida.released.`);
+    }
+    if (!found.match) {
+      return block("G5", found.near ? `rule 3: no released calendar salida is exactly this event. The nearest is ${found.near.id}; the call differs: ${found.near.mismatches.join("; ")}. Create the event with exactly the approved fields (the approved version's body), or propose a new version for Andrés to approve.` : "rule 3: no released calendar salida in Mesa matches this event. Create it only on `salida.released` (Andrés approved it and the 20 s undo window is over), then `mesa salida sent <id> --permalink <event link>`.");
     }
   }
   if (tool === "mcp__claude_ai_Slack__slack_schedule_message") {

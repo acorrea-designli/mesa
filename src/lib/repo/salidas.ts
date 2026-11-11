@@ -9,7 +9,9 @@ import {
   nowIso,
   toAssignments,
   TransitionError,
+  ValidationError,
 } from "../db/util";
+import { eventBodyProblem, parseEventBody } from "../domain/calendar-event";
 import {
   canAddVersion,
   dueEvent,
@@ -106,8 +108,29 @@ export function salidasRepo(db: Db) {
       db.prepare("SELECT 1 FROM salida_turns WHERE salida_id = ? AND author = 'andres' AND state = 'open' LIMIT 1").get(id),
     );
 
+  // The calendar's health is about READING the feed; creating an event goes through the connector, so a feed outage
+  // never parks a calendar salida in "Aprobar al volver".
   const sourceDown = (source: string) =>
+    source !== "calendar" &&
     Boolean(db.prepare("SELECT 1 FROM source_state WHERE source = ? AND health = 'down'").get(source));
+
+  // A calendar salida's body IS the event (src/lib/domain/calendar-event.ts): every version must be a complete, valid one.
+  const checkBody = (source: string, body: string) => {
+    const problem = source === "calendar" ? eventBodyProblem(body) : null;
+    if (problem) throw new ValidationError(`calendar salida body: ${problem}`);
+  };
+
+  // The destination of a calendar salida lists the invitees and the Meet for the chips and the queue line, but the
+  // version's body is the truth (it is what Aprobar signs and what hook G5 compares). Every time the current version
+  // changes (a new version, "Volver a vN") the destination is rewritten from that body, so it can never go stale.
+  const syncCalendarDestination = (salidaId: string, body: string) => {
+    const s = get(salidaId);
+    if (s.source !== "calendar" || s.destination.kind !== "calendar_event") return;
+    const p = parseEventBody(body);
+    if (!p.ok) return;
+    const d = { ...s.destination, invitees: p.fields.invitees, meet: p.fields.meet };
+    db.prepare("UPDATE salidas SET destination = ? WHERE id = ?").run(JSON.stringify(d), salidaId);
+  };
 
   const insertVersion = (salidaId: string, v: VersionInput, ts: string): number => {
     const n = versionCount(salidaId) + 1;
@@ -118,6 +141,7 @@ export function salidasRepo(db: Db) {
     );
     db.prepare(sql).run(...values);
     db.prepare("UPDATE salidas SET current_version = ?, updated_at = ? WHERE id = ?").run(n, ts, salidaId);
+    syncCalendarDestination(salidaId, v.body);
     return n;
   };
 
@@ -157,6 +181,7 @@ export function salidasRepo(db: Db) {
     create(input: SalidaInput, now = new Date()): SalidaDetail {
       const id = newId("sa");
       const ts = nowIso(now);
+      checkBody(input.source, input.body);
       return tx(db, () => {
         ensureSession(db, input.ownerSession, now);
         const { sql, values } = insertSql(
@@ -190,6 +215,7 @@ export function salidasRepo(db: Db) {
       return tx(db, () => {
         const s = get(id);
         if (!canAddVersion(s.status)) throw new TransitionError(`cannot add a version to a salida that is ${s.status}`);
+        checkBody(s.source, v.body);
         const ts = nowIso(now);
         let turnId = v.turnId;
         if (!turnId && v.author === "claude") {
@@ -225,6 +251,8 @@ export function salidasRepo(db: Db) {
       if (!canAddVersion(s.status)) throw new TransitionError(`cannot change the version of a salida that is ${s.status}`);
       if (n < 1 || n > versionCount(id)) throw new TransitionError(`version ${n} does not exist`);
       patch(id, { currentVersion: n }, nowIso(now));
+      const picked = db.prepare("SELECT body FROM salida_versions WHERE salida_id = ? AND n = ?").get(id, n) as { body: string } | undefined;
+      if (picked) syncCalendarDestination(id, picked.body);
       touchInteraction(db, now);
       return repo.detail(id);
     },

@@ -1,6 +1,8 @@
 // Hoy read model (server only): everything the screen needs in one pass over the repositories.
 import { mapHealth } from "@/components/shell/health";
+import { nextMeeting } from "@/lib/domain/calendar";
 import type { Source } from "@/lib/domain/types";
+import { calendarConfigState } from "@/lib/integrations/calendar-env";
 import { repos } from "@/lib/repo";
 import { clock, isToday, longDay, shortDay, when } from "./format";
 import { ignoreTarget } from "../ignore/model";
@@ -134,5 +136,14 @@ export function loadHoy(now: Date = new Date()): HoyData {
     setup,
     hasSample: all.some((i) => i.isSample) || salidas.some((s) => s.isSample),
     ignored: loadIgnored(),
+    calendar: loadCalendarStrip(r, now),
   };
+}
+
+/** The "Próxima reunión" strip: visible when the feed is configured or sample events are seeded. */
+function loadCalendarStrip(r: ReturnType<typeof repos>, now: Date): HoyData["calendar"] {
+  const n = r.calendar.count();
+  const visible = calendarConfigState() !== "off" || n.real + n.samples > 0;
+  const next = visible ? nextMeeting(r.calendar.list({ from: now, to: new Date(now.getTime() + 7 * 86_400_000) }), now) : null;
+  return { visible, next, nowIso: now.toISOString() };
 }

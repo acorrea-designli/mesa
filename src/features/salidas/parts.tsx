@@ -18,7 +18,7 @@ export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Bool
 
 export function Route({ d, source }: { d: Destination; source: SalidaDetail["source"] }) {
   const stops = routeStops(d);
-  const color = source === "slack" ? "var(--sl)" : source === "basecamp" ? "var(--bc)" : "var(--gh)";
+  const color = source === "slack" ? "var(--sl)" : source === "basecamp" ? "var(--bc)" : source === "calendar" ? "var(--ca)" : "var(--gh)";
   return (
     <div className="sa-route" style={{ ["--route" as string]: color }}>
       {stops.map((s) => (
@@ -417,7 +417,7 @@ export function Banner({ tone, title, text, children, icon }: { tone?: string; t
 
 // ---------- sent: permalink + delete per destination ----------
 
-const OPEN_IN: Record<string, string> = { slack: "Abrir en Slack", basecamp: "Abrir en Basecamp", github: "Abrir en GitHub" };
+const OPEN_IN: Record<string, string> = { slack: "Abrir en Slack", basecamp: "Abrir en Basecamp", github: "Abrir en GitHub", calendar: "Abrir en Google Calendar" };
 
 export function SentBlock({
   s,
@@ -498,7 +498,7 @@ export function SentBlock({
               </a>
             ) : null}
             <span className="sx-why" id={whyId}>
-              {s.source === "slack" ? "Slack no permite borrar desde Mesa todavía · ábrelo en Slack" : "Una revisión enviada no se puede borrar · ábrela en GitHub"}
+              {s.source === "slack" ? "Slack no permite borrar desde Mesa todavía · ábrelo en Slack" : s.source === "calendar" ? "Mesa no borra eventos · quítalo en Google Calendar" : "Una revisión enviada no se puede borrar · ábrela en GitHub"}
             </span>
           </>
         ) : (

@@ -46,7 +46,9 @@ know they are in the sandbox even if the env does not reach them. It refuses `G:
   its `-wal`; tests check the bytes and mtime of both. With the live server stopped, the empty `-wal`/`-shm` the
   reader creates are removed again. The target can never be the source or any file named `mesa.db`.
 - **`--from seed`**: the sample seed. Its rows are made ordinary (`is_sample = 0`), because sample salidas can never
-  be released or sent, and here the whole board is dummy data anyway.
+  be released or sent, and here the whole board is dummy data anyway. The exception is Calendario (t112): the seeded
+  meetings stay samples ("Datos de muestra."), because the sandbox never fetches the iCal feed and the screen needs
+  something to show; the seeded calendar salida becomes ordinary like the others.
 - **Scrub** (both). It deletes every wake event and session and clears `owner_session`, so the sandbox lead gets
   every wake. Live agents are retired and pending permission cards expire, since their hooks poll the live board.
   Approved salidas, whether in the undo window, released, scheduled or held, go back to `pending`. GitHub Project
@@ -105,7 +107,7 @@ Each change is gated on `echo $MESA_ENV` printing `sandbox`:
 
 - `mesa-start`: its first line names the sandbox. It uses the sandbox cwd, port and hooks, the `designli-sandbox`
   engram project, and no sweeper.
-- `mesa-salida`, `mesa-review`: `--simulated` instead of the MCP or pr-gh.mjs call.
+- `mesa-salida`, `mesa-review`: `--simulated` instead of the MCP or pr-gh.mjs call (a calendar event too).
 - `mesa-sweep`: a no-op.
 - Spawn preamble rule 16 tells teammates the same.
 
@@ -113,5 +115,8 @@ Each change is gated on `echo $MESA_ENV` printing `sandbox`:
 
 - The sandbox reads the real sources. Its sessions may still read Slack, Basecamp and GitHub through MCP and `gh`
   reads, and the engram panel reads the real engram. Only writes are blocked.
-- Other MCP connectors (Gmail, Drive, Calendar, …) are not covered by G11; the team does not use them.
+- Google Calendar (t112) is covered: the poller never starts and `POST /api/calendar/refresh` answers 409 `sandbox` (the
+  feed address is never read), and hook G11 blocks every Google Calendar write (reads such as listing events or free
+  time stay open); a calendar salida is reported with `mesa salida sent <id> --simulated`.
+- Other MCP connectors (Gmail, Drive, …) are not covered by G11; the team does not use them.
 - Restart Claude Code in the sandbox folder after re-running the installer.

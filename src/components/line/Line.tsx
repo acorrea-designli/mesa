@@ -1,18 +1,19 @@
 // Line language primitives: 6px round-capped strokes, 45/90 degree bends,
 // open interchange rings, dotted = out of service. Colour = source only.
 import type { CSSProperties } from "react";
-import type { Source } from "@/lib/domain/types";
+import type { LineSource } from "@/lib/domain/types";
 
-const LINE_VAR: Record<Source, string> = {
+const LINE_VAR: Record<LineSource, string> = {
   github: "var(--gh)",
   slack: "var(--sl)",
   claude: "var(--cl)",
   basecamp: "var(--bc)",
+  calendar: "var(--ca)",
 };
-export const lineColor = (s: Source | "ink") => (s === "ink" ? "var(--ink)" : LINE_VAR[s]);
+export const lineColor = (s: LineSource | "ink") => (s === "ink" ? "var(--ink)" : LINE_VAR[s]);
 
 /** Source dot used in rows and tabs. */
-export function SourceDot({ source, size = 10 }: { source: Source; size?: number }) {
+export function SourceDot({ source, size = 10 }: { source: LineSource; size?: number }) {
   return (
     <i
       className="dot"
@@ -30,7 +31,7 @@ export function LineStub({
   dotted = false,
   title,
 }: {
-  source: Source | "ink";
+  source: LineSource | "ink";
   width?: number;
   dim?: boolean;
   dotted?: boolean;
@@ -52,7 +53,7 @@ export function LineStub({
 }
 
 /** Open interchange ring. */
-export function Ring({ source = "ink", size = 13, on = false }: { source?: Source | "ink"; size?: number; on?: boolean }) {
+export function Ring({ source = "ink", size = 13, on = false }: { source?: LineSource | "ink"; size?: number; on?: boolean }) {
   const r = size / 2 - 1.75;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ flex: "none" }}>
@@ -62,7 +63,7 @@ export function Ring({ source = "ink", size = 13, on = false }: { source?: Sourc
 }
 
 /** Line stub that ends in an interchange ring: the card stub for an item linked to two sources. */
-export function Interchange({ from, to }: { from: Source; to: Source }) {
+export function Interchange({ from, to }: { from: LineSource; to: LineSource }) {
   return (
     <svg width={44} height={18} viewBox="0 0 44 18" aria-hidden="true" style={{ flex: "none" }}>
       <path d="M3 5H16" stroke={LINE_VAR[from]} strokeWidth={5} strokeLinecap="round" fill="none" />
@@ -95,7 +96,7 @@ export function DirectionMarker({ direction, label }: { direction: "claude_asks"
 }
 
 /** Service interrupted: a dotted line cut by a 45 degree slash. Never red. */
-export function BrokenLine({ source, width = 26, title }: { source: Source; width?: number; title?: string }) {
+export function BrokenLine({ source, width = 26, title }: { source: LineSource; width?: number; title?: string }) {
   return (
     <svg width={width} height={14} viewBox={`0 0 ${width} 14`} role="img" aria-label={title ?? "Sin conexión"} style={{ flex: "none" }}>
       <path d={`M3 7H${width - 3}`} stroke={LINE_VAR[source]} strokeWidth={5} strokeLinecap="round" strokeDasharray="1 7" fill="none" />

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import { BrandMark, BrokenLine, SourceDot } from "@/components/line/Line";
 import { Btn, FilesBadge } from "@/components/ui/primitives";
 import { Tabs, useToast } from "@/components/ui/interactive";
-import { STATION_LABEL, STATIONS, type Source, type Station } from "@/lib/domain/types";
+import { STATION_LABEL, STATIONS, type LineSource, type Source, type Station } from "@/lib/domain/types";
 import { useArrive, usePress } from "@/lib/motion";
 import { Corridor } from "../band/Corridor";
 import { LineBand } from "../band/LineBand";
@@ -19,6 +19,7 @@ import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { SalidaApproval } from "@/features/salidas/SalidaApproval";
 import { clock } from "./format";
 import { LeadFocus } from "./LeadFocus";
+import { NextStrip } from "@/features/calendar/NextStrip";
 import { useLive } from "./useLive";
 import { useSkip } from "./useSkip";
 import { MoreButton, useActionMenu, type MenuAction } from "../ignore/ActionMenu";
@@ -35,7 +36,7 @@ const LONG_PRESS_MS = 450;
 
 const LEGEND: Source[] = ["github", "slack", "claude", "basecamp"];
 const TAB_ORDER: Source[] = ["github", "basecamp", "slack", "claude"];
-const NAME: Record<Source, string> = { github: "GitHub", slack: "Slack", basecamp: "Basecamp", claude: "Claude" };
+const NAME: Record<LineSource, string> = { github: "GitHub", slack: "Slack", basecamp: "Basecamp", claude: "Claude", calendar: "Calendario" };
 
 function SweepButton({ compact }: { compact?: boolean }) {
   const toast = useToast();
@@ -403,6 +404,7 @@ export function HoyView({ data }: { data: HoyData }) {
 
         <div className="hy-main" ref={pressRef}>
           {offlineNote ? <div className="hy-desk-off">{offlineNote}</div> : null}
+          {data.calendar.visible ? <NextStrip className="hy-next" next={data.calendar.next} nowIso={data.calendar.nowIso} /> : null}
           {data.approvals.length || data.leadFocus ? (
             <section id="permisos" className="hy-perm" aria-label="Permisos">
               <div className="grp">{data.approvals.length ? "Permisos · esperan tu decisión" : "Permisos"}</div>

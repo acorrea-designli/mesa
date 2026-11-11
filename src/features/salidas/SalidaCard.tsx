@@ -30,6 +30,7 @@ import {
   VersionList,
   VersionStepper,
 } from "./parts";
+import { EventBlock } from "@/features/calendar/EventBlock";
 import { SemaforoText } from "./Semaforo";
 import { Composer, History, MemoryPanel, OriginStrip, RefineChat } from "./side";
 import type { SalidaView } from "./types";
@@ -100,7 +101,9 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
               ? `Borrador de las ${hhmm(s.createdAt)}`
               : s.status === "sending"
                 ? "Texto exacto"
-                : "Texto que se enviará";
+                : s.source === "calendar"
+                  ? "Evento que se creará"
+                  : "Texto que se enviará";
 
   const left = (
     <div className="sa-left">
@@ -153,7 +156,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
 
       {c.mode === "view" && sendLabel ? (
         <div className="acts sa-desk-acts">
-          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button className="btn" type="button" disabled={c.locked || c.busy || isGithubBatch} onClick={() => c.setMode("edit")}>
             <IcPencil />
             Editar
@@ -247,7 +250,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
       ) : null}
       {s.status === "pending" && c.mode === "view" ? (
         <div className="sa-dock sa-phone-only">
-          <SplitApprove phone up slack={isSlack} label={isSlack ? "Aprobar" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove phone up slack={isSlack} label={isSlack ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
         </div>
       ) : null}
     </article>
@@ -267,6 +270,8 @@ function metaLine(s: SalidaView): string {
 /** The exact text: semáforo block, or the batched GitHub review comments. */
 export function ExactBlock({ s, text, marks, setMarks, highlight }: { s: SalidaDetail; text: string; marks: Mark[]; setMarks?: (m: Mark[]) => void; highlight?: string | null }) {
   const d = s.destination;
+  // A calendar salida's text is the event itself: show it as the event (to change it, "Editar" or ask Claude).
+  if (d.kind === "calendar_event") return <EventBlock text={text} className={s.status === "sent" || s.status === "denied" || s.status === "expired" || s.status === "deleted" ? "sent" : undefined} />;
   if (d.kind === "github_review") {
     const comments = d.comments ?? [];
     return (
@@ -339,7 +344,7 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
         </div>
       ) : null}
       <div className="acts">
-        <SplitApprove slack={isSlack} version={c.s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : "Aprobar y enviar mi versión"} disabled={!changed || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
+        <SplitApprove slack={isSlack} version={c.s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : c.s.source === "calendar" ? "Aprobar y crear mi versión" : "Aprobar y enviar mi versión"} disabled={!changed || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
         {isSlack ? (
           <button className="btn" type="button" disabled={!changed || c.busy} onClick={() => c.approveText(draft, "send")}>
             Aprobar y que Claude lo envíe

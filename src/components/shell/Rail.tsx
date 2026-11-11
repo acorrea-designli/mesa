@@ -18,6 +18,7 @@ export const NAV = [
   { href: "/tablero", label: "Tablero", count: (c: Counts) => c.tablero, line: "github" as const },
   { href: "/tickets", label: "Tickets", count: (c: Counts) => c.tickets, line: "claude" as const },
   { href: "/salidas", label: "Salidas", count: (c: Counts) => c.salidas, line: "slack" as const },
+  { href: "/calendario", label: "Calendario", count: (c: Counts) => c.calendar, line: "calendar" as const },
 ];
 
 export const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));

@@ -1,7 +1,8 @@
 // Hoy view model: pure mapping from domain rows to what the screen renders.
 // Client safe (no server imports); unit tested in model.test.ts.
 import type { StatusTone } from "@/components/ui/primitives";
-import type { Approval, Destination, Item, Salida, Source, Station, TicketStatus, WaitOn } from "@/lib/domain/types";
+import type { Approval, CalendarEvent, Destination, Item, LineSource, Salida, Source, Station, TicketStatus, WaitOn } from "@/lib/domain/types";
+import { eventWhen, parseEventBody } from "@/lib/domain/calendar-event";
 import { TICKET_STATUS_LABEL } from "@/lib/domain/ticket-machine";
 import { STATION_LABEL } from "@/lib/domain/types";
 import { chipOfMeta, type FilesChip } from "@/lib/domain/files";
@@ -18,7 +19,8 @@ export interface HoyRow {
   kind: "item" | "salida";
   id: string;
   station: Station;
-  source: Source;
+  /** An item's source, or the salida's (a calendar salida is the fifth line). */
+  source: LineSource;
   time: string;
   subject: string;
   excerpt: string;
@@ -118,6 +120,8 @@ export interface HoyData {
   hasSample: boolean;
   /** Ignored projects ("N ignorados" on the source tabs). Their items are not in rows or band. */
   ignored: IgnoredRow[];
+  /** The "Próxima reunión" strip (t112): shown once the calendar is connected (or seeded); `next` is null with nothing left this week. */
+  calendar: { visible: boolean; next: CalendarEvent | null; nowIso: string };
 }
 
 // ---------- labels ----------
@@ -176,6 +180,8 @@ export function destinationLabel(d: Destination): string {
     case "github_review":
     case "github_comment":
       return `${d.repo}#${d.pr}`;
+    case "calendar_event":
+      return d.invitees?.length ? `Calendario · ${d.invitees.length === 1 ? "1 invitado" : `${d.invitees.length} invitados`}` : "Calendario · solo tú";
   }
 }
 
@@ -234,6 +240,8 @@ export function withTicketNeed(row: HoyRow, needs: readonly { label: string }[] 
 
 export function salidaRow(s: Salida, body: string, time: string): HoyRow {
   const quote = firstLine(body);
+  // A calendar salida's body is the event, one field per line: the row says what and when, not "Título: …".
+  const ev = s.source === "calendar" ? parseEventBody(body) : null;
   return {
     key: `sa:${s.id}`,
     kind: "salida",
@@ -241,8 +249,8 @@ export function salidaRow(s: Salida, body: string, time: string): HoyRow {
     station: "inbox",
     source: s.source,
     time,
-    subject: `Para ${destinationLabel(s.destination)}`,
-    excerpt: quote ? `“${quote}”` : s.title,
+    subject: ev?.ok ? `Crear evento · ${ev.fields.title}` : `Para ${destinationLabel(s.destination)}`,
+    excerpt: ev?.ok ? eventWhen(ev.fields) : quote ? `“${quote}”` : s.title,
     need: "Aprobar",
     tag: { tone: "you", label: "Por enviar" },
     phoneTag: { tone: "you", label: "Firmar" },
@@ -262,8 +270,8 @@ export function visibleRows(rows: HoyRow[], station: Station, source: Source | "
 }
 
 /** Source tab counts for a station (items and salidas). */
-export function sourceCounts(rows: HoyRow[], station: Station): Record<Source | "all", number> {
-  const out = { all: 0, github: 0, slack: 0, basecamp: 0, claude: 0 } as Record<Source | "all", number>;
+export function sourceCounts(rows: HoyRow[], station: Station): Record<LineSource | "all", number> {
+  const out = { all: 0, github: 0, slack: 0, basecamp: 0, claude: 0, calendar: 0 } as Record<LineSource | "all", number>;
   for (const r of rows) {
     if (r.station !== station || (r.kind === "salida" && station !== "inbox")) continue;
     out.all += 1;

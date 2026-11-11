@@ -1,6 +1,6 @@
 ---
 name: mesa-salida
-description: Outgoing messages through Mesa Salidas - propose a draft with its exact destination, refine it turn by turn with Andrés (semáforo marks Mantener/Reformular/Quitar, versions, learned quick chips), send only after his approval and the 20 s undo window (Slack: a draft he sends himself, or "Claude lo envía"), report the permalink, scheduled sends, and delete per destination (Basecamp trash 25 days, Campfire permanent, a Slack draft is his to delete in Slack, a direct Slack send not deletable from Mesa). Use for any message to Slack, Basecamp or GitHub on Andrés's behalf, "respóndele a", "mándale", "contesta en Basecamp", "afinar", or a salida.* wake event.
+description: Outgoing messages through Mesa Salidas - propose a draft with its exact destination, refine it turn by turn with Andrés (semáforo marks Mantener/Reformular/Quitar, versions, learned quick chips), send only after his approval and the 20 s undo window (Slack: a draft he sends himself, or "Claude lo envía"), report the permalink, scheduled sends, and delete per destination (Basecamp trash 25 days, Campfire permanent, a Slack draft is his to delete in Slack, a direct Slack send not deletable from Mesa). Also Google Calendar events (source `calendar`: the exact event, created by the lead through the connector after his approval). Use for any message to Slack, Basecamp or GitHub on Andrés's behalf, a meeting or Meet to create, "respóndele a", "mándale", "contesta en Basecamp", "afinar", or a salida.* wake event.
 ---
 
 # Salidas: nothing goes out unseen
@@ -34,6 +34,7 @@ Destination JSON (the server validates it; `postAs` is who it posts as):
 | `slack_thread` / `slack_channel` | `workspace` ("designli"), `channel` ("#name"), `channelId` (required to send: it is the draft's and the send's `channel_id`), `threadTs` (thread only), `threadLabel`, `postAs` |
 | `basecamp_comment` / `basecamp_message` / `basecamp_campfire` | `project`, `projectId`, `recordingId` (comment: the recording it attaches to; campfire: the chat id), `recordingTitle`, `mentions` (`basecamp_comment` only), `postAs` |
 | `github_review` / `github_comment` | `repo`, `pr`, `event`, `path`, `line`, `commitId`, `findingN`, `postAs` (see `mesa-review`) |
+| `calendar_event` | `calendar` ("primary"), `invitees` (addresses, for the chips), `meet` (true/false), `postAs`. The event itself is the BODY (see **Calendar events**) |
 
 **Mentions.** A `basecamp_comment` pings people only through `mentions: [{ "id": "9001", "name": "Matt Myers" }]`
 in its destination: `id` is the person id as a string from `list_project_people` (the exact person of that
@@ -52,6 +53,35 @@ second attribution.
 
 Read the thread before writing so the text answers what was actually asked. Link the ticket that produced it
 (`--ticket`) and its sources (`--link`), which Mesa shows as the Origen strip.
+
+## Calendar events (source `calendar`)
+
+Every event Andrés asks for, with or without invitees, is a salida (his decision 4A); nothing is created in Google
+Calendar before he approves the exact event. The body IS the event, one field per line (the server and hook G5 parse
+it; any other shape is a 400):
+
+```
+Título: Meet con Matt
+Inicio: 2026-11-12T10:00:00-05:00
+Fin: 2026-11-12T10:30:00-05:00
+Zona: America/Bogota
+Invitados: matt.r@scoutapp.example
+Meet: sí
+Descripción: optional free text, to the end
+```
+
+Times are ISO with their offset (never a bare local time), `Invitados` is omitted when nobody is invited, `Meet` is
+`sí` or `no`. Use the CLI so the format is right:
+
+```
+node G:/WorkSpace/designli/ops/bin/mesa calendar propose --title "Meet con Matt" --start 2026-11-12T10:00:00-05:00 --end 2026-11-12T10:30:00-05:00 --invitee matt.r@scoutapp.example --ticket <ref> --context "<what you checked>"
+```
+
+Before proposing, check the slot against the stored events (`mesa calendar free --day <YYYY-MM-DD> --minutes <n>`) and
+find each guest's address (`mesa calendar people`, the thread, the ticket); an address you cannot find is a question
+to Andrés, never a guess. Say in `--context` which slot you checked and where each address came from. A refinement
+("más temprano") is a new version with the same format (`mesa salida version`). No humanizer pass on the fields;
+the title is the only wording that is yours, in the language Andrés used.
 
 ## Refine (Afinar con Claude)
 
@@ -117,6 +147,16 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
    source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with
    `recheckThread: true` (step 0); its mode is kept.
 
+**Calendar** (`source: calendar`, no mode): step 2 is ONE `create_event` call of the Google Calendar connector
+(`mcp__claude_ai_Google_Calendar__create_event`) with exactly the fields of the approved body: title, start, end
+(with the zone), the invitees as attendees, a Google Meet only when `Meet: sí`, and the description. Hook G5 passes
+the call only when every field equals the approved ones (instants for the times, the set of addresses for the
+guests) and refuses every other Google Calendar write (update, delete, respond): never fix an event after the
+fact, propose a new salida. Step 3 is `MESA salida sent <id> --permalink <the event's link>`; if the connector cannot
+attach the Meet, do not create the event without it: `MESA salida hold <id> --reason "el conector no puede crear el Meet"`
+and tell Andrés in the ticket. A feed outage (`mesa source get calendar` down) does not matter here: reading is not
+creating. Guests receive Google's invitation e-mail when the event is created: that is what he approved.
+
 **Sandbox** (`echo $MESA_ENV` prints `sandbox`): step 2 is skipped, never call the MCP tool (hook G11 blocks both
 Slack tools). Step 3 is `MESA salida sent <id> --simulated` (no `--permalink`; Mesa records `sandbox://<source>/<id>`
 and shows "Simulado · no salió"), or `MESA salida drafted <id> --simulated` for a Slack salida in mode draft. Steps
@@ -134,3 +174,4 @@ Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases th
 | Slack, draft mode | a draft is Andrés's to delete in Slack (Mesa never touched a message); once he sends it, it is his own message and Mesa cannot delete it | nothing |
 | Slack, direct send | not possible from Mesa (no delete tool): Mesa already refuses it; the 20 s undo was the only way back | nothing |
 | GitHub | not supported: tell Andrés in the ticket with the comment link | nothing |
+| Calendar event | not supported from Mesa (no delete or update tool is wired): tell Andrés in the ticket with the event link; he removes it in Google Calendar | nothing |

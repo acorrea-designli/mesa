@@ -1,6 +1,8 @@
 // Reads what waits on Andrés from the existing GETs (the stream frames carry no state).
-import type { Approval, Item, Review, Salida, SalidaDetail, Ticket } from "@/lib/domain/types";
-import { approvalWaiting, itemWaiting, salidaKey, salidaWaiting, ticketKey, ticketWaiting, type Seen, type Waiting } from "./decide";
+import { remindersDue } from "@/lib/domain/calendar";
+import type { Approval, CalendarPayload, Item, Review, Salida, SalidaDetail, Ticket } from "@/lib/domain/types";
+import { addDays, localDay } from "@/lib/domain/week";
+import { approvalWaiting, itemWaiting, meetingWaiting, salidaKey, salidaWaiting, ticketKey, ticketWaiting, type Seen, type Waiting } from "./decide";
 
 async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(url, { cache: "no-store" });
@@ -30,6 +32,20 @@ async function wroteByHand(s: Salida): Promise<boolean> {
 }
 
 /**
+ * Meetings that start within ten minutes (t112). A calendar that cannot be read is no reminders, never a failed scan:
+ * the rest of the waiting set must still be read. Today and tomorrow cover a meeting just after midnight.
+ */
+async function dueMeetings(now: Date): Promise<Waiting[]> {
+  try {
+    const today = localDay(now);
+    const { events } = await getJson<CalendarPayload>(`/api/calendar?from=${today}&to=${addDays(today, 2)}`);
+    return remindersDue(events, now).map((e) => meetingWaiting(e, now));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The whole waiting set. Throws when a list cannot be read (the caller skips that scan, so a
  * blip never looks like "everything left"). Labels and the own-version check cost one request
  * each and only run for keys not in `seen`; pass `seen = null` for a baseline read, which needs none.
@@ -49,5 +65,5 @@ export async function fetchWaiting(seen: Seen | null): Promise<Waiting[]> {
     ...approvals.map(async (a) => approvalWaiting(a)),
     ...items.map(async (i) => itemWaiting(i)),
   ]);
-  return out;
+  return [...out, ...(await dueMeetings(new Date()))];
 }

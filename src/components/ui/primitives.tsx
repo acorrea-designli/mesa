@@ -1,10 +1,10 @@
 // Presentational primitives shared by every screen. Server-safe (no hooks).
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
-import type { Source } from "@/lib/domain/types";
+import type { LineSource } from "@/lib/domain/types";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-export const srcClass = (s?: Source | null) => (s ? `src-${s}` : undefined);
+export const srcClass = (s?: LineSource | null) => (s ? `src-${s}` : undefined);
 
 // ---------- Btn ----------
 export interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -34,7 +34,7 @@ export function Chip({
   className,
   href,
 }: {
-  source?: Source;
+  source?: LineSource;
   /** plain: edge on porcelain. ref: ink-bordered @ ticket reference. */
   variant?: "plain" | "ref";
   children: ReactNode;
@@ -51,7 +51,7 @@ export function Chip({
   );
 }
 
-export function LinkChip({ source, children, href }: { source?: Source; children: ReactNode; href?: string }) {
+export function LinkChip({ source, children, href }: { source?: LineSource; children: ReactNode; href?: string }) {
   const cls = cx("lk", srcClass(source));
   return href ? (
     <a className={cls} href={href} target="_blank" rel="noopener noreferrer">
@@ -86,7 +86,7 @@ export function StatusTag({ tone = "plain", children, icon }: { tone?: StatusTon
 }
 
 // ---------- Kind line ("Salida · Slack") ----------
-export function Kind({ source, children }: { source: Source; children: ReactNode }) {
+export function Kind({ source, children }: { source: LineSource; children: ReactNode }) {
   return (
     <div className={cx("kind", srcClass(source))}>
       <i style={{ background: "var(--c)" }} aria-hidden="true" />
@@ -110,7 +110,7 @@ export function ContextQuote({ children }: { children: ReactNode }) {
 }
 
 /** The outgoing message exactly as it will be sent; the destination line enters from the top. */
-export function ExactText({ source, children, ...rest }: { source: Source; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+export function ExactText({ source, children, ...rest }: { source: LineSource; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cx("msg", srcClass(source))} {...rest}>
       {children}

@@ -5,7 +5,7 @@
 // rebuilt from the per-character model in ./marks, so overlaps split cleanly.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Mark, MarkKind, Source } from "@/lib/domain/types";
+import type { LineSource, Mark, MarkKind } from "@/lib/domain/types";
 import { paintMarks, rise } from "@/lib/motion";
 import { clearTouched, fromMarks, kindOf, paint, segments, snapToWords, toMarks } from "./marks";
 import { SwClear, SwDrop, SwKeep, SwRedo } from "./icons";
@@ -25,7 +25,7 @@ function words(text: string): [number, number][] {
 
 export interface SemaforoProps {
   text: string;
-  source: Source;
+  source: LineSource;
   marks: Mark[];
   onMarks?: (m: Mark[]) => void;
   /** Locked (sending, scheduled, sent, rewrite pending): no selection, no toolbar. */
