@@ -6,9 +6,10 @@
 //    sync: one ticket.batch with origin "github"). Items already in Hoy are never back-filled: only what the sync
 //    creates or brings back counts.
 //  - Slack: an upserted Slack item with meta.pr ("owner/repo#n") is linked to the PR's ticket (meta.ticketRef), which
-//    is created the same way when the PR has none. A notice gets an informational line and leaves Hoy; a question
-//    gets a line, the ticket (reopened quietly if closed) and ONE ticket.pr_question wake for the lead, who spawns
-//    writer-<ref>; the item stays in Hoy until that ticket's Slack salida to the same thread is sent or denied.
+//    is created the same way when the PR has none. Mesa does not judge the message (t107: an Opus agent on the
+//    ticket does): the ticket (reopened quietly if closed) gets a neutral line and the lead ONE ticket.pr_message
+//    wake, and spawns or reuses writer-<ref>. The writer either records a notice (prNotice: a line, the item to
+//    Hecho, no salida) or answers with a Slack salida to the same thread; the item stays in Hoy until one of them.
 //  - One switch turns all of it off: config/sweep.json "autoDispatch" (env MESA_AUTO_DISPATCH overrides it).
 //
 // A PR is matched to its ticket by the review row (repo + pr), then by the PR item on a card; never by title.
@@ -17,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
-import { fromRow, nowIso } from "../db/util";
+import { fromRow, nowIso, TransitionError } from "../db/util";
 import { classify, prKey, prUrl } from "../domain/links";
 import type { Item, Salida, Ticket } from "../domain/types";
 import { emitWake } from "../wake/wake";
@@ -46,20 +47,6 @@ export function autoDispatchEnabled(env: Record<string, string | undefined> = pr
     return true;
   }
 }
-
-// ---------- notice vs question (criteria 4 and 6 of t107) ----------
-
-/** What a Slack PR message is. A missing or unknown intent is a question: when in doubt, it gets a reply drafted. */
-export type PrIntent = "notice" | "question";
-
-export const prIntent = (meta: Record<string, unknown> | undefined): PrIntent => (meta?.intent === "notice" ? "notice" : "question");
-
-/**
- * Where a notice lands: "done" (Hecho, waitOn none) or "hoy" (stays in Hoy with waitOn none until he skips it).
- * Pending Andrés's answer on t107 (tm_24y4p7l0dm5g); the recommended option is the default.
- */
-export type NoticePolicy = "done" | "hoy";
-export const NOTICE_POLICY: NoticePolicy = "done";
 
 // ---------- PR references ----------
 
@@ -120,9 +107,18 @@ export interface ReviewIntakeResult {
   batchId: string | null;
 }
 
+/** item.meta.prIntake. `verdict` stays null until the writer records a notice (a question ends in a salida instead). */
+export interface PrIntakeMeta {
+  at: string;
+  ticketCreated: boolean;
+  /** This message reopened the PR's closed ticket (quietly); a notice verdict may close it again. */
+  reopened: boolean;
+  verdict: "notice" | null;
+  verdictAt?: string;
+}
+
 export interface SlackIntake {
   ticketRef: string;
-  intent: PrIntent;
   /** The PR's ticket was opened by this message. */
   ticketCreated: boolean;
   /** This upsert repeated a message already handled: nothing new was written or woken. */
@@ -137,6 +133,19 @@ export interface UpsertResult {
 
 /** Item meta keys the intake owns: kept across re-upserts (the sweeper does not send them back). */
 const OWN_KEYS = ["ticketRef", "prTicketId", "prIntake"] as const;
+
+const prLabel = (p: PrRef) => `${shortName(p.repo)}#${p.n}`;
+
+/** Who wrote a Slack item: meta.person, else the first part of its "<person> · <ask>" title. */
+const whoOf = (i: Pick<Item, "title" | "meta">): string =>
+  (typeof i.meta?.person === "string" && i.meta.person) || i.title.split(" · ")[0]!.trim() || "alguien";
+
+const whatOf = (i: Pick<Item, "title" | "excerpt">): string => (i.excerpt || i.title.split(" · ").slice(1).join(" · ") || i.title).trim();
+
+const slackRefs = (i: Pick<Item, "url">, who: string) => (i.url ? [{ refType: "url" as const, target: i.url, label: `Slack · ${who}` }] : []);
+
+/** Salida states that still lead somewhere: a ticket with one of these is not finished. */
+const LIVE_SALIDA = ["draft", "pending", "sending", "failed", "scheduled", "queued_until_back", "draft_created"];
 
 type TicketRow = Pick<Ticket, "id" | "ref" | "status" | "taskId" | "isSample">;
 
@@ -299,70 +308,96 @@ export function intakeRepo(db: Db) {
     /**
      * POST /api/items/upsert. Any item is upserted as before; a Slack item with meta.pr is also linked to the PR's
      * ticket (created when the PR has none), once per externalId: a repeat refreshes the content only, keeping the
-     * station, waitOn and the link, and writes no line, wake or ticket. `enabled` defaults to the switch.
+     * station, waitOn and the link, and writes no line, wake or ticket. meta.intent is ignored: the writer judges.
+     * `enabled` defaults to the switch.
      */
-    upsertItem(input: ItemInput, o: { enabled?: boolean; notice?: NoticePolicy } = {}, now = new Date()): UpsertResult {
+    upsertItem(input: ItemInput, o: { enabled?: boolean } = {}, now = new Date()): UpsertResult {
       const p = input.source === "slack" && !input.isSample ? parsePrRef(input.meta?.pr) : null;
       if (!p || !(o.enabled ?? autoDispatchEnabled())) return items.upsert(input, now);
       return tx(db, () => {
         const prev = db.prepare("SELECT meta FROM items WHERE source = ? AND external_id = ?").get(input.source, input.externalId) as { meta: string } | undefined;
         const prevMeta = prev ? (JSON.parse(prev.meta || "{}") as Record<string, unknown>) : null;
-        const handled = prevMeta?.prIntake as { intent: PrIntent; ticketCreated?: boolean } | undefined;
-        if (handled) {
-          const keep = Object.fromEntries(OWN_KEYS.filter((k) => k in prevMeta!).map((k) => [k, prevMeta![k]]));
+        if (prevMeta?.prIntake) {
+          const keep = Object.fromEntries(OWN_KEYS.filter((k) => k in prevMeta).map((k) => [k, prevMeta[k]]));
           const { station: _s, waitOn: _w, ...rest } = input;
           void _s;
           void _w;
           const r = items.upsert({ ...rest, meta: { ...(input.meta ?? {}), ...keep } }, now);
-          return { ...r, intake: { ticketRef: String(prevMeta!.ticketRef ?? ""), intent: handled.intent, ticketCreated: false, repeated: true } };
+          return { ...r, intake: { ticketRef: String(prevMeta.ticketRef ?? ""), ticketCreated: false, repeated: true } };
         }
 
         const { item, created } = items.upsert(input, now);
         if (item.skippedAt) return { item, created };
         const pt = ensurePrTicket(p, now);
         if (!pt) return { item, created };
-        const intent = prIntent(input.meta);
-        const who = (typeof input.meta?.person === "string" && input.meta.person) || item.title.split(" · ")[0]!.trim() || "alguien";
+        const who = whoOf(item);
         const [channelId = "", ts = ""] = item.externalId.split(":");
         const threadTs = typeof input.meta?.threadTs === "string" && input.meta.threadTs ? input.meta.threadTs : ts;
-        const what = (item.excerpt || item.title.split(" · ").slice(1).join(" · ") || item.title).trim();
-        const refs = item.url ? [{ refType: "url" as const, target: item.url, label: `Slack · ${who}` }] : [];
-        const prLabel = `${shortName(p.repo)}#${p.n}`;
+        // The writer works on a live ticket: a closed one comes back quietly (the wake below says why).
+        const reopened = pt.ticket.status === "closed";
+        if (reopened) reuse(pt.ticket, null, p, "slack message", now, true);
+        const t = tickets.get(pt.ticket.id);
+        const messageId = tickets.note(t.id, { body: `Mensaje en Slack de ${who} sobre ${prLabel(p)}: ${whatOf(item)}${item.url ? `\n${item.url}` : ""}`, refs: slackRefs(item, who) }, now);
+        emitWake(
+          db,
+          {
+            sessionId: t.ownerSession,
+            kind: "ticket.pr_message",
+            entityType: "ticket",
+            entityId: t.id,
+            payload: { ref: t.ref, ticketRef: t.ref, messageId, itemId: item.id, repo: p.repo, pr: p.n, who, url: item.url, channelId, ts, threadTs },
+          },
+          now,
+        );
+        const prIntake: PrIntakeMeta = { at: nowIso(now), ticketCreated: pt.created, reopened, verdict: null };
+        const linked = items.update(item.id, { meta: { ...item.meta, ticketRef: t.ref, prTicketId: t.id, prIntake } }, now);
+        return { item: linked, created, intake: { ticketRef: t.ref, ticketCreated: pt.created, repeated: false } };
+      });
+    },
 
-        let ticketRef = pt.ticket.ref;
-        if (intent === "notice") {
-          // Informational: no status change, no wake, no writer. The item leaves Te esperan.
-          tickets.note(pt.ticket.id, { body: `Aviso en Slack de ${who} sobre ${prLabel}: ${what}${item.url ? `\n${item.url}` : ""}`, refs }, now);
-          items.update(item.id, (o.notice ?? NOTICE_POLICY) === "done" ? { station: "done", waitOn: "none" } : { waitOn: "none" }, now);
-        } else {
-          // A question needs words: the ticket comes back if it was closed (quietly: this wake says why), gets the
-          // question as a line, and the lead gets ONE wake to spawn writer-<ref>. The item stays until the salida resolves.
-          if (pt.ticket.status === "closed") reuse(pt.ticket, null, p, "slack question", now, true);
-          const t = tickets.get(pt.ticket.id);
-          ticketRef = t.ref;
-          const messageId = tickets.note(t.id, { body: `Pregunta en Slack de ${who} sobre ${prLabel}: ${what}${item.url ? `\n${item.url}` : ""}`, refs }, now);
-          emitWake(
-            db,
-            {
-              sessionId: t.ownerSession,
-              kind: "ticket.pr_question",
-              entityType: "ticket",
-              entityId: t.id,
-              payload: { ref: t.ref, ticketRef: t.ref, messageId, itemId: item.id, repo: p.repo, pr: p.n, who, url: item.url, channelId, ts, threadTs, intent },
-            },
-            now,
-          );
+    /**
+     * The writer judged a linked Slack PR message a notice (`mesa item pr-notice <id>`, POST /api/items/:id/pr-notice):
+     * the verdict is recorded, the item goes to Hecho (waitOn none) and the PR ticket gets one informational line (no
+     * status change, no wake, no salida). If this message had reopened a closed ticket and nothing else is pending
+     * on it (another linked message without a verdict, a salida still in flight), the ticket closes again, quietly.
+     * Idempotent: a second call changes nothing. 409 for an item that is not a linked Slack PR message.
+     */
+    prNotice(itemId: string, now = new Date()): { item: Item; ticketRef: string; repeated: boolean } {
+      return tx(db, () => {
+        const item = items.get(itemId);
+        const pi = item.meta.prIntake as PrIntakeMeta | undefined;
+        const ticketId = item.meta.prTicketId;
+        if (item.source !== "slack" || !pi || typeof ticketId !== "string") {
+          throw new TransitionError(`item ${item.id} is not a Slack message linked to a PR ticket`);
         }
-        const prIntake = { intent, at: nowIso(now), ticketCreated: pt.created };
-        const linked = items.update(item.id, { meta: { ...item.meta, ticketRef, prTicketId: pt.ticket.id, prIntake } }, now);
-        return { item: linked, created, intake: { ticketRef, intent, ticketCreated: pt.created, repeated: false } };
+        const t = tickets.get(ticketId);
+        if (pi.verdict === "notice") return { item, ticketRef: t.ref, repeated: true };
+        const p = parsePrRef(item.meta.pr);
+        const who = whoOf(item);
+        tickets.note(t.id, { body: `Aviso en Slack de ${who}${p ? ` sobre ${prLabel(p)}` : ""}, sin respuesta: ${whatOf(item)}${item.url ? `\n${item.url}` : ""}`, refs: slackRefs(item, who) }, now);
+        const prIntake: PrIntakeMeta = { ...pi, verdict: "notice", verdictAt: nowIso(now) };
+        const out = items.update(item.id, { station: "done", waitOn: "none", meta: { ...item.meta, prIntake } }, now);
+        if (pi.reopened && t.status !== "closed") {
+          const otherMessage = db
+            .prepare(
+              `SELECT 1 FROM items WHERE source = 'slack' AND id <> ? AND station <> 'done' AND json_extract(meta, '$.prTicketId') = ?
+                 AND json_extract(meta, '$.prIntake') IS NOT NULL AND COALESCE(json_extract(meta, '$.prIntake.verdict'), '') <> 'notice' LIMIT 1`,
+            )
+            .get(item.id, t.id);
+          const liveSalida = db
+            .prepare(`SELECT 1 FROM salidas WHERE ticket_id = ? AND status IN (${LIVE_SALIDA.map(() => "?").join(",")}) LIMIT 1`)
+            .get(t.id, ...LIVE_SALIDA);
+          if (!otherMessage && !liveSalida) tickets.transition(t.id, { type: "close", by: "claude" }, undefined, now);
+        }
+        return { item: out, ticketRef: t.ref, repeated: false };
       });
     },
   };
 }
 
 /**
- * A Slack salida of a PR ticket reached an end (sent, denied, expired): the Slack questions it answers leave Hoy.
+ * A Slack salida of a PR ticket reached an end (sent, denied, expired): the linked Slack PR messages it answers (all
+ * but those the writer judged a notice, which are already in Hecho) leave Hoy.
  * Matched by the ticket and, when the salida names them, the channel and the thread. Joins the caller's transaction.
  */
 export function settlePrQuestions(db: Db, s: Pick<Salida, "ticketId" | "source" | "destination" | "status">, now = new Date()): number {
@@ -371,7 +406,8 @@ export function settlePrQuestions(db: Db, s: Pick<Salida, "ticketId" | "source" 
   const rows = db
     .prepare(
       `SELECT id, external_id AS ext, meta FROM items WHERE source = 'slack' AND station <> 'done'
-         AND json_extract(meta, '$.prTicketId') = ? AND json_extract(meta, '$.prIntake.intent') = 'question'`,
+         AND json_extract(meta, '$.prTicketId') = ? AND json_extract(meta, '$.prIntake') IS NOT NULL
+         AND COALESCE(json_extract(meta, '$.prIntake.verdict'), '') <> 'notice'`,
     )
     .all(s.ticketId) as { id: string; ext: string; meta: string }[];
   let n = 0;

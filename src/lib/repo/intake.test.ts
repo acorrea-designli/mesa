@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { POST as PR_NOTICE } from "@/app/api/items/[id]/pr-notice/route";
 import { POST as UPSERT } from "@/app/api/items/upsert/route";
 import { openDb } from "../db/sqlite";
 import { syncReviewRequests } from "../integrations/github-ingest";
@@ -218,7 +219,7 @@ describe("criterion 3: one switch, no back-fill", () => {
   });
 
   it("a Slack PR message is a plain item when the switch is off", () => {
-    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7", intent: "question" }), { enabled: false }, T0);
+    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: false }, T0);
     expect(out.intake).toBeUndefined();
     expect(r.tickets.list()).toHaveLength(0);
     expect(out.item.meta.ticketRef).toBeUndefined();
@@ -230,7 +231,7 @@ describe("criterion 5: a Slack message about a PR joins the PR's ticket", () => 
     search = [pr("acme/api", 7)];
     await sync(T0);
     const t = reviewTickets()[0]!;
-    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7", intent: "question" }), { enabled: true }, at(1));
+    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: true }, at(1));
     expect(out.intake).toMatchObject({ ticketRef: t.ref, ticketCreated: false, repeated: false });
     expect(out.item.meta).toMatchObject({ ticketRef: t.ref, prTicketId: t.id });
     const line = r.tickets.detail(t.ref).messages.at(-1)!;
@@ -241,7 +242,7 @@ describe("criterion 5: a Slack message about a PR joins the PR's ticket", () => 
   });
 
   it("a PR with nothing yet gets its item, card and review ticket under the same key, and the GitHub request lands on them", async () => {
-    const out = r.intake.upsertItem(slack("1.1", { pr: "https://github.com/Acme/Api/pull/7", intent: "notice" }), { enabled: true }, T0);
+    const out = r.intake.upsertItem(slack("1.1", { pr: "https://github.com/Acme/Api/pull/7" }), { enabled: true }, T0);
     expect(out.intake).toMatchObject({ ticketCreated: true });
     const t = reviewTickets()[0]!;
     expect(t.title).toBe("Review acme/api#7");
@@ -279,37 +280,39 @@ describe("criterion 5: a Slack message about a PR joins the PR's ticket", () => 
   });
 });
 
-describe("criterion 6 (provisional, pending tm_24y4p7l0dm5g): a notice gets no reply", () => {
-  it("goes to Hecho with waitOn none, leaves an informational line, and wakes no writer", async () => {
+describe("criteria 4 and 7: Mesa does not judge; the writer on the PR ticket does", () => {
+  it("meta.intent is ignored: even a 'notice' tag gets a neutral line, ONE ticket.pr_message wake, and stays in Hoy", async () => {
     search = [pr("acme/api", 7)];
     await sync(T0);
     const t = reviewTickets()[0]!;
     const before = wakes().length;
-    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7", intent: "notice" }, { title: "Sebastián · te dejé la PR" }), { enabled: true }, at(1));
-    expect(out.item).toMatchObject({ station: "done", waitOn: "none" });
-    expect(r.tickets.get(t.ref).status).toBe("waiting_claude"); // still claimable: the line does not change it
-    expect(r.tickets.detail(t.ref).messages.at(-1)!.body).toMatch(/^Aviso en Slack de Sebastián/);
-    expect(wakes().length).toBe(before);
+    const out = r.intake.upsertItem(slack("1700000000.000200", { pr: "acme/api#7", intent: "notice", threadTs: "1700000000.000100" }), { enabled: true }, at(1));
+    expect(out.item).toMatchObject({ station: "inbox", waitOn: "you" });
+    expect(out.item.meta.prIntake).toMatchObject({ verdict: null, reopened: false, ticketCreated: false });
+    expect(wakes().slice(before).map((w) => w.kind)).toEqual(["ticket.pr_message"]);
+    const line = r.tickets.detail(t.ref).messages.at(-1)!;
+    expect(wakes("ticket.pr_message")[0]!.payload).toEqual({
+      ref: t.ref,
+      ticketRef: t.ref,
+      messageId: line.id,
+      itemId: out.item.id,
+      repo: "acme/api",
+      pr: 7,
+      who: "Sebastián",
+      url: out.item.url,
+      channelId: "D0SEBAS",
+      ts: "1700000000.000200",
+      threadTs: "1700000000.000100",
+    });
+    expect(line.body).toMatch(/^Mensaje en Slack de Sebastián sobre api#7: /);
+    expect(r.tickets.get(t.ref).status).toBe("waiting_claude"); // the line does not change it
   });
 
-  it("with the other policy it stays in Hoy with waitOn none", () => {
-    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7", intent: "notice" }), { enabled: true, notice: "hoy" }, T0);
-    expect(out.item).toMatchObject({ station: "inbox", waitOn: "none" });
-  });
-});
-
-describe("criterion 7: a question gets a writer on the PR ticket", () => {
-  it("adds the question, wakes the lead once with ticket.pr_question, and keeps the item until the salida is sent", async () => {
+  it("a question ends in a salida to the same thread: sent settles the item, another thread does not", async () => {
     search = [pr("acme/api", 7)];
     await sync(T0);
     const t = reviewTickets()[0]!;
-    const out = r.intake.upsertItem(slack("1700000000.000200", { pr: "acme/api#7", intent: "question", threadTs: "1700000000.000100" }), { enabled: true }, at(1));
-    expect(out.item).toMatchObject({ station: "inbox", waitOn: "you" });
-    const q = wakes("ticket.pr_question");
-    expect(q).toHaveLength(1);
-    expect(q[0]!.payload).toMatchObject({ ref: t.ref, itemId: out.item.id, repo: "acme/api", pr: 7, channelId: "D0SEBAS", ts: "1700000000.000200", threadTs: "1700000000.000100", intent: "question" });
-    expect(r.tickets.detail(t.ref).messages.at(-1)!.body).toMatch(/^Pregunta en Slack de Sebastián/);
-
+    const out = r.intake.upsertItem(slack("1700000000.000200", { pr: "acme/api#7", threadTs: "1700000000.000100" }), { enabled: true }, at(1));
     const dest = { kind: "slack_thread" as const, workspace: "designli", channel: "Sebastián", channelId: "D0SEBAS", postAs: "Andrés" };
     // A reply to another thread leaves it alone.
     const other = r.salidas.create({ source: "slack", destination: { ...dest, threadTs: "1.0" }, body: "otra", ticketId: t.id }, at(2));
@@ -332,27 +335,102 @@ describe("criterion 7: a question gets a writer on the PR ticket", () => {
     expect(r.items.get(out.item.id).station).toBe("done");
   });
 
-  it("a question on a closed PR ticket reopens it quietly: the only wake is ticket.pr_question", async () => {
+  it("a message on a closed PR ticket reopens it quietly: the only wake is ticket.pr_message", async () => {
     search = [pr("acme/api", 7)];
     await sync(T0);
     const t = reviewTickets()[0]!;
     r.tickets.transition(t.ref, { type: "claim" }, "lead", at(1));
     r.tickets.transition(t.ref, { type: "close", by: "claude" }, undefined, at(2));
     const before = wakes().length;
-    r.intake.upsertItem(slack("1.1", { pr: "acme/api#7", intent: "question" }), { enabled: true }, at(3));
+    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: true }, at(3));
     expect(r.tickets.get(t.ref).status).toBe("waiting_claude");
-    expect(wakes().slice(before).map((w) => w.kind)).toEqual(["ticket.pr_question"]);
+    expect(out.item.meta.prIntake).toMatchObject({ reopened: true, verdict: null });
+    expect(wakes().slice(before).map((w) => w.kind)).toEqual(["ticket.pr_message"]);
+  });
+});
+
+describe("criterion 6: the writer's notice verdict (mesa item pr-notice)", () => {
+  const notice = async (id: string) => {
+    const res = await PR_NOTICE(new Request(`http://local/api/items/${id}/pr-notice`, { method: "POST" }), { params: Promise.resolve({ id }) });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  };
+
+  it("goes to Hecho with waitOn none, leaves one informational line, no salida and no wake; a repeat is a no-op", async () => {
+    search = [pr("acme/api", 7)];
+    await sync(T0);
+    const t = reviewTickets()[0]!;
+    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }, { title: "Sebastián · te dejé la PR", excerpt: undefined }), { enabled: true }, at(1));
+    const lines = r.tickets.detail(t.ref).messages.length;
+    const n = wakes().length;
+    const v = r.intake.prNotice(out.item.id, at(2));
+    expect(v).toMatchObject({ ticketRef: t.ref, repeated: false });
+    expect(v.item).toMatchObject({ station: "done", waitOn: "none" });
+    expect(v.item.meta.prIntake).toMatchObject({ verdict: "notice", verdictAt: at(2).toISOString() });
+    expect(r.tickets.detail(t.ref).messages.at(-1)!.body).toMatch(/^Aviso en Slack de Sebastián sobre api#7, sin respuesta: te dejé la PR/);
+    expect(r.tickets.detail(t.ref).messages.length).toBe(lines + 1);
+    expect(r.tickets.get(t.ref).status).toBe("waiting_claude");
+    expect(r.salidas.list()).toHaveLength(0);
+    expect(wakes().length).toBe(n);
+
+    const again = r.intake.prNotice(out.item.id, at(3));
+    expect(again.repeated).toBe(true);
+    expect(r.tickets.detail(t.ref).messages.length).toBe(lines + 1);
+    expect(r.items.get(out.item.id).meta.prIntake).toMatchObject({ verdictAt: at(2).toISOString() });
   });
 
-  it("an unclassified message is treated as a question", () => {
-    r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: true }, T0);
-    expect(wakes("ticket.pr_question")).toHaveLength(1);
+  it("through POST /api/items/:id/pr-notice: 200, 200 repeated, 409 for an item that is not a linked PR message, 404 for none", async () => {
+    const out = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: true }, T0);
+    const a = await notice(out.item.id);
+    expect(a.status).toBe(200);
+    expect(a.body).toMatchObject({ repeated: false, ticketRef: out.item.meta.ticketRef, item: { station: "done", waitOn: "none" } });
+    expect((await notice(out.item.id)).body).toMatchObject({ repeated: true });
+    const plain = r.items.upsert(slack("2.2", {})).item;
+    expect((await notice(plain.id)).status).toBe(409);
+    expect((await notice("it_missing")).status).toBe(404);
+  });
+
+  it("closes again, quietly, a ticket that this message reopened, unless something else is pending on it", async () => {
+    search = [pr("acme/api", 7)];
+    await sync(T0);
+    const t = reviewTickets()[0]!;
+    r.tickets.transition(t.ref, { type: "claim" }, "lead", at(1));
+    r.tickets.transition(t.ref, { type: "close", by: "claude" }, undefined, at(2));
+    const a = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: true }, at(3));
+    const n = wakes().length;
+    r.intake.prNotice(a.item.id, at(4));
+    expect(r.tickets.get(t.ref).status).toBe("closed");
+    expect(wakes().length).toBe(n);
+
+    // Reopened again by a second message, while a third (same ticket, no verdict yet) still waits: it stays open.
+    const b = r.intake.upsertItem(slack("1.2", { pr: "acme/api#7" }), { enabled: true }, at(5));
+    const c = r.intake.upsertItem(slack("1.3", { pr: "acme/api#7" }), { enabled: true }, at(6));
+    expect(b.item.meta.prIntake).toMatchObject({ reopened: true });
+    expect(c.item.meta.prIntake).toMatchObject({ reopened: false });
+    r.intake.prNotice(b.item.id, at(7));
+    expect(r.tickets.get(t.ref).status).not.toBe("closed");
+    // A reply to the third one settles it; the notice is already in Hecho and stays as it is.
+    const s = r.salidas.create({ source: "slack", destination: { kind: "slack_thread", workspace: "designli", channel: "x", channelId: "D0SEBAS", threadTs: "1.3", postAs: "Andrés" }, body: "b", ticketId: t.id }, at(8));
+    r.salidas.transition(s.id, { type: "deny" }, at(9));
+    expect(r.items.get(c.item.id)).toMatchObject({ station: "done", waitOn: "none" });
+    expect(r.items.get(b.item.id).meta.prIntake).toMatchObject({ verdict: "notice" });
+  });
+
+  it("does not close a reopened ticket while one of its salidas is in flight", async () => {
+    search = [pr("acme/api", 7)];
+    await sync(T0);
+    const t = reviewTickets()[0]!;
+    r.tickets.transition(t.ref, { type: "claim" }, "lead", at(1));
+    r.tickets.transition(t.ref, { type: "close", by: "claude" }, undefined, at(2));
+    const a = r.intake.upsertItem(slack("1.1", { pr: "acme/api#7" }), { enabled: true }, at(3));
+    r.salidas.create({ source: "slack", destination: { kind: "slack_thread", workspace: "designli", channel: "x", channelId: "D0OTRO", threadTs: "9.9", postAs: "Andrés" }, body: "b", ticketId: t.id }, at(4));
+    r.intake.prNotice(a.item.id, at(5));
+    expect(r.tickets.get(t.ref).status).not.toBe("closed");
   });
 });
 
 describe("criterion 8: re-reading the same message changes nothing", () => {
   it("no second line, wake, ticket or card; the link and a notice's Hecho stand", () => {
-    const input = slack("1.1", { pr: "acme/api#7", intent: "question" });
+    const input = slack("1.1", { pr: "acme/api#7" });
     const first = r.intake.upsertItem(input, { enabled: true }, T0);
     const lines = r.tickets.detail(String(first.item.meta.ticketRef)).messages.length;
     const n = wakes().length;
@@ -367,21 +445,22 @@ describe("criterion 8: re-reading the same message changes nothing", () => {
     expect(r.tickets.list()).toHaveLength(1);
     expect(r.tasks.list()).toHaveLength(1);
 
-    const notice = slack("2.2", { pr: "acme/api#7", intent: "notice" });
-    r.intake.upsertItem(notice, { enabled: true }, at(3));
-    const again = r.intake.upsertItem(notice, { enabled: true }, at(4)); // the sweeper sends waitOn "you" again
+    r.intake.prNotice(first.item.id, at(3));
+    const again = r.intake.upsertItem(input, { enabled: true }, at(4)); // the sweeper sends waitOn "you" again
     expect(again.item).toMatchObject({ station: "done", waitOn: "none" });
+    expect(again.item.meta.prIntake).toMatchObject({ verdict: "notice" });
+    expect(wakes().length).toBe(n);
   });
 
-  it("through POST /api/items/upsert: 201 then 200, one ticket, one pr_question", async () => {
-    const input = slack("1.1", { pr: "acme/api#7", intent: "question" });
+  it("through POST /api/items/upsert: 201 then 200, one ticket, one pr_message", async () => {
+    const input = slack("1.1", { pr: "acme/api#7" });
     const a = await upsertRoute(input);
     const b = await upsertRoute(input);
     expect(a.status).toBe(201);
     expect(b.status).toBe(200);
-    expect(a.body.intake).toMatchObject({ intent: "question", ticketCreated: true, repeated: false });
+    expect(a.body.intake).toEqual({ ticketRef: a.body.item.meta.ticketRef, ticketCreated: true, repeated: false });
     expect(b.body.intake).toMatchObject({ repeated: true });
     expect(r.tickets.list()).toHaveLength(1);
-    expect(wakes("ticket.pr_question")).toHaveLength(1);
+    expect(wakes("ticket.pr_message")).toHaveLength(1);
   });
 });
