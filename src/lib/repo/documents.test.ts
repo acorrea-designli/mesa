@@ -32,7 +32,7 @@ describe("documents", () => {
     const old = pdf(a.id, "viejo.pdf", 10);
     r.tickets.addAttachment(a.id, { messageId: null, filename: "foto.png", mime: "image/png", size: 1, path: "x/foto.png" }, at(15));
     const recent = pdf(b.id, "nuevo.pdf", 20);
-    r.tickets.transition(b.id, { type: "close" }, "lead", at(30));
+    r.tickets.transition(b.id, { type: "close", by: "andres" }, "lead", at(30));
     const docs = r.annotations.documents();
     expect(docs.map((d) => d.attachmentId)).toEqual([recent.id, old.id]);
     expect(docs[0]).toMatchObject({ filename: "nuevo.pdf", size: 10, ticketId: b.id, ticketRef: b.ref, ticketTitle: "Propuesta", ticketStatus: "closed", isSample: false, createdAt: at(20).toISOString() });

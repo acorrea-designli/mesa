@@ -63,11 +63,10 @@
   flex-wrap: wrap; /* the pane is narrow beside the thread: the actions drop to a second line instead of overflowing */
   margin-bottom: 12px;
 }
+/* Five tabs: where the pane is narrow they wrap to a second line instead of scrolling out of sight. */
 .tk-tools .tabs {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 .tk-acts {
   display: flex;
@@ -1210,9 +1209,10 @@
   .tk-tools {
     flex-wrap: wrap;
   }
+  /* Five tabs do not fit in 358px: they wrap to a second line, never a hidden sideways scroll. */
   .tk-tools .tabs {
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    overflow: visible;
     width: 100%;
   }
   .tk-acts {

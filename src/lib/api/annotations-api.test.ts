@@ -121,6 +121,12 @@ describe("PUT /api/tickets/:id/attachments/:attId/reviewed", () => {
     expect(((await undone.json()) as Attachment).reviewedAt).toBeNull();
   });
 
+  it("answers 403 to the CLI (Claude): only Andrés marks a PDF as terminado", async () => {
+    const res = await REVIEWED(call("PUT", { reviewed: true }, true), ctx({ id: ref, attId: pdf }));
+    expect(res.status).toBe(403);
+    expect(r.tickets.detail(ref).attachments.find((a) => a.id === pdf)?.reviewedAt).toBeNull();
+  });
+
   it("answers 400 for a bad body or a non-PDF, and 404 for an unknown PDF or ticket", async () => {
     expect((await put(pdf, { reviewed: "yes" })).status).toBe(400);
     const png = r.tickets.addAttachment(r.tickets.get(ref).id, { messageId: null, filename: "a.png", mime: "image/png", size: 1, path: "x/a.png" }).id;
