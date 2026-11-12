@@ -32,6 +32,7 @@ export type CalendarRun =
 
 export class CalendarWorker {
   private busy: Promise<CalendarRun> | null = null;
+  private booting = true;
 
   constructor(
     private r: Repos,
@@ -46,6 +47,17 @@ export class CalendarWorker {
       this.busy = null;
     });
     return this.busy;
+  }
+
+  /**
+   * The poller's pass. The first one after a Mesa start reads the feed even when the stored backoff
+   * is still in the future (the outage that set it is likely over by the time Mesa restarts); the
+   * ones after it honor backoff and cadence. A failed first read backs off as any other.
+   */
+  tick(now?: Date): Promise<CalendarRun> {
+    const force = this.booting;
+    this.booting = false;
+    return this.run({ force, now });
   }
 
   private async pass(o: { force?: boolean; now?: Date }): Promise<CalendarRun> {
@@ -118,7 +130,7 @@ export function startCalendarWorker(): void {
   const worker = calendarWorker();
   const state = g.__mesaCalendar!;
   if (state.timer) return;
-  const tick = () => void worker.run().catch(() => console.error("[mesa] calendar read failed"));
+  const tick = () => void worker.tick().catch(() => console.error("[mesa] calendar read failed"));
   state.timer = setInterval(tick, TICK_MS);
   state.timer.unref();
   console.info(`[mesa] calendar poller on; the iCal feed is read about every ${BASE_S / 60} min`);

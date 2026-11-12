@@ -3,6 +3,7 @@ import { mapHealth } from "@/components/shell/health";
 import { nextMeeting } from "@/lib/domain/calendar";
 import type { Source } from "@/lib/domain/types";
 import { calendarConfigState } from "@/lib/integrations/calendar-env";
+import { healthContext } from "@/lib/integrations/health";
 import { repos } from "@/lib/repo";
 import { clock, isToday, longDay, shortDay, when } from "./format";
 import { ignoreTarget } from "../ignore/model";
@@ -26,7 +27,8 @@ export function loadHoy(now: Date = new Date()): HoyData {
   const counts = r.counts();
 
   const health: HoyData["health"] = {};
-  for (const s of ["github", "slack", "basecamp"] as const) health[s] = mapHealth(r.sources.get(s));
+  const ctx = healthContext(r, now);
+  for (const s of ["github", "slack", "basecamp"] as const) health[s] = mapHealth(r.sources.get(s), ctx);
 
   // Items of ignored projects stay in the DB but leave Hoy, the band and the counts.
   const all = r.items.list({ ignored: "exclude" });
