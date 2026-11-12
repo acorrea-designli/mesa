@@ -27,7 +27,7 @@ export async function readStdinJson() {
 
 // One JSON call to Mesa. Throws on network errors, non-2xx and { ok: false }.
 export async function mesaCall(path, { method, body, fetchImpl = fetch, base = mesaBase(), timeoutMs = 5000 } = {}) {
-  const headers = body ? { "content-type": "application/json" } : {};
+  const headers = { "x-mesa-client": "cli", ...(body ? { "content-type": "application/json" } : {}) }; // not Andrés's interaction
   if (process.env.MESA_TOKEN) headers["x-mesa-token"] = process.env.MESA_TOKEN;
   const res = await fetchImpl(`${base}${path}`, {
     method: method ?? (body ? "POST" : "GET"),

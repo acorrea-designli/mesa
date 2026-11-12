@@ -370,13 +370,13 @@ procedure and the lead's on-demand pass.
   interval (300 s) and when it applies (30 quiet minutes), the backoff (base, factor, cap), the probe limit, the
   ticks per instance, the Basecamp catch-up interval (`sources.basecamp.fullScanEveryTicks`) and `autoDispatch`, the PR
   intake switch (§ 4). `scripts/sweep-tick.mjs` is the clock: `wait` blocks until a source is due, `report`
-  records a tick's outcome. Any new item or any interaction by Andrés snaps the cadence back to 60 s.
+  records a tick's outcome. Any new item or any click by Andrés in the Mesa UI snaps the cadence back to 60 s; the lead's and the agents' CLI writes do not (the CLI marks every request, `x-mesa-client: cli`). A tick probes every source due within half the interval, so Slack and Basecamp share one `wait` return.
 - **Barrer ahora** (or `mesa sweep`) emits `sweep.requested` to the Mesa session `sweeper`
   (`MESA_SWEEPER_SESSION`); `sweep-tick.mjs wait` long-polls that session and returns at once with every listed
   source, even outside work hours. `sweep-tick.mjs force [--source s]` does the same by hand.
 - **State in Mesa.** `GET /api/sources` and `PATCH /api/sources/:name` (`source_state`: watermark (Basecamp: `<probe>|<scan>`, the catch-up window apart from the probe), lastChecked,
   lastNewAt, backoffUntil, cadenceS, errorCount, lastError, health) plus `lastInteractionAt`, stamped by any UI
-  action of Andrés. There is no local fallback: Mesa down means `wait` reports `mesa_down` and the tick waits.
+  action of Andrés (never by a CLI-marked request). There is no local fallback: Mesa down means `wait` reports `mesa_down` and the tick waits.
 - **Errors.** A 429 or an MCP error backs that source off (60 s, 120 s, … up to 30 min) and sets its health to
   `degraded`, or `down` after `downAfterErrors` consecutive failures that are not rate limits; the rail shows it
   (Estados B). The next good probe sets it back to `ok`, and leaving `down` resumes the salidas held for it.

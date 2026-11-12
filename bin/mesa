@@ -200,7 +200,7 @@ function options(opt) {
 // ---------- http ----------
 const BASE = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, "");
 async function call(method, path, body) {
-  const headers = { "content-type": "application/json" };
+  const headers = { "content-type": "application/json", "x-mesa-client": "cli" }; // the server does not count CLI writes as Andrés's interaction
   if (process.env.MESA_TOKEN) headers["x-mesa-token"] = process.env.MESA_TOKEN;
   let res;
   try {

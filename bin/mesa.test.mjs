@@ -18,7 +18,7 @@ beforeAll(async () => {
     let raw = "";
     for await (const c of req) raw += c;
     const url = new URL(req.url, "http://x");
-    const r = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: raw ? JSON.parse(raw) : undefined };
+    const r = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: raw ? JSON.parse(raw) : undefined, headers: req.headers };
     requests.push(r);
     const out = (await handler(r)) ?? { status: 200, body: {} };
     res.writeHead(out.status ?? 200, { "content-type": "application/json" });
@@ -215,6 +215,16 @@ describe("mesa CLI", () => {
     expect(requests.some((q) => q.path === "/api/wait/ack")).toBe(false);
     await mesa(["ack", "5"]);
     expect(requests.at(-1)).toMatchObject({ path: "/api/wait/ack", body: { session: "lead", cursor: 5 } });
+  });
+
+  it("every request carries x-mesa-client: cli, so the server does not count it as Andrés's interaction", async () => {
+    handler = (q) => (q.path === "/api/wait" ? { body: { events: [{ id: 4, kind: "ticket.answered" }], cursor: 4 } } : { body: { id: "tk_1", ref: "t1", tickets: [], questions: [] } });
+    await mesa(["wait", "--timeout", "1"]); // GET /api/wait, POST /api/wait/ack
+    await mesa(["source", "set", "slack", "--health", "ok"]); // PATCH
+    await mesa(["ticket", "context", "t1"]); // GET
+    expect(requests.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(requests.map((q) => q.method)).size).toBeGreaterThanOrEqual(3);
+    for (const q of requests) expect(q.headers["x-mesa-client"], `${q.method} ${q.path}`).toBe("cli");
   });
 
   it("wait requires a session", async () => {
