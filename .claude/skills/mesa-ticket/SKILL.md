@@ -124,7 +124,7 @@ A ticket created from a Tablero card ("+ Tarea", "Dárselo a Claude", Nuevo pedi
 `taskId`; its card shows the owner chip ("Claude · por asignar" until the lead claims it and adds the owner with
 `mesa team add … --owner`, then "<owner> · <estado>"). The lead handles `ticket.created` by kind (`mesa-start` § 5,
 `docs/TEAM.md` § 4). The card follows the ticket: Mesa moves it in the same transaction as every status change
-(`working` and `waiting_claude` → En curso, `waiting_andres` → Esperando, `closed` → Hecho, so a reopen lands in
+(`working` and `waiting_claude` → En curso, `waiting_andres` → Esperando, `paused` → Esperando, `ongoing` → En curso, `closed` → Hecho, so a reopen lands in
 En curso). Never move it by hand for a status change (no `MESA task move`); a card Andrés drags stays put until the
 next status change. Moving a GitHub Project or Basecamp card stays `needs_ok`.
 
@@ -135,6 +135,24 @@ The owner closes a ticket with `MESA ticket close <ref>`; a closed ticket comes 
 from its author reopens by itself (GitHub poll, or `MESA review open` at a new head): same ticket, `waiting_claude`,
 wake `ticket.reopened { ref, repo, pr, oldHead, newHead }`; pushes by Andrés or a bot do not reopen it. Boot from
 `MESA ticket context <ref>`: `reviews[].headSha` is the reviewed head, `seenHead` the new one.
+
+## Pausar (En pausa / En proceso)
+
+A ticket that is neither Andrés's turn nor yours has its own state, so the board does not call it "Claude trabaja" or
+"Te espera":
+
+- **Waiting on another ticket, a third party or a date:** `MESA ticket pause <ref> --reason "<why>" [--until-ticket tN]`
+  ("En pausa"). The reason is required; put a date in it ("espera al cliente hasta el viernes"). With `--until-ticket`
+  (an open ticket, not this one) it comes back by itself the moment that ticket closes, by any path: the ticket goes to
+  `waiting_claude` and its owner session gets `ticket.resumed`.
+- **Going on with nobody active** (CI running, a third party working): `MESA ticket ongoing <ref> --reason "<what>"`
+  ("En proceso"). No dependency, no auto-resume.
+- **Back to work yourself:** `MESA ticket resume <ref>` (to `working`, no wake). A claim, your own question or plan, or
+  Andrés replying also end it. An informational `ticket reply` does not.
+- Pausing never withdraws a question, plan step or salida: whatever Andrés owes still reads "Te espera".
+- **The lead relays `ticket.resumed`** (`RESUMED <ref> by <andres|dependency>`) to the owner and respawns one if none
+  is live; the owner boots from `MESA ticket context <ref>` (`ticket.status`, `pauseReason`, `pausedUntil`) and continues.
+  Andrés can also pause and resume from the ticket header; "En proceso" is only set from here.
 
 ## @ refs and files
 
