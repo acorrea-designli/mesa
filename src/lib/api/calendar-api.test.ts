@@ -161,6 +161,20 @@ describe("POST /api/calendar/requests", () => {
   it("rejects an empty request", async () => {
     expect((await postRequest(post("/api/calendar/requests", { text: "  " }), ctx)).status).toBe(400);
   });
+
+  it("adds a 'Se repite' line for a repeat choice and nothing without one", async () => {
+    for (const [repeat, label] of [["weekly", "cada semana"], ["biweekly", "cada 2 semanas"], ["monthly", "cada mes"]] as const) {
+      const res = await postRequest(post("/api/calendar/requests", { text: "weekly de DRE los miércoles a las 4", repeat }), ctx);
+      expect(res.status).toBe(201);
+      expect((await res.json()).messages[0].body).toBe(`${MEETING_REQUEST_MARK}\n\nweekly de DRE los miércoles a las 4\n\nSe repite: ${label}`);
+    }
+    const none = await postRequest(post("/api/calendar/requests", { text: "meet con Matt", repeat: undefined }), ctx);
+    expect((await none.json()).messages[0].body).not.toContain("Se repite");
+  });
+
+  it("rejects a repeat choice that is not in the list", async () => {
+    expect((await postRequest(post("/api/calendar/requests", { text: "meet con Matt", repeat: "daily" }), ctx)).status).toBe(400);
+  });
 });
 
 describe("a calendar salida over the API", () => {
@@ -171,7 +185,30 @@ describe("a calendar salida over the API", () => {
     expect(ok.status).toBe(201);
     const bad = await postSalida(post("/api/salidas", { source: "calendar", destination: dest, body: "mañana a las 10", ownerSession: "lead" }), ctx);
     expect(bad.status).toBe(400);
+    const rule = "RRULE:FREQ=WEEKLY;BYDAY=TH";
+    const series = await postSalida(post("/api/salidas", { source: "calendar", destination: dest, body: body.replace("Meet: sí", `Meet: sí\nRepetir: ${rule}`), ownerSession: "lead" }), ctx);
+    expect(series.status).toBe(201);
+    expect((await series.json()).destination).toMatchObject({ recurrence: rule });
+    const badRule = await postSalida(post("/api/salidas", { source: "calendar", destination: dest, body: body.replace("Meet: sí", "Meet: sí\nRepetir: RRULE:FREQ=WEEKLY;BYDAY=MO"), ownerSession: "lead" }), ctx);
+    expect(badRule.status).toBe(400);
+    expect(JSON.stringify(await badRule.json())).toMatch(/empieza un TH/);
     const mismatch = await postSalida(post("/api/salidas", { source: "slack", destination: dest, body: "x", ownerSession: "lead" }), ctx);
     expect(mismatch.status).toBe(400);
+  });
+
+  it("an invalid Repetir with the CLI's destination shape is the Spanish problem, not the schema error", async () => {
+    // `mesa calendar propose --repeat X` copies X into destination.recurrence and into the body's Repetir line.
+    for (const [rule, problem] of [
+      ["FREQ=WEEKLY;BYDAY=TH", /debe empezar por RRULE:/],
+      ["rrule:FREQ=WEEKLY;BYDAY=TH", /debe empezar por RRULE:/],
+      ["RRULE:freq=weekly;byday=th", /mayúsculas/],
+      ["RRULE:FREQ=MONTHLY;BYMONTHDAY=5", /empieza el día 12 del mes/],
+    ] as const) {
+      const res = await postSalida(post("/api/salidas", { source: "calendar", destination: { ...dest, recurrence: rule }, body: body.replace("Meet: sí", `Meet: sí\nRepetir: ${rule}`), ownerSession: "lead" }), ctx);
+      expect(res.status, rule).toBe(400);
+      const text = JSON.stringify(await res.json());
+      expect(text, rule).toMatch(problem);
+      expect(text, rule).not.toMatch(/invalid request body/i);
+    }
   });
 });

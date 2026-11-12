@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // PermissionDenied hook (t128 part H, docs/TEAM.md § 6.7): a call that auto mode already denied becomes a
-// "Bloqueado por el modo automático" card inside the agent's Mesa ticket, and the hook waits up to 120 s for Andrés:
+// "Bloqueado por el modo automático" card inside the agent's Mesa ticket. When the card carries a proposed rule the hook
+// waits up to 120 s for Andrés; a card with no rule (it can only be denied) returns at once and expires on its own:
 //
 //   Permitir esta regla -> the Mesa server (never this hook, never Claude) derives one narrow Edit rule from the stored
 //                          call and appends it to settings.local.json; this hook then prints retry: true so the agent

@@ -1,7 +1,7 @@
 // The exact text of a calendar salida, drawn as the event it creates (t112): title, when, zone, invitees, Meet. The
 // approved body is one field per line (src/lib/domain/calendar-event.ts); this block reads it back so Andrés sees the
 // event, not "Título: …". The top stub is the Calendario line colour, like every exact-text block.
-import { eventWhen, parseEventBody } from "@/lib/domain/calendar-event";
+import { describeRecurrence, eventWhen, parseEventBody } from "@/lib/domain/calendar-event";
 import { isMoveBody, parseMoveBody } from "@/lib/domain/calendar-move";
 import "./calendar.css";
 
@@ -37,6 +37,15 @@ export function EventBlock({ text, className }: { text: string; className?: stri
         <dd>{f.invitees.length ? f.invitees.join(", ") : "Nadie: solo tú"}</dd>
         <dt>Meet</dt>
         <dd>{f.meet ? "Se crea con el evento" : "Sin Meet"}</dd>
+        {f.recurrence ? (
+          <>
+            <dt>Se repite</dt>
+            <dd>
+              {describeRecurrence(f.recurrence, f.timeZone)}
+              <code className="cal-ev-rule">{f.recurrence}</code>
+            </dd>
+          </>
+        ) : null}
         {f.description ? (
           <>
             <dt>Notas</dt>

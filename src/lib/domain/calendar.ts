@@ -10,6 +10,11 @@ export const REMIND_MINUTES = 10;
 export const MEETING_REQUEST_MARK = "Pedido de reunión (Calendario)";
 const MIN = 60_000;
 
+/** The repeat choices of "Pedir reunión" (t128), in the order of the picker, and the text the request ticket carries. */
+export const REPEAT_CHOICES = ["weekly", "biweekly", "monthly"] as const;
+export type RepeatChoice = (typeof REPEAT_CHOICES)[number];
+export const REPEAT_LABEL: Record<RepeatChoice, string> = { weekly: "cada semana", biweekly: "cada 2 semanas", monthly: "cada mes" };
+
 /** A meeting is what reminds and what the strip shows: timed, and not declined by Andrés. */
 export const isMeeting = (e: CalendarEvent): boolean => !e.allDay && e.response !== "declined";
 

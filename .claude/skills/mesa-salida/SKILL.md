@@ -67,14 +67,22 @@ Fin: 2026-11-12T10:30:00-05:00
 Zona: America/Bogota
 Invitados: matt.r@scoutapp.example
 Meet: sí
+Repetir: RRULE:FREQ=WEEKLY;BYDAY=WE
 Descripción: optional free text, to the end
 ```
 
 Times are ISO with their offset (never a bare local time), `Invitados` is omitted when nobody is invited, `Meet` is
-`sí` or `no`. Use the CLI so the format is right:
+`sí` or `no`. `Repetir` is optional (after `Meet`, before `Descripción`) and makes the event a series: one exact
+RRULE string, uppercase, parts only FREQ (DAILY|WEEKLY|MONTHLY|YEARLY, required), INTERVAL, BYDAY, BYMONTHDAY,
+BYMONTH, COUNT or UNTIL (not both), WKST, each once, evaluated in the event's `Zona`; UNTIL is `YYYYMMDD` or
+`YYYYMMDDTHHMMSSZ` after the start, a WEEKLY rule with BYDAY must include the start's weekday, and a MONTHLY rule with
+BYMONTHDAY the start's day of the month (otherwise Google adds an off-pattern first instance). Anything else is a 400 with the problem in Spanish. The card shows it in Spanish
+("Cada semana, los miércoles") with the raw rule under it. A request ticket from Calendario that ends with
+`Se repite: cada semana | cada 2 semanas | cada mes` asks for a series: pass `--repeat "RRULE:..."` (the start must
+fall on the BYDAY day). Use the CLI so the format is right:
 
 ```
-node G:/WorkSpace/designli/ops/bin/mesa calendar propose --title "Meet con Matt" --start 2026-11-12T10:00:00-05:00 --end 2026-11-12T10:30:00-05:00 --invitee matt.r@scoutapp.example --ticket <ref> --context "<what you checked>"
+node G:/WorkSpace/designli/ops/bin/mesa calendar propose --title "Meet con Matt" --start 2026-11-12T10:00:00-05:00 --end 2026-11-12T10:30:00-05:00 --invitee matt.r@scoutapp.example [--repeat "RRULE:FREQ=WEEKLY;BYDAY=TH"] --ticket <ref> --context "<what you checked>"
 ```
 
 Before proposing, check the slot against the stored events (`mesa calendar free --day <YYYY-MM-DD> --minutes <n>`) and
@@ -149,7 +157,14 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 
 **Calendar** (`source: calendar`, no mode): step 2 is ONE `create_event` call of the Google Calendar connector
 (`mcp__claude_ai_Google_Calendar__create_event`) with exactly the fields of the approved body: title, start, end
-(with the zone), the invitees as attendees, a Google Meet only when `Meet: sí`, and the description. Hook G5 passes
+(with the zone), the invitees as attendees, a Google Meet only when `Meet: sí`, and the description. The
+connector's own names: `startTime` / `endTime` are LOCAL times without offset (`2026-11-18T16:00:00`) plus the
+top-level `timeZone` (the approved `Zona`); the Meet flag is `addGoogleMeetUrl: true` (a boolean) and only when
+`Meet: sí` (never `googleMeetUrl`, a specific URL that overrides it); a series is `recurrenceData`, an array that is
+EXACTLY `["<the approved Repetir text>"]` (byte for byte, one entry: no second RRULE, RDATE or EXDATE), and the call has
+no `recurrenceData` at all when the body has no `Repetir`. Do not send attachments, availability, colorId, eventType,
+guestPermissions, location, notificationLevel, overrideReminders, useDefaultReminders, visibility, allDay or any other
+recurrence alias: G5 refuses them. Hook G5 passes
 the call only when every field equals the approved ones (instants for the times, the set of addresses for the
 guests) and refuses every other Google Calendar write (delete, respond, move to another calendar): never fix an event after the
 fact, propose a new salida. Step 3 is `MESA salida sent <id> --permalink <the event's link>`; if the connector cannot

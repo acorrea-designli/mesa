@@ -24,8 +24,9 @@
 //                channelId (and threadTs when it has one) as channel_id / thread_ts. The wrong tool for the mode is
 //                refused with the right path: a draft is never sent, a direct send is never drafted.
 //                A Google Calendar create_event (the connector, t112) passes only for a released, unsent, non-sample
-//                `calendar` salida whose approved body (title, start, end, invitees, Meet, description: one field per
-//                line, scripts/hooks/calendar-body.mjs) is exactly what the call writes; any other Google Calendar write
+//                `calendar` salida whose approved body (title, start, end, invitees, Meet, Repetir, description: one
+//                field per line, scripts/hooks/calendar-body.mjs) is exactly what the call writes, a series included
+//                (`recurrenceData` is exactly ["<the approved Repetir>"], the Meet flag is `addGoogleMeetUrl`); any other Google Calendar write
 //                (delete, respond, move to another calendar) is refused outright. An update_event / patch_event (t131) passes
 //                only for a released, unsent, non-sample calendar MOVE salida (body "Mover: <eventId>", scripts/hooks/
 //                calendar-move.mjs) whose eventId, calendar, start and end instants the call matches exactly, with no

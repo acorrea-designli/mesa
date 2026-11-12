@@ -130,6 +130,8 @@ export function salidasRepo(db: Db) {
     const p = parseEventBody(body);
     if (!p.ok) return;
     const d = { ...s.destination, invitees: p.fields.invitees, meet: p.fields.meet };
+    if (p.fields.recurrence) d.recurrence = p.fields.recurrence;
+    else delete d.recurrence; // the body dropped `Repetir`
     db.prepare("UPDATE salidas SET destination = ? WHERE id = ?").run(JSON.stringify(d), salidaId);
   };
 

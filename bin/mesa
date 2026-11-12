@@ -135,9 +135,12 @@ Calendario (Andrés's Google Calendar, read only: the server polls his private i
   mesa calendar people                             people on the stored events (email, name, shared meetings): find an invitee's address
   mesa calendar refresh                            read the feed now (409 in sandbox or without MESA_GCAL_ICS_URL)
   mesa calendar propose --title T --start ISO --end ISO [--zone America/Bogota] [--invitee EMAIL]... [--no-meet]
-                  [--description D] [--calendar primary] [--ticket ID] [--context C] [--wait-release [--timeout S]]
+                  [--repeat "RRULE:FREQ=WEEKLY;BYDAY=WE"] [--description D] [--calendar primary] [--ticket ID] [--context C] [--wait-release [--timeout S]]
                                                    the exact event as a salida (source calendar); times carry their offset,
                                                    e.g. 2026-11-12T10:00:00-05:00. The lead creates it after Andrés approves.
+                                                   --repeat makes it a series: the exact RRULE (FREQ, INTERVAL, BYDAY, BYMONTHDAY,
+                                                   BYMONTH, COUNT or UNTIL, WKST), uppercase, the start on a BYDAY day; the card
+                                                   says it in Spanish. An invalid rule comes back as the server's 400.
 
 GitHub (server side, with the gh login; Mesa never writes reviews or comments)
   mesa github sync                                 poll notifications + review requests, push/pull the Project now
@@ -743,10 +746,12 @@ async function main() {
           const lines = [`Título: ${String(need(opt.title, "--title"))}`, `Inicio: ${String(need(opt.start, "--start"))}`, `Fin: ${String(need(opt.end, "--end"))}`, `Zona: ${String(opt.zone ?? "America/Bogota")}`];
           if (invitees.length) lines.push(`Invitados: ${invitees.join(", ")}`);
           lines.push(`Meet: ${meet ? "sí" : "no"}`);
+          const recurrence = opt.repeat === undefined ? undefined : opt.repeat === true ? "" : String(opt.repeat).trim();
+          if (recurrence !== undefined) lines.push(`Repetir: ${recurrence}`);
           if (opt.description && opt.description !== true) lines.push(`Descripción: ${String(opt.description).trim()}`);
           const created = await call("POST", "/api/salidas", {
             source: "calendar",
-            destination: { kind: "calendar_event", calendar: String(opt.calendar ?? "primary"), invitees, meet, postAs: "Andrés Correa" },
+            destination: { kind: "calendar_event", calendar: String(opt.calendar ?? "primary"), invitees, meet, ...(recurrence ? { recurrence } : {}), postAs: "Andrés Correa" },
             body: lines.join("\n"),
             title: `Evento: ${String(opt.title)}`,
             context: opt.context,

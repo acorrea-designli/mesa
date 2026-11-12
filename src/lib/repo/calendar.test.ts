@@ -86,6 +86,24 @@ describe("calendar salidas", () => {
     expect(back.destination).toMatchObject({ invitees: ["matt.r@scoutapp.example"], meet: true });
   });
 
+  it("writes the recurrence into the destination from the body and drops it when the body drops it", () => {
+    const rule = "RRULE:FREQ=WEEKLY;BYDAY=TH";
+    const s = propose({ body: formatEventBody({ ...fields, recurrence: rule }) });
+    expect(r.salidas.get(s.id).destination).toMatchObject({ kind: "calendar_event", recurrence: rule });
+    const v2 = r.salidas.edit(s.id, formatEventBody({ ...fields, recurrence: "RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TH" }), NOW);
+    expect(v2.destination).toMatchObject({ recurrence: "RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TH" });
+    const v3 = r.salidas.edit(s.id, formatEventBody(fields), NOW);
+    expect(v3.destination).not.toHaveProperty("recurrence");
+    const back = r.salidas.selectVersion(s.id, 1, NOW);
+    expect(back.destination).toMatchObject({ recurrence: rule });
+  });
+
+  it("refuses a body whose Repetir line is invalid, on create and on a new version", () => {
+    expect(() => propose({ body: formatEventBody({ ...fields, recurrence: "RRULE:FREQ=WEEKLY;BYDAY=MO" }) })).toThrow(/empieza un TH/);
+    const s = propose();
+    expect(() => r.salidas.edit(s.id, formatEventBody(fields).replace("Meet: sí", "Meet: sí\nRepetir: FREQ=WEEKLY"), NOW)).toThrow(/RRULE:/);
+  });
+
   it("goes out through the normal path even while the feed is down (reading is not creating)", () => {
     r.sources.set("calendar", { health: "down", note: "sin conexión con Google" }, NOW);
     const s = propose();
