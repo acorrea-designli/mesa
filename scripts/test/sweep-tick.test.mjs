@@ -15,6 +15,7 @@ import {
   makeStore,
   report,
   splitMark,
+  tickSources,
   wait,
   writeForce,
 } from "../sweep-tick.mjs";
@@ -267,4 +268,54 @@ test("report writes the catch-up window to Mesa and keeps it across a probe-only
   assert.equal(store.saved.basecamp.watermark, "P1|S1");
   await report(config, store, "basecamp", { new: 0, watermark: "P2" }, { now: () => tue10 + 60_000 });
   assert.equal(store.saved.basecamp.watermark, "P2|S1");
+});
+
+// A store on a fake clock: waiting advances the clock by the time asked, nothing forces a sweep.
+const clockStore = (state, clock) => ({
+  ...memStore(state),
+  async forcedWithin(sec) {
+    clock.t += sec * 1000;
+    return null;
+  },
+});
+
+test("coalesced tick: sources checked 7 s apart come back in one wait, not two", async () => {
+  const state = { sources: { slack: { lastChecked: iso(tue10 - 61_000) }, basecamp: { lastChecked: iso(tue10 - 54_000) } }, lastInteractionAt: iso(tue10) };
+  const r = await wait(config, memStore(state), { now: () => tue10 });
+  assert.deepEqual(r.sources, ["slack", "basecamp"]); // basecamp is due in 7 s, inside half of 60 s
+  assert.equal(r.forced, false);
+  assert.deepEqual(r.scanSince, { basecamp: null });
+});
+
+test("coalesced tick: only sources due within half the interval, never one that is backing off", () => {
+  const live = { lastInteractionAt: iso(tue10) };
+  const slackDue = { lastChecked: iso(tue10 - 61_000) };
+  const pick = (basecamp) => tickSources(config, { ...live, sources: { slack: slackDue, basecamp } }, tue10);
+  assert.deepEqual(pick({ lastChecked: iso(tue10 - 30_000) }), ["slack", "basecamp"]); // due in 30 s = half of 60 s
+  assert.deepEqual(pick({ lastChecked: iso(tue10 - 29_000) }), ["slack"]); // due in 31 s
+  assert.deepEqual(pick({ lastChecked: iso(tue10) }), ["slack"]); // just checked
+  assert.deepEqual(pick({ lastChecked: iso(tue10 - 54_000), backoffUntil: iso(tue10 + 5_000) }), ["slack"]); // parked
+  assert.deepEqual(pick({ lastChecked: iso(tue10 - 54_000), backoffUntil: iso(tue10 - 1_000) }), ["slack", "basecamp"]); // backoff over
+  assert.deepEqual(tickSources(config, { ...live, sources: { slack: { lastChecked: iso(tue10) }, basecamp: { lastChecked: iso(tue10 - 54_000) } } }, tue10), []); // nothing due: nothing is pulled in
+  assert.deepEqual(tickSources(config, { sources: {} }, at("2026-11-03T22:00:00")), []); // outside work hours
+});
+
+test("a quiet hour costs at most 12 wait() returns for a sweeper, even with the sources 7 s apart", async () => {
+  const clock = { t: tue10 };
+  const now = () => clock.t;
+  const state = { sources: { slack: { lastChecked: iso(tue10 - 400_000) }, basecamp: { lastChecked: iso(tue10 - 407_000) } } };
+  const store = clockStore(state, clock);
+  let returns = 0;
+  const end = tue10 + 3600_000;
+  while (clock.t < end) {
+    const r = await wait(config, store, { now });
+    if (clock.t >= end) break; // this return belongs to the next hour
+    returns++;
+    if (!r.due) continue;
+    for (const name of r.sources) {
+      await report(config, store, name, { new: 0 }, { now });
+      clock.t += 7_000; // the probe of the next source takes a few seconds
+    }
+  }
+  assert.ok(returns <= 12, `${returns} wait returns in a quiet hour`);
 });

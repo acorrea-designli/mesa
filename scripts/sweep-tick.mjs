@@ -22,7 +22,8 @@
 // Cadence: during work hours every source is probed every activeIntervalSec; after idleAfterMin minutes with no new
 // item and no interaction from Andrés it backs off to idleIntervalSec, and it snaps back on the next new item or
 // interaction. A source that errors waits baseSec * factor^(errors-1), capped at maxSec, and is marked degraded.
-// Outside work hours nothing is due except a forced sweep. One JSON line on stdout per call.
+// Outside work hours nothing is due except a forced sweep. One tick probes every source due within half the
+// current interval (tickSources), so Slack and Basecamp share one `wait` return. One JSON line on stdout per call.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -90,6 +91,17 @@ export function dueSources(config, state, now, { forced = false } = {}) {
   if (!inWorkHours(config, now)) return [];
   const t = dueTimes(config, state, now);
   return Object.keys(t).filter((n) => t[n] <= now);
+}
+
+// The sources one tick probes: every source that is due, plus every enabled source that is not backing off and is due
+// within half the current interval. Slack and Basecamp stamp `lastChecked` a few seconds apart, so without this
+// `wait` returns them in two ticks per interval. A source checked just now stays out (it is due a whole interval away).
+export function tickSources(config, state, now) {
+  const due = dueSources(config, state, now);
+  if (!due.length) return due;
+  const t = dueTimes(config, state, now);
+  const half = (intervalSec(config, state, now) * 1000) / 2;
+  return Object.keys(t).filter((n) => t[n] <= now || (t[n] <= now + half && !(ms(state.sources?.[n]?.backoffUntil) > now)));
 }
 
 // ---------- compound watermark ----------
@@ -234,7 +246,7 @@ export async function wait(config, store, { now = Date.now, maxSec = config.wait
     } catch (err) {
       return { due: false, reason: "mesa_down", error: err.message, store: store.kind };
     }
-    const due = dueSources(config, state, now());
+    const due = tickSources(config, state, now());
     if (due.length) return { due: true, forced: false, sources: due, intervalSec: intervalSec(config, state, now()), store: store.kind, watermarks: marks(state, due), ...scanInfo(config, state, due) };
     const left = until - now();
     if (left <= 0) return { due: false, reason: "timeout", store: store.kind };
