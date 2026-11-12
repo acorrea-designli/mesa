@@ -1693,3 +1693,215 @@
   gap: 6px;
   align-items: center;
 }
+
+/* ---------- checklist card (t124): a Claude message with manual steps for Andrés ---------- */
+/* min-width 0 all the way down: a long code line scrolls inside its block, it never widens the card past the pane. */
+.tk-ck-card {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 8px;
+}
+.tk-ck-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.tk-ck-h b {
+  font-weight: 700;
+}
+.tk-ck-n {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+.tk-ck-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.tk-ck-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--cl);
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tk-ck-bar i {
+    transition: none;
+  }
+}
+.tk-ck-list {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.tk-ck {
+  min-width: 0;
+}
+.tk-ck-l {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 36px;
+  padding: 8px;
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+.tk-ck-l:hover {
+  background: var(--raise);
+}
+/* The real checkbox stays in the page for the keyboard and screen readers; the box beside it is what is drawn. */
+.tk-ck-in {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+.tk-ck-box {
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  background: var(--raise);
+  color: var(--gnd);
+}
+.tk-ck-box svg {
+  opacity: 0;
+}
+.tk-ck-in:checked + .tk-ck-box {
+  background: var(--ink);
+}
+.tk-ck-in:checked + .tk-ck-box svg {
+  opacity: 1;
+}
+.tk-ck-in:focus-visible + .tk-ck-box {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tk-ck-in:disabled + .tk-ck-box {
+  opacity: 0.55;
+}
+.tk-ck-l:has(.tk-ck-in:disabled) {
+  cursor: default;
+}
+.tk-ck-t {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tk-ck-k {
+  color: var(--mute);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tk-ck.on .tk-ck-t {
+  color: var(--mute);
+}
+.tk-ck-v {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 0 4px 40px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink2);
+}
+.tk-ck-v .ln {
+  flex: none;
+  transform: translateY(-3px);
+}
+.tk-ck-v b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.tk-ck-d {
+  min-width: 0;
+  margin: 0 0 6px 40px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink2);
+}
+.tk-ck-d p {
+  margin: 4px 0;
+  white-space: pre-line;
+}
+.tk-ck-d ul,
+.tk-ck-d ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.tk-ck-pre {
+  position: relative;
+  margin: 6px 0;
+}
+.tk-ck-pre pre {
+  margin: 0;
+  padding: 10px 76px 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--raise);
+  color: var(--ink);
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre;
+  overflow-x: auto;
+  user-select: text;
+}
+.tk-ck-pre pre:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.tk-ck-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--raise); /* code scrolls under it */
+}
+.tk-ck-code {
+  padding: 0 5px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--raise);
+  color: var(--ink);
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  cursor: copy;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.tk-ck-code:hover {
+  border-color: var(--ink);
+}
+.tk-ck-code:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  /* A 44 px row to tap: the whole label is the target. */
+  .tk-ck-l {
+    min-height: 44px;
+    padding: 11px 8px;
+  }
+  .tk-ck-copy {
+    height: 40px;
+  }
+  .tk-ck-pre pre {
+    padding-right: 84px;
+  }
+}

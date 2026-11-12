@@ -3,12 +3,14 @@ import { useState } from "react";
 import { BrokenLine, DirectionMarker, Interchange, LineStub, Ring, SourceDot } from "@/components/line/Line";
 import { Sheet, SplitApprove, Tabs, useToast } from "@/components/ui/interactive";
 import { Btn, Chip, ContextQuote, ExactText, Kind, Label, LinkChip, StatusTag } from "@/components/ui/primitives";
+import { ChecklistCard } from "@/features/tickets/ChecklistCard";
 import { QuestionCard } from "@/features/tickets/QuestionCard";
 import type { Picks } from "@/features/tickets/card";
 import { UsageBlock } from "@/features/usage/UsageBlock";
 import { UsoView } from "@/features/usage/UsoView";
 import { addUsage, summarize, type Buckets, type Role } from "@/lib/domain/tokens";
-import { SOURCES, type Source, type TicketQuestion } from "@/lib/domain/types";
+import { groupChecklists } from "@/lib/domain/ticket-checklists";
+import { SOURCES, type Checklist, type Source, type TicketQuestion, type TicketStep } from "@/lib/domain/types";
 import { usageView, type UsagePoint, type UsageSnapshot } from "@/lib/domain/usage";
 import { useArrive, useLayLines, usePress } from "@/lib/motion";
 
@@ -128,6 +130,62 @@ function KitQuestions() {
   );
 }
 
+// A checklist in every step state: done by Andrés, verified by Claude (with its note), open with a Markdown detail
+// and code, and open plain. Tapping works on the sample (nothing is saved).
+const KIT_STEP = (n: number, text: string, extra: Partial<TicketStep>): TicketStep => ({
+  id: `ck_kit${n}`,
+  ticketId: "tk_kit",
+  messageId: "m_kit_ck",
+  n,
+  text,
+  detail: null,
+  state: "open",
+  doneBy: null,
+  doneAt: null,
+  note: null,
+  createdAt: "2026-11-12T15:00:00.000Z",
+  ...extra,
+});
+const KIT_STEPS: TicketStep[] = [
+  KIT_STEP(1, "Pega la URL iCal en .env.local", {
+    state: "done",
+    doneBy: "andres",
+    doneAt: "2026-11-12T15:10:00.000Z",
+    detail: "En Google Calendar: Configuración, tu calendario, **Dirección secreta en formato iCal**.\n\n```\nMESA_ICS_URL=https://calendar.google.com/calendar/ical/...\n```",
+  }),
+  KIT_STEP(2, "Reinicia Mesa para que lea el archivo", { state: "done", doneBy: "claude", doneAt: "2026-11-12T15:12:00.000Z", note: "Mesa responde configured:true" }),
+  KIT_STEP(3, "Autoriza el conector de Google con /mcp", {
+    detail: "Abre Claude Code y escribe `/mcp`, elige el conector y acepta el permiso.\n\n- Cuenta: la de Designli\n- Alcance: solo lectura",
+  }),
+  KIT_STEP(4, "Avísale a Claude cuando esté listo", {}),
+];
+const kitList = (steps: TicketStep[]): Checklist => groupChecklists(steps)[0]!;
+
+function KitChecklist() {
+  const [steps, setSteps] = useState(KIT_STEPS);
+  const set = async (s: TicketStep, done: boolean) => {
+    await new Promise((r) => setTimeout(r, 250));
+    setSteps((xs) => xs.map((x) => (x.id === s.id ? { ...x, state: done ? "done" : "open", doneBy: done ? "andres" : null, doneAt: done ? new Date().toISOString() : null, note: null } : x)));
+  };
+  const fails = async () => {
+    await new Promise((r) => setTimeout(r, 250));
+    throw new Error("El ticket está cerrado (muestra del error)");
+  };
+  return (
+    <div className="kit-line" style={{ alignItems: "flex-start" }}>
+      <div className="kit-card">
+        <ChecklistCard checklist={kitList(steps)} disabled={false} onSet={set} />
+      </div>
+      <div className="kit-card">
+        <ChecklistCard checklist={kitList(KIT_STEPS.slice(0, 2).map((s) => ({ ...s, state: "done", doneBy: s.doneBy ?? "andres", doneAt: s.doneAt ?? "2026-11-12T15:10:00.000Z" })))} disabled onSet={fails} />
+      </div>
+      <div className="kit-card">
+        <ChecklistCard checklist={kitList(KIT_STEPS.slice(2).map((s, i) => ({ ...s, n: i + 1 })))} disabled={false} onSet={fails} />
+      </div>
+    </div>
+  );
+}
+
 export function KitDemo() {
   const [tab, setTab] = useState<Filter>("all");
   const [sheet, setSheet] = useState(false);
@@ -228,6 +286,11 @@ export function KitDemo() {
       <section>
         <Label>Tarjeta de preguntas: respondida, elegida, retirada y abierta; y una de un paso</Label>
         <KitQuestions />
+      </section>
+
+      <section>
+        <Label>Checklist de pasos: hecho por Andrés, verificado por Claude, abierto con detalle y código; todo hecho y cerrado; y uno que falla al marcar</Label>
+        <KitChecklist />
       </section>
 
       <section>

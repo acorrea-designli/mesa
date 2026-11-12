@@ -1,10 +1,10 @@
 "use client";
-// Thread pane (520 px): the question cards (QuestionCard.tsx), Claude's recommendation, the
+// Thread pane (520 px): the question cards (QuestionCard.tsx), the checklists (ChecklistCard.tsx), Claude's recommendation, the
 // client's words, sources, Claude's plan, permission approvals, reviews, the
 // messages, the agents on the ticket and the reply composer.
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Attachment, PlannedAction, QuestionAnswer, TicketMessage, TicketQuestion, TicketRef } from "@/lib/domain/types";
+import type { Attachment, Checklist, PlannedAction, QuestionAnswer, TicketMessage, TicketQuestion, TicketRef, TicketStep } from "@/lib/domain/types";
 import { Alert, Chip, FilesBadge, srcClass } from "@/components/ui/primitives";
 import { chipOfMeta } from "@/lib/domain/files";
 import { useToast } from "@/components/ui/interactive";
@@ -20,6 +20,8 @@ import { KnownTickets, Linked } from "./Linkified";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
+import { checklistOf } from "@/lib/domain/ticket-checklists";
+import { ChecklistCard } from "./ChecklistCard";
 import { QuestionCard } from "./QuestionCard";
 import { PauseBar } from "./PauseBar";
 import { answersOf, livePicks, type Picks } from "./card";
@@ -257,6 +259,11 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
       setBusy(false);
     }
   };
+  /** One checklist step, ticked or unticked: the card shows it at once; a refusal reaches it as a rejection and it rolls back. */
+  const setStep = async (s: TicketStep, done: boolean) => {
+    await ticketApi.setStep(t.id, s.id, done);
+    onChanged();
+  };
   const transition = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
     try {
@@ -380,6 +387,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
                   m={m}
                   fold={repeatsReviewCard({ ...m, options: cardFor(m).length ? cardFor(m) : m.options }, cardFindings, data.reviews.length > 0)}
                   card={cardFor(m)}
+                  list={checklistOf(t.checklists, m.id)}
+                  closed={closed}
+                  onSetStep={setStep}
                   answered={t.questions.filter((q) => q.answerMessageId === m.id)}
                   all={t.questions}
                   picks={picks}
@@ -579,7 +589,7 @@ const answeredTag = (qs: TicketQuestion[], all: TicketQuestion[]) => {
   return qs.every((q) => q.chosen) ? `eligió ${parts.join(" · ")}` : `respondió ${parts.join(" · ")}`;
 };
 
-function Message({ m, fold, card, answered, all, picks, onPicks, disabled, onSend, atts, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; card: TicketQuestion[]; answered: TicketQuestion[]; all: TicketQuestion[]; picks: Picks; onPicks: (p: Picks) => void; disabled: boolean; onSend: (a: QuestionAnswer[]) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+function Message({ m, fold, card, list, closed, onSetStep, answered, all, picks, onPicks, disabled, onSend, atts, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; card: TicketQuestion[]; list: Checklist | null; closed: boolean; onSetStep: (s: TicketStep, done: boolean) => Promise<void>; answered: TicketQuestion[]; all: TicketQuestion[]; picks: Picks; onPicks: (p: Picks) => void; disabled: boolean; onSend: (a: QuestionAnswer[]) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
   const tag = answeredTag(answered, all) ?? (m.chosen ? `eligió ${m.chosen}` : null);
   return (
     <div className="tk-msg">
@@ -600,6 +610,7 @@ function Message({ m, fold, card, answered, all, picks, onPicks, disabled, onSen
         </>
       ) : m.body ? <p><Linked text={m.body} /></p> : null}
       {card.length ? <QuestionCard questions={card} picks={picks} onPicks={onPicks} onSend={onSend} disabled={disabled} /> : null}
+      {list ? <ChecklistCard checklist={list} disabled={closed} onSet={onSetStep} /> : null}
       {refs.length ? (
         <div className="tk-files">
           {refs.map((r) => (

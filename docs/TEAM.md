@@ -76,7 +76,7 @@ acknowledgements (hook G3). Detail lives in the ticket; a message points at it.
 |---|---|
 | owner → team-lead | `NEED <role> <ref> <why>[ complexity: high]` · `DONE <ref> <name> <result>` · `BLOCKED <ref> <why>` |
 | any → team-lead | `HANDOFF <ref> <name>` + the handoff text (only when Mesa is unreachable, hook H3) |
-| team-lead → agent | the spawn prompt · `ANSWER <ref> <message id \| plan_approved \| plan_approved partial <ids> \| plan_revoked <ids> \| salida.turn <salida> <turn>>` (`plan_revoked <ids>`: Andrés took those steps back, do not run them) · `SENT <ref> <salida> [comment ids]` · `CLOSED <ref>` · `REOPENED <ref>` · `HANDOFF-NOW <ref>` · `SPAWNED <ref> <name>` |
+| team-lead → agent | the spawn prompt · `ANSWER <ref> <message id \| plan_approved \| plan_approved partial <ids> \| plan_revoked <ids> \| checklist <n> done\|open <doneCount>/<total> [all] \| salida.turn <salida> <turn>>` (`plan_revoked <ids>`: Andrés took those steps back, do not run them; `checklist`: he ticked or unticked step `n` of a checklist, `all` when the last step was ticked, see `mesa-ticket` § Checklists) · `SENT <ref> <salida> [comment ids]` · `CLOSED <ref>` · `REOPENED <ref>` · `HANDOFF-NOW <ref>` · `SPAWNED <ref> <name>` |
 | implementer → tl | `READY <ref> PR <url> at <sha>` |
 | reviewer/tl → implementer | `PASS <ref> #<n> at <sha>` · `FAIL <ref> #<n> at <sha>` + numbered items with `path:line` |
 | teammate → owner | `DONE <ref> <name> <result>` (the owner forwards what the lead needs) |

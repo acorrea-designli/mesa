@@ -58,6 +58,11 @@ export const ticketApi = {
   seenAll: () => call<{ count: number; seenAt: string }>("/api/tickets/seen", { body: {} }),
   close: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "close", by: "andres" } }),
   reopen: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "reopen", by: "andres" } }),
+  /**
+   * Ticks or unticks one checklist step (the owner wakes with ticket.checklist). Resolves with the fresh ticket;
+   * rejects with the API's message (409 on a closed ticket, 404 when the step is gone).
+   */
+  setStep: (id: string, stepId: string, done: boolean) => call<TicketDetail>(`${T(id)}/steps/${encodeURIComponent(stepId)}`, { method: "PUT", body: { done } }),
   /** "Pídeme permiso": posts the marked message and wakes the owner (ticket.permission_requested). */
   requestPermission: (id: string) => call<TicketDetail>(`${T(id)}/permission-request`, { body: {} }),
   approvePlan: (id: string, reject: string[]) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { reject } }),

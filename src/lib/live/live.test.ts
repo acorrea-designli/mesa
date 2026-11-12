@@ -27,6 +27,9 @@ describe("changeFromRequest", () => {
     expect(changeFromRequest("PATCH", "http://x/api/items/it_1")).toEqual({ entityType: "item", entityId: "it_1", kind: "updated" });
     expect(changeFromRequest("POST", "http://x/api/items/upsert")).toEqual({ entityType: "item", entityId: "", kind: "upsert" });
     expect(changeFromRequest("PATCH", "http://x/api/sources/slack")).toEqual({ entityType: "source", entityId: "slack", kind: "updated" });
+    // Checklists (t124): both writes are changes of the ticket, so the board and the phone refresh on Claude's marks too.
+    expect(changeFromRequest("POST", "http://x/api/tickets/t5/checklist")).toEqual({ entityType: "ticket", entityId: "t5", kind: "checklist" });
+    expect(changeFromRequest("PUT", "http://x/api/tickets/t5/steps/ck_1")).toEqual({ entityType: "ticket", entityId: "t5", kind: "steps.ck_1" });
   });
   it("ignores reads and plumbing", () => {
     expect(changeFromRequest("GET", "http://x/api/tasks")).toBeNull();

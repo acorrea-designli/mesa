@@ -95,6 +95,9 @@ describe("mesa CLI", () => {
       "mesa lead focus",
       "mesa ticket questions",
       "mesa ticket question withdraw",
+      "mesa ticket checklist",
+      "mesa ticket check",
+      "ticket.checklist",
     ]) {
       expect(r.stdout).toContain(c);
     }
@@ -270,6 +273,46 @@ describe("mesa CLI", () => {
     expect(bad.code).toBe(2);
     expect(bad.stderr).toMatch(/--json wants/);
     expect(requests).toHaveLength(1);
+  });
+
+  it("ticket checklist posts one message of steps from stdin; strings are steps, the body and refs ride along", async () => {
+    handler = () => ({ body: { id: "tk_1", ref: "t1", checklists: [] } });
+    const list = { body: "Dos pasos tuyos", steps: [{ text: "Pega la URL", detail: "en `.env.local`" }, "Reinicia Mesa"], refs: ["t112"] };
+    const r = await mesa(["ticket", "checklist", "t1", "--json", "-"], { stdin: JSON.stringify(list) });
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({
+      method: "POST",
+      path: "/api/tickets/t1/checklist",
+      body: { body: "Dos pasos tuyos", steps: [{ text: "Pega la URL", detail: "en `.env.local`" }, { text: "Reinicia Mesa" }], refs: [{ refType: "ticket", target: "t112" }], session: "lead" },
+    });
+    expect(requests[0].headers["x-mesa-client"]).toBe("cli");
+    const bad = await mesa(["ticket", "checklist", "t1", "--json", "-"], { stdin: JSON.stringify({ body: "x" }) });
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toMatch(/--json wants/);
+    expect((await mesa(["ticket", "checklist", "--json", "-"], { stdin: JSON.stringify(list) })).code).toBe(2);
+    expect(requests).toHaveLength(1);
+  });
+
+  it("ticket check marks a step done with its note, --undo reopens it, <message>/<n> goes as <message>.<n>", async () => {
+    handler = () => ({ body: { id: "tk_1", ref: "t1", checklists: [] } });
+    expect((await mesa(["ticket", "check", "t1", "2", "--note", "Mesa dice configured:true"])).code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "PUT", path: "/api/tickets/t1/steps/2", body: { done: true, note: "Mesa dice configured:true", session: "lead" } });
+    expect(requests[0].headers["x-mesa-client"]).toBe("cli");
+    expect((await mesa(["ticket", "check", "t1", "ck_9"])).code).toBe(0);
+    expect(requests[1]).toMatchObject({ method: "PUT", path: "/api/tickets/t1/steps/ck_9", body: { done: true } });
+    expect(requests[1].body.note).toBeUndefined();
+    expect((await mesa(["ticket", "check", "t1", "tm_5/3", "--undo"])).code).toBe(0);
+    expect(requests[2]).toMatchObject({ method: "PUT", path: "/api/tickets/t1/steps/tm_5.3", body: { done: false } });
+    expect((await mesa(["ticket", "check", "t1", "--undo", "2"])).code).toBe(0);
+    expect(requests[3]).toMatchObject({ path: "/api/tickets/t1/steps/2", body: { done: false } });
+  });
+
+  it("ticket check needs the ref and the step, and a note does not go with --undo", async () => {
+    handler = () => ({ body: {} });
+    expect((await mesa(["ticket", "check", "t1"])).code).toBe(2);
+    expect((await mesa(["ticket", "check"])).code).toBe(2);
+    expect((await mesa(["ticket", "check", "t1", "2", "--undo", "--note", "x"])).code).toBe(2);
+    expect(requests).toHaveLength(0);
   });
 
   it("ticket question withdraw posts the reason; it needs the id and --why", async () => {

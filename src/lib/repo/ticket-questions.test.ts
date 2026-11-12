@@ -30,7 +30,7 @@ const states = (ref: string) => r.tickets.detail(ref).questions.map((q) => q.sta
 const answeredWakes = () => eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "ticket.answered").map((e) => e.payload);
 const needsOf = (ref: string) => {
   const d = r.tickets.detail(ref);
-  return ticketNeeds({ status: d.status, messages: d.messages, questions: d.questions, actions: d.actions, approvals: [], reviews: [], salidas: [] }, T0);
+  return ticketNeeds({ status: d.status, messages: d.messages, questions: d.questions, steps: [], actions: d.actions, approvals: [], reviews: [], salidas: [] }, T0);
 };
 
 describe("a question card", () => {

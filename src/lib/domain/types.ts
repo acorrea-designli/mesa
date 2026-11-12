@@ -177,6 +177,41 @@ export interface QuestionAnswer {
   text?: string;
 }
 
+export type StepState = "open" | "done";
+export type StepBy = "andres" | "claude";
+
+/**
+ * One step of a checklist (t124): a Claude message carries 1-30 of them. Anyone sets a step either way, any number of
+ * times: Andrés from the board and the phone, Claude from the CLI when it verified the step itself (`note`).
+ */
+export interface TicketStep {
+  id: string; // ck_*
+  ticketId: string;
+  /** The Claude message that posted the checklist. */
+  messageId: string;
+  /** Step in its checklist, from 1. */
+  n: number;
+  text: string;
+  /** Optional Markdown. */
+  detail: string | null;
+  state: StepState;
+  /** Who set it done; null while open. */
+  doneBy: StepBy | null;
+  doneAt: string | null;
+  /** Claude's one-line verification, null when Andrés ticked it. */
+  note: string | null;
+  createdAt: string;
+}
+
+/** The steps of one message, with their counts. */
+export interface Checklist {
+  messageId: string;
+  done: number;
+  total: number;
+  allDone: boolean;
+  steps: TicketStep[];
+}
+
 export interface Attachment {
   id: string;
   ticketId: string;
@@ -244,6 +279,8 @@ export interface TicketDetail extends Ticket {
   messages: TicketMessage[];
   /** Every question card row of the ticket, in card order then step order. */
   questions: TicketQuestion[];
+  /** Every checklist of the ticket (t124), oldest first, with its steps and done / total. */
+  checklists: Checklist[];
   attachments: Attachment[];
   refs: TicketRef[];
   actions: PlannedAction[];
@@ -468,6 +505,7 @@ export type WakeKind =
   | "ticket.batch" // Andrés handed 2+ cards to Claude at once: { batchId, origin, tickets: [{ ticketRef, taskId, title, kind?, urls }] }; replaces the N ticket.created
   | "ticket.answered" // Andrés replied or chose an option
   | "ticket.plan_approved"
+  | "ticket.checklist" // Andrés ticked or unticked a checklist step (never Claude's own mark): { ref, ticketRef, messageId, stepId, n, done, doneCount, total, allDone }
   | "ticket.closed"
   | "ticket.reopened"
   | "ticket.resumed" // a paused/ongoing ticket came back to Claude: { ref, ticketRef, by: "andres"|"dependency", dependencyRef? }; the lead respawns the owner
@@ -665,6 +703,8 @@ export interface TicketContext {
   openQuestions: string[];
   /** Every card question of the ticket with its state (open, answered, withdrawn). */
   questions: TicketQuestion[];
+  /** Every checklist of the ticket with its steps (state, doneBy, note) and done / total (t124). */
+  checklists: Checklist[];
   team: TeamAgent[];
   handoffs: Handoff[]; // latest per agent, newest first
   latestHandoff: Handoff | null;
