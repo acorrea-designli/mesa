@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/interactive";
 import { usePress } from "@/lib/motion";
 import { call, salidaApi } from "@/features/salidas/api";
 import { secondsLeft, undoOpen } from "@/features/salidas/model";
+import { postable, takesActions } from "./model";
 import "./reviews.css";
 
 const LABEL: Record<Finding["label"], string> = { blocker: "bloqueante", nit: "detalle", comment: "comentario" };
@@ -30,7 +31,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
 
   const open = r.findings.filter((f) => f.state === "open");
   const blockers = open.filter((f) => f.label === "blocker");
-  const postable = (f: Finding) => f.state === "open" && !f.salidaId && !f.ghCommentId;
+  const live = takesActions(r);
+  const canPost = (f: Finding) => postable(r, f);
 
   const act = async (action: ReviewAction, findingNs?: number[]) => {
     setBusy(true);
@@ -81,8 +83,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
             <label className="rv-pick">
               <input
                 type="checkbox"
-                hidden={!postable(f)}
-                disabled={!postable(f)}
+                hidden={!canPost(f)}
+                disabled={!canPost(f)}
                 checked={picked.includes(f.n)}
                 onChange={() => setPicked((p) => (p.includes(f.n) ? p.filter((x) => x !== f.n) : [...p, f.n]))}
                 aria-label={`Elegir hallazgo ${f.n}`}
@@ -96,9 +98,9 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
               </div>
               <p className="rv-sum">{f.summary}</p>
               {f.explanation ? <p className="rv-exp">{f.explanation}</p> : null}
-              {f.state === "open" ? (
+              {live && f.state === "open" ? (
                 <div className="rv-acts">
-                  {postable(f) ? (
+                  {canPost(f) ? (
                     <button className="btn sm" type="button" disabled={busy} onClick={() => setPreview([f.n])}>
                       Post
                     </button>

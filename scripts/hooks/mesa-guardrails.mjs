@@ -30,7 +30,8 @@
 //                Mesa unreachable = blocked (nothing goes out unseen).
 //   G10 (rule 3) Nobody approves (and so never picks the Slack mode), schedules, denies or undoes a salida, closes a
 //                Slack draft as sent ("Ya lo envié"), approves a plan or decides a permission card through the raw
-//                API: those are Andrés's clicks.
+//                API: those are Andrés's clicks. The raw /reviews/:id/close route is blocked the same way (the lead
+//                closes a card with `mesa review close`).
 //   G6 (rule 8)  run_in_background for git, gh, tests or builds. Only `mesa wait` may run in the background.
 //   G7 (rule 10) `gh pr create` without --draft, bare force push, --no-verify, `gh auth` changes.
 //   G11 (rule 16) Sandbox (MESA_ENV=sandbox, or `--env sandbox` on the hook command), lead and teammates alike:
@@ -489,7 +490,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/actions\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
       return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
