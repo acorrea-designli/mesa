@@ -1,7 +1,9 @@
 // CLI tests: run bin/mesa as a child process against a fake Mesa API and check the
 // requests it makes (method, path, body), its output and its exit codes.
 import { spawn } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -15,10 +17,19 @@ let handler = () => ({ status: 200, body: {} });
 
 beforeAll(async () => {
   server = createServer(async (req, res) => {
-    let raw = "";
-    for await (const c of req) raw += c;
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const buf = Buffer.concat(chunks);
     const url = new URL(req.url, "http://x");
-    const r = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: raw ? JSON.parse(raw) : undefined, headers: req.headers };
+    // A multipart upload (ticket attach) is parsed into `form`: { fields, file: { name, type, size, text } }.
+    let form;
+    if (String(req.headers["content-type"] ?? "").startsWith("multipart/form-data")) {
+      const fd = await new Request("http://x", { method: "POST", headers: { "content-type": req.headers["content-type"] }, body: buf }).formData();
+      const file = fd.get("file");
+      form = { fields: Object.fromEntries([...fd.entries()].filter(([, v]) => typeof v === "string")), file: file && { name: file.name, type: file.type, size: file.size, text: await file.text() } };
+    }
+    const raw = form ? "" : buf.toString("utf8");
+    const r = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: raw ? JSON.parse(raw) : undefined, form, headers: req.headers };
     requests.push(r);
     const out = (await handler(r)) ?? { status: 200, body: {} };
     res.writeHead(out.status ?? 200, { "content-type": "application/json" });
@@ -98,6 +109,9 @@ describe("mesa CLI", () => {
       "mesa ticket checklist",
       "mesa ticket check",
       "ticket.checklist",
+      "mesa ticket attach",
+      "mesa ticket annotations",
+      "mesa ticket annotation-reply",
     ]) {
       expect(r.stdout).toContain(c);
     }
@@ -599,5 +613,65 @@ describe("mesa CLI", () => {
     const w = await mesa(["salida", "propose", "--source", "slack", "--dest", '{"kind":"slack_thread","workspace":"w","channel":"c","postAs":"Andrés"}', "--body", "hola", "--wait-release"]);
     expect(w.code).toBe(3);
     expect(w.stderr).toMatch(/withdrawn: do not send it/);
+  });
+});
+
+describe("PDF review (t125)", () => {
+  const scratch = mkdtempSync(join(tmpdir(), "mesa-attach-"));
+  const pdf = join(scratch, "informe costos.pdf");
+  writeFileSync(pdf, "%PDF-1.4 fake");
+
+  it("ticket attach uploads the file as multipart to the existing route and prints the attachment", async () => {
+    handler = () => ({ status: 201, body: { id: "at_1", ticketId: "tk_1", filename: "informe_costos.pdf", mime: "application/pdf", size: 13 } });
+    const r = await mesa(["ticket", "attach", "t87", pdf, "--message", "tm_9"]);
+    expect(r.code).toBe(0);
+    expect(r.json()).toMatchObject({ id: "at_1", mime: "application/pdf" });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t87/attachments" });
+    expect(requests[0].form).toEqual({ fields: { messageId: "tm_9" }, file: { name: "informe costos.pdf", type: "application/pdf", size: 13, text: "%PDF-1.4 fake" } });
+    expect(requests[0].headers["x-mesa-client"]).toBe("cli");
+  });
+
+  it("ticket attach without --message sends no messageId, and fails clearly on a missing file or arguments", async () => {
+    handler = () => ({ status: 201, body: { id: "at_2" } });
+    await mesa(["ticket", "attach", "t87", pdf]);
+    expect(requests[0].form.fields).toEqual({});
+    requests = [];
+    const gone = await mesa(["ticket", "attach", "t87", join(scratch, "nope.pdf")]);
+    expect(gone.code).toBe(1);
+    expect(gone.stderr).toMatch(/cannot read .*nope\.pdf/);
+    expect((await mesa(["ticket", "attach", "t87"])).code).toBe(2);
+    expect((await mesa(["ticket", "attach"])).code).toBe(2);
+    expect(requests).toEqual([]);
+  });
+
+  it("ticket attach shows the server's refusal (25 MB) and exits 1", async () => {
+    handler = () => ({ status: 413, body: { error: { code: "too_large", message: "attachments are limited to 25 MB" } } });
+    const r = await mesa(["ticket", "attach", "t87", pdf]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/413 attachments are limited to 25 MB/);
+  });
+
+  it("ticket annotations reads the ticket's marks, with --att and --open as filters", async () => {
+    handler = () => ({ body: [{ id: "an_1", page: 2, kind: "highlight", rect: { x: 1, y: 2, w: 3, h: 4 }, quote: "Costo", body: "¿IVA?", state: "open", replies: [] }] });
+    const r = await mesa(["ticket", "annotations", "t87"]);
+    expect(r.code).toBe(0);
+    expect(r.json()[0]).toMatchObject({ id: "an_1", page: 2, kind: "highlight", quote: "Costo" });
+    expect(requests[0]).toMatchObject({ method: "GET", path: "/api/tickets/t87/annotations", query: {} });
+    await mesa(["ticket", "annotations", "t87", "--att", "at_1", "--open"]);
+    expect(requests[1]).toMatchObject({ method: "GET", path: "/api/tickets/t87/annotations", query: { att: "at_1", open: "1" } });
+    expect((await mesa(["ticket", "annotations"])).code).toBe(2);
+  });
+
+  it("ticket annotation-reply posts Claude's body (stdin works) to the mark's replies", async () => {
+    handler = () => ({ status: 201, body: { id: "an_1", replies: [{ author: "claude", body: "Es sin IVA" }] } });
+    const r = await mesa(["ticket", "annotation-reply", "t87", "an_1", "--body", "-"], { stdin: "Es sin IVA\n" });
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t87/annotations/an_1/replies", body: { body: "Es sin IVA" } });
+    expect(requests[0].headers["x-mesa-client"]).toBe("cli");
+    requests = [];
+    expect((await mesa(["ticket", "annotation-reply", "t87", "an_1"])).code).toBe(2);
+    expect((await mesa(["ticket", "annotation-reply", "t87", "--body", "x"])).code).toBe(2);
+    expect(requests).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import { getDb, type Db } from "../db/sqlite";
 import { STATIONS, type Counts, type Station } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { agentsRepo } from "./agents";
+import { annotationsRepo } from "./annotations";
 import { approvalsRepo } from "./approvals";
 import { calendarRepo } from "./calendar";
 import { bogotaStart, meetingsLeft } from "../domain/calendar";
@@ -31,6 +32,7 @@ export function createRepos(db: Db) {
     items: itemsRepo(db),
     tasks: tasksRepo(db),
     tickets: ticketsRepo(db),
+    annotations: annotationsRepo(db),
     dispatch: dispatchRepo(db),
     intake: intakeRepo(db),
     salidas: salidasRepo(db),

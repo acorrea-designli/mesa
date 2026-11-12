@@ -90,6 +90,14 @@ export class ValidationError extends Error {
   }
 }
 
+/** A request that is understood but not allowed for this caller (HTTP 403): editing a mark someone else made. */
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
 export class TransitionError extends Error {
   constructor(message: string) {
     super(message);
