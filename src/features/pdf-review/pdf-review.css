@@ -1,0 +1,524 @@
+/*
+ * PDF review (t125). Every class starts with pr-. Shared tokens and classes (.btn, .tab, .ln, .src-claude) come
+ * from src/styles; nothing here depends on a component kit.
+ * Claude orange (--cl) marks Claude-authored items only: its marks, its replies, its pins. Andrés's marks are a
+ * neutral ink highlight. A PDF page is white in both themes, so the marks drawn ON the page use fixed colours
+ * (--pr-ink, --pr-claude) while the chrome around it (panel, toolbar) follows the theme tokens.
+ */
+.pr {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-width: 0;
+}
+
+/* ---------- toolbar ---------- */
+.pr-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+.pr-head h1 {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pr-head h1 span {
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+.pr-tools,
+.pr-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pr-tool svg {
+  flex: none;
+}
+.pr-tools .btn[aria-pressed="true"],
+.pr-zoom .btn[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--gnd);
+}
+.pr-zoom output {
+  min-width: 44px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- body: PDF | panel ---------- */
+.pr-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--detail-w);
+}
+.pr-scroll {
+  position: relative; /* offsetParent of the pages: scrolling to a mark reads their offsetTop */
+  min-width: 0;
+  overflow: auto;
+  background: var(--gnd);
+}
+.pr-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 100%;
+  padding: 20px;
+}
+.pr-note {
+  padding: 24px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mute);
+}
+
+/* ---------- a page: canvas, marks, text, ink, pins ---------- */
+.pr-page {
+  --pr-ink: #1c1d21;
+  --pr-claude: #f39700;
+  --total-scale-factor: 1;
+  position: relative;
+  flex: none;
+  margin-inline: auto;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--rule);
+  user-select: none;
+}
+.pr-canvas,
+.pr-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.pr-svg {
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.pr-text {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.pr-text :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  user-select: text;
+}
+.pr-text > :not(.markedContent, .pr-end),
+.pr-text .markedContent span:not(.markedContent) {
+  z-index: 1; /* above .pr-end, which is only for the gaps between them */
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.pr-text .markedContent {
+  display: contents;
+}
+.pr-text ::selection {
+  background: color-mix(in srgb, var(--pr-ink) 28%, transparent);
+}
+.pr-end {
+  position: absolute;
+  z-index: 0;
+  inset: 100% 0 0;
+  cursor: default;
+  user-select: none;
+}
+.pr-text.selecting .pr-end {
+  top: 0;
+}
+.pr-ink {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  touch-action: none;
+}
+.pr-ink.on {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* ---------- marks ---------- */
+.pr-m {
+  --mk: var(--pr-ink);
+}
+.pr-m.claude {
+  --mk: var(--pr-claude);
+}
+.pr-hl {
+  fill: var(--mk);
+  fill-opacity: 0.17;
+}
+.pr-m.claude .pr-hl {
+  fill-opacity: 0.32;
+}
+.pr-m.on .pr-hl {
+  fill-opacity: 0.3;
+  stroke: var(--mk);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.pr-shape,
+.pr-shape :is(line, polyline) {
+  fill: none;
+  stroke: var(--mk);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.pr-shape.on,
+.pr-shape.on :is(line, polyline) {
+  stroke-width: 3.5px;
+}
+.pr-shape.draft,
+.pr-shape.draft :is(line, polyline) {
+  stroke-dasharray: 5 4;
+}
+.pr-m.done {
+  opacity: 0.38;
+}
+.pr-m.flash-0,
+.pr-m.flash-1 {
+  filter: drop-shadow(0 0 5px var(--mk));
+}
+.pr-m.flash-0 {
+  animation: pr-flash-0 0.7s ease-in-out 2;
+}
+.pr-m.flash-1 {
+  animation: pr-flash-1 0.7s ease-in-out 2;
+}
+@keyframes pr-flash-0 {
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes pr-flash-1 {
+  50% {
+    opacity: 0.25;
+  }
+}
+.pr-pin {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--pr-ink);
+  color: #fff;
+  font: 700 11px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  filter: none;
+}
+.pr-pin.claude {
+  background: var(--pr-claude);
+  color: #1c1d21;
+}
+.pr-pin.on {
+  outline: 2px solid var(--pr-ink);
+  outline-offset: 2px;
+}
+.pr-pin.done {
+  opacity: 0.45;
+}
+.pr-pin.flash-0,
+.pr-pin.flash-1 {
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--mk) 35%, transparent);
+}
+
+/* ---------- panel ---------- */
+.pr-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-left: 1px solid var(--rule);
+  background: var(--deep);
+  padding: 20px 24px;
+  gap: 14px;
+}
+.pr-phead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pr-phead h2 {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.pr-phead h2 span {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.pr-seg {
+  display: flex;
+  gap: 6px;
+}
+.pr-seg .tab {
+  height: 28px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pr-seg .tab[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--gnd);
+  border-color: var(--ink);
+}
+.pr-seg .tab b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pr-send {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-send small {
+  font-size: 12.5px;
+  color: var(--mute);
+}
+.pr-none {
+  font-size: 14px;
+  color: var(--mute);
+}
+.pr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-card {
+  padding: 10px 12px 11px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--raise);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-card:hover {
+  border-color: var(--edge);
+}
+.pr-card.on {
+  border-color: var(--ink);
+  box-shadow: var(--float-low);
+}
+.pr-card.done {
+  background: transparent;
+}
+.pr-card.done .pr-says,
+.pr-card.done .pr-quote {
+  color: var(--mute);
+}
+.pr-chead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.pr-no {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pr-card.claude .pr-no {
+  border-color: var(--cl);
+}
+.pr-meta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+.pr-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pr-tag {
+  margin-left: auto;
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-tag);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mute);
+}
+.pr-tag.dashed {
+  border-style: dashed;
+}
+.pr-quote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--rule);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+.pr-says {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pr-says.empty {
+  color: var(--mute);
+}
+.pr-replies {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-replies li {
+  padding-top: 8px;
+  border-top: 1px solid var(--rule2);
+}
+.pr-replies p {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pr-rwho {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pr-rwho time {
+  font-weight: 500;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+.pr-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.pr-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pr-compose textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--raise);
+  color: var(--ink);
+  caret-color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* ---------- phone: read only, stacked ---------- */
+@media (max-width: 720px) {
+  .pr {
+    height: auto;
+  }
+  .pr-head {
+    padding: 10px 16px;
+  }
+  .pr-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .pr-scroll {
+    height: 62dvh;
+    border-bottom: 1px solid var(--rule);
+  }
+  .pr-pages {
+    padding: 10px;
+  }
+  .pr-panel {
+    overflow: visible;
+    border-left: 0;
+    padding: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-m.flash-0,
+  .pr-m.flash-1 {
+    animation: none;
+  }
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
-import { NotFoundError, TransitionError, ValidationError } from "../db/util";
+import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "../db/util";
 import { publishRequest } from "../live/bus";
 import { repos, type Repos } from "../repo";
 import { asCliCall } from "../repo/interaction";
@@ -38,6 +38,7 @@ export function route<P extends Record<string, string>>(
       if (err instanceof NotFoundError || (err as Error)?.name === "NotFoundError") return error(404, "not_found", (err as Error).message);
       if (err instanceof TransitionError || (err as Error)?.name === "TransitionError") return error(409, "invalid_transition", (err as Error).message);
       if (err instanceof ValidationError || (err as Error)?.name === "ValidationError") return error(400, "invalid_request", (err as Error).message);
+      if (err instanceof ForbiddenError || (err as Error)?.name === "ForbiddenError") return error(403, "forbidden", (err as Error).message);
       if (err instanceof SyntaxError) return error(400, "invalid_json", err.message);
       console.error(err);
       return error(500, "internal", err instanceof Error ? err.message : "internal error");

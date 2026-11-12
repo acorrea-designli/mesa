@@ -1905,3 +1905,22 @@
     padding-right: 84px;
   }
 }
+
+/* PDF attachment: its chip and the "Revisar" action beside it (t125, the review view in features/pdf-review). */
+.tk-att-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+.tk-review {
+  padding: 0 10px;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--gnd);
+}
+.tk-review:hover {
+  background: var(--ink2);
+  border-color: var(--ink2);
+}
