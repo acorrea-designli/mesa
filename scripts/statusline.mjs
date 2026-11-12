@@ -105,7 +105,7 @@ export async function postSnapshot(baseUrl, payload, { fetchFn = globalThis.fetc
   try {
     const res = await fetchFn(new URL("/api/usage", baseUrl), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-mesa-client": "cli" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(timeoutMs),
     });

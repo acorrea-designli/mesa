@@ -3,6 +3,7 @@ import { ZodError, type ZodType } from "zod";
 import { NotFoundError, TransitionError, ValidationError } from "../db/util";
 import { publishRequest } from "../live/bus";
 import { repos, type Repos } from "../repo";
+import { asCliCall } from "../repo/interaction";
 
 export type Ctx<P extends Record<string, string> = Record<string, string>> = { params: Promise<P> };
 
@@ -25,7 +26,9 @@ export function route<P extends Record<string, string>>(
     try {
       const r = repos();
       r.sweep();
-      const res = await fn(req, r, (await ctx.params) ?? ({} as P));
+      const params = (await ctx.params) ?? ({} as P);
+      // bin/mesa marks its calls: the lead's and the agents' writes are not Andrés's interaction (repo/interaction.ts).
+      const res = await (req.headers.get("x-mesa-client") === "cli" ? asCliCall(() => fn(req, r, params)) : fn(req, r, params));
       publishRequest(req, res.status); // live updates for /api/stream
       return res;
     } catch (err) {

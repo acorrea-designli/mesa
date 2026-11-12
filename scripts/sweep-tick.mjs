@@ -10,7 +10,7 @@
 //
 // Every number lives in config/sweep.json. State per source lives in Mesa (`GET /api/sources`,
 // `PATCH /api/sources/:name`: watermark, lastChecked, lastNewAt, health, errorCount, backoffUntil, lastError, cadenceS;
-// plus `lastInteractionAt`, stamped only by Andrés's UI actions). Basecamp's `watermark` is compound,
+// plus `lastInteractionAt`, stamped only by Andrés's UI actions: CLI requests carry `x-mesa-client: cli` and never stamp it). Basecamp's `watermark` is compound,
 // `<probe>|<scan>` (see splitMark): `--watermark` moves the probe part, `--scan-since` the full-notifications
 // catch-up's own "since"; `wait`/`status` print them apart, with `fullScanEveryTicks` (config sources.basecamp,
 // default 10). Mesa unreachable or erroring = `wait` reports
@@ -20,7 +20,7 @@
 // long-polls; `force` is the lead's manual equivalent.
 //
 // Cadence: during work hours every source is probed every activeIntervalSec; after idleAfterMin minutes with no new
-// item and no interaction from Andrés it backs off to idleIntervalSec, and it snaps back on the next new item or
+// item and no click by Andrés in the Mesa UI it backs off to idleIntervalSec, and it snaps back on the next new item or
 // interaction. A source that errors waits baseSec * factor^(errors-1), capped at maxSec, and is marked degraded.
 // Outside work hours nothing is due except a forced sweep. One tick probes every source due within half the
 // current interval (tickSources), so Slack and Basecamp share one `wait` return. One JSON line on stdout per call.
@@ -161,7 +161,7 @@ export function applyReport(config, s = {}, report, now) {
 async function http(path, { method = "GET", body, fetchImpl, base, timeoutMs = 5000 }) {
   const res = await fetchImpl(`${base}${path}`, {
     method,
-    headers: body ? { "content-type": "application/json" } : {},
+    headers: { "x-mesa-client": "cli", ...(body ? { "content-type": "application/json" } : {}) }, // not Andrés's interaction
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(timeoutMs),
   });

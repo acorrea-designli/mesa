@@ -48,7 +48,7 @@ The clock is `scripts/sweep-tick.mjs`; every number (60 s active, 5 min after 30
 backoff to 30 min on errors, work hours, probe limit, ticks per instance, the Basecamp catch-up interval
 `sources.basecamp.fullScanEveryTicks`) is in `config/sweep.json`; the catch-up window lives in Mesa, in the Basecamp
 `source_state.watermark` as `<probe>|<scan>`. It snaps back to 60 s on any new
-item or when Andrés interacts with Mesa (`lastInteractionAt`). "Barrer ahora" (or `mesa sweep`) emits
+item or when Andrés clicks in the Mesa UI (`lastInteractionAt`; a request from `bin/mesa` or a team script carries `x-mesa-client: cli` and never stamps it). One tick probes every source due within half the interval, so Slack and Basecamp share it. "Barrer ahora" (or `mesa sweep`) emits
 `sweep.requested` to the Mesa session `sweeper`, which `wait` long-polls, so the probe runs at once
 (`sweep-tick.mjs force` is the lead's manual equivalent). A 429 or an MCP error backs that source off and sets its
 health to `degraded` (`down` after repeated failures that are not rate limits) in `source_state`, which the rail
