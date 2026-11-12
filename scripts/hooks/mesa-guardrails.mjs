@@ -12,7 +12,8 @@
 //                `--body` from a variable or `$(...)`) is blocked too: write it as a heredoc. The lead and every other
 //                role are not affected.
 //   G4 (rule 3)  Outward writes by a teammate: Slack sends, Basecamp writes, GitHub comments/reviews/merges,
-//                pr-gh.mjs, `mesa salida sent`. Only the lead sends, and only after approval.
+//                pr-gh.mjs, `mesa salida sent`. Only the lead sends, and only after approval. `mesa salida withdraw` and
+//                `mesa review close` (the lead's cleanup of stale salidas and review cards, t123) are the lead's too.
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
 //                the text being sent; its pr-gh.mjs writes need a released github salida for that repo and PR.
 //                A Basecamp create_comment also needs its `mentions` ids to equal the salida's destination.mentions
@@ -514,8 +515,11 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       if (/\bgh\s+pr\s+(review|comment|merge|close|reopen|edit|ready)\b|\bgh\s+issue\s+(comment|create|close|reopen|edit|delete)\b|\bgh\s+release\s+create\b/.test(c)) {
         return block("G4", "rule 3: that gh command writes to GitHub on Andrés's behalf. Only `gh pr create --draft` for your own branch is yours; everything else goes through the lead after approval.");
       }
-      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|drafted|failed|hold|bounce|deleted|restored)\b/.test(c)) {
-        return block("G4", "rule 3: only the lead reports a salida as sent, drafted, failed, held, bounced, deleted or restored.");
+      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|drafted|failed|hold|bounce|deleted|restored|withdraw)\b/.test(c)) {
+        return block("G4", "rule 3: only the lead reports a salida as sent, drafted, failed, held, bounced, deleted or restored, or withdraws one.");
+      }
+      if (/\bmesa\b[^\n|;&]*\breview\s+close\b/.test(c)) {
+        return block("G4", "rule 3: only the lead closes a review card (`mesa review close`).");
       }
     }
 

@@ -254,7 +254,8 @@ export type SalidaStatus =
   | "scheduled"
   | "queued_until_back" // approved while the source was down ("Aprobar al volver")
   | "draft_created" // Slack, mode draft: the text waits as a draft in Andrés's Slack ("Borrador en Slack · envíalo tú") until "Ya lo envié"
-  | "deleted";
+  | "deleted"
+  | "withdrawn"; // the lead took a stale pending/draft salida back (t123): final, never sent, the reason stays visible
 
 export type SalidaSource = "slack" | "basecamp" | "github" | "calendar";
 
@@ -377,6 +378,9 @@ export interface Salida {
   error: string | null;
   deleteRequestedAt: string | null;
   deletedAt: string | null;
+  /** Why the lead withdrew it (status withdrawn), and when. Null otherwise. */
+  withdrawReason: string | null;
+  withdrawnAt: string | null;
   isSample: boolean;
   createdAt: string;
   updatedAt: string;
@@ -603,8 +607,11 @@ export interface Review {
   headSha: string;
   /** The newest PR head seen after a push on a closed ticket (where an incremental re-review ends); empty until then. */
   seenHead: string;
-  state: "open" | "approving" | "approved";
+  state: "open" | "approving" | "approved" | "closed";
   salidaId: string | null;
+  /** Why the lead closed the card (state closed), and when. Empty / null otherwise. */
+  closeReason: string | null;
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
   findings: Finding[];

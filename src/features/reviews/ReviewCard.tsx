@@ -62,7 +62,15 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
           Revisión · {r.repo}#{r.pr}
         </b>
         {r.headSha ? <code>{r.headSha.slice(0, 7)}</code> : null}
-        <span className="rv-st">{r.state === "approved" ? "Aprobado" : r.state === "approving" ? "Aprobando · en Salidas" : `${open.length} abiertos`}</span>
+        <span className="rv-st">
+          {r.state === "closed"
+            ? `Cerrada · ${r.closeReason ?? ""}`
+            : r.state === "approved"
+              ? "Aprobado"
+              : r.state === "approving"
+                ? "Aprobando · en Salidas"
+                : `${open.length} abiertos`}
+        </span>
       </div>
       {r.findings.length === 0 ? (
         <p className="rv-empty">{r.state === "open" ? "Sin hallazgos · listo para aprobar" : "Sin hallazgos"}</p>

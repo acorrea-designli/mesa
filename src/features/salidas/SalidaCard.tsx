@@ -95,7 +95,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
         ? "Texto del borrador en Slack"
         : s.status === "sent" || s.status === "deleted"
           ? "Texto enviado"
-          : s.status === "denied"
+          : s.status === "denied" || s.status === "withdrawn"
             ? "Texto que no saldrá"
             : s.status === "expired"
               ? `Borrador de las ${hhmm(s.createdAt)}`
@@ -271,7 +271,7 @@ function metaLine(s: SalidaView): string {
 export function ExactBlock({ s, text, marks, setMarks, highlight }: { s: SalidaDetail; text: string; marks: Mark[]; setMarks?: (m: Mark[]) => void; highlight?: string | null }) {
   const d = s.destination;
   // A calendar salida's text is the event itself: show it as the event (to change it, "Editar" or ask Claude).
-  if (d.kind === "calendar_event") return <EventBlock text={text} className={s.status === "sent" || s.status === "denied" || s.status === "expired" || s.status === "deleted" ? "sent" : undefined} />;
+  if (d.kind === "calendar_event") return <EventBlock text={text} className={s.status === "sent" || s.status === "denied" || s.status === "expired" || s.status === "deleted" || s.status === "withdrawn" ? "sent" : undefined} />;
   if (d.kind === "github_review") {
     const comments = d.comments ?? [];
     return (
@@ -287,7 +287,7 @@ export function ExactBlock({ s, text, marks, setMarks, highlight }: { s: SalidaD
       </div>
     );
   }
-  return <SemaforoText text={text} source={s.source} marks={marks} onMarks={setMarks} locked={!setMarks} highlight={highlight} className={s.status === "sent" || s.status === "denied" || s.status === "expired" || s.status === "deleted" ? "sent" : undefined} />;
+  return <SemaforoText text={text} source={s.source} marks={marks} onMarks={setMarks} locked={!setMarks} highlight={highlight} className={s.status === "sent" || s.status === "denied" || s.status === "expired" || s.status === "deleted" || s.status === "withdrawn" ? "sent" : undefined} />;
 }
 
 function MarkOutcome({ o }: { o: ReturnType<typeof markOutcome> }) {
@@ -432,6 +432,15 @@ export function StateBlocks({
       );
     case "denied":
       return compact ? <div className="sa-status"><b>Denegada.</b>&nbsp;Claude no la enviará.</div> : <div className="sa-status"><span><b>Denegaste esta salida{s.updatedAt ? ` · ${hhmm(s.updatedAt)}` : ""}.</b> Claude no la enviará.</span></div>;
+    case "withdrawn":
+      return (
+        <div className="sa-status">
+          <span>
+            <b>Retirada · {s.withdrawReason}</b>
+            {s.withdrawnAt ? ` (${hhmm(s.withdrawnAt)})` : ""}. Nunca se envió.
+          </span>
+        </div>
+      );
     case "expired":
       return (
         <div className="sa-status">

@@ -232,7 +232,7 @@ export function agentsRepo(db: Db) {
         salidas: fromRows<Pick<Salida, "id" | "status" | "source" | "title" | "currentVersion">>(
           db
             .prepare(
-              "SELECT id, status, source, title, current_version FROM salidas WHERE ticket_id = ? AND status NOT IN ('sent','denied','expired','deleted') ORDER BY created_at",
+              "SELECT id, status, source, title, current_version FROM salidas WHERE ticket_id = ? AND status NOT IN ('sent','denied','expired','deleted','withdrawn') ORDER BY created_at",
             )
             .all(t.id),
         ),

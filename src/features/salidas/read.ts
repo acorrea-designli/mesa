@@ -6,7 +6,7 @@ import { conversationLinks, destinationUrl, type DestinationConfig } from "./mod
 import type { HistoryEvent, SalidaView, SalidasData, TicketBrief } from "./types";
 
 const OPEN: SalidaStatus[] = ["pending", "scheduled", "queued_until_back", "sending", "draft_created", "failed"];
-const DECIDED: SalidaStatus[] = ["sent", "denied", "expired", "deleted"];
+const DECIDED: SalidaStatus[] = ["sent", "denied", "expired", "deleted", "withdrawn"];
 
 const clip = (s: string, n = 120) => {
   const one = s.replace(/\s+/g, " ").trim();
