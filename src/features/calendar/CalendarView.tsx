@@ -9,7 +9,7 @@ import { useState } from "react";
 import { BrokenLine } from "@/components/line/Line";
 import { Btn } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/interactive";
-import { clockOf, dayLabel } from "@/lib/domain/calendar";
+import { clockOf, dayLabel, type RepeatChoice } from "@/lib/domain/calendar";
 import { localDay } from "@/lib/domain/week";
 import { useLiveRefresh } from "@/lib/live/useLive";
 import { call } from "@/features/salidas/api";
@@ -208,14 +208,16 @@ function RequestPane({ requests }: { requests: MeetingRequest[] }) {
   const router = useRouter();
   const toast = useToast();
   const [text, setText] = useState("");
+  const [repeat, setRepeat] = useState<RepeatChoice | "">("");
   const [busy, setBusy] = useState(false);
   async function send() {
     const t = text.trim();
     if (t.length < 3 || busy) return;
     setBusy(true);
     try {
-      const d = await call<{ ref: string }>("/api/calendar/requests", { body: { text: t } });
+      const d = await call<{ ref: string }>("/api/calendar/requests", { body: { text: t, ...(repeat ? { repeat } : {}) } });
       setText("");
+      setRepeat("");
       toast({ text: `Pedido enviado a Claude · ${d.ref}` });
       router.refresh();
     } catch (err) {
@@ -243,6 +245,15 @@ function RequestPane({ requests }: { requests: MeetingRequest[] }) {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
           }}
         />
+        <label className="cal-rep">
+          <span>Repetir</span>
+          <select aria-label="Repetir" value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatChoice | "")}>
+            <option value="">No se repite</option>
+            <option value="weekly">Cada semana</option>
+            <option value="biweekly">Cada 2 semanas</option>
+            <option value="monthly">Cada mes</option>
+          </select>
+        </label>
         <div className="cal-bar">
           <span className="hint">Texto libre · Ctrl+Enter envía</span>
           <Btn variant="primary" size="sm" onClick={send} disabled={busy || text.trim().length < 3}>

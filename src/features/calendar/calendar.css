@@ -380,6 +380,30 @@
 .cal-box textarea::placeholder {
   color: var(--mute);
 }
+.cal-rep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.cal-rep select {
+  height: 28px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: var(--raise);
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
 .cal-bar {
   display: flex;
   align-items: center;
@@ -451,7 +475,7 @@
 }
 .cal-ev-dl {
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   gap: 6px 12px;
   margin-top: 10px;
   font-size: 15px;
@@ -468,6 +492,14 @@
 .cal-ev-dl dd {
   font-weight: 500;
   overflow-wrap: anywhere;
+}
+.cal-ev-rule {
+  display: block;
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--mute);
 }
 .cal-ev-bad {
   margin-top: 8px;

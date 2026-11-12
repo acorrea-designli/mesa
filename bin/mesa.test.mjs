@@ -372,6 +372,37 @@ describe("mesa CLI", () => {
     expect(requests[0].body.ticketId).toBe("t22");
   });
 
+  it("calendar propose --repeat writes the Repetir line after Meet and before Descripción, and lists in help", async () => {
+    expect((await mesa(["help"])).stdout).toMatch(/mesa calendar propose[\s\S]*--repeat "RRULE:FREQ=WEEKLY;BYDAY=WE"/);
+    handler = () => ({ status: 201, body: { id: "sa_1", status: "pending" } });
+    const rule = "RRULE:FREQ=WEEKLY;BYDAY=WE";
+    const r = await mesa([
+      "calendar", "propose", "--title", "DRE Weekly", "--start", "2026-11-18T16:00:00-05:00", "--end", "2026-11-18T16:30:00-05:00",
+      "--invitee", "matt.r@scoutapp.example", "--repeat", rule, "--description", "Weekly.",
+    ]);
+    expect(r.code).toBe(0);
+    expect(requests[0].body.body).toBe(
+      "Título: DRE Weekly\nInicio: 2026-11-18T16:00:00-05:00\nFin: 2026-11-18T16:30:00-05:00\nZona: America/Bogota\nInvitados: matt.r@scoutapp.example\nMeet: sí\nRepetir: RRULE:FREQ=WEEKLY;BYDAY=WE\nDescripción: Weekly.",
+    );
+    expect(requests[0].body.destination).toMatchObject({ kind: "calendar_event", recurrence: rule });
+  });
+
+  it("calendar propose without --repeat writes no Repetir line", async () => {
+    handler = () => ({ status: 201, body: { id: "sa_1", status: "pending" } });
+    const r = await mesa(["calendar", "propose", "--title", "T", "--start", "2026-11-18T16:00:00-05:00", "--end", "2026-11-18T16:30:00-05:00"]);
+    expect(r.code).toBe(0);
+    expect(requests[0].body.body).not.toContain("Repetir");
+    expect(requests[0].body.destination).not.toHaveProperty("recurrence");
+  });
+
+  it("calendar propose --repeat with an invalid rule comes back as the server's 400 and its Spanish problem", async () => {
+    handler = () => ({ status: 400, body: { error: { message: "calendar salida body: Repetir debe empezar por RRULE:, p. ej. RRULE:FREQ=WEEKLY;BYDAY=WE" } } });
+    const r = await mesa(["calendar", "propose", "--title", "T", "--start", "2026-11-18T16:00:00-05:00", "--end", "2026-11-18T16:30:00-05:00", "--repeat", "FREQ=WEEKLY"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/mesa: 400 calendar salida body: Repetir debe empezar por RRULE:/);
+    expect(requests[0].body.body).toContain("Repetir: FREQ=WEEKLY");
+  });
+
   it("help says a state-only finding upsert needs only {repo, pr, n, state}", async () => {
     expect((await mesa(["help"])).stdout).toMatch(/state-only upsert needs only \{repo, pr, n, state\}/);
   });

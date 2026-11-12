@@ -67,14 +67,22 @@ Fin: 2026-11-12T10:30:00-05:00
 Zona: America/Bogota
 Invitados: matt.r@scoutapp.example
 Meet: sí
+Repetir: RRULE:FREQ=WEEKLY;BYDAY=WE
 Descripción: optional free text, to the end
 ```
 
 Times are ISO with their offset (never a bare local time), `Invitados` is omitted when nobody is invited, `Meet` is
-`sí` or `no`. Use the CLI so the format is right:
+`sí` or `no`. `Repetir` is optional (after `Meet`, before `Descripción`) and makes the event a series: one exact
+RRULE string, uppercase, parts only FREQ (DAILY|WEEKLY|MONTHLY|YEARLY, required), INTERVAL, BYDAY, BYMONTHDAY,
+BYMONTH, COUNT or UNTIL (not both), WKST, each once, evaluated in the event's `Zona`; UNTIL is `YYYYMMDD` or
+`YYYYMMDDTHHMMSSZ` after the start, and a WEEKLY rule with BYDAY must include the start's weekday (otherwise Google
+adds an off-pattern first instance). Anything else is a 400 with the problem in Spanish. The card shows it in Spanish
+("Cada semana, los miércoles") with the raw rule under it. A request ticket from Calendario that ends with
+`Se repite: cada semana | cada 2 semanas | cada mes` asks for a series: pass `--repeat "RRULE:..."` (the start must
+fall on the BYDAY day). Use the CLI so the format is right:
 
 ```
-node G:/WorkSpace/designli/ops/bin/mesa calendar propose --title "Meet con Matt" --start 2026-11-12T10:00:00-05:00 --end 2026-11-12T10:30:00-05:00 --invitee matt.r@scoutapp.example --ticket <ref> --context "<what you checked>"
+node G:/WorkSpace/designli/ops/bin/mesa calendar propose --title "Meet con Matt" --start 2026-11-12T10:00:00-05:00 --end 2026-11-12T10:30:00-05:00 --invitee matt.r@scoutapp.example [--repeat "RRULE:FREQ=WEEKLY;BYDAY=TH"] --ticket <ref> --context "<what you checked>"
 ```
 
 Before proposing, check the slot against the stored events (`mesa calendar free --day <YYYY-MM-DD> --minutes <n>`) and

@@ -363,6 +363,8 @@ export type Destination =
       /** Invitee addresses at proposal time, for the chips; the body is the truth the guard compares. */
       invitees?: string[];
       meet?: boolean;
+      /** The RRULE of the body's `Repetir:` line, for the queue line; absent when the event does not repeat. */
+      recurrence?: string;
       postAs: string;
     };
 
