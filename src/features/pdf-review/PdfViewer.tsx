@@ -93,6 +93,17 @@ export function PdfViewer({ url, zoom, onScale, tool, readOnly, marks, order, se
 
   useEffect(() => onPages(pages.length), [pages.length, onPages]);
 
+  // A drag that ends outside the text layer it started in (another page, the panel) must still end the selection.
+  useEffect(() => {
+    const done = () => document.querySelectorAll(".pr-text.selecting").forEach((el) => el.classList.remove("selecting"));
+    document.addEventListener("pointerup", done);
+    document.addEventListener("pointercancel", done);
+    return () => {
+      document.removeEventListener("pointerup", done);
+      document.removeEventListener("pointercancel", done);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -132,13 +143,19 @@ export function PdfViewer({ url, zoom, onScale, tool, readOnly, marks, order, se
     for (const pageEl of box.querySelectorAll<HTMLElement>("[data-page]")) {
       const layer = pageEl.querySelector<HTMLElement>(".pr-text");
       if (!layer || !range.intersectsNode(layer)) continue;
+      // Only the text spans count: .pr-end (the box that keeps a selection from jumping) covers the whole page.
+      const texts = [...layer.children].filter((c) => !c.classList.contains("pr-end"));
+      const first = texts[0];
+      const last = texts.at(-1);
+      if (!first || !last) continue;
       const sub = range.cloneRange();
-      if (!layer.contains(range.startContainer)) sub.setStart(layer, 0);
-      if (!layer.contains(range.endContainer)) sub.setEnd(layer, layer.childNodes.length);
+      if (!layer.contains(range.startContainer) || range.startContainer === layer) sub.setStartBefore(first);
+      if (!layer.contains(range.endContainer) || range.endContainer === layer) sub.setEndAfter(last);
       const quote = sub.toString().replace(/\s+/g, " ").trim();
       if (!quote) continue;
       const at = pageEl.getBoundingClientRect();
-      const rects = mergeLineRects([...sub.getClientRects()].map((c) => ({ x: (c.left - at.left) / scale, y: (c.top - at.top) / scale, w: c.width / scale, h: c.height / scale })));
+      const lines = [...sub.getClientRects()].filter((c) => !(c.width >= at.width * 0.95 && c.height >= at.height * 0.5)); // never a whole-page box
+      const rects = mergeLineRects(lines.map((c) => ({ x: (c.left - at.left) / scale, y: (c.top - at.top) / scale, w: c.width / scale, h: c.height / scale })));
       if (rects.length) made.push({ page: Number(pageEl.dataset.page), kind: "highlight", geometry: { rects }, quote });
     }
     sel.removeAllRanges();
