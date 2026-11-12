@@ -22,12 +22,23 @@ export function isListening(s: Session, now = new Date()): boolean {
   return now.getTime() - Date.parse(s.lastSeenAt) < LISTENING_GRACE_MS;
 }
 
+/**
+ * The sweeper runs a tick or rotates instances outside /api/wait, so it is not "listening" in the 90 s
+ * sense most of the time. It counts as alive while it waits, or when it was seen within this grace.
+ */
+export const SWEEPER_GRACE_MS = 5 * 60_000;
+
+export function isSweeperAlive(s: Session, now = new Date()): boolean {
+  if (s.waitingSince) return true;
+  return now.getTime() - Date.parse(s.lastSeenAt) < SWEEPER_GRACE_MS;
+}
+
 export function sessionsRepo(db: Db) {
   const all = () => fromRows<Session>(db.prepare("SELECT * FROM sessions").all());
-  /** What the Fuentes rail shows of sessions: is any Claude session listening, and is the sweeper. */
+  /** What the Fuentes rail shows of sessions: is any Claude session listening, and is the sweeper alive. */
   const railKey = (now: Date) => {
     const list = all();
-    return `${list.some((s) => isListening(s, now))}|${list.some((s) => s.id === sweeperSession() && isListening(s, now))}`;
+    return `${list.some((s) => isListening(s, now))}|${list.some((s) => s.id === sweeperSession() && isSweeperAlive(s, now))}`;
   };
   /** Run a write; when it flips what the rail shows, tell the open screens (no wake event). */
   const publishOnFlip = <T>(now: Date, write: () => T): T => {

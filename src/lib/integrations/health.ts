@@ -4,13 +4,15 @@
 import { mapHealth, railHealth, type HealthContext, type SourceHealth } from "@/components/shell/health";
 import type { HealthSource } from "@/lib/domain/types";
 import { repos, sweeperSession, type Repos } from "@/lib/repo";
+import { isSweeperAlive } from "@/lib/repo/sessions";
 
 export type RailHealth = SourceHealth & { name: string };
 
 /** The clock and the sweeper's liveness that mapHealth needs to tell a stale "ok" from a current one. */
 export function healthContext(r: Repos = repos(), now = new Date()): HealthContext {
   const sweeper = r.sessions.find(sweeperSession());
-  return { now, sweeperListening: Boolean(sweeper && r.sessions.isListening(sweeper, now)) };
+  // The sweeper's grace is 5 min, not the 90 s of a Claude session (it ticks outside /api/wait).
+  return { now, sweeperListening: Boolean(sweeper && isSweeperAlive(sweeper, now)) };
 }
 
 /** Rail rows: empty while every source is ok (the calm rail stays quiet). */

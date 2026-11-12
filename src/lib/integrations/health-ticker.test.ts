@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
 import { subscribeChanges, type LiveChange } from "../live/bus";
 import { createRepos, type Repos } from "../repo";
-import { LISTENING_GRACE_MS } from "../repo/sessions";
+import { LISTENING_GRACE_MS, SWEEPER_GRACE_MS } from "../repo/sessions";
 import { getSourceHealth } from "./health";
 import { HealthWatcher } from "./health-ticker";
 
@@ -43,9 +43,30 @@ describe("getSourceHealth", () => {
     ]);
   });
 
-  it("goes stale when the sweeper's grace runs out", () => {
-    expect(getSourceHealth(r, new Date(T0.getTime() + LISTENING_GRACE_MS - 1))).toEqual([]);
-    expect(getSourceHealth(r, new Date(T0.getTime() + LISTENING_GRACE_MS)).map((x) => x.state)).toContain("degraded");
+  it("keeps the sweeper alive 2 to 4 minutes after its last sign of life, though it is not waiting", () => {
+    // beyond the 90 s of a Claude session: a tick or an instance rotation runs outside /api/wait
+    expect(LISTENING_GRACE_MS).toBeLessThan(2 * 60_000);
+    for (const min of [2, 3, 4]) expect(getSourceHealth(r, at(min))).toEqual([]);
+    // Claude's own row still uses its 90 s: nobody else is listening, so the block only shows if something is wrong
+    expect(r.sessions.isListening(r.sessions.get("sweeper"), at(2))).toBe(false);
+  });
+
+  it("goes stale when the sweeper's 5 minute grace runs out", () => {
+    expect(getSourceHealth(r, new Date(T0.getTime() + SWEEPER_GRACE_MS - 1))).toEqual([]);
+    const rows = getSourceHealth(r, new Date(T0.getTime() + SWEEPER_GRACE_MS));
+    expect(rows.map((x) => [x.name, x.state])).toEqual([
+      ["GitHub", "ok"],
+      ["Slack", "degraded"],
+      ["Basecamp", "degraded"],
+      ["Claude", "ok"],
+    ]);
+    expect(rows.find((x) => x.name === "Claude")?.note).toBe("sin sesión");
+  });
+
+  it("stays alive while the sweeper waits, however long ago it was seen", () => {
+    r.sessions.setWaiting("sweeper", true, T0);
+    for (const s of ["github", "slack", "basecamp"] as const) r.sources.set(s, { lastChecked: at(29).toISOString() }, at(29));
+    expect(getSourceHealth(r, at(30))).toEqual([]);
   });
 });
 
@@ -54,13 +75,14 @@ describe("HealthWatcher", () => {
     const w = new HealthWatcher(r);
     expect(w.check(at(0, 10))).toBe(false); // baseline: quiet rail
     expect(published()).toHaveLength(0);
-    // the sweeper's grace ends at 1:30: slack and basecamp turn stale with no write
-    expect(w.check(at(0, 40))).toBe(false);
-    expect(w.check(at(2))).toBe(true);
+    // the sweeper was last seen at T0 and has 5 minutes: quiet at 4:00
+    expect(w.check(at(4))).toBe(false);
+    // its grace ends at 5:00: slack and basecamp turn stale with no write
+    expect(w.check(at(5, 1))).toBe(true);
     expect(published()).toHaveLength(1);
     // nothing changed since: the following passes stay silent, even as the clock moves
-    expect(w.check(at(2, 30))).toBe(false);
-    expect(w.check(at(5))).toBe(false);
+    expect(w.check(at(5, 30))).toBe(false);
+    expect(w.check(at(8))).toBe(false);
     expect(published()).toHaveLength(1);
     // github crosses its 10 minute floor
     expect(w.check(at(11))).toBe(true);
@@ -70,7 +92,6 @@ describe("HealthWatcher", () => {
 
   it("publishes when a pause ends with no write", () => {
     r.sources.set("basecamp", { health: "degraded", note: "ENOTFOUND", backoffUntil: at(1).toISOString(), lastChecked: T0.toISOString() }, T0);
-    r.sessions.touch({ id: "sweeper" }, at(0, 50)); // keep the sweeper listening at 1:00
     const w = new HealthWatcher(r);
     expect(w.check(at(0, 55))).toBe(false); // baseline: "pausa" shown
     expect(getSourceHealth(r, at(0, 55)).find((x) => x.name === "Basecamp")?.note).toMatch(/^pausa /);
@@ -82,18 +103,20 @@ describe("HealthWatcher", () => {
 
 describe("sessions flipping what the rail shows", () => {
   it("publishes when a session starts listening, not on every heartbeat", () => {
-    r.sessions.touch({ id: "lead" }, at(5)); // new session: nobody else listening beyond the sweeper's expired grace
+    r.sessions.touch({ id: "lead" }, at(6)); // new session: nobody else is listening (the sweeper's 90 s are long gone)
     const first = published().length;
     expect(first).toBeGreaterThan(0);
-    r.sessions.touch({ id: "lead" }, at(5, 20)); // heartbeat, still listening
-    r.sessions.setWaiting("lead", true, at(5, 30));
+    r.sessions.touch({ id: "lead" }, at(6, 20)); // heartbeat, still listening
+    r.sessions.setWaiting("lead", true, at(6, 30));
     expect(published()).toHaveLength(first);
   });
 
-  it("publishes when the sweeper starts listening again", () => {
-    r.sessions.touch({ id: "lead" }, at(5)); // lead listening; sweeper stale since 1:30
+  it("publishes when the sweeper comes back, and not when it only heartbeats inside its grace", () => {
+    r.sessions.touch({ id: "lead" }, at(6)); // lead listening; the sweeper has been gone since 5:00
     seen = [];
-    r.sessions.touch({ id: "sweeper" }, at(5, 10));
+    r.sessions.touch({ id: "sweeper" }, at(6, 10));
+    expect(published()).toHaveLength(1);
+    r.sessions.touch({ id: "sweeper" }, at(6, 40)); // heartbeat: nothing flips
     expect(published()).toHaveLength(1);
   });
 });
