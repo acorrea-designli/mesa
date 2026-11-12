@@ -22,8 +22,11 @@ test("merge keeps existing keys and adds every Mesa hook once", () => {
   assert.equal(settings.hooks.PreToolUse[0].hooks[0].command, "node other.mjs");
   assert.deepEqual(settings.permissions.deny, ["Bash(rm *)"]);
   assert.ok(settings.permissions.allow.includes("Bash(ls)"));
-  for (const e of ["PermissionRequest", "Stop", "SubagentStop"]) assert.equal(settings.hooks[e].length, 1);
+  for (const e of ["PermissionRequest", "PermissionDenied", "Stop", "SubagentStop"]) assert.equal(settings.hooks[e].length, 1);
   assert.equal(settings.hooks.PermissionRequest[0].hooks[0].timeout, 600);
+  assert.match(settings.hooks.PermissionDenied[0].hooks[0].command, /scripts\/hooks\/mesa-denied\.mjs"$/);
+  assert.equal(settings.hooks.PermissionDenied[0].matcher, undefined); // every tool
+  assert.equal(settings.hooks.PermissionDenied[0].hooks[0].timeout, 150); // the hook waits 120 s for the card
   assert.ok(added.length > 5);
   const again = mergeSettings(settings, { hooks, env: ENV, allow: ALLOW });
   assert.deepEqual(again.added, []);
@@ -87,7 +90,7 @@ test("--env sandbox creates the folder, points every session at :8796 and tags t
   install({ target, node: "C:/node.exe", env: "sandbox", log: () => {} });
   const s = JSON.parse(readFileSync(join(target, ".claude", "settings.json"), "utf8"));
   assert.deepEqual(s.env, { MESA_URL: "http://127.0.0.1:8796", MESA_ENV: "sandbox", MESA_SESSION: "lead" });
-  for (const e of ["PreToolUse", "PermissionRequest", "Stop", "SubagentStop"]) assert.match(s.hooks[e][0].hooks[0].command, / --env sandbox$/);
+  for (const e of ["PreToolUse", "PermissionRequest", "PermissionDenied", "Stop", "SubagentStop"]) assert.match(s.hooks[e][0].hooks[0].command, / --env sandbox$/);
   assert.ok(lstatSync(join(target, ".claude", "skills", "mesa-start")).isSymbolicLink());
   assert.ok(existsSync(join(target, ".claude", "mesa", "spawn-preamble.md")));
 });

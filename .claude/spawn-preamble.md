@@ -44,7 +44,11 @@ no `&&`, no pipes), so it matches the allow rule.
    on your ticket (`ticket.permission_requested`, relayed as `ANSWER <ref> permission_requested <id>`): add the
    narrowest `permissions.ask` rule for the exact blocked call to `.claude/settings.local.json` (never an allow rule,
    never a broader pattern), retry that exact call once so the card appears, and remove the rule after his decision
-   unless he says to keep it (`mesa-ticket` skill, `docs/TEAM.md` § 6).
+   unless he says to keep it (`mesa-ticket` skill, `docs/TEAM.md` § 6). A call that auto mode itself denied
+   ("Bloqueado por el modo automático") files its own card in your ticket: Andrés presses "Permitir esta regla"
+   (Mesa adds a narrow `Edit(...)` rule for that worktree directory, you never write one) or "Denegar". When the
+   hook tells you to retry, retry the exact call once; on a deny or no answer, stop and never work around it
+   (`docs/TEAM.md` § 6.7).
 10. **Git.** Work only in your own worktree under `G:/WorkSpace/designli-wt/<your-name>`, created from `origin/<base>`;
     never edit or switch branches in a repo's main checkout. Stage explicit paths. Commits are one line,
     `type(scope): subject`, lowercase, imperative, no trailing period, at most 72 characters, a single `-m`, no body,
