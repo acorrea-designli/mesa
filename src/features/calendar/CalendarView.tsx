@@ -14,7 +14,7 @@ import { localDay } from "@/lib/domain/week";
 import { useLiveRefresh } from "@/lib/live/useLive";
 import { call } from "@/features/salidas/api";
 import { MeetIcon, NextStrip, PeopleIcon, useNow } from "./NextStrip";
-import { agendaRows, calendarHref, healthPill, stations, type AgendaRow, type Station } from "./model";
+import { agendaRows, calendarHref, healthPill, outsideNote, stations, weekNav, type AgendaRow, type Station, type WeekNav } from "./model";
 import type { CalendarPageData, MeetingRequest } from "./read";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -23,7 +23,7 @@ export function CalendarView({ data }: { data: CalendarPageData }) {
   const { payload, day, view } = data;
   useLiveRefresh({ entityTypes: ["calendar", "source", "ticket", "salida"] });
   const now = useNow(payload.now);
-  const connected = payload.configured || payload.events.length > 0;
+  const connected = payload.configured || data.hasStored;
   const pill = healthPill(payload, now);
   const sample = payload.events.some((e) => e.isSample);
   return (
@@ -46,6 +46,7 @@ export function CalendarView({ data }: { data: CalendarPageData }) {
         {connected ? (
           <>
             <NextStrip next={payload.next} nowIso={payload.now} />
+            <WeekSwitch nav={weekNav(day, view, localDay(now))} />
             <WeekBand stations={stations(payload.events, day, now)} view={view} />
             <div className="tabs cal-tabs" role="tablist" aria-label="Vista">
               <Link role="tab" aria-selected={view === "hoy"} className={cx("tab", view === "hoy" && "on")} href={calendarHref(day, "hoy")}>
@@ -119,6 +120,33 @@ function NotConnected({ sandbox }: { sandbox: boolean }) {
   );
 }
 
+/** Previous week, back to today, next week: plain links, so the keyboard and the browser's history work as they are. */
+function WeekSwitch({ nav }: { nav: WeekNav }) {
+  return (
+    <nav className="cal-weeknav" aria-label="Cambiar de semana">
+      <p className="cal-weeklabel">
+        <b>{nav.label}</b>
+        <span>{nav.current ? "Esta semana" : "Otra semana"}</span>
+      </p>
+      <div className="cal-weekbtns">
+        <Link className="btn sm cal-wk-prev" href={nav.prevHref} scroll={false}>
+          <span aria-hidden="true">←</span>
+          Semana anterior
+        </Link>
+        {nav.thisHref ? (
+          <Link className="btn sm cal-wk-this" href={nav.thisHref} scroll={false}>
+            Esta semana
+          </Link>
+        ) : null}
+        <Link className="btn sm cal-wk-next" href={nav.nextHref} scroll={false}>
+          Semana siguiente
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
+    </nav>
+  );
+}
+
 function WeekBand({ stations: st, view }: { stations: Station[]; view: "hoy" | "semana" }) {
   const n = st.length;
   const sel = Math.max(0, st.findIndex((s) => s.selected));
@@ -142,6 +170,7 @@ function Agenda({ data, now }: { data: CalendarPageData; now: Date }) {
   const { payload, day, view } = data;
   const days = view === "semana" ? stations(payload.events, day, now).map((s) => s.ymd) : [day];
   const empty = days.every((d) => agendaRows(payload.events, d, now).length === 0);
+  const outside = outsideNote(day, view, localDay(now));
   return (
     <div className="cal-agenda">
       <div className="cal-cols" aria-hidden="true">
@@ -150,7 +179,15 @@ function Agenda({ data, now }: { data: CalendarPageData; now: Date }) {
         <span>Personas</span>
         <span />
       </div>
-      {empty ? <p className="cal-empty">{view === "semana" ? "No hay reuniones esta semana." : "No tienes reuniones este día."} Si quieres agendar algo, pídeselo a Claude con tus palabras.</p> : null}
+      {outside ? (
+        <p className="cal-outside" role="note">
+          {outside.text}{" "}
+          <a href={outside.href} target="_blank" rel="noopener noreferrer">
+            {outside.linkText}
+          </a>
+        </p>
+      ) : null}
+      {empty && !outside?.whole ? <p className="cal-empty">{view === "semana" ? "No hay reuniones esta semana." : "No tienes reuniones este día."} Si quieres agendar algo, pídeselo a Claude con tus palabras.</p> : null}
       {days.map((d) => {
         const rows = agendaRows(payload.events, d, now);
         if (!rows.length) return null;
@@ -197,6 +234,10 @@ function Row({ r }: { r: AgendaRow }) {
         ) : (
           <span className="cal-done">—</span>
         )}
+        <a className="cal-open" href={r.openUrl} target="_blank" rel="noopener noreferrer" aria-label={`Abrir en Google: ${e.title}`}>
+          Abrir en Google
+          <span aria-hidden="true">↗</span>
+        </a>
       </span>
     </div>
   );

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { CalendarEvent } from "@/lib/domain/types";
-import { agendaRows, calendarHref, healthPill, stations, stripModel } from "./model";
+import { agendaRows, calendarHref, healthPill, outsideNote, stations, stripModel, weekLabel, weekNav } from "./model";
 
 let n = 0;
 const ev = (start: string, end: string, o: Partial<CalendarEvent> = {}): CalendarEvent => ({
   id: `ce_${++n}`,
   uid: `u${n}`,
+  occurrenceKey: new Date(start).toISOString(),
   title: `Reunión ${n}`,
   startsAt: new Date(start).toISOString(),
   endsAt: new Date(end).toISOString(),
@@ -115,5 +116,63 @@ describe("calendarHref", () => {
     expect(calendarHref("2026-11-12")).toBe("/calendario?dia=2026-11-12");
     expect(calendarHref("2026-11-12", "semana")).toBe("/calendario?dia=2026-11-12&vista=semana");
     expect(calendarHref(null, "semana")).toBe("/calendario?vista=semana");
+  });
+});
+
+describe("weekNav and weekLabel (t127)", () => {
+  it("moves seven days and keeps the view", () => {
+    const n = weekNav("2026-11-11", "semana", "2026-11-11");
+    expect(n).toMatchObject({ monday: "2026-11-09", label: "9–15 nov", current: true, thisHref: null });
+    expect(n.prevHref).toBe("/calendario?dia=2026-11-04&vista=semana");
+    expect(n.nextHref).toBe("/calendario?dia=2026-11-18&vista=semana");
+    expect(weekNav("2026-11-11", "hoy", "2026-11-11").nextHref).toBe("/calendario?dia=2026-11-18");
+  });
+
+  it("goes back to today without a day, and says it is another week", () => {
+    const n = weekNav("2026-10-05", "semana", "2026-11-11");
+    expect(n).toMatchObject({ monday: "2026-10-05", label: "5–11 oct", current: false, thisHref: "/calendario?vista=semana" });
+    expect(weekNav("2026-10-05", "hoy", "2026-11-11").thisHref).toBe("/calendario");
+    // another day of the current week: the button is there to go back to today
+    expect(weekNav("2026-11-13", "hoy", "2026-11-11").thisHref).toBe("/calendario");
+  });
+
+  it("crosses the year in both directions", () => {
+    expect(weekNav("2026-12-29", "semana", "2026-12-29").nextHref).toBe("/calendario?dia=2027-01-05&vista=semana");
+    expect(weekNav("2027-01-02", "semana", "2027-01-02").prevHref).toBe("/calendario?dia=2026-12-26&vista=semana");
+  });
+
+  it("labels a week that spans months or years, and one from another year", () => {
+    expect(weekLabel("2026-09-28", "2026-11-11")).toBe("28 sep–4 oct");
+    expect(weekLabel("2026-12-28", "2026-11-11")).toBe("28 dic 2026–3 ene 2027");
+    expect(weekLabel("2025-03-03", "2026-11-11")).toBe("3–9 mar 2025");
+  });
+});
+
+describe("outsideNote (t127)", () => {
+  const today = "2026-11-12";
+  it("is null for a week or a day the poller keeps", () => {
+    expect(outsideNote("2026-11-12", "semana", today)).toBeNull();
+    expect(outsideNote("2026-08-13", "hoy", today)).toBeNull();
+  });
+  it("explains a week outside and links the same week in Google Calendar", () => {
+    const n = outsideNote("2026-05-06", "semana", today)!;
+    expect(n.whole).toBe(true);
+    expect(n.text).toContain("13 semanas atrás y 26 adelante");
+    expect(n.href).toBe("https://calendar.google.com/calendar/r/week/2026/5/4");
+  });
+  it("links the day in the day view, and a half-stored week says only part is missing", () => {
+    expect(outsideNote("2027-06-01", "hoy", today)!.href).toBe("https://calendar.google.com/calendar/r/day/2027/6/1");
+    const p = outsideNote("2026-08-12", "semana", today)!;
+    expect(p.whole).toBe(false);
+    expect(p.text).toMatch(/^Parte de esta semana/);
+  });
+});
+
+describe("the row's Abrir en Google link (t127)", () => {
+  it("uses the event's own link, else its day", () => {
+    const own = ev(at("09:00"), at("09:30"), { googleUrl: "https://www.google.com/calendar/event?eid=abc" });
+    expect(agendaRows([own], "2026-11-11", NOW)[0]!.openUrl).toBe("https://www.google.com/calendar/event?eid=abc");
+    const bare = ev(at("10:00"), at("10:30"));
+    expect(agendaRows([bare], "2026-11-11", NOW)[0]!.openUrl).toBe("https://calendar.google.com/calendar/r/day/2026/11/11");
   });
 });
