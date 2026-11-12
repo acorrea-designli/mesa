@@ -20,6 +20,7 @@ import {
   type TicketMessage,
 } from "../domain/types";
 import { questionText } from "../domain/ticket-questions";
+import { annotationsRepo } from "./annotations";
 import { ticketsRepo } from "./tickets";
 
 const BRIEF_SPEC = { json: ["decisions", "open_questions"] };
@@ -50,6 +51,7 @@ export const DEFAULT_CONTEXT_MESSAGES = 20;
 
 export function agentsRepo(db: Db) {
   const tickets = ticketsRepo(db);
+  const annotations = annotationsRepo(db);
 
   const brief = (ticketId: string): Brief | null => {
     const row = db.prepare("SELECT * FROM ticket_briefs WHERE ticket_id = ?").get(ticketId);
@@ -252,6 +254,7 @@ export function agentsRepo(db: Db) {
             db.prepare("SELECT * FROM engram_links WHERE entity_type = 'ticket' AND entity_id = ? ORDER BY created_at").all(t.id),
           ),
         },
+        annotations: annotations.summary(t.id),
       };
     },
   };

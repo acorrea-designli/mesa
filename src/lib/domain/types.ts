@@ -510,6 +510,7 @@ export type WakeKind =
   | "ticket.reopened"
   | "ticket.resumed" // a paused/ongoing ticket came back to Claude: { ref, ticketRef, by: "andres"|"dependency", dependencyRef? }; the lead respawns the owner
   | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
+  | "ticket.annotations" // Andrés sent PDF marks to Claude ("Enviar a Claude (n)"): { ref, ticketRef, attachmentId, annotationIds, count }; read them with mesa ticket annotations, answer with mesa ticket annotation-reply
   | "ticket.pr_message" // a Slack message about the ticket's PR (repo/intake.ts): { ref, ticketRef, messageId, itemId, repo, pr, who, url, channelId, ts, threadTs }; the lead spawns or reuses writer-<ref>, who records a notice (mesa item pr-notice) or answers with a salida
   | "salida.turn" // Andrés asked for a change
   | "salida.released" // undo window over: send now. payload { version, status, mode, recheckThread }; mode (Slack only) "draft" = leave a Slack draft, "send" = send through the connector
@@ -714,6 +715,8 @@ export interface TicketContext {
   /** The PR reviews of this ticket, without findings (see `findings`): headSha = reviewed head, seenHead = newest head seen after a push. */
   reviews: Omit<Review, "findings">[];
   engram: { topicKey: string; project: string; links: EngramLink[] };
+  /** PDF review marks per attachment (only PDFs that have any); read them with `mesa ticket annotations`. */
+  annotations: AnnotationSummary[];
 }
 
 /** Engram topic key for a ticket: every ticket thread is saved under it. */
@@ -765,4 +768,58 @@ export interface CalendarPayload {
   events: CalendarEvent[];
   /** The next meeting (or the one in progress) as the "Próxima reunión" strip shows it. */
   next: CalendarEvent | null;
+}
+
+// ---------- PDF review (t125) ----------
+
+export type AnnotationKind = "highlight" | "note" | "rect" | "ellipse" | "arrow";
+export type AnnotationState = "open" | "resolved";
+
+/** Page units: the page's viewport at scale 1 (PDF points), origin top left, y down. Scale independent. */
+export interface PageRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+export type AnnotationGeometry =
+  | { rects: PageRect[] } // highlight
+  | { x: number; y: number } // note
+  | PageRect // rect, ellipse
+  | { x1: number; y1: number; x2: number; y2: number }; // arrow
+
+export interface AnnotationReply {
+  id: string;
+  annotationId: string;
+  author: Author;
+  body: string;
+  createdAt: string;
+}
+
+export interface Annotation {
+  id: string;
+  ticketId: string;
+  attachmentId: string;
+  page: number;
+  kind: AnnotationKind;
+  geometry: AnnotationGeometry;
+  /** Bounding box of the geometry in page units (a note is a zero-size box at its point). */
+  rect: PageRect;
+  quote: string;
+  body: string;
+  author: Author;
+  state: AnnotationState;
+  /** When it went to Claude in a ticket.annotations wake; null = not sent yet. */
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  replies: AnnotationReply[];
+}
+
+/** TicketContext.annotations: what Claude has to look at, per PDF. */
+export interface AnnotationSummary {
+  attachmentId: string;
+  filename: string;
+  open: number;
+  total: number;
 }
