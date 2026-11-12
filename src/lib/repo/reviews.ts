@@ -172,6 +172,7 @@ export function reviewsRepo(db: Db) {
                 status: t.status,
                 messages: t.messages,
                 questions: t.questions,
+                steps: t.checklists.flatMap((c) => c.steps),
                 actions: t.actions,
                 approvals: db.prepare("SELECT status, agent, expires_at AS expiresAt FROM approvals WHERE ticket_id = ? AND status = 'pending'").all(t.id) as { status: "pending"; agent: string; expiresAt: string }[],
                 reviews: repo.list({ ticket: t.id }),

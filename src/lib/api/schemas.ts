@@ -1,6 +1,7 @@
 // Request schemas for the REST API. The response types live in domain/types.ts.
 import { z } from "zod";
 import { SOURCES, STATIONS } from "../domain/types";
+import { checklistProblem, MAX_STEP_NOTE, MAX_STEPS } from "../domain/ticket-checklists";
 import { cardProblem, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS } from "../domain/ticket-questions";
 
 export const source = z.enum(SOURCES);
@@ -136,6 +137,22 @@ export const ticketMessage = z
     if (m.author === "claude" && (m.answers?.length || m.chosen)) ctx.addIssue({ code: "custom", message: "only Andrés answers questions", path: ["answers"] });
     checkCard(m, ctx);
   });
+
+/** A checklist (t124): an optional body (the context) and 1-30 steps, each with text and an optional Markdown detail. */
+export const ticketChecklist = z
+  .object({
+    body: z.string().optional(),
+    steps: z.array(z.object({ text: z.string(), detail: z.string().nullish() })).min(1).max(MAX_STEPS),
+    refs: z.array(refInput).optional(),
+    session: z.string().optional(),
+  })
+  .superRefine((m, ctx) => {
+    const problem = checklistProblem(m.steps);
+    if (problem) ctx.addIssue({ code: "custom", message: problem, path: ["steps"] });
+  });
+
+/** One step set either way (PUT /api/tickets/:id/steps/:step). `note` is Claude's one-line proof; Andrés's calls carry none. */
+export const stepSet = z.object({ done: z.boolean(), note: z.string().trim().max(MAX_STEP_NOTE).optional(), session: z.string().optional() });
 
 /** Claude withdraws an open question (mesa ticket question withdraw <tq id> --why W). */
 export const questionWithdraw = z.object({ reason: z.string().trim().min(1), session: z.string().optional() });

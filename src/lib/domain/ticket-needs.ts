@@ -3,10 +3,11 @@
 // The stored status drifts: a plan with needs_ok steps sets waiting_andres, but any later reply or claim
 // moves it to waiting_claude / working while the steps stay "planned". Salidas, permission approvals and
 // review cards never touched the status at all. So the list asks the facts. Pure: no IO, client safe.
+import { stepsOwed } from "./ticket-checklists";
 import { keysLine, openInOrder, recommendedLine } from "./ticket-questions";
-import type { Approval, PlannedAction, Review, Salida, TicketMessage, TicketQuestion, TicketStatus } from "./types";
+import type { Approval, PlannedAction, Review, Salida, TicketMessage, TicketQuestion, TicketStatus, TicketStep } from "./types";
 
-export type NeedKind = "permission" | "answer" | "plan" | "review" | "salida";
+export type NeedKind = "permission" | "answer" | "steps" | "plan" | "review" | "salida";
 
 export interface TicketNeed {
   kind: NeedKind;
@@ -17,11 +18,12 @@ export interface TicketNeed {
 }
 
 /** Priority order: the first need of a ticket is the one the list names. */
-export const NEED_ORDER: readonly NeedKind[] = ["permission", "answer", "plan", "review", "salida"];
+export const NEED_ORDER: readonly NeedKind[] = ["permission", "answer", "steps", "plan", "review", "salida"];
 
 export const NEED_LABEL: Record<NeedKind, string> = {
   permission: "Dar permiso",
   answer: "Responder",
+  steps: "Hacer pasos",
   plan: "Aprobar plan",
   review: "Decidir review",
   salida: "Firmar salida",
@@ -32,6 +34,8 @@ export interface TicketNeedsInput {
   messages: Pick<TicketMessage, "id" | "author" | "body">[];
   /** The ticket's card questions, any state: every open one counts. */
   questions: Pick<TicketQuestion, "messageId" | "n" | "options" | "recommended" | "state" | "createdAt">[];
+  /** The steps of the ticket's checklists (t124), any state: every open one is something he owes. */
+  steps: Pick<TicketStep, "state" | "messageId">[];
   actions: Pick<PlannedAction, "state" | "mode">[];
   /** The ticket's approvals, any status: only the pending ones that have not lapsed count. */
   approvals: Pick<Approval, "status" | "agent" | "expiresAt">[];
@@ -47,7 +51,7 @@ const clip = (s: string, n: number) => {
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
-/** The needs of one ticket, in priority order (permission, answer, plan, review, salida). None when closed. */
+/** The needs of one ticket, in priority order (permission, answer, steps, plan, review, salida). None when closed. */
 export function ticketNeeds(t: TicketNeedsInput, now: Date = new Date()): TicketNeed[] {
   if (t.status === "closed") return [];
   const out = new Map<NeedKind, TicketNeed>();
@@ -74,15 +78,19 @@ export function ticketNeeds(t: TicketNeedsInput, now: Date = new Date()): Ticket
     add("salida", `${salidas[0]!.title}${more ? ` y ${more} más` : ""}`);
   }
 
+  // Hacer pasos: the open steps of a checklist ("2 de 5 hechos", over the checklists that still have one open).
+  const owed = stepsOwed(t.steps);
+  if (owed.open) add("steps", `${owed.done} de ${owed.total} hechos`);
+
   // Responder: every open card question counts ("3 preguntas abiertas · Claude recomienda 1A 2C 3B"); or the
-  // status says it is his turn and neither the plan nor a review explains it (a question without options, an --ask).
+  // status says it is his turn and neither the plan, a review nor a checklist explains it (a question without options, an --ask).
   const open = openInOrder(t.questions, t.messages);
   if (open.length) {
     const rec = recommendedLine(open);
     const parts = open.length === 1 ? [`elige ${keysLine(open[0]!.options)}`] : [`${open.length} preguntas abiertas`];
     if (rec) parts.push(`Claude recomienda ${rec}`);
     add("answer", parts.join(" · "));
-  } else if (t.status === "waiting_andres" && !out.has("plan") && !out.has("review")) {
+  } else if (t.status === "waiting_andres" && !out.has("plan") && !out.has("review") && !out.has("steps")) {
     const last = [...t.messages].reverse().find((m) => m.author === "claude");
     add("answer", last?.body ? clip(last.body, 70) : "Claude espera tu respuesta");
   }

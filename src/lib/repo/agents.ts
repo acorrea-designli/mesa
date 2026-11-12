@@ -220,6 +220,7 @@ export function agentsRepo(db: Db) {
         messages: msgs,
         openQuestions: [...(b?.openQuestions ?? []), ...pendingChoice],
         questions,
+        checklists: tickets.checklists(t.id),
         team: repo.team({ ticket: t.id }),
         handoffs,
         latestHandoff: all[0] ?? null,

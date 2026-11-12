@@ -12,6 +12,7 @@ import {
 } from "../db/util";
 import { inferKind } from "../domain/dispatch-kind";
 import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
+import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, type StepInput } from "../domain/ticket-checklists";
 import { answersBody, cardProblem, optionLabel, parseShorthand, type QuestionInput } from "../domain/ticket-questions";
 import type {
   ActionMode,
@@ -24,6 +25,7 @@ import type {
   RefType,
   Source,
   Station,
+  StepBy,
   Ticket,
   TicketDetail,
   TicketDirection,
@@ -32,6 +34,7 @@ import type {
   TicketQuestion,
   TicketRef,
   TicketStatus,
+  TicketStep,
 } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { ensureSession } from "./sessions";
@@ -65,6 +68,8 @@ export interface MessageInput {
   questions?: QuestionInput[];
   /** Andrés answers open card questions: a pick, his own words, or both, for any subset. */
   answers?: QuestionAnswer[];
+  /** A checklist (Claude): 1-30 manual steps for Andrés on this message (t124). Not combined with a question card. */
+  steps?: StepInput[];
   /** One question as before: becomes a 1-step card (with `recommended` and `recommendation`). */
   options?: TicketOption[];
   recommended?: string;
@@ -197,9 +202,41 @@ export function ticketsRepo(db: Db) {
       Q_SPEC,
     );
 
+  const insertSteps = (ticketId: string, messageId: string, steps: StepInput[], ts: string) => {
+    steps.forEach((x, i) => {
+      const { sql, values } = insertSql("ticket_steps", {
+        id: newId("ck"),
+        ticketId,
+        messageId,
+        n: i + 1,
+        text: x.text.trim(),
+        detail: x.detail?.trim() || null,
+        state: "open",
+        createdAt: ts,
+      });
+      db.prepare(sql).run(...values);
+    });
+  };
+
+  const stepsOf = (ticketId: string): TicketStep[] =>
+    fromRows<TicketStep>(
+      db
+        .prepare(
+          `SELECT s.* FROM ticket_steps s JOIN ticket_messages m ON m.id = s.message_id
+            WHERE s.ticket_id = ? ORDER BY m.created_at, m.rowid, s.n`,
+        )
+        .all(ticketId),
+    );
+
   const insertMessage = (ticketId: string, m: MessageInput, ts: string): string => {
     const id = newId("tm");
     const card = cardInput(m);
+    if (m.steps) {
+      if (m.author !== "claude") throw new ValidationError("only Claude posts a checklist");
+      if (card) throw new ValidationError("a message is a question card or a checklist, not both");
+      const problem = checklistProblem(m.steps);
+      if (problem) throw new ValidationError(problem);
+    }
     if (card) {
       if (m.author !== "claude") throw new ValidationError("only Claude asks questions");
       const problem = cardProblem(card, { requireText: card.length > 1 });
@@ -226,6 +263,7 @@ export function ticketsRepo(db: Db) {
     db.prepare(sql).run(...values);
     insertRefs(ticketId, id, m.refs ?? [], ts);
     if (card) insertQuestions(ticketId, id, card, ts);
+    if (m.steps?.length) insertSteps(ticketId, id, m.steps, ts);
     return id;
   };
 
@@ -330,6 +368,7 @@ export function ticketsRepo(db: Db) {
           M_SPEC,
         ),
         questions: questionsOf(t.id),
+        checklists: groupChecklists(stepsOf(t.id)),
         attachments: fromRows<Attachment>(
           db.prepare("SELECT * FROM attachments WHERE ticket_id = ? ORDER BY created_at").all(t.id),
         ),
@@ -479,7 +518,7 @@ export function ticketsRepo(db: Db) {
           return { questionId: q.id, n: q.n, chosen: a.chosen ?? null, label: optionLabel(q, a.chosen) || null, text };
         });
         if (m.author === "andres") touchInteraction(db, now);
-        const ev: TicketEvent = m.author === "andres" ? { type: "andres_reply" } : { type: "claude_reply", asks: Boolean(m.ask || cardInput(m)) };
+        const ev: TicketEvent = m.author === "andres" ? { type: "andres_reply" } : { type: "claude_reply", asks: Boolean(m.ask || cardInput(m) || m.steps?.length) };
         // ticket.answered { ref, messageId, chosen, answers: [{ questionId, n, chosen, label, text }], openLeft }
         const payload: Record<string, unknown> = { messageId: msgId, chosen: m.chosen ?? null };
         if (m.author === "andres") {
@@ -487,6 +526,63 @@ export function ticketsRepo(db: Db) {
           payload.openLeft = (db.prepare("SELECT COUNT(*) AS n FROM ticket_questions WHERE ticket_id = ? AND state = 'open'").get(t.id) as { n: number }).n;
         }
         apply(t, ev, now, payload);
+        return this.detail(t.id);
+      });
+    },
+
+    /** Every checklist of a ticket (t124), oldest first, with its steps and done / total. */
+    checklists(id: string) {
+      return groupChecklists(stepsOf(get(id).id));
+    },
+
+    /**
+     * Sets one checklist step (t124): `done` true or false, by Andrés (the board, the phone) or by Claude (the CLI, with
+     * a one-line `note` of what it verified). `step` names it as findStep does (a step id, <message>.<n> or a bare n).
+     * 404 when the ticket does not have it, 400 when a bare n names steps of several checklists, 409 on a closed ticket.
+     * Idempotent: setting the state a step already has changes nothing (not even its owner or note) and wakes nobody.
+     * A real change by Andrés is his turn taken (andresActed, his interaction) and wakes the owner with
+     * ticket.checklist { ref, ticketRef, messageId, stepId, n, done, doneCount, total, allDone }; Claude's own marks
+     * never wake. Open steps stay in "Te espera" through ticketNeeds.
+     */
+    setStep(id: string, step: string, o: { done: boolean; by: StepBy; note?: string | null }, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        const found = findStep(stepsOf(t.id), step);
+        if ("error" in found) {
+          if (found.error === "ambiguous") throw new ValidationError(found.message);
+          throw new NotFoundError("step", step);
+        }
+        const cur = found.step;
+        if (t.status === "closed") throw new TransitionError("ticket is closed; reopen it first");
+        const target = o.done ? "done" : "open";
+        if (cur.state === target) return this.detail(t.id);
+        const note = o.by === "claude" && o.done ? o.note?.replace(/\s+/g, " ").trim().slice(0, MAX_STEP_NOTE) || null : null;
+        const ts = nowIso(now);
+        db.prepare("UPDATE ticket_steps SET state = ?, done_by = ?, done_at = ?, note = ? WHERE id = ?").run(
+          target,
+          o.done ? o.by : null,
+          o.done ? ts : null,
+          note,
+          cur.id,
+        );
+        db.prepare("UPDATE tickets SET updated_at = ? WHERE id = ?").run(ts, t.id);
+        if (o.by === "andres") {
+          touchInteraction(db, now);
+          this.andresActed(t.id, now);
+          const { done: doneCount, total } = stepCount(stepsOf(t.id).filter((x) => x.messageId === cur.messageId));
+          db.prepare("UPDATE tickets SET woke_at = ? WHERE id = ?").run(ts, t.id);
+          emitWake(
+            db,
+            {
+              sessionId: t.ownerSession,
+              kind: "ticket.checklist",
+              entityType: "ticket",
+              entityId: t.id,
+              payload: { ref: t.ref, ticketRef: t.ref, messageId: cur.messageId, stepId: cur.id, n: cur.n, done: o.done, doneCount, total, allDone: doneCount === total },
+            },
+            now,
+          );
+        }
         return this.detail(t.id);
       });
     },

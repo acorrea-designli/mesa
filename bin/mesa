@@ -34,6 +34,13 @@ Tickets
                   Each question stays open until Andrés answers it or you withdraw it (ticket.answered carries
                   answers [{questionId, n, chosen, label, text}] and openLeft)
   mesa ticket question withdraw <tq id> --why W  withdraw an open question (moot, or his words already answered it); 409 if not open
+  mesa ticket checklist <id|ref> --json -      a checklist of manual steps for Andrés: {body, steps:[{text, detail?}]} from stdin; 1-30
+                  steps, text one line (300), detail optional Markdown (4000, code fences get a copy button). It is a message of
+                  yours; the ticket goes to "Te espera" until every step is done ("Hacer pasos · 2 de 5"). Each tick or untick
+                  of Andrés wakes you with ticket.checklist {ref, ticketRef, messageId, stepId, n, done, doneCount, total, allDone}
+  mesa ticket check <id|ref> <step> [--undo] [--note "<one line>"]   mark a step you verified yourself ("verificado por Claude" + the
+                  note, no wake); --undo reopens it. <step> is a step id (ck_..), <message id>/<n>, or a bare n while only one of
+                  the ticket's checklists has it (else a 400 "ambiguous" names the options); "mesa ticket context" lists the steps
   mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
   mesa ticket claim <id|ref>      take an Andrés request and start work
   mesa ticket close <id|ref>
@@ -400,6 +407,31 @@ async function main() {
               body: typeof raw.body === "string" ? raw.body : undefined,
               questions,
               refs: Array.isArray(raw.refs) ? raw.refs.map((r) => ({ refType: "ticket", target: String(r) })) : undefined,
+              session,
+            }),
+          );
+        }
+        case "checklist": {
+          const raw = parseJsonOpt(text(opt.json, "--json"), "--json");
+          if (!raw || typeof raw !== "object" || !Array.isArray(raw.steps)) usage('--json wants {body, steps:[{text, detail?}]}');
+          const steps = raw.steps.map((x) => (typeof x === "string" ? { text: x } : { text: x?.text, detail: x?.detail }));
+          return out(
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/checklist`, {
+              body: typeof raw.body === "string" ? raw.body : undefined,
+              steps,
+              refs: Array.isArray(raw.refs) ? raw.refs.map((r) => ({ refType: "ticket", target: String(r) })) : undefined,
+              session,
+            }),
+          );
+        }
+        case "check": {
+          // "--undo 2" would swallow the step as the flag's value: read it back.
+          const step = String(need(pos[3] ?? (typeof opt.undo === "string" ? opt.undo : undefined), "<step>")).replace("/", ".");
+          if (opt.undo && opt.note !== undefined) usage("--note goes with a mark, not with --undo");
+          return out(
+            await call("PUT", `/api/tickets/${enc(need(id, "<id>"))}/steps/${enc(step)}`, {
+              done: !opt.undo,
+              note: opt.note === undefined ? undefined : text(opt.note, "--note"),
               session,
             }),
           );

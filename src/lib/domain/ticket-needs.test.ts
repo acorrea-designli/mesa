@@ -26,7 +26,7 @@ const q = (messageId: string, n: number, extra: Partial<Q> = {}): Q => ({
   createdAt: "2026-11-09T10:00:00.000Z",
   ...extra,
 });
-const input = (o: Partial<TicketNeedsInput> = {}): TicketNeedsInput => ({ status: "working", messages: [], questions: [], actions: [], approvals: [], reviews: [], salidas: [], ...o });
+const input = (o: Partial<TicketNeedsInput> = {}): TicketNeedsInput => ({ status: "working", messages: [], questions: [], steps: [], actions: [], approvals: [], reviews: [], salidas: [], ...o });
 const kinds = (o: Partial<TicketNeedsInput>) => ticketNeeds(input(o), NOW).map((n) => n.kind);
 
 describe("ticketNeeds", () => {
@@ -122,18 +122,49 @@ describe("ticketNeeds", () => {
     expect(kinds({ status: "waiting_andres", reviews: [{ state: "approved", findings: [] }] })).toEqual(["answer"]);
   });
 
-  it("orders permission > answer > plan > review > salida", () => {
+  it("orders permission > answer > steps > plan > review > salida", () => {
     expect(
       kinds({
         status: "waiting_andres",
         messages: [msg("q", "claude")],
         questions: [q("q", 1)],
+        steps: [{ state: "open", messageId: "c" }],
         actions: [{ state: "planned", mode: "needs_ok" }],
         approvals: [{ status: "pending", agent: "a", expiresAt: later }],
         reviews: [{ state: "open", findings: [] }],
         salidas: [{ status: "pending", title: "s" }],
       }),
-    ).toEqual(["permission", "answer", "plan", "review", "salida"]);
+    ).toEqual(["permission", "answer", "steps", "plan", "review", "salida"]);
+  });
+});
+
+describe("Hacer pasos (checklist steps, t124)", () => {
+  const st = (messageId: string, state: "open" | "done") => ({ messageId, state });
+
+  it("an open step is a need with its count, in every non-closed status", () => {
+    const steps = [st("c", "done"), st("c", "open"), st("c", "open"), st("c", "done"), st("c", "open")];
+    for (const status of ["waiting_andres", "waiting_claude", "working"] as const) {
+      expect(ticketNeeds(input({ status, steps }), NOW)).toEqual([{ kind: "steps", label: "Hacer pasos", detail: "2 de 5 hechos" }]);
+    }
+    expect(ticketNeeds(input({ status: "closed", steps }), NOW)).toEqual([]);
+  });
+
+  it("no open step, no need: a finished checklist owes nothing", () => {
+    expect(kinds({ steps: [st("c", "done"), st("c", "done")] })).toEqual([]);
+    expect(kinds({ steps: [] })).toEqual([]);
+  });
+
+  it("counts only the checklists that still have an open step", () => {
+    expect(ticketNeeds(input({ steps: [st("a", "done"), st("a", "done"), st("b", "done"), st("b", "open")] }), NOW)[0]?.detail).toBe("1 de 2 hechos");
+  });
+
+  it("explains a waiting_andres ticket by itself: no generic Responder line next to it", () => {
+    expect(kinds({ status: "waiting_andres", messages: [msg("c", "claude")], steps: [st("c", "open")] })).toEqual(["steps"]);
+  });
+
+  it("leads below an open question and above the plan", () => {
+    const needs = ticketNeeds(input({ steps: [st("c", "open")], actions: [{ state: "planned", mode: "needs_ok" }] }), NOW);
+    expect(needLine(needs)).toEqual({ lead: "Hacer pasos", rest: " · 0 de 1 hechos · también Aprobar plan" });
   });
 });
 

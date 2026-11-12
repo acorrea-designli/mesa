@@ -63,6 +63,36 @@ open. His answer arrives as `ticket.answered { messageId, answers: [{questionId,
 the lead relays `ANSWER <ref> <message id>` with the answers inline to the owner, who reads the rest with
 `MESA ticket context <ref>` (its `questions` list every question with its state).
 
+## Checklists (manual steps for Andrés)
+
+When you need him to do several manual things (paste a URL in `.env.local`, restart something, authorize a connector
+with `/mcp`), post ONE checklist instead of a long message: `ticket checklist` (up to 30 steps, each with a one-line
+`text` and an optional `detail` in Markdown; a fenced block or `inline code` in the detail gets a copy button). It is
+not a question card: it does not count against "one open card per ticket", and nothing else changes while it waits.
+
+```
+node G:/WorkSpace/designli/ops/bin/mesa ticket checklist t112 --json - <<'EOF'
+{"body": "Para conectar el calendario faltan dos cosas tuyas.",
+ "steps": [
+  {"text": "Pega la URL iCal en .env.local", "detail": "Google Calendar, tu calendario, dirección secreta en formato iCal.\n\n```\nMESA_ICS_URL=...\n```"},
+  {"text": "Autoriza el conector de Google con /mcp"}
+ ]}
+EOF
+```
+
+- He ticks (and unticks) on the board or the phone. Each tick wakes you with `ticket.checklist { ref, ticketRef,
+  messageId, stepId, n, done, doneCount, total, allDone }` (the lead relays `ANSWER <ref> checklist <n> done|open
+  <doneCount>/<total>`); `allDone` is your cue to continue. Read the states with `MESA ticket context <ref>`: its
+  `checklists` list every step with `state`, `doneBy` and `note`. Open steps keep the ticket in "Te espera" ("Hacer
+  pasos · 2 de 5 hechos").
+- Mark a step yourself only when you verified it: `MESA ticket check <ref> <n> --note "Mesa dice configured:true"`
+  (`<n>` is the step number while the ticket has one checklist; with several use `<message id>/<n>` or the step id,
+  `ck_…`, from the context). The note is one line of proof; the card shows "Verificado por Claude" with it and you wake
+  nobody. Never mark a step he has to do, and never tick one you only assume. `--undo` reopens a step; he can untick
+  yours too.
+- Steps cannot be edited or reordered after posting. A step that became moot stays open: say so in a reply (`FYI:`),
+  he can tick it to clear it from "Te espera".
+
 ## "Pídeme permiso" (a blocked call)
 
 When a call of yours is blocked and Andrés presses **Pídeme permiso** on the ticket, his message "Pídeme permiso"
