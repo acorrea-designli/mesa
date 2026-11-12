@@ -3,7 +3,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { GET as GET_APPROVAL } from "@/app/api/approvals/[id]/route";
 import { POST as APPROVE } from "@/app/api/approvals/[id]/approve/route";
 import { POST as DENY } from "@/app/api/approvals/[id]/deny/route";
 import { POST as READ_CONFIG } from "@/app/api/approvals/[id]/read-config/route";
@@ -175,5 +177,43 @@ describe("Denegar and the other buttons", () => {
     const p = r.approvals.create({ ticketRef: ref, agent: "dev-t1", tool: "Bash", summary: "git status" });
     expect((await APPROVE(req({}), ctx({ id: p.id }))).status).toBe(200);
     expect(written()).toBeNull();
+  });
+});
+
+// The hook against the real routes and repositories: it files the card, Andrés presses a button, the server writes the rule.
+describe("the denial hook end to end", () => {
+  const HOOK = path.join(process.cwd(), "scripts/hooks/mesa-denied.mjs");
+  const dispatch = async (url: string | URL, init?: RequestInit): Promise<Response> => {
+    const u = new URL(String(url));
+    const rq = new Request(u, init);
+    const m = /^\/api\/approvals\/([^/]+)$/.exec(u.pathname);
+    if (u.pathname === "/api/approvals") return POST_APPROVALS(rq, ctx());
+    if (m) return GET_APPROVAL(rq, ctx({ id: m[1]! }));
+    throw new TypeError("fetch failed");
+  };
+  const input = { tool_name: "Edit", tool_input: { file_path: FILE, old_string: "a", new_string: "b" }, reason: "[Self-Modification]", cwd: "x", transcript_path: "t.jsonl", session_id: "s" };
+  const run = async (press: (id: string) => Promise<unknown>) => {
+    const { denied } = (await import(/* @vite-ignore */ pathToFileURL(HOOK).href)) as { denied: (i: unknown, o: unknown) => Promise<unknown> };
+    const out = denied(input, { fetchImpl: dispatch, timeoutMs: 3000, pollMs: 20, waitSec: 1, env: { MESA_AGENT: `dev-${ref}` } });
+    for (let i = 0; i < 100 && !r.approvals.list({ status: "pending" }).length; i++) await new Promise((ok) => setTimeout(ok, 20));
+    const card = r.approvals.list({ status: "pending" })[0]!;
+    await press(card.id);
+    return { out: await out, card };
+  };
+
+  it("Permitir esta regla: the card names the rule, the server writes it, the hook says retry", async () => {
+    const { out, card } = await run((id) => APPROVE(req({}), ctx({ id })));
+    expect(card).toMatchObject({ kind: "denied", ticketRef: ref, agent: `dev-${ref}`, reason: "[Self-Modification]", rule: RULE });
+    expect(out).toEqual({ hookSpecificOutput: { hookEventName: "PermissionDenied", retry: true } });
+    expect(written()).toEqual([RULE]);
+  });
+  it("Denegar: no retry and no rule", async () => {
+    const { out } = await run((id) => DENY(req({ note: "no" }), ctx({ id })));
+    expect(out).toBeNull();
+    expect(written()).toBeNull();
+  });
+  it("an allow made outside the UI routes does not retry", async () => {
+    const { out } = await run(async (id) => r.approvals.decide(id, { decision: "allow", actor: "dev-t12" }, new Date(), { writeRule: () => undefined }));
+    expect(out).toBeNull();
   });
 });
