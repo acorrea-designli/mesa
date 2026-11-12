@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/components/ui/interactive";
 import { useArrive, usePress } from "@/lib/motion";
-import { IcBack, IcEngram, IcPlus } from "@/features/salidas/icons";
+import { IcBack, IcCheck, IcEngram, IcPlus } from "@/features/salidas/icons";
 import { useLiveRefresh } from "@/features/salidas/live";
 import { needLine } from "@/lib/domain/ticket-needs";
 import { ticketApi } from "./api";
+import { StatusTag } from "@/components/ui/primitives";
+import type { PdfDocument } from "@/lib/domain/types";
 import { Dir, hm, LivePill, statusLabel, TicketStatus } from "./bits";
 import { ComposerBox, useComposer, type SlashAction } from "./Composer";
 import type { TicketRow, TicketsData } from "./read";
@@ -30,7 +32,8 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
   const sel = data.selected?.ticket;
   const listRef = useArrive<HTMLDivElement>(".tk-row", data.tab);
   const pressRef = usePress<HTMLElement>(".btn, .tab");
-  const open = explicit || data.creating;
+  const docs = data.tab === "docs" && !data.creating; // Documentos has no thread pane: each row opens the review view
+  const open = !docs && (explicit || data.creating);
 
   // Landing view (no ?t=): settle on the ticket shown by putting it in the URL (?p=), so a live
   // refresh after a new ticket or message keeps it instead of falling back to the first row.
@@ -101,7 +104,7 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
   }, [rail]);
 
   return (
-    <div className="tk-app" data-open={open ? "1" : undefined} data-rail={rail ? "1" : undefined}>
+    <div className="tk-app" data-open={open ? "1" : undefined} data-rail={rail ? "1" : undefined} data-docs={docs ? "1" : undefined}>
       <main
         className="tk-main"
         ref={(el) => {
@@ -144,6 +147,9 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
               <Link role="tab" className="tab" aria-selected={data.tab === "closed"} href={href({ tab: "closed" })}>
                 Cerrados hoy {data.counts.closedToday}
               </Link>
+              <Link role="tab" className="tab" aria-selected={data.tab === "docs"} href={href({ tab: "docs" })}>
+                Documentos {data.counts.docs}
+              </Link>
             </div>
             <div className="tk-acts">
               {data.unreadCount > 0 ? (
@@ -151,52 +157,58 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
                   Marcar todo como leído
                 </button>
               ) : null}
-              <Link ref={newRef} className="btn sm tk-new" href={href({ tab, new: "1" })}>
+              <Link ref={newRef} className="btn sm tk-new" href={href({ tab: tab === "docs" ? undefined : tab, new: "1" })}>
                 <IcPlus />
                 Nuevo pedido para Claude
               </Link>
             </div>
           </div>
-          <div className="tk-cols" aria-hidden="true">
-            <span>ID</span>
-            <span>Dirección</span>
-            <span>Asunto</span>
-            <span>Hora</span>
-            <span>Estado</span>
-          </div>
-          <div ref={listRef} role="list">
-            {data.rows.length ? (
-              data.rows.map((t) => <Row key={t.id} t={t} sel={!data.creating && sel?.id === t.id} tab={tab} />)
-            ) : (
-              <div className="tk-blank">
-                <svg width="180" height="56" viewBox="0 0 180 56" aria-hidden="true">
-                  <path d="M6 20H66l12 12h18" fill="none" stroke="var(--cl)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
-                  <path d="M174 44H114l-12-12H90" fill="none" stroke="var(--ink)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
-                  <circle cx="90" cy="32" r="10" fill="var(--raise)" stroke="var(--ink)" strokeWidth="3" />
-                </svg>
-                <h2>{data.tab === "closed" ? "Nada cerrado hoy" : data.tab === "paused" ? "Nada en pausa ni en proceso" : "Nada pendiente entre tú y Claude"}</h2>
-                <p>Cuando Claude necesite una decisión aparece aquí. Tú también puedes pedirle algo.</p>
-                <Link className="btn p" href={href({ tab, new: "1" })}>
-                  <IcPlus />
-                  Nuevo pedido para Claude
-                </Link>
+          {docs ? (
+            <Documents docs={data.docs} />
+          ) : (
+            <>
+              <div className="tk-cols" aria-hidden="true">
+                <span>ID</span>
+                <span>Dirección</span>
+                <span>Asunto</span>
+                <span>Hora</span>
+                <span>Estado</span>
               </div>
-            )}
-            {data.closedToday.length ? (
-              <>
-                <div className="grp">Cerrados hoy</div>
-                {data.closedToday.map((t) => (
-                  <Row key={t.id} t={t} sel={!data.creating && sel?.id === t.id} tab={tab} />
-                ))}
-              </>
-            ) : null}
-          </div>
-          {data.rows.some((r) => r.isSample) ? <div className="sample">Datos de muestra.</div> : null}
+              <div ref={listRef} role="list">
+                {data.rows.length ? (
+                  data.rows.map((t) => <Row key={t.id} t={t} sel={!data.creating && sel?.id === t.id} tab={tab} />)
+                ) : (
+                  <div className="tk-blank">
+                    <svg width="180" height="56" viewBox="0 0 180 56" aria-hidden="true">
+                      <path d="M6 20H66l12 12h18" fill="none" stroke="var(--cl)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
+                      <path d="M174 44H114l-12-12H90" fill="none" stroke="var(--ink)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
+                      <circle cx="90" cy="32" r="10" fill="var(--raise)" stroke="var(--ink)" strokeWidth="3" />
+                    </svg>
+                    <h2>{data.tab === "closed" ? "Nada cerrado hoy" : data.tab === "paused" ? "Nada en pausa ni en proceso" : "Nada pendiente entre tú y Claude"}</h2>
+                    <p>Cuando Claude necesite una decisión aparece aquí. Tú también puedes pedirle algo.</p>
+                    <Link className="btn p" href={href({ tab, new: "1" })}>
+                      <IcPlus />
+                      Nuevo pedido para Claude
+                    </Link>
+                  </div>
+                )}
+                {data.closedToday.length ? (
+                  <>
+                    <div className="grp">Cerrados hoy</div>
+                    {data.closedToday.map((t) => (
+                      <Row key={t.id} t={t} sel={!data.creating && sel?.id === t.id} tab={tab} />
+                    ))}
+                  </>
+                ) : null}
+              </div>
+            </>
+          )}
+          {(docs ? data.docs.some((d) => d.isSample) : data.rows.some((r) => r.isSample)) ? <div className="sample">Datos de muestra.</div> : null}
         </div>
       </main>
       {data.creating ? (
         <NewRequest data={data} tab={tab} />
-      ) : data.selected ? (
+      ) : docs ? null : data.selected ? (
         <Thread key={data.selected.ticket.id} data={data.selected} listening={data.listening.listening} pick={data.pick} verbs={data.verbs} onChanged={refresh} focusMode={rail} onToggleFocus={toggleFocus} />
       ) : (
         <aside className="tk-pane tk-empty">
@@ -204,6 +216,66 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
         </aside>
       )}
     </div>
+  );
+}
+
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString("es", { day: "numeric", month: "short" }).replace(".", "");
+
+/** Tickets · Documentos (t135): one row per PDF of every ticket, newest first. A row opens the review view and "Volver" comes back here. */
+function Documents({ docs }: { docs: PdfDocument[] }) {
+  const listRef = useArrive<HTMLDivElement>(".tk-doc", docs.length);
+  if (!docs.length)
+    return (
+      <div className="tk-blank">
+        <svg width="180" height="56" viewBox="0 0 180 56" aria-hidden="true">
+          <path d="M6 20H66l12 12h18" fill="none" stroke="var(--cl)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
+          <path d="M174 44H114l-12-12H90" fill="none" stroke="var(--ink)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
+          <circle cx="90" cy="32" r="10" fill="var(--raise)" stroke="var(--ink)" strokeWidth="3" />
+        </svg>
+        <h2>Aún no hay PDF</h2>
+        <p>Cuando un ticket tenga un PDF adjunto aparece aquí, con tus notas, para que vuelvas a revisarlo cuando quieras.</p>
+      </div>
+    );
+  return (
+    <>
+      <div className="tk-doccols" aria-hidden="true">
+        <span>Documento</span>
+        <span>Notas</span>
+        <span>Estado</span>
+        <span>Fecha</span>
+      </div>
+      <div ref={listRef} role="list">
+        {docs.map((d) => (
+          <Link key={d.attachmentId} role="listitem" className={["tk-doc", d.ticketStatus === "closed" && "closed"].filter(Boolean).join(" ")} href={`/tickets/${encodeURIComponent(d.ticketRef)}/pdf/${encodeURIComponent(d.attachmentId)}?from=docs`}>
+            <span className="subj">
+              {d.filename}
+              <small>
+                <b>{d.ticketRef}</b> · {d.ticketTitle}
+              </small>
+            </span>
+            <span className="notes" aria-label={d.total ? `${d.open} abiertas de ${d.total} notas` : "Sin notas"}>
+              {d.total ? (
+                <>
+                  <b>{d.open}</b>/{d.total} <small>notas</small>
+                </>
+              ) : (
+                <small>Sin notas</small>
+              )}
+            </span>
+            <span className="tk-docst">
+              {d.reviewedAt ? (
+                <StatusTag tone="plain" icon={<IcCheck width={12} height={12} />}>
+                  Terminado
+                </StatusTag>
+              ) : (
+                <StatusTag tone="off">Pendiente</StatusTag>
+              )}
+            </span>
+            <span className="t">{shortDate(d.createdAt)}</span>
+          </Link>
+        ))}
+      </div>
+    </>
   );
 }
 

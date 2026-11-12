@@ -4,9 +4,9 @@ import { isSimulated } from "@/lib/domain/sandbox";
 import { needLine, needRank, type TicketNeed } from "@/lib/domain/ticket-needs";
 import { related, type RelItem, type RelTicket, type Related } from "@/lib/domain/related";
 import { loadTicketNeeds } from "./needs";
-import type { Approval, Brief, Handoff, Item, PlannedAction, Review, Salida, TeamAgent, Ticket, TicketDetail } from "@/lib/domain/types";
+import type { Approval, Brief, Handoff, Item, PdfDocument, PlannedAction, Review, Salida, TeamAgent, Ticket, TicketDetail } from "@/lib/domain/types";
 
-export type TicketTab = "open" | "you" | "paused" | "closed";
+export type TicketTab = "open" | "you" | "paused" | "closed" | "docs";
 
 export interface TicketRow extends Ticket {
   excerpt: string;
@@ -43,7 +43,9 @@ export interface TicketsData {
   tab: TicketTab;
   rows: TicketRow[];
   closedToday: TicketRow[];
-  counts: { open: number; you: number; closedToday: number; paused: number };
+  /** Tickets · Documentos (t135): every PDF attachment, newest first. Only loaded on that tab. */
+  docs: PdfDocument[];
+  counts: { open: number; you: number; closedToday: number; paused: number; docs: number };
   selected: ThreadData | null;
   /** The selected ticket has a message Andrés has not seen: opening it marks it seen. */
   selectedUnread: boolean;
@@ -231,15 +233,17 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
   const waitsOnYou = open.filter((t) => needsOf(t).length > 0);
   const closedToday = all.filter((t) => t.status === "closed" && (t.closedAt ?? t.updatedAt) >= day.toISOString());
   const idle = open.filter((t) => t.status === "paused" || t.status === "ongoing");
-  const tab: TicketTab = opts.tab === "you" || opts.tab === "closed" || opts.tab === "paused" ? opts.tab : "open";
+  const tab: TicketTab = opts.tab === "you" || opts.tab === "closed" || opts.tab === "paused" || opts.tab === "docs" ? opts.tab : "open";
+  const documents = r.annotations.documents();
   // Tickets with a need first (by the priority of the first need, then the one waiting longest), then the rest, newest first.
-  const rows = (tab === "you" ? waitsOnYou : tab === "closed" ? closedToday : tab === "paused" ? idle : open).sort((a, b) => {
+  const rows = (tab === "docs" ? ([] as Ticket[]) : tab === "you" ? waitsOnYou : tab === "closed" ? closedToday : tab === "paused" ? idle : open).sort((a, b) => {
     const [ra, rb] = [needRank(needsOf(a)), needRank(needsOf(b))];
     if (ra !== rb) return ra - rb; // Infinity - Infinity is NaN: equal ranks are handled above
     return ra === Infinity ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt);
   });
   let selected: ThreadData | null = null;
-  for (const id of selectionOrder(opts, rows)) {
+  // Documentos has no thread pane: every row opens the review view.
+  for (const id of tab === "docs" ? [] : selectionOrder(opts, rows)) {
     try {
       selected = threadData(r, id, now);
       break;
@@ -275,10 +279,11 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
   return {
     tab,
     rows: rows.map(row),
+    docs: tab === "docs" ? documents : [],
     closedToday: tab === "open" ? closedToday.map(row) : [],
     selectedUnread: Boolean(selected && unread.has(selected.ticket.id)),
     unreadCount: [...open, ...closedToday].filter((t) => unread.has(t.id)).length,
-    counts: { open: open.length, you: waitsOnYou.length, closedToday: closedToday.length, paused: idle.length },
+    counts: { open: open.length, you: waitsOnYou.length, closedToday: closedToday.length, paused: idle.length, docs: documents.length },
     selected,
     listening,
     pick,
