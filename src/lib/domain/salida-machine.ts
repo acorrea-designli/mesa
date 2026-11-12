@@ -8,6 +8,10 @@
 //     │                 │                          Slack, mode draft: drafted ──▶ draft_created ──confirm_sent (Andrés)──▶ sent
 //     │                 ├─deny──▶ denied                       sent ──deleted──▶ deleted
 //     │                 └─expire─▶ expired                     failed ──retry──▶ pending
+//     └─────withdraw (the lead, with a reason; draft or pending only)──▶ withdrawn (final, never sent)
+//
+// `withdraw` is the lead's cleanup of a stale leftover (t123): it is not a deny (deny stays Andrés's click and wakes the
+// owner), it sets no approvedVersion, sendMode, undoUntil or releasedAt, never wakes, and nothing leaves `withdrawn`.
 //
 // The session that owns a salida only executes the send after the `release`
 // (the 20 s undo window is over). `sent` before release is refused.
@@ -32,6 +36,7 @@ export type SalidaEvent =
   | { type: "failed"; error: string }
   | { type: "retry" }
   | { type: "deny" }
+  | { type: "withdraw"; reason: string } // the lead takes a stale draft/pending salida back: final, never sent (not a deny)
   | { type: "expire" }
   | { type: "schedule"; at: string; version: number; mode?: SalidaSendMode }
   | { type: "unschedule" }
@@ -96,7 +101,7 @@ export function canAddVersion(status: SalidaStatus): boolean {
 }
 
 /** Statuses that are final (no more transitions except delete/restore on sent/deleted). */
-export const TERMINAL: SalidaStatus[] = ["denied", "expired"];
+export const TERMINAL: SalidaStatus[] = ["denied", "expired", "withdrawn"];
 
 export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuards): Transition {
   const iso = now.toISOString();
@@ -207,6 +212,15 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       const bad = expect(s, ["draft", "pending", "scheduled", "queued_until_back"], "deny");
       if (bad) return bad;
       return { ok: true, patch: { status: "denied", sendAt: null, sendMode: null }, wake: "salida.denied" };
+    }
+
+    case "withdraw": {
+      const bad = expect(s, ["draft", "pending"], "withdraw");
+      if (bad) return bad;
+      const reason = ev.reason?.trim();
+      if (!reason) return fail("a withdrawal needs a reason");
+      // Never a send: no approvedVersion, sendMode, undoUntil or releasedAt, and no wake (the lead is the one acting).
+      return { ok: true, patch: { status: "withdrawn", withdrawReason: reason, withdrawnAt: iso, sendAt: null } };
     }
 
     case "expire": {

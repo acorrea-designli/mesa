@@ -14,7 +14,7 @@ import { useLiveRefresh, useNow } from "./live";
 import type { SalidaView, SalidasData } from "./types";
 
 const UNDECIDED = new Set(["pending"]);
-const isDecided = (s: SalidaView) => ["sent", "denied", "expired", "deleted"].includes(s.status);
+const isDecided = (s: SalidaView) => ["sent", "denied", "expired", "deleted", "withdrawn"].includes(s.status);
 
 function stripStatus(s: SalidaView, now: number): string {
   switch (s.status) {
@@ -36,6 +36,8 @@ function stripStatus(s: SalidaView, now: number): string {
       return "Denegada";
     case "expired":
       return "Caducada";
+    case "withdrawn":
+      return "Retirada";
     case "failed":
       return "Falló";
     default:

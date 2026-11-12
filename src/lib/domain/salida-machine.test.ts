@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueEvent, transitionSalida, UNDO_WINDOW_MS, type SalidaEvent, type SalidaGuards } from "./salida-machine";
+import { dueEvent, TERMINAL, transitionSalida, UNDO_WINDOW_MS, type SalidaEvent, type SalidaGuards } from "./salida-machine";
 import type { Destination, Salida } from "./types";
 
 const slack: Destination = { kind: "slack_thread", workspace: "Designli", channel: "#scout-dev", postAs: "Andrés" };
@@ -227,5 +227,61 @@ describe("salida machine: Slack send modes", () => {
     expect(transitionSalida(released("send"), { type: "confirm_sent" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: false });
     expect(transitionSalida(base(), { type: "confirm_sent" }, T0, g)).toMatchObject({ ok: false });
     expect(transitionSalida(sent, { type: "confirm_sent" }, at(UNDO_WINDOW_MS * 4), g)).toMatchObject({ ok: false });
+  });
+
+  describe("withdraw (the lead's cleanup, t123)", () => {
+    const withdraw: SalidaEvent = { type: "withdraw", reason: "stale leftover of mesa#36" };
+
+    it("moves a pending or draft salida to withdrawn with its reason and time, and never wakes", () => {
+      for (const status of ["pending", "draft"] as const) {
+        const r = transitionSalida(base({ status }), withdraw, T0, g);
+        expect(r).toEqual({ ok: true, patch: { status: "withdrawn", withdrawReason: "stale leftover of mesa#36", withdrawnAt: T0.toISOString(), sendAt: null } });
+      }
+    });
+
+    it("needs a non-empty reason", () => {
+      expect(transitionSalida(base(), { type: "withdraw", reason: "  " }, T0, g)).toMatchObject({ ok: false });
+    });
+
+    it("is refused from every other status", () => {
+      for (const status of ["sending", "scheduled", "queued_until_back", "draft_created", "sent", "failed", "denied", "expired", "deleted", "withdrawn"] as const) {
+        expect(transitionSalida(base({ status, sendAt: status === "scheduled" ? at(60_000).toISOString() : null }), withdraw, T0, g), status).toMatchObject({ ok: false });
+      }
+    });
+
+    it("sets nothing that sends and is a deny in nothing but its end", () => {
+      const r = transitionSalida(base(), withdraw, T0, g);
+      expect(r.ok && Object.keys(r.patch).sort()).toEqual(["sendAt", "status", "withdrawReason", "withdrawnAt"]);
+      expect(r.ok && r.wake).toBeUndefined();
+      expect(TERMINAL).toContain("withdrawn");
+    });
+
+    it("nothing leaves withdrawn: no approval, schedule, release, send, retry, resume or undo, and nothing is due", () => {
+      const w = run(base(), withdraw);
+      const evs: SalidaEvent[] = [
+        { type: "approve", version: 1 },
+        { type: "schedule", at: at(60_000).toISOString(), version: 1 },
+        { type: "release" },
+        { type: "sent" },
+        { type: "drafted" },
+        { type: "confirm_sent" },
+        { type: "failed", error: "x" },
+        { type: "retry" },
+        { type: "resume" },
+        { type: "undo" },
+        { type: "deny" },
+        { type: "expire" },
+        { type: "unschedule" },
+        { type: "unqueue" },
+        { type: "hold", reason: "x" },
+        { type: "bounce", reason: "x" },
+        { type: "propose" },
+        { type: "request_delete" },
+        { type: "deleted" },
+        { type: "withdraw", reason: "again" },
+      ];
+      for (const ev of evs) expect(transitionSalida(w, ev, at(UNDO_WINDOW_MS * 10), g), ev.type).toMatchObject({ ok: false });
+      expect(dueEvent({ ...w, expiresAt: T0.toISOString(), sendAt: T0.toISOString(), undoUntil: T0.toISOString() }, at(UNDO_WINDOW_MS * 10))).toBeNull();
+    });
   });
 });

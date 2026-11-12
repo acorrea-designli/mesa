@@ -165,6 +165,16 @@ and shows "Simulado · no salió"), or `MESA salida drafted <id> --simulated` fo
 Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases the salida and the same
 `salida.released` arrives. Never use `slack_schedule_message` (hook G5).
 
+## Withdraw (lead only, stale leftovers)
+
+A `pending` or `draft` salida nobody should send any more (its PR merged, the thread moved on, a leftover of a finished
+ticket) is closed with `MESA salida withdraw <id> --reason "<why Andrés can read>"`. It is not a deny and not an
+approval: final status `withdrawn`, never sent, no wake, the card reads "Retirada · <why>" and the ticket stops
+counting it. Any other status is 409 (sending, scheduled, queued, sent, failed, denied...): it is not stale, leave it.
+A withdrawn github review salida frees its findings so they can be posted again. After withdrawing the pending salidas of
+a PR whose review card is stale, close the card with `MESA review close <reviewId> --reason "<why>"` (409 unless the
+review is open). Teammates never run either verb (G4). Deny stays Andrés's click and has no CLI verb.
+
 ## Delete (lead, on `salida.delete_requested` / `salida.restore_requested`)
 
 | Destination | Delete | Then |

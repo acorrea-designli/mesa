@@ -496,6 +496,7 @@ const SAL_STATUS: Record<string, string> = {
   failed: "falló",
   denied: "denegada",
   expired: "caducada",
+  withdrawn: "retirada",
   scheduled: "programada",
   queued_until_back: "al volver",
   draft_created: "borrador en Slack",

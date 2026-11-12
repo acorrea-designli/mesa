@@ -288,6 +288,7 @@ export const salidaTransition = z.discriminatedUnion("type", [
   z.object({ type: z.literal("failed"), error: z.string().min(1) }),
   z.object({ type: z.literal("retry") }),
   z.object({ type: z.literal("deny") }),
+  z.object({ type: z.literal("withdraw"), reason: z.string().trim().min(1) }),
   z.object({ type: z.literal("schedule"), at: isoDate, version: z.number().int().min(1), mode: sendMode.optional() }),
   z.object({ type: z.literal("unschedule") }),
   z.object({ type: z.literal("request_delete") }),
@@ -381,6 +382,7 @@ export const reviewOpenInput = z.object({
   pr: z.number().int().positive(),
   sha: z.string().trim().min(1),
 });
+export const reviewCloseInput = z.object({ reason: z.string().trim().min(1) });
 export const reviewActionInput = z.object({
   action: z.enum(["approve", "approve_anyway", "post", "dismiss", "explain"]),
   findingNs: z.array(z.number().int().positive()).optional(),

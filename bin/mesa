@@ -51,7 +51,7 @@ Tickets
 
 Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida propose --source slack|basecamp|github|calendar --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
-                  [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired (exit 3)
+                  [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired/withdrawn (exit 3)
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
   mesa salida sent <id> [--permalink URL]          only after salida.released, for a Slack salida in mode send ("Claude lo envía"),
                                                    Basecamp and GitHub
@@ -64,6 +64,8 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida hold <id> --reason R               released but the source is down (waits as "Aprobar al volver")
   mesa salida bounce <id> --reason R             the thread changed: back to Andrés for a new approval
   mesa salida deleted <id> | restored <id>
+  mesa salida withdraw <id> --reason R           (lead) take a stale draft/pending salida back: final status "withdrawn", never sent,
+                  the reason shows on its card ("Retirada · R"); not a deny (no wake, no Andrés turn). Any other status: 409
   mesa salida show <id>
   mesa salida list [--status pending,scheduled]
 
@@ -82,6 +84,8 @@ Reviews and approvals
   mesa finding list <ref>
   mesa review open <ref> --repo owner/name --pr N --sha <head>   open/refresh the review card (also with 0 findings; new head reopens an approved one)
   mesa review list [--ticket ref] | show <reviewId>
+  mesa review close <reviewId> --reason R        (lead) close a stale open review card ("Cerrada · R"); its ticket leaves Te espera when
+                  nothing else is owed. 409 unless the review is open; "review open" at any head reopens it
                   a closed review ticket reopens by itself when its PR gets a new head (GitHub poll or review open)
   mesa sandbox push <ref> [--sha <sha>]          sandbox only: simulate a push to the PR of the review on <ref> (random sha
                                                    when omitted); the same server function as the poll. Refused in live
@@ -297,7 +301,7 @@ async function waitRelease(salida, sessionId, timeoutS) {
   const res = await peekLoop(sessionId, timeoutS, async () => {
     const s = await call("GET", `/api/salidas/${enc(salida.id)}`);
     if ((s.status === "sending" && s.releasedAt) || s.status === "draft_created" || s.status === "sent") return { released: true, salida: s };
-    if (["denied", "expired", "deleted"].includes(s.status)) return { released: false, salida: s };
+    if (["denied", "expired", "deleted", "withdrawn"].includes(s.status)) return { released: false, salida: s };
     return null;
   });
   if (!res) {
@@ -501,6 +505,8 @@ async function main() {
         case "hold":
         case "bounce":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd, reason: text(opt.reason, "--reason") }));
+        case "withdraw":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "withdraw", reason: text(opt.reason, "--reason") }));
         case "deleted":
         case "restored":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd }));
@@ -574,6 +580,7 @@ async function main() {
         return out(await call("POST", `/api/tickets/${enc(need(id, "<ref>"))}/reviews`, { repo: need(opt.repo, "--repo"), pr, sha: need(opt.sha, "--sha") }));
       }
       if (cmd === "show") return out(await call("GET", `/api/reviews/${enc(need(id, "<reviewId>"))}`));
+      if (cmd === "close") return out(await call("POST", `/api/reviews/${enc(need(id, "<reviewId>"))}/close`, { reason: text(opt.reason, "--reason") }));
       if (cmd !== "list") return usage(`unknown review command "${cmd ?? ""}"`);
       return out(await call("GET", `/api/reviews${opt.ticket ? `?ticket=${enc(opt.ticket)}` : ""}`));
 

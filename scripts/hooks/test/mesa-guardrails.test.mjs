@@ -490,6 +490,20 @@ test("G10 covers the review buttons; G4 covers every lead-only salida report", a
   assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida bounce s1 --reason moved")), "G4");
 });
 
+test("G4: withdrawing a salida and closing a review card are the lead's; a teammate is blocked, the lead passes", async () => {
+  const withdraw = 'node G:/WorkSpace/designli/ops/bin/mesa salida withdraw sa_1 --reason "stale leftover"';
+  const close = 'node G:/WorkSpace/designli/ops/bin/mesa review close rv_1 --reason "stale card"';
+  assert.equal(await rule(sh(mate(), withdraw)), "G4");
+  assert.equal(await rule(sh(mate(), close)), "G4");
+  assert.equal(await rule(sh(lead, withdraw)), null);
+  assert.equal(await rule(sh(lead, close)), null);
+  // the raw route is blocked for everyone, like /actions: the lead uses the CLI verb
+  assert.equal(await rule(sh(mate(), "curl -X POST http://127.0.0.1:8790/api/reviews/rv_1/close -d '{\"reason\":\"x\"}'")), "G10");
+  assert.equal(await rule(sh(lead, "curl -X POST http://127.0.0.1:8790/api/reviews/rv_1/close -d '{\"reason\":\"x\"}'")), "G10");
+  // a teammate may still read a review
+  assert.equal(await rule(sh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa review show rv_1")), null);
+});
+
 // ---------- G11: sandbox (MESA_ENV=sandbox) ----------
 
 const sbx = (base, tool_name, tool_input, fetchImpl = unreachable) => check({ ...base, tool_name, tool_input }, { fetchImpl, sandbox: true });

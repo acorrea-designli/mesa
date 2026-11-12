@@ -322,6 +322,8 @@ export function salidasRepo(db: Db) {
         });
         if (!r.ok) throw new TransitionError(r.error);
         patch(id, r.patch, nowIso(now));
+        // A withdrawn review write frees its findings: they point at no salida, so "Post" can send them again.
+        if (ev.type === "withdraw") db.prepare("UPDATE review_findings SET salida_id = NULL, updated_at = ? WHERE salida_id = ?").run(nowIso(now), id);
         if (ANDRES_EVENTS.has(ev.type)) touchInteraction(db, now);
         // The seed builds sample states and is not a press.
         if (TURN_TAKING_EVENTS.has(ev.type) && !opts.seed) tickets.andresActed(s.ticketId, now);

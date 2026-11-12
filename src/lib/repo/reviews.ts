@@ -8,6 +8,7 @@ import { tx } from "../db/sqlite";
 import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
 import type { Finding, FindingState, Review, ReviewAction } from "../domain/types";
 import { emitWake } from "../wake/wake";
+import { ticketNeeds } from "../domain/ticket-needs";
 import { salidasRepo } from "./salidas";
 import { ticketsRepo } from "./tickets";
 import { touchInteraction } from "./interaction";
@@ -60,7 +61,7 @@ export function reviewsRepo(db: Db) {
       const approvedAt = (s.destination as { commitId?: string }).commitId;
       const stale = !!approvedAt && !!r.headSha && approvedAt !== r.headSha;
       const next =
-        s.status === "sent" ? (stale ? "open" : "approved") : ["pending", "denied", "failed", "expired"].includes(s.status) ? "open" : null;
+        s.status === "sent" ? (stale ? "open" : "approved") : ["pending", "denied", "failed", "expired", "withdrawn"].includes(s.status) ? "open" : null;
       if (next) {
         db.prepare("UPDATE reviews SET state = ?, salida_id = CASE WHEN ? = 'open' THEN NULL ELSE salida_id END WHERE id = ?").run(next, next, id);
         r = fromRow<Omit<Review, "findings">>(db.prepare("SELECT * FROM reviews WHERE id = ?").get(id));
@@ -81,12 +82,14 @@ export function reviewsRepo(db: Db) {
       | undefined;
     if (row) {
       if (head) {
-        // The approval covered the old commit: an approved review goes back to open when the head moved.
-        const reopen = row.state === "approved" && !!sha && sha !== row.head_sha ? 1 : 0;
+        // The approval covered the old commit: an approved review goes back to open when the head moved. A closed card
+        // (the lead's cleanup, `review close`) comes back at any head: opening it is a new review pass.
+        const reopen = (row.state === "approved" && !!sha && sha !== row.head_sha) || row.state === "closed" ? 1 : 0;
         db.prepare(
           `UPDATE reviews SET head_sha = COALESCE(NULLIF(?, ''), head_sha), seen_head = COALESCE(NULLIF(?, ''), seen_head), ticket_id = COALESCE(?, ticket_id),
-             state = CASE WHEN ? THEN 'open' ELSE state END, salida_id = CASE WHEN ? THEN NULL ELSE salida_id END, updated_at = ? WHERE id = ?`,
-        ).run(sha ?? "", sha ?? "", ticketId, reopen, reopen, ts, row.id);
+             state = CASE WHEN ? THEN 'open' ELSE state END, salida_id = CASE WHEN ? THEN NULL ELSE salida_id END,
+             close_reason = CASE WHEN ? THEN NULL ELSE close_reason END, closed_at = CASE WHEN ? THEN NULL ELSE closed_at END, updated_at = ? WHERE id = ?`,
+        ).run(sha ?? "", sha ?? "", ticketId, reopen, reopen, reopen, reopen, ts, row.id);
       } else {
         db.prepare(
           "UPDATE reviews SET head_sha = COALESCE(NULLIF(head_sha, ''), NULLIF(?, '')), ticket_id = COALESCE(ticket_id, ?), updated_at = ? WHERE id = ?",
@@ -140,6 +143,48 @@ export function reviewsRepo(db: Db) {
           tickets.reopenBySystem(ticket.id, { repo: i.repo, pr: i.pr, oldHead: before.head_sha, newHead: sha }, now);
         }
         return get(id);
+      });
+    },
+
+    /**
+     * The lead's cleanup of a stale card (t123): an `open` review becomes `closed` with the reason on the card
+     * ("Cerrada · <reason>"; the findings stay as they are). Not Andrés's press: no wake, no lastInteractionAt, and
+     * never through /actions. 409 unless the review is open (`approving`: a salida is in flight; `approved`; an
+     * already `closed` card is refused, not a no-op, so a double close shows). The ticket stops waiting on Andrés for
+     * it: a waiting_andres ticket with no other need (pending salida, permission, open question, planned needs_ok
+     * step, another open review) moves to waiting_claude, quietly. `review open` at any head reopens the card.
+     */
+    close(reviewId: string, reason: string, now = new Date()): Review {
+      return tx(db, () => {
+        const why = reason.trim();
+        if (!why) throw new ValidationError("closing a review needs a reason");
+        const r = get(reviewId);
+        if (r.state !== "open") {
+          throw new TransitionError(r.state === "approving" ? "review is approving: a salida is in flight, let it finish or withdraw it first" : `review is ${r.state}`);
+        }
+        const ts = nowIso(now);
+        db.prepare("UPDATE reviews SET state = 'closed', close_reason = ?, closed_at = ?, updated_at = ? WHERE id = ?").run(why, ts, ts, r.id);
+        if (r.ticketId) {
+          const t = tickets.detail(r.ticketId);
+          if (t.status === "waiting_andres") {
+            const needs = ticketNeeds(
+              {
+                status: t.status,
+                messages: t.messages,
+                questions: t.questions,
+                actions: t.actions,
+                approvals: db.prepare("SELECT status, agent, expires_at AS expiresAt FROM approvals WHERE ticket_id = ? AND status = 'pending'").all(t.id) as { status: "pending"; agent: string; expiresAt: string }[],
+                reviews: repo.list({ ticket: t.id }),
+                salidas: salidas.list({ status: ["pending"] }).filter((s) => s.ticketId === t.id),
+              },
+              now,
+            );
+            // With nothing else on him, ticketNeeds falls back to "Claude espera tu respuesta" for a waiting_andres status: that one is the status itself.
+            const owed = needs.some((n) => n.kind !== "answer") || t.questions.some((q) => q.state === "open");
+            if (!owed) tickets.andresActed(t.id, now);
+          }
+        }
+        return get(r.id);
       });
     },
 
@@ -248,6 +293,7 @@ export function reviewsRepo(db: Db) {
     action(reviewId: string, a: { action: ReviewAction; findingNs?: number[]; note?: string }, now = new Date()): Review & { salidaIds: string[] } {
       return tx(db, () => {
         const r = get(reviewId);
+        if (r.state === "closed") throw new TransitionError(`review is closed (${r.closeReason ?? "closed by the lead"}); \`review open\` reopens it`);
         const t = r.ticketId ? tickets.get(r.ticketId) : null;
         const ts = nowIso(now);
         const pick = (ns?: number[]) => {

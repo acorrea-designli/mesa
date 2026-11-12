@@ -490,4 +490,39 @@ describe("mesa CLI", () => {
     expect(r.code).toBe(0);
     expect(r.json()).toMatchObject({ released: true, salida: { id: "sa_1", status: "draft_created" } });
   });
+
+  it("salida withdraw posts the withdraw event with its reason; the reason is required", async () => {
+    const r = await mesa(["salida", "withdraw", "sa_1", "--reason", "stale leftover of mesa#36"]);
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/salidas/sa_1/transition", body: { type: "withdraw", reason: "stale leftover of mesa#36" } });
+    requests = [];
+    expect((await mesa(["salida", "withdraw", "sa_1"])).code).toBe(2);
+    expect((await mesa(["salida", "withdraw", "sa_1", "--reason", ""])).code).toBe(2);
+    expect((await mesa(["salida", "withdraw", "--reason", "x"])).code).toBe(2);
+    expect(requests).toEqual([]);
+  });
+
+  it("review close posts the reason to the review's own close endpoint, not /actions", async () => {
+    const r = await mesa(["review", "close", "rv_1", "--reason", "stale card"]);
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/reviews/rv_1/close", body: { reason: "stale card" } });
+    requests = [];
+    expect((await mesa(["review", "close", "rv_1"])).code).toBe(2);
+    expect((await mesa(["review", "close", "--reason", "x"])).code).toBe(2);
+    expect(requests).toEqual([]);
+  });
+
+  it("help lists salida withdraw and review close, and propose --wait-release exits 3 on a withdrawn salida", async () => {
+    const h = await mesa(["help"]);
+    expect(h.stdout).toContain("mesa salida withdraw");
+    expect(h.stdout).toContain("mesa review close");
+    handler = (q) => {
+      if (q.method === "POST") return { status: 201, body: { id: "sa_3", status: "pending" } };
+      if (q.path === "/api/salidas/sa_3") return { body: { id: "sa_3", status: "withdrawn", withdrawReason: "stale" } };
+      return { body: { events: [], cursor: 0 } };
+    };
+    const w = await mesa(["salida", "propose", "--source", "slack", "--dest", '{"kind":"slack_thread","workspace":"w","channel":"c","postAs":"Andrés"}', "--body", "hola", "--wait-release"]);
+    expect(w.code).toBe(3);
+    expect(w.stderr).toMatch(/withdrawn: do not send it/);
+  });
 });
