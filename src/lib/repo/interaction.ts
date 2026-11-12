@@ -1,7 +1,8 @@
-// The last time Andrés acted in the Mesa UI (a real click on the board). The sweeper reads it from GET /api/sources
-// as information only: its cadence follows new items, not interaction (t122: the lead's and the agents' own writes
-// kept the sweeper at 60 s all session). A request from the Mesa CLI (header `x-mesa-client: cli`, set by
-// bin/mesa, which only the lead and the agents use) never stamps it, whatever the write: task move, dispatch, claim.
+// The last time Andrés acted in the Mesa UI (a real click on the board). Only his UI actions stamp it. The sweeper
+// reads it from GET /api/sources and goes back to 60 s while it is recent (scripts/sweep-tick.mjs intervalSec counts it
+// next to the sources' lastNewAt). A request from the Mesa CLI (header `x-mesa-client: cli`, set by bin/mesa and the
+// team scripts, which only the lead and the agents use) never stamps it, whatever the write: task move, dispatch,
+// claim. Before t122 those writes kept the sweeper at 60 s all session.
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Db } from "../db/sqlite";
 import { nowIso } from "../db/util";
