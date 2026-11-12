@@ -75,8 +75,8 @@ Times are ISO with their offset (never a bare local time), `Invitados` is omitte
 `sí` or `no`. `Repetir` is optional (after `Meet`, before `Descripción`) and makes the event a series: one exact
 RRULE string, uppercase, parts only FREQ (DAILY|WEEKLY|MONTHLY|YEARLY, required), INTERVAL, BYDAY, BYMONTHDAY,
 BYMONTH, COUNT or UNTIL (not both), WKST, each once, evaluated in the event's `Zona`; UNTIL is `YYYYMMDD` or
-`YYYYMMDDTHHMMSSZ` after the start, and a WEEKLY rule with BYDAY must include the start's weekday (otherwise Google
-adds an off-pattern first instance). Anything else is a 400 with the problem in Spanish. The card shows it in Spanish
+`YYYYMMDDTHHMMSSZ` after the start, a WEEKLY rule with BYDAY must include the start's weekday, and a MONTHLY rule with
+BYMONTHDAY the start's day of the month (otherwise Google adds an off-pattern first instance). Anything else is a 400 with the problem in Spanish. The card shows it in Spanish
 ("Cada semana, los miércoles") with the raw rule under it. A request ticket from Calendario that ends with
 `Se repite: cada semana | cada 2 semanas | cada mes` asks for a series: pass `--repeat "RRULE:..."` (the start must
 fall on the BYDAY day). Use the CLI so the format is right:

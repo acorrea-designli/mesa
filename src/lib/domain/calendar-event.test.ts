@@ -114,6 +114,8 @@ describe("recurrence line", () => {
     ["UNTIL debe ser después", "RRULE:FREQ=WEEKLY;UNTIL=20261101"],
     ["UNTIL debe ser después", "RRULE:FREQ=WEEKLY;UNTIL=20261118T203000Z"],
     ["empieza un WE", "RRULE:FREQ=WEEKLY;BYDAY=MO,TH"],
+    ["empieza el día 18 del mes", "RRULE:FREQ=MONTHLY;BYMONTHDAY=5"],
+    ["empieza el día 18 del mes", "RRULE:FREQ=MONTHLY;BYMONTHDAY=5,20"],
   ])("rejects: %s (%s)", (problem, rule) => {
     const r = parseEventBody(formatEventBody({ ...dre, recurrence: undefined }).replace("Meet: sí", `Meet: sí\nRepetir: ${rule}`));
     expect(r.ok).toBe(false);
@@ -137,6 +139,16 @@ describe("recurrence line", () => {
     const late = { ...dre, start: "2026-11-18T20:00:00-05:00", end: "2026-11-18T20:30:00-05:00", recurrence: "RRULE:FREQ=WEEKLY;BYDAY=WE" };
     expect(eventBodyProblem(formatEventBody(late))).toBeNull();
     expect(eventBodyProblem(formatEventBody({ ...late, recurrence: "RRULE:FREQ=WEEKLY;BYDAY=TH" }))).toContain("empieza un WE");
+  });
+  it("checks the day of the month in the event zone for MONTHLY with BYMONTHDAY", () => {
+    // 20:00 on the 18th in Bogota is already the 19th in UTC; the rule must name the 18th.
+    const late = { ...dre, start: "2026-11-18T20:00:00-05:00", end: "2026-11-18T20:30:00-05:00" };
+    expect(eventBodyProblem(formatEventBody({ ...late, recurrence: "RRULE:FREQ=MONTHLY;BYMONTHDAY=18" }))).toBeNull();
+    expect(eventBodyProblem(formatEventBody({ ...late, recurrence: "RRULE:FREQ=MONTHLY;BYMONTHDAY=5,18,25" }))).toBeNull();
+    expect(eventBodyProblem(formatEventBody({ ...late, recurrence: "RRULE:FREQ=MONTHLY;BYMONTHDAY=19" }))).toContain("empieza el día 18 del mes");
+    // a MONTHLY rule without BYMONTHDAY, and a YEARLY one, are not checked
+    expect(eventBodyProblem(formatEventBody({ ...late, recurrence: "RRULE:FREQ=MONTHLY" }))).toBeNull();
+    expect(eventBodyProblem(formatEventBody({ ...late, recurrence: "RRULE:FREQ=YEARLY;BYMONTH=3;BYMONTHDAY=8" }))).toBeNull();
   });
   it("does not check BYDAY against the start for a non-weekly rule", () => {
     expect(eventBodyProblem(formatEventBody({ ...dre, recurrence: "RRULE:FREQ=MONTHLY;BYDAY=MO" }))).toBeNull();

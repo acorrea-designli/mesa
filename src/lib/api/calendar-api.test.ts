@@ -177,4 +177,20 @@ describe("a calendar salida over the API", () => {
     const mismatch = await postSalida(post("/api/salidas", { source: "slack", destination: dest, body: "x", ownerSession: "lead" }), ctx);
     expect(mismatch.status).toBe(400);
   });
+
+  it("an invalid Repetir with the CLI's destination shape is the Spanish problem, not the schema error", async () => {
+    // `mesa calendar propose --repeat X` copies X into destination.recurrence and into the body's Repetir line.
+    for (const [rule, problem] of [
+      ["FREQ=WEEKLY;BYDAY=TH", /debe empezar por RRULE:/],
+      ["rrule:FREQ=WEEKLY;BYDAY=TH", /debe empezar por RRULE:/],
+      ["RRULE:freq=weekly;byday=th", /mayúsculas/],
+      ["RRULE:FREQ=MONTHLY;BYMONTHDAY=5", /empieza el día 12 del mes/],
+    ] as const) {
+      const res = await postSalida(post("/api/salidas", { source: "calendar", destination: { ...dest, recurrence: rule }, body: body.replace("Meet: sí", `Meet: sí\nRepetir: ${rule}`), ownerSession: "lead" }), ctx);
+      expect(res.status, rule).toBe(400);
+      const text = JSON.stringify(await res.json());
+      expect(text, rule).toMatch(problem);
+      expect(text, rule).not.toMatch(/invalid request body/i);
+    }
+  });
 });

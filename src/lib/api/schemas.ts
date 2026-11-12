@@ -250,7 +250,8 @@ const calendarDest = z.object({
   calendar: z.string().min(1),
   invitees: z.array(z.string().min(3)).max(50).optional(),
   meet: z.boolean().optional(),
-  recurrence: z.string().regex(/^RRULE:/).max(300).optional(),
+  // Not validated here: the version body is the truth and checkBody gives the Spanish problem; syncCalendarDestination rewrites it.
+  recurrence: z.string().max(300).optional(),
   postAs: z.string().min(1),
 });
 export const destination = z.union([slackDest, basecampDest, githubDest, calendarDest]);

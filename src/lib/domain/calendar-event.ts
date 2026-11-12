@@ -119,11 +119,11 @@ const bad = (problem: string) => ({ ok: false as const, problem });
 const UINT = /^[1-9]\d{0,5}$/;
 const UNTIL_RE = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z)?$/;
 
-/** The start's local date (YYYYMMDD) and weekday index (0 = MO) in `tz`. */
-function localStart(start: string, tz: string): { ymd: string; wd: number } {
+/** The start's local date (YYYYMMDD), weekday index (0 = MO) and day of the month in `tz`. */
+function localStart(start: string, tz: string): { ymd: string; wd: number; day: number } {
   const local = isoInZone(Date.parse(start), tz).slice(0, 10);
   const wd = (new Date(`${local}T00:00:00Z`).getUTCDay() + 6) % 7;
-  return { ymd: local.replace(/-/g, ""), wd };
+  return { ymd: local.replace(/-/g, ""), wd, day: Number(local.slice(8, 10)) };
 }
 
 function validUntil(u: string): { ok: boolean; ms: number } {
@@ -136,7 +136,7 @@ function validUntil(u: string): { ok: boolean; ms: number } {
   return { ok, ms };
 }
 
-/** Parses and validates "RRULE:FREQ=WEEKLY;BYDAY=WE"; with `at` it also checks UNTIL and BYDAY against the event's start and zone. */
+/** Parses and validates "RRULE:FREQ=WEEKLY;BYDAY=WE"; with `at` it also checks UNTIL, BYDAY (WEEKLY) and BYMONTHDAY (MONTHLY) against the event's start and zone. */
 export function parseRrule(raw: string, at?: { start: string; timeZone: string }): { ok: true; rule: Rrule } | { ok: false; problem: string } {
   if (!raw.startsWith("RRULE:")) return bad("Repetir debe empezar por RRULE:, p. ej. RRULE:FREQ=WEEKLY;BYDAY=WE");
   const body = raw.slice("RRULE:".length);
@@ -194,6 +194,8 @@ export function parseRrule(raw: string, at?: { start: string; timeZone: string }
   }
   if (ls && freq === "WEEKLY" && byDay.length && !byDay.includes(DAYS[ls.wd]!))
     return bad(`Repetir: el evento empieza un ${DAYS[ls.wd]}, que debe estar en BYDAY`);
+  if (ls && freq === "MONTHLY" && byMonthDay.length && !byMonthDay.includes(ls.day))
+    return bad(`Repetir: el evento empieza el día ${ls.day} del mes, que debe estar en BYMONTHDAY`);
   return {
     ok: true,
     rule: {
