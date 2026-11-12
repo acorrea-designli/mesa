@@ -151,11 +151,18 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 (`mcp__claude_ai_Google_Calendar__create_event`) with exactly the fields of the approved body: title, start, end
 (with the zone), the invitees as attendees, a Google Meet only when `Meet: sí`, and the description. Hook G5 passes
 the call only when every field equals the approved ones (instants for the times, the set of addresses for the
-guests) and refuses every other Google Calendar write (update, delete, respond): never fix an event after the
+guests) and refuses every other Google Calendar write (delete, respond, move to another calendar): never fix an event after the
 fact, propose a new salida. Step 3 is `MESA salida sent <id> --permalink <the event's link>`; if the connector cannot
 attach the Meet, do not create the event without it: `MESA salida hold <id> --reason "el conector no puede crear el Meet"`
 and tell Andrés in the ticket. A feed outage (`mesa source get calendar` down) does not matter here: reading is not
 creating. Guests receive Google's invitation e-mail when the event is created: that is what he approved.
+
+**Calendar move** (`source: calendar`, body starts with `Mover: <eventId>`, fields `Mover`, `Título` (display only), `Inicio`, `Fin`,
+`Zona`, `Avisar: sí|no`; propose it with `mesa salida propose --source calendar --dest '{"kind":"calendar_event","calendar":"primary","postAs":"Andrés Correa"}' --body -`):
+step 2 is ONE `update_event` call with exactly `eventId`, `startTime` and `endTime` (local time without offset) and `timeZone`
+(the approved Zona), plus `notificationLevel: NONE` only when `Avisar: no` (`Avisar: sí` is the default, ALL). Any other parameter
+(summary, attendees, Meet, description, reminders, `allDay`, ...) makes G5 refuse the call. Step 3 is `MESA salida sent <id>`.
+Guests get Google's update e-mail when `Avisar: sí`: that is what he approved.
 
 **Sandbox** (`echo $MESA_ENV` prints `sandbox`): step 2 is skipped, never call the MCP tool (hook G11 blocks both
 Slack tools). Step 3 is `MESA salida sent <id> --simulated` (no `--permalink`; Mesa records `sandbox://<source>/<id>`

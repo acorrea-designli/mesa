@@ -1,6 +1,7 @@
 // Pure helpers for Salidas: version stepper collapse, undo countdown, word diff,
 // schedule choices, destination route stops and short labels. Unit tested.
 import { eventWhen, parseEventBody } from "@/lib/domain/calendar-event";
+import { parseMoveBody } from "@/lib/domain/calendar-move";
 import type { ConversationLinks, Destination, Salida, SalidaDetail, SalidaVersion } from "@/lib/domain/types";
 
 // ---------- version stepper ----------
@@ -400,5 +401,7 @@ export const firstLine = (s: string) => (s.split("\n").find((l) => l.trim()) ?? 
 /** The one line a calendar salida shows in lists: "Meet con Matt · jueves 12 nov · 10:00–10:30" (its body is the event, one field per line). */
 export function calendarLine(body: string): string {
   const p = parseEventBody(body);
-  return p.ok ? `${p.fields.title} · ${eventWhen(p.fields)}` : firstLine(body);
+  if (p.ok) return `${p.fields.title} · ${eventWhen(p.fields)}`;
+  const m = parseMoveBody(body);
+  return m.ok ? `Mover · ${m.fields.title} · ${eventWhen(m.fields)}` : firstLine(body);
 }
