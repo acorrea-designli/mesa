@@ -21,5 +21,8 @@ export const annotationReply = z.object({ body: z.string().min(1) });
 
 export const annotationSend = z.object({ attachmentId: z.string().min(1) });
 
+/** "Terminé" on a PDF (t135): true marks it reviewed, false takes it back. */
+export const attachmentReviewed = z.object({ reviewed: z.boolean() });
+
 /** Who is calling: the CLI (bin/mesa sends x-mesa-client: cli, only the lead and the agents use it) is Claude; the board is Andrés. */
 export const callerOf = (req: Request): Author => (req.headers.get("x-mesa-client") === "cli" ? "claude" : "andres");

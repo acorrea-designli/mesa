@@ -5,11 +5,12 @@ import { GET as LIST, POST as CREATE } from "@/app/api/tickets/[id]/annotations/
 import { DELETE as REMOVE, PATCH as PATCH_ONE } from "@/app/api/tickets/[id]/annotations/[annId]/route";
 import { POST as REPLY } from "@/app/api/tickets/[id]/annotations/[annId]/replies/route";
 import { POST as SEND } from "@/app/api/tickets/[id]/annotations/send/route";
+import { PUT as REVIEWED } from "@/app/api/tickets/[id]/attachments/[attId]/reviewed/route";
 import { GET as CONTEXT } from "@/app/api/tickets/[id]/context/route";
 import { openDb } from "../db/sqlite";
 import { createRepos, type Repos } from "../repo";
 import { eventsAfter } from "../wake/wake";
-import type { Annotation, TicketContext } from "../domain/types";
+import type { Annotation, Attachment, TicketContext } from "../domain/types";
 
 const g = globalThis as unknown as { __mesaRepos?: Repos };
 let r: Repos;
@@ -106,5 +107,31 @@ describe("GET /api/tickets/:id/context", () => {
     await create({ body: "dos" });
     const c = (await (await CONTEXT(call("GET", undefined, true), ctx({ id: ref }))).json()) as TicketContext;
     expect(c.annotations).toEqual([{ attachmentId: pdf, filename: "informe.pdf", open: 2, total: 2 }]);
+  });
+});
+
+describe("PUT /api/tickets/:id/attachments/:attId/reviewed", () => {
+  const put = (attId: string, b: unknown, id = ref) => REVIEWED(call("PUT", b), ctx({ id, attId }));
+
+  it("marks a PDF as terminado and takes it back", async () => {
+    const done = await put(pdf, { reviewed: true });
+    expect(done.status).toBe(200);
+    expect(((await done.json()) as Attachment).reviewedAt).not.toBeNull();
+    const undone = await put(pdf, { reviewed: false });
+    expect(((await undone.json()) as Attachment).reviewedAt).toBeNull();
+  });
+
+  it("answers 403 to the CLI (Claude): only Andrés marks a PDF as terminado", async () => {
+    const res = await REVIEWED(call("PUT", { reviewed: true }, true), ctx({ id: ref, attId: pdf }));
+    expect(res.status).toBe(403);
+    expect(r.tickets.detail(ref).attachments.find((a) => a.id === pdf)?.reviewedAt).toBeNull();
+  });
+
+  it("answers 400 for a bad body or a non-PDF, and 404 for an unknown PDF or ticket", async () => {
+    expect((await put(pdf, { reviewed: "yes" })).status).toBe(400);
+    const png = r.tickets.addAttachment(r.tickets.get(ref).id, { messageId: null, filename: "a.png", mime: "image/png", size: 1, path: "x/a.png" }).id;
+    expect((await put(png, { reviewed: true })).status).toBe(400);
+    expect((await put("at_nope", { reviewed: true })).status).toBe(404);
+    expect((await put(pdf, { reviewed: true }, "t999")).status).toBe(404);
   });
 });

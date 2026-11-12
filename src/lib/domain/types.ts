@@ -221,6 +221,8 @@ export interface Attachment {
   size: number;
   path: string;
   createdAt: string;
+  /** t135: when Andrés marked the PDF as reviewed ("Terminé"); null = pendiente. */
+  reviewedAt: string | null;
 }
 
 export type RefType = "ticket" | "item" | "url";
@@ -818,6 +820,22 @@ export interface Annotation {
   createdAt: string;
   updatedAt: string;
   replies: AnnotationReply[];
+}
+
+/** One row of Tickets · Documentos (t135): a PDF attachment, its ticket and Andrés's marks on it (his own: open / total). */
+export interface PdfDocument {
+  attachmentId: string;
+  filename: string;
+  size: number;
+  createdAt: string;
+  reviewedAt: string | null;
+  ticketId: string;
+  ticketRef: string;
+  ticketTitle: string;
+  ticketStatus: TicketStatus;
+  isSample: boolean;
+  open: number;
+  total: number;
 }
 
 /** TicketContext.annotations: what Claude has to look at, per PDF. */

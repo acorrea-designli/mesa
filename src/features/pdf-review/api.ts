@@ -1,6 +1,6 @@
 // Client calls for the PDF review view (t125). Each returns the fresh Annotation (or throws with the API's English
 // message, which the view turns into a toast).
-import type { Annotation, AnnotationGeometry, AnnotationKind, AnnotationState } from "@/lib/domain/types";
+import type { Annotation, AnnotationGeometry, AnnotationKind, AnnotationState, Attachment } from "@/lib/domain/types";
 import { call } from "@/features/salidas/api";
 
 const A = (ticketId: string) => `/api/tickets/${encodeURIComponent(ticketId)}/annotations`;
@@ -22,4 +22,7 @@ export const reviewApi = {
   reply: (ticketId: string, id: string, body: string) => call<Annotation>(`${A(ticketId)}/${encodeURIComponent(id)}/replies`, { body: { body } }),
   /** "Enviar a Claude (n)": one ticket.annotations wake for the marks not sent yet. */
   send: (ticketId: string, attachmentId: string) => call<{ count: number; annotationIds: string[] }>(`${A(ticketId)}/send`, { body: { attachmentId } }),
+  /** "Terminé": mark the PDF as reviewed, or take it back. */
+  reviewed: (ticketId: string, attachmentId: string, reviewed: boolean) =>
+    call<Attachment>(`/api/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}/reviewed`, { method: "PUT", body: { reviewed } }),
 };

@@ -63,8 +63,10 @@
   flex-wrap: wrap; /* the pane is narrow beside the thread: the actions drop to a second line instead of overflowing */
   margin-bottom: 12px;
 }
+/* Five tabs: where the pane is narrow they wrap to a second line instead of scrolling out of sight. */
 .tk-tools .tabs {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .tk-acts {
   display: flex;
@@ -1207,9 +1209,10 @@
   .tk-tools {
     flex-wrap: wrap;
   }
+  /* Five tabs do not fit in 358px: they wrap to a second line, never a hidden sideways scroll. */
   .tk-tools .tabs {
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    overflow: visible;
     width: 100%;
   }
   .tk-acts {
@@ -1923,4 +1926,172 @@
 .tk-review:hover {
   background: var(--ink2);
   border-color: var(--ink2);
+}
+
+/* ---------- Documentos (t135): every PDF of every ticket ---------- */
+.tk-doccols,
+.tk-doc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 112px 56px;
+  column-gap: 12px;
+  align-items: center;
+}
+.tk-doccols {
+  height: 26px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--mute);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px;
+}
+.tk-doc {
+  min-height: 54px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule2);
+  color: var(--ink);
+}
+.tk-doc:hover {
+  background: color-mix(in srgb, var(--raise) 50%, transparent);
+}
+.tk-doc .subj {
+  font-weight: 600;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.tk-doc .subj small {
+  display: block;
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+.tk-doc .subj small b {
+  font-weight: 700;
+  color: var(--ink);
+}
+.tk-doc .notes {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.tk-doc .notes small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mute);
+}
+.tk-doc .t {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.tk-doc.closed .subj {
+  color: var(--mute);
+}
+/* No thread pane on Documentos: the list takes the whole width. */
+@media (min-width: 721px) {
+  .tk-app[data-docs] {
+    grid-template-columns: 100% 0;
+  }
+  .tk-app[data-docs] .tk-pane {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .tk-doccols {
+    display: none;
+  }
+  .tk-doc {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "subj st"
+      "notes t";
+    row-gap: 2px;
+    padding: 8px 0;
+  }
+  .tk-doc .subj {
+    grid-area: subj;
+    font-size: 15px;
+  }
+  .tk-doc .notes {
+    grid-area: notes;
+  }
+  .tk-doc .tk-docst {
+    grid-area: st;
+  }
+  .tk-doc .t {
+    grid-area: t;
+    justify-self: end;
+  }
+}
+
+/* ---------- "Revisar PDF" in the ticket header (t135) ---------- */
+.tk-revpdf {
+  position: relative;
+  flex: none;
+  margin-right: 10px;
+}
+.tk-revpdf-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  max-width: min(320px, 86vw);
+  padding: 6px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  background: var(--raise);
+}
+.tk-revpdf-pop a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tk-revpdf-pop a:hover,
+.tk-revpdf-pop a:focus-visible {
+  background: var(--deep);
+}
+.tk-revpdf-pop a span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tk-revpdf-pop small {
+  margin-left: auto;
+  flex: none;
+  font-weight: 500;
+  color: var(--mute);
+}
+/* On desktop the header only exists when the ticket has a PDF, and then it only carries this access. */
+@media (min-width: 721px) {
+  .tk-phead.has-pdf {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: none;
+    padding: 8px 10px 0 20px;
+  }
+  .tk-phead.has-pdf .tk-back,
+  .tk-phead.has-pdf .tk-pt {
+    display: none;
+  }
 }
