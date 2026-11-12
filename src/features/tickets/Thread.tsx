@@ -15,6 +15,8 @@ import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/feature
 import { ApiError } from "@/features/salidas/api";
 import { classify, normalizeUrl } from "@/lib/domain/links";
 import { ticketApi } from "./api";
+import { isPdf, placeAttachments } from "./attachments";
+import { ReviewPdf } from "./ReviewPdf";
 import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
@@ -230,6 +232,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   const openQs = t.questions.filter((q) => q.state === "open");
   const cardFor = (m: TicketMessage | undefined) => (m ? cardOf(t.questions, m.id) : []);
   const firstCard = cardFor(first);
+  // An attachment shows under its own message; one with no message closes the thread (t135).
+  const placed = useMemo(() => placeAttachments(t.attachments, t.messages), [t.attachments, t.messages]);
+  const pdfs = useMemo(() => t.attachments.filter(isPdf), [t.attachments]);
   const closed = t.status === "closed";
   // Claude replies that repeat the review card (older ones, from before hook G12) fold under it.
   const cardFindings = data.reviews.flatMap((r) => r.findings);
@@ -304,7 +309,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   return (
     <KnownTickets.Provider value={known}>
     <aside className="tk-pane tk-thread" ref={ref} aria-label={`Ticket ${t.ref}`}>
-      <header className="tk-phead">
+      <header className={pdfs.length ? "tk-phead has-pdf" : "tk-phead"}>
         <Link className="tk-back" href="/tickets" aria-label="Volver a Tickets">
           <IcBack />
           <span className="tk-back-l">Tickets</span>
@@ -313,6 +318,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           <b>{t.title}</b>
           <small>{statusLabel(t.status)}</small>
         </div>
+        <ReviewPdf ticketId={t.id} pdfs={pdfs} />
       </header>
       <div className="tk-scrollwrap">
         <div
@@ -349,7 +355,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
 
           <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} related={data.related} />
 
-          {first ? <Files atts={t.attachments.filter((a) => a.messageId === first.id || !a.messageId)} ticketId={t.id} /> : null}
+          {first ? <Files atts={placed.byMessage.get(first.id) ?? []} ticketId={t.id} /> : null}
 
           {t.actions.length ? (
             <div className="tk-planwrap" ref={planRef}>
@@ -396,13 +402,20 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
                   onPicks={setPicks}
                   disabled={busy || closed}
                   onSend={(a) => void send(a)}
-                  atts={t.attachments.filter((a) => a.messageId === m.id)}
+                  atts={placed.byMessage.get(m.id) ?? []}
                   refs={t.refs.filter((r) => r.messageId === m.id)}
                   ticketId={t.id}
                   titles={data.refTitles}
                 />
               ))}
             </div>
+          ) : null}
+
+          {placed.tail.length ? (
+            <>
+              <div className="k">Adjuntos</div>
+              <Files atts={placed.tail} ticketId={t.id} />
+            </>
           ) : null}
 
           {data.salidas.length ? (
@@ -572,10 +585,17 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   return (
     <div className="tk-files">
       {atts.map((a) => (
-        <a key={a.id} className="tk-att" href={`/api/tickets/${ticketId}/attachments/${a.id}`} target="_blank" rel="noreferrer">
-          <IcFile />
-          <span className="tk-att-t">{a.filename}</span> <small>{fmtSize(a.size)}</small>
-        </a>
+        <span key={a.id} className="tk-att-row">
+          <a className="tk-att" href={`/api/tickets/${ticketId}/attachments/${a.id}`} target="_blank" rel="noreferrer">
+            <IcFile />
+            <span className="tk-att-t">{a.filename}</span> <small>{fmtSize(a.size)}</small>
+          </a>
+          {a.mime === "application/pdf" ? (
+            <Link className="tk-att tk-review" href={`/tickets/${ticketId}/pdf/${a.id}`} aria-label={`Revisar ${a.filename}`}>
+              Revisar
+            </Link>
+          ) : null}
+        </span>
       ))}
     </div>
   );

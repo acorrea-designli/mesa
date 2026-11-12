@@ -19,6 +19,8 @@ export interface CalendarPageData {
   day: string;
   view: "hoy" | "semana";
   requests: MeetingRequest[];
+  /** Some event is stored (any week): a week with nothing in it is still a connected calendar, not "sin conectar". */
+  hasStored: boolean;
 }
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -45,5 +47,6 @@ export function loadCalendar(r: Repos, q: { day: string; view: "hoy" | "semana" 
       statusLabel: TICKET_STATUS_LABEL[t.status],
       salidaId: pending.find((s) => s.ticketId === t.id)?.id ?? null,
     }));
-  return { payload, day: q.day, view: q.view, requests };
+  const stored = r.calendar.count();
+  return { payload, day: q.day, view: q.view, requests, hasStored: stored.real + stored.samples > 0 };
 }

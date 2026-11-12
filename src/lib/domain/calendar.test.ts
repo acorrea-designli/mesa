@@ -6,6 +6,7 @@ let n = 0;
 const ev = (start: string, end: string, o: Partial<CalendarEvent> = {}): CalendarEvent => ({
   id: `ce_${++n}`,
   uid: `u${n}`,
+  occurrenceKey: new Date(start).toISOString(),
   title: `Reunión ${n}`,
   startsAt: new Date(start).toISOString(),
   endsAt: new Date(end).toISOString(),

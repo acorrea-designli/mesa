@@ -2,6 +2,7 @@ import { getDb, type Db } from "../db/sqlite";
 import { STATIONS, type Counts, type Station } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { agentsRepo } from "./agents";
+import { annotationsRepo } from "./annotations";
 import { approvalsRepo } from "./approvals";
 import { calendarRepo } from "./calendar";
 import { bogotaStart, meetingsLeft } from "../domain/calendar";
@@ -19,7 +20,7 @@ import { sourcesRepo } from "./sources";
 import { itemsRepo } from "./items";
 import { reviewsRepo } from "./reviews";
 import { salidasRepo } from "./salidas";
-import { sessionsRepo } from "./sessions";
+import { sessionsRepo, sweeperSession } from "./sessions";
 import { tasksRepo } from "./tasks";
 import { usageRepo } from "./usage";
 import { weekRepo } from "./week";
@@ -31,6 +32,7 @@ export function createRepos(db: Db) {
     items: itemsRepo(db),
     tasks: tasksRepo(db),
     tickets: ticketsRepo(db),
+    annotations: annotationsRepo(db),
     dispatch: dispatchRepo(db),
     intake: intakeRepo(db),
     salidas: salidasRepo(db),
@@ -66,8 +68,7 @@ export function createRepos(db: Db) {
 /** The stable session that owns every ticket and relays wakes to agents. */
 export const leadSession = () => process.env.MESA_LEAD_SESSION ?? "lead";
 
-/** The session that runs the Slack/Basecamp sweep tick (scripts/sweep-tick.mjs). */
-export const sweeperSession = () => process.env.MESA_SWEEPER_SESSION ?? "sweeper";
+export { sweeperSession };
 
 export type Repos = ReturnType<typeof createRepos>;
 

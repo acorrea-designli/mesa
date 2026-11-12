@@ -12,6 +12,7 @@ import {
   ValidationError,
 } from "../db/util";
 import { eventBodyProblem, parseEventBody } from "../domain/calendar-event";
+import { isMoveBody, moveBodyProblem } from "../domain/calendar-move";
 import {
   canAddVersion,
   dueEvent,
@@ -114,9 +115,9 @@ export function salidasRepo(db: Db) {
     source !== "calendar" &&
     Boolean(db.prepare("SELECT 1 FROM source_state WHERE source = ? AND health = 'down'").get(source));
 
-  // A calendar salida's body IS the event (src/lib/domain/calendar-event.ts): every version must be a complete, valid one.
+  // A calendar salida's body IS the event (src/lib/domain/calendar-event.ts) or a move of one (calendar-move.ts): every version must be a complete, valid one.
   const checkBody = (source: string, body: string) => {
-    const problem = source === "calendar" ? eventBodyProblem(body) : null;
+    const problem = source === "calendar" ? (isMoveBody(body) ? moveBodyProblem(body) : eventBodyProblem(body)) : null;
     if (problem) throw new ValidationError(`calendar salida body: ${problem}`);
   };
 

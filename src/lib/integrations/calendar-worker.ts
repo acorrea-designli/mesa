@@ -1,12 +1,13 @@
 // The server-side Calendario poller, started from src/instrumentation.ts (t112).
 //  - reads Andrés's private iCal (ICS) feed about every 5 minutes (MESA_GCAL_ICS_URL, a secret in .env.local);
 //  - on failure it backs off (10, 20, 40, 60 min) and the rail shows "Calendario" as degraded, then down;
-//  - parses the feed into the next 5 weeks of occurrences and replaces the stored, non-sample rows.
+//  - parses the feed into the occurrences of 13 weeks back to 26 weeks ahead and replaces the stored, non-sample rows.
 // Health goes to the source_state row "calendar". Read only: nothing here writes to Google; creating an event is a
 // salida the lead makes through the Google Calendar connector. Without the variable it does nothing (the screen
 // says "Calendario sin conectar"); in sandbox (MESA_ENV=sandbox) it never starts and never fetches.
-import { calendarEnabled } from "./calendar-env";
+import { calendarEnabled, rememberCalendarName } from "./calendar-env";
 import { FeedError, feedConfig, fetchFeed, type Env, type FetchLike } from "./calendar-feed";
+import { STORED_AHEAD_DAYS, STORED_BACK_DAYS } from "../domain/calendar";
 import { parseIcs } from "../domain/ics";
 import { localDay } from "../domain/week";
 import { publishChange } from "../live/bus";
@@ -18,9 +19,9 @@ const TICK_MS = 30_000;
 const BASE_S = 300;
 const MAX_BACKOFF_S = 3600;
 const DAY = 86_400_000;
-/** The window the table keeps: yesterday to five weeks ahead (Bogota). */
-export const WINDOW_BACK_DAYS = 1;
-export const WINDOW_AHEAD_DAYS = 35;
+/** The window the table keeps: 13 weeks back to 26 weeks ahead of today (Bogota, t127). */
+export const WINDOW_BACK_DAYS = STORED_BACK_DAYS;
+export const WINDOW_AHEAD_DAYS = STORED_AHEAD_DAYS;
 
 export type CalendarRun =
   | { state: "off" }
@@ -31,6 +32,7 @@ export type CalendarRun =
 
 export class CalendarWorker {
   private busy: Promise<CalendarRun> | null = null;
+  private booting = true;
 
   constructor(
     private r: Repos,
@@ -45,6 +47,17 @@ export class CalendarWorker {
       this.busy = null;
     });
     return this.busy;
+  }
+
+  /**
+   * The poller's pass. The first one after a Mesa start reads the feed even when the stored backoff
+   * is still in the future (the outage that set it is likely over by the time Mesa restarts); the
+   * ones after it honor backoff and cadence. A failed first read backs off as any other.
+   */
+  tick(now?: Date): Promise<CalendarRun> {
+    const force = this.booting;
+    this.booting = false;
+    return this.run({ force, now });
   }
 
   private async pass(o: { force?: boolean; now?: Date }): Promise<CalendarRun> {
@@ -65,6 +78,7 @@ export class CalendarWorker {
       const from = new Date(Date.parse(`${localDay(now)}T00:00:00-05:00`) - WINDOW_BACK_DAYS * DAY);
       const to = new Date(from.getTime() + (WINDOW_BACK_DAYS + WINDOW_AHEAD_DAYS) * DAY);
       const parsed = parseIcs(text, { from, to, ownerEmail: cfg.config.ownerEmail });
+      rememberCalendarName(parsed.calendarName);
       const res = this.r.calendar.replace(parsed.occurrences, now);
       this.r.sources.set(
         "calendar",
@@ -116,7 +130,7 @@ export function startCalendarWorker(): void {
   const worker = calendarWorker();
   const state = g.__mesaCalendar!;
   if (state.timer) return;
-  const tick = () => void worker.run().catch(() => console.error("[mesa] calendar read failed"));
+  const tick = () => void worker.tick().catch(() => console.error("[mesa] calendar read failed"));
   state.timer = setInterval(tick, TICK_MS);
   state.timer.unref();
   console.info(`[mesa] calendar poller on; the iCal feed is read about every ${BASE_S / 60} min`);

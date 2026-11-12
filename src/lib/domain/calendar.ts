@@ -166,3 +166,21 @@ export function knownPeople(events: readonly CalendarEvent[], ownerEmail?: strin
     }
   return [...by.values()].sort((a, b) => b.meetings - a.meetings || a.email.localeCompare(b.email));
 }
+
+// ---------- the stored window (t127) ----------
+
+/** What the poller keeps: 13 weeks back and 26 ahead of today (Bogota). The screen reads these to say what lies outside. */
+export const STORED_BACK_DAYS = 13 * 7;
+export const STORED_AHEAD_DAYS = 26 * 7;
+
+/** The Bogota days the poller keeps for a given today: `fromDay` inclusive, `toDay` exclusive. */
+export const storedWindow = (today: string): { fromDay: string; toDay: string } => ({ fromDay: addDays(today, -STORED_BACK_DAYS), toDay: addDays(today, STORED_AHEAD_DAYS) });
+
+export type Coverage = "in" | "partial" | "out";
+
+/** Is the Bogota day range [fromDay, toDay) inside what Mesa stores? `out` means none of it is, so an empty list there says nothing. */
+export function coverageOf(fromDay: string, toDay: string, today: string): Coverage {
+  const w = storedWindow(today);
+  if (toDay <= w.fromDay || fromDay >= w.toDay) return "out";
+  return fromDay >= w.fromDay && toDay <= w.toDay ? "in" : "partial";
+}

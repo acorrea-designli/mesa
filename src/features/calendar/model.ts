@@ -1,8 +1,9 @@
 // Calendario view model (pure): the agenda rows, the week stations, the health pill and the strip's words.
 // Times are Bogota; everything is derived from the stored events and an explicit `now`.
-import { clockOf, eventsOn, isMeeting, nextMeeting, rangeLabel, REMIND_MINUTES, shortDay, weekDays, whenLabel } from "@/lib/domain/calendar";
+import { clockOf, coverageOf, eventsOn, isMeeting, nextMeeting, rangeLabel, REMIND_MINUTES, shortDay, STORED_AHEAD_DAYS, STORED_BACK_DAYS, weekDays, whenLabel } from "@/lib/domain/calendar";
+import { googleDayUrl, googleWeekUrl } from "@/lib/domain/google-calendar";
 import type { CalendarEvent, CalendarPayload } from "@/lib/domain/types";
-import { addDays, localDay } from "@/lib/domain/week";
+import { addDays, localDay, mondayOf } from "@/lib/domain/week";
 
 export type RowState = "past" | "now" | "next" | "ahead" | "declined" | "allday";
 
@@ -17,6 +18,8 @@ export interface AgendaRow {
   people: string;
   /** Unirse is offered: there is a Meet link and the meeting is not over or declined. */
   canJoin: boolean;
+  /** "Abrir en Google": the event's own link, else the day it is on. Always set. */
+  openUrl: string;
 }
 
 export const calendarHref = (day?: string | null, view?: "hoy" | "semana"): string => {
@@ -48,6 +51,7 @@ export function agendaRows(events: readonly CalendarEvent[], ymd: string, now: D
       sub,
       people: e.attendeesCount > 0 ? String(e.attendeesCount) : "",
       canJoin: Boolean(e.meetUrl) && (state === "next" || state === "now" || state === "ahead"),
+      openUrl: e.googleUrl ?? googleDayUrl(localDay(new Date(e.startsAt))),
     };
   });
 }
@@ -124,3 +128,71 @@ export function stripModel(next: CalendarEvent | null, now: Date): StripModel {
   return { mode, event: next, when, time: rangeLabel(next) };
 }
 
+
+// ---------- week navigation (t127) ----------
+
+const MONTH = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const part = (ymd: string) => ({ y: Number(ymd.slice(0, 4)), m: Number(ymd.slice(5, 7)) - 1, d: Number(ymd.slice(8, 10)) });
+
+/** "10–16 nov", "28 sep–4 oct"; a week that is not in the current year (or spans two) carries the year: "28 dic 2026–3 ene 2027". */
+export function weekLabel(monday: string, today: string): string {
+  const a = part(monday);
+  const b = part(addDays(monday, 6));
+  const thisYear = part(today).y;
+  if (a.y !== b.y) return `${a.d} ${MONTH[a.m]} ${a.y}–${b.d} ${MONTH[b.m]} ${b.y}`;
+  const yr = a.y === thisYear ? "" : ` ${a.y}`;
+  if (a.m === b.m) return `${a.d}–${b.d} ${MONTH[a.m]}${yr}`;
+  return `${a.d} ${MONTH[a.m]}–${b.d} ${MONTH[b.m]}${yr}`;
+}
+
+export interface WeekNav {
+  /** The Monday of the week on screen. */
+  monday: string;
+  /** "10–16 nov". */
+  label: string;
+  /** The week on screen is the one that holds today. */
+  current: boolean;
+  prevHref: string;
+  nextHref: string;
+  /** Back to today (the URL without `dia`); null when today is already selected. */
+  thisHref: string | null;
+}
+
+/** Previous and next week keep the weekday and the view: `?dia=` moves by seven calendar days (year changes included). */
+export function weekNav(day: string, view: "hoy" | "semana", today: string): WeekNav {
+  const monday = mondayOf(day);
+  return {
+    monday,
+    label: weekLabel(monday, today),
+    current: monday === mondayOf(today),
+    prevHref: calendarHref(addDays(day, -7), view),
+    nextHref: calendarHref(addDays(day, 7), view),
+    thisHref: day === today ? null : calendarHref(null, view),
+  };
+}
+
+export interface OutsideNote {
+  /** The line that explains why there is nothing (or not everything) to show. */
+  text: string;
+  /** Where the same days are in Google Calendar. */
+  href: string;
+  linkText: string;
+  /** None of it is stored: the empty-agenda sentence would be false. */
+  whole: boolean;
+}
+
+/** A day or week the poller does not keep (13 weeks back, 26 ahead): say so and point to Google Calendar. Null when it is all stored. */
+export function outsideNote(day: string, view: "hoy" | "semana", today: string): OutsideNote | null {
+  const monday = mondayOf(day);
+  const [from, to] = view === "semana" ? [monday, addDays(monday, 7)] : [day, addDays(day, 1)];
+  const cov = coverageOf(from, to, today);
+  if (cov === "in") return null;
+  const this_ = view === "semana" ? "esta semana" : "este día";
+  const kept = `${STORED_BACK_DAYS / 7} semanas atrás y ${STORED_AHEAD_DAYS / 7} adelante`;
+  return {
+    text: cov === "out" ? `${this_[0]!.toUpperCase()}${this_.slice(1)} queda fuera de lo que Mesa guarda (${kept}), por eso no ves reuniones aquí.` : `Parte de esta semana queda fuera de lo que Mesa guarda (${kept}).`,
+    href: view === "semana" ? googleWeekUrl(monday) : googleDayUrl(day),
+    linkText: `Ver ${this_} en Google Calendar`,
+    whole: cov === "out",
+  };
+}

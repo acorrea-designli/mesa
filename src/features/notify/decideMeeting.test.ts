@@ -7,6 +7,7 @@ const at = (hm: string, day = "2026-11-11") => `${day}T${hm}:00-05:00`;
 const ev = (over: Partial<CalendarEvent> = {}): CalendarEvent => ({
   id: "ce_onb",
   uid: "onb",
+  occurrenceKey: new Date(at("15:00")).toISOString(),
   title: "Revisión de onboarding Bseen",
   startsAt: new Date(at("15:00")).toISOString(),
   endsAt: new Date(at("15:30")).toISOString(),

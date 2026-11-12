@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Item, Salida } from "@/lib/domain/types";
-import { mapHealth, railHealth } from "@/components/shell/health";
+import { mapHealth, railHealth, type HealthContext } from "@/components/shell/health";
 import { destinationLabel, isCalm, itemRow, itemSubject, needLabel, salidaRow, skipTarget, skipTargets, skipToast, sourceCounts, visibleRows, waitTag, withTicketNeed } from "./model";
 
 const base: Item = {
@@ -24,6 +24,9 @@ const base: Item = {
   createdAt: "2026-11-03T14:02:00.000Z",
   updatedAt: "2026-11-03T14:02:00.000Z",
 };
+
+// 5 minutes after the rows' last check: fresh, the sweeper is listening.
+const ctx: HealthContext = { now: new Date("2026-11-03T15:25:00.000Z"), sweeperListening: true };
 
 const state = (source: "github" | "slack", health: "ok" | "degraded" | "down", extra: object = {}) => ({
   source,
@@ -101,7 +104,7 @@ describe("labels", () => {
 
 describe("rows", () => {
   it("marks rows of a down source as Sin datos with the last data time", () => {
-    const h = mapHealth(state("slack", "down", { lastNewAt: "2026-11-03T15:20:00.000Z" }));
+    const h = mapHealth(state("slack", "down", { lastNewAt: "2026-11-03T15:20:00.000Z" }), ctx);
     const r = itemRow({ ...base, source: "slack" }, "09:31", h);
     expect(r.stale).toBe(true);
     expect(r.tag).toEqual({ tone: "off", label: "Sin datos" });
@@ -117,7 +120,7 @@ describe("rows", () => {
   });
 
   it("keeps the tag but notes the pause for a degraded source", () => {
-    const h = mapHealth(state("github", "degraded", { backoffUntil: "2026-11-03T16:05:00.000Z" }));
+    const h = mapHealth(state("github", "degraded", { backoffUntil: "2026-11-03T16:05:00.000Z" }), ctx);
     const r = itemRow(base, "09:02", h);
     expect(r.tag.label).toBe("Te espera");
     expect(r.excerpt).toMatch(/GitHub en pausa hasta \d\d:\d\d/);
@@ -146,11 +149,11 @@ describe("rows", () => {
 
 describe("rail health", () => {
   it("stays quiet while every source is ok", () => {
-    expect(railHealth([state("github", "ok"), state("slack", "ok")], true)).toEqual([]);
+    expect(railHealth([state("github", "ok"), state("slack", "ok")], true, ctx)).toEqual([]);
   });
 
   it("lists every source plus Claude when one is down", () => {
-    const rows = railHealth([state("github", "ok"), state("slack", "down")], true);
+    const rows = railHealth([state("github", "ok"), state("slack", "down")], true, ctx);
     expect(rows.map((r) => [r.name, r.note])).toEqual([
       ["GitHub", "al día"],
       ["Slack", "sin conexión"],

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
 import { createRepos, type Repos } from "../repo";
-import { calendarEnabled } from "./calendar-env";
+import { calendarEnabled, calendarOwnerId } from "./calendar-env";
 import { feedConfig, type Env, type FetchLike } from "./calendar-feed";
-import { CalendarWorker } from "./calendar-worker";
+import { CalendarWorker, WINDOW_AHEAD_DAYS, WINDOW_BACK_DAYS } from "./calendar-worker";
 
 // A fixture feed. The address below is a made-up secret: no test ever prints it, and none may find it stored.
 const SECRET_URL = "https://calendar.google.com/calendar/ical/secret-owner%40example.com/private-0123456789abcdef/basic.ics";
@@ -101,6 +101,24 @@ describe("CalendarWorker", () => {
     expect(r.sources.get("calendar")).toMatchObject({ health: "ok", errorCount: 0, lastError: null, lastChecked: T0.toISOString(), cadenceS: 300, backoffUntil: null });
   });
 
+  it("keeps 13 weeks back to 26 weeks ahead of today (Bogota), nothing beyond", async () => {
+    expect([WINDOW_BACK_DAYS, WINDOW_AHEAD_DAYS]).toEqual([13 * 7, 26 * 7]);
+    const daily = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:daily@google.com", "DTSTART;TZID=America/Bogota:20260101T090000", "DTEND;TZID=America/Bogota:20260101T093000", "SUMMARY:Diaria", "RRULE:FREQ=DAILY", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    await worker(ok(daily)).run({ now: T0 });
+    const rows = r.calendar.list({ from: new Date("2026-01-01T00:00:00Z"), to: new Date("2028-01-01T00:00:00Z") });
+    expect(rows).toHaveLength(WINDOW_BACK_DAYS + WINDOW_AHEAD_DAYS);
+    expect(rows[0]!.startsAt).toBe("2026-08-12T14:00:00.000Z"); // 91 days before 11 Nov
+    expect(rows.at(-1)!.startsAt).toBe("2027-05-11T14:00:00.000Z"); // the last day before today + 182
+  });
+
+  it("remembers the feed's calendar name as the owner when the variable is missing", async () => {
+    const noOwner: Env = { MESA_GCAL_ICS_URL: SECRET_URL };
+    await worker(ok(FEED), noOwner).run({ now: T0 });
+    expect(calendarOwnerId(noOwner)).toBe("andres@example.com");
+    expect(calendarOwnerId({ ...noOwner, MESA_GCAL_OWNER_EMAIL: "Me@Example.com" })).toBe("me@example.com");
+    expect(calendarOwnerId({})).toBeNull(); // no feed on this board
+  });
+
   it("keeps ids stable across reads and replaces the rows (a deleted meeting disappears)", async () => {
     await worker(ok(FEED)).run({ now: T0 });
     const before = r.calendar.list({ from: new Date("2026-11-11T05:00:00Z"), to: new Date("2026-11-12T05:00:00Z") });
@@ -142,6 +160,33 @@ describe("CalendarWorker", () => {
     res = await worker(ok(FEED)).run({ now: at(120) });
     expect(res.state).toBe("ok");
     expect(r.sources.get("calendar")).toMatchObject({ health: "ok", errorCount: 0, backoffUntil: null });
+  });
+
+  it("the first tick after a start reads through a stored backoff; the next ticks honor it (t129)", async () => {
+    let reads = 0;
+    const counting: FetchLike = async () => {
+      reads += 1;
+      return { ok: true, status: 200, text: async () => FEED, headers: new Headers() };
+    };
+    // an outage before the restart left the calendar degraded, paused for 20 more minutes
+    r.sources.set("calendar", { health: "degraded", note: "sin conexión con Google", lastChecked: at(-2).toISOString(), errorCount: 2, lastError: "sin conexión con Google", cadenceS: 300, backoffUntil: at(20).toISOString() }, at(-2));
+    const w = worker(counting);
+    expect((await w.tick(T0)).state).toBe("ok");
+    expect(reads).toBe(1);
+    expect(r.sources.get("calendar")).toMatchObject({ health: "ok", backoffUntil: null });
+    // a later failure sets a backoff again and the second tick honors it
+    r.sources.set("calendar", { backoffUntil: at(30).toISOString() }, at(2));
+    expect(await w.tick(at(3))).toEqual({ state: "skipped", reason: "not_due" });
+    expect(reads).toBe(1);
+  });
+
+  it("a failed first tick backs off as any other failure (t129)", async () => {
+    r.sources.set("calendar", { health: "degraded", note: "x", lastChecked: at(-2).toISOString(), errorCount: 1, cadenceS: 300, backoffUntil: at(20).toISOString() }, at(-2));
+    const w = worker(status(503));
+    expect((await w.tick(T0)).state).toBe("error");
+    expect(r.sources.get("calendar")).toMatchObject({ health: "degraded", errorCount: 2 });
+    expect(r.sources.get("calendar").backoffUntil).toBe(at(20).toISOString()); // 300 s * 2^2
+    expect(await w.tick(at(5))).toEqual({ state: "skipped", reason: "not_due" });
   });
 
   it.each([
