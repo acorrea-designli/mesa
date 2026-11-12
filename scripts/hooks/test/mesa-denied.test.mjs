@@ -4,6 +4,7 @@ import { denied, RETRY } from "../mesa-denied.mjs";
 import { fakeAgent, fakeMesa, unreachable } from "./helpers.mjs";
 
 const FILE = "G:/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/calendar-body.mjs";
+const RULE = "Edit(//g/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/**)";
 const edit = (agentInput, over = {}) => ({
   ...agentInput,
   hook_event_name: "PermissionDenied",
@@ -18,7 +19,7 @@ const fast = { timeoutMs: 200, pollMs: 5, waitSec: 1, env: {} };
 
 const decided = (decision, extra = {}) =>
   fakeMesa({
-    "POST /api/approvals": [201, { approval: { id: "ap1" } }],
+    "POST /api/approvals": [201, { approval: { id: "ap1", rule: RULE } }],
     "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision, decidedBy: "andres", ...extra } },
   });
 
@@ -67,7 +68,7 @@ test("Lee tus configuraciones is not an allow", async () => {
 test("a timeout leaves the denial standing and decides nothing", async () => {
   const { input } = fakeAgent({ name: "dev-t128-2" });
   const mesa = fakeMesa({
-    "POST /api/approvals": [201, { approval: { id: "ap9" } }],
+    "POST /api/approvals": [201, { approval: { id: "ap9", rule: RULE } }],
     "GET /api/approvals/ap9": { approval: { id: "ap9", status: "pending", decision: null } },
   });
   assert.equal(await denied(edit(input), { ...fast, timeoutMs: 60, fetchImpl: mesa.fetchImpl }), null);
@@ -78,7 +79,7 @@ test("a timeout leaves the denial standing and decides nothing", async () => {
 test("an expired card leaves the denial standing", async () => {
   const { input } = fakeAgent({ name: "dev-t128-2" });
   const mesa = fakeMesa({
-    "POST /api/approvals": [201, { approval: { id: "ap2" } }],
+    "POST /api/approvals": [201, { approval: { id: "ap2", rule: RULE } }],
     "GET /api/approvals/ap2": { approval: { id: "ap2", status: "expired", decision: null } },
   });
   assert.equal(await denied(edit(input), { ...fast, fetchImpl: mesa.fetchImpl }), null);
@@ -99,7 +100,7 @@ test("Mesa going away while it waits still ends at the deadline with no retry", 
   const { input } = fakeAgent({ name: "dev-t128-2" });
   let n = 0;
   const fetchImpl = async (...a) => {
-    if (n++ === 0) return fakeMesa({ "POST /api/approvals": [201, { approval: { id: "ap3" } }] }).fetchImpl(...a);
+    if (n++ === 0) return fakeMesa({ "POST /api/approvals": [201, { approval: { id: "ap3", rule: RULE } }] }).fetchImpl(...a);
     throw new TypeError("fetch failed");
   };
   assert.equal(await denied(edit(input), { ...fast, timeoutMs: 80, fetchImpl }), null);
@@ -142,10 +143,38 @@ test("the lead passes through untouched unless MESA_APPROVAL_LEAD=1, then it is 
   assert.equal(await denied(lead, { ...fast, fetchImpl: unreachable }), null);
   const mesa = fakeMesa({
     "GET /api/lead/focus": { ticketRef: "t128" },
-    "POST /api/approvals": [201, { approval: { id: "ap1" } }],
+    "POST /api/approvals": [201, { approval: { id: "ap1", rule: RULE } }],
     "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision: "allow", decidedBy: "andres" } },
   });
   assert.deepEqual(await denied(lead, { ...fast, env: { MESA_APPROVAL_LEAD: "1" }, fetchImpl: mesa.fetchImpl }), RETRY);
   const filed = mesa.calls.find((c) => c.key === "POST /api/approvals").body;
   assert.deepEqual([filed.ticketRef, filed.agent, filed.role], ["t128", "lead", "lead"]);
+});
+
+test("a card with no rule can only be denied: the hook returns at once, without polling", async () => {
+  const { input } = fakeAgent({ name: "dev-t128-2" });
+  for (const approval of [{ id: "ap7", rule: "" }, { id: "ap7" }, { id: "ap7", rule: null }]) {
+    const mesa = fakeMesa({
+      "POST /api/approvals": [201, { approval }],
+      "GET /api/approvals/ap7": { approval: { id: "ap7", status: "decided", decision: "allow", decidedBy: "andres" } },
+    });
+    const t0 = Date.now();
+    assert.equal(await denied({ ...input, tool_name: "Bash", tool_input: { command: "rm x" }, reason: "[Irreversible Local Destruction]" }, { ...fast, timeoutMs: 5000, fetchImpl: mesa.fetchImpl }), null);
+    assert.ok(Date.now() - t0 < 1000);
+    assert.equal(mesa.calls.length, 1); // only the POST: the card stays visible and expires on its own
+  }
+});
+
+test("a card with a rule still waits for the decision", async () => {
+  const { input } = fakeAgent({ name: "dev-t128-2" });
+  let polls = 0;
+  const mesa = fakeMesa({
+    "POST /api/approvals": [201, { approval: { id: "ap8", rule: RULE } }],
+    "GET /api/approvals/ap8": () => {
+      polls++;
+      return { approval: polls < 3 ? { id: "ap8", status: "pending", decision: null } : { id: "ap8", status: "decided", decision: "allow", decidedBy: "andres" } };
+    },
+  });
+  assert.deepEqual(await denied(edit(input), { ...fast, timeoutMs: 5000, fetchImpl: mesa.fetchImpl }), RETRY);
+  assert.equal(polls, 3);
 });

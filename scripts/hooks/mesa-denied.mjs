@@ -78,6 +78,9 @@ export async function denied(input, { timeoutMs = 120_000, pollMs = 2000, waitSe
     });
     id = data.approval?.id ?? data.id;
     if (!id) return null;
+    // The server found no rule to propose (a command, an MCP tool, a path outside the worktrees, .claude, settings...):
+    // the card can only be denied, so there is nothing to wait for. It stays visible and expires on its own.
+    if (!data.approval?.rule) return null;
   } catch {
     return null;
   }
