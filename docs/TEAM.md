@@ -256,8 +256,11 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    - The only rule Mesa proposes is `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)` for an Edit, Write,
      MultiEdit or NotebookEdit on a file under `G:/WorkSpace/designli-wt` (`Edit` rules cover the other three; on
      Windows `G:` is `//g/`). **No rule** (the card offers only Denegar) for: a path outside the worktrees folder, a
-     `..`, anything under `.claude` or `.git`, `settings*.json`, a file in a worktree root, a name with a glob,
-     bracket, parenthesis or space, and every Bash, PowerShell or MCP call. Never `*`, `**`, a drive or a worktree root.
+     `..`, anything under a protected folder (`.git`, `.config/git`, `.vscode`, `.idea`, `.husky`, `.cargo`,
+     `.devcontainer`, `.yarn`, `.mvn`, `.claude`), `settings*.json`, a file in a worktree root, a name with a glob,
+     bracket, parenthesis or space, and every Bash, PowerShell or MCP call. Never `*`, `**`, a drive or a worktree
+     root. On allow the server also compares the re-derived rule with the one stored on the card (the one Andrés
+     saw) and writes nothing when they differ or the card had none.
    - Limits: Claude Code ignores `retry` when the classifier gave no verdict, and writes to protected paths are
      routed to the classifier even when an allow rule matches (permission-modes, protected paths). Whether the hook
      fires inside subagents is not stated in the docs; the first live use (t128 H7) is the check.

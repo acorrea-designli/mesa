@@ -116,6 +116,10 @@ export function approvalsRepo(db: Db) {
           // The rule is derived again here from the stored call: nothing a client sends can change it.
           const r = deniedRule(a.tool, a.deniedInput ? (JSON.parse(a.deniedInput) as unknown) : null, worktreesRoot());
           if (!r.ok) throw new TransitionError(`no se puede proponer una regla para esta llamada: ${r.why}`);
+          // What Andrés saw on the card is what gets written: a card with no rule, or one whose stored rule is not what
+          // the call derives now (a changed worktrees folder, a row edited outside the API), is never allowed.
+          if (!a.rule) throw new TransitionError("esta tarjeta no tenía una regla propuesta; solo se puede denegar");
+          if (r.rule !== a.rule) throw new TransitionError("la regla de la tarjeta ya no coincide con la que se deriva de la llamada; no se escribió nada");
           if (!opts.writeRule) throw new TransitionError("no settings writer for a denied card");
           rule = r.rule;
         }
