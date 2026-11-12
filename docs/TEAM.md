@@ -216,8 +216,9 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    - **Denegar**: denied, with his optional note.
 4. **Timeout (9 min), an error, an expired card or an unreachable Mesa: deny**, with the instruction to stop trying
    that call and post a ticket question or send `BLOCKED`.
-5. **"Pídeme permiso"** (his own flow). A classifier denial never reaches the hook unless a `permissions.ask` rule
-   matches the call, so no card appears. Every open ticket conversation has a **Pídeme permiso** button next to the
+5. **"Pídeme permiso"** (his own flow). A classifier denial never reaches the `PermissionRequest` hook unless a
+   `permissions.ask` rule matches the call; since t128 it files a different card through `PermissionDenied` (item 7),
+   and this flow stays for a call that card cannot unblock. Every open ticket conversation has a **Pídeme permiso** button next to the
    composer: it posts his message "Pídeme permiso" (marked `kind: permission_request`, referring to the latest Claude
    message) and wakes the ticket's live owner with `ticket.permission_requested { ticketRef, messageId }`. The lead
    relays `ANSWER <ref> permission_requested <message id>` to the live owner, who relays it to the teammate that is
@@ -239,6 +240,27 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    `[0:0:0:0:0:0:0:1]`), `//approve` and `//api` (with `curl -L`), quoted segments, variable splicing (`A=approve`),
    and tool-name disguises (`cu''rl`, `c\url`). G10 and the rule that agents never decide are the only barrier until
    improvement 13 (a credential for Andrés's UI). Security hardening is on hold until he asks.
+7. **"Bloqueado por el modo automático"** (t128, the `PermissionDenied` hook, `scripts/hooks/mesa-denied.mjs`). When
+   auto mode denies a call, Claude Code runs this hook (it fires only in auto mode, with `tool_name`, `tool_input`,
+   `reason`; it cannot undo the denial, it can only tell the model it may retry). The hook resolves the agent and the
+   ticket like `mesa-approval.mjs` (the lead's focus ticket for the lead) and files a card of `kind: "denied"` with
+   the tool, the exact call, the denial reason and the proposed rule, then waits up to **120 s**:
+   - **Permitir esta regla**: the Mesa **server** (never Claude, never a rule sent by a client) derives the rule again
+     from the stored call (`src/lib/domain/denied-rule.ts`) and appends it to
+     `G:/WorkSpace/designli/.claude/settings.local.json` `permissions.allow` (`MESA_SETTINGS_LOCAL` overrides the
+     path; dedup, the rest of the JSON kept, atomic write, refused in the sandbox). The hook answers
+     `hookSpecificOutput.retry: true`; the agent retries the exact call, and an allow rule resolves a call before
+     auto mode's check (permission-modes, decision order step 1). The decided card records who, when and the rule.
+   - **Denegar**, a timeout, an unreachable Mesa or any crash: no retry, the denial stands, and the card shows how it
+     ended. There is no "Lee tus configuraciones" on this card.
+   - The only rule Mesa proposes is `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)` for an Edit, Write,
+     MultiEdit or NotebookEdit on a file under `G:/WorkSpace/designli-wt` (`Edit` rules cover the other three; on
+     Windows `G:` is `//g/`). **No rule** (the card offers only Denegar) for: a path outside the worktrees folder, a
+     `..`, anything under `.claude` or `.git`, `settings*.json`, a file in a worktree root, a name with a glob,
+     bracket, parenthesis or space, and every Bash, PowerShell or MCP call. Never `*`, `**`, a drive or a worktree root.
+   - Limits: Claude Code ignores `retry` when the classifier gave no verdict, and writes to protected paths are
+     routed to the classifier even when an allow rule matches (permission-modes, protected paths). Whether the hook
+     fires inside subagents is not stated in the docs; the first live use (t128 H7) is the check.
 
 **The lead's prompts.** They stay in his terminal (the hook passes the main thread through); `MESA_APPROVAL_LEAD=1`
 routes them to Mesa too. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the
@@ -257,6 +279,7 @@ piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
 |---|---|---|
 | PreToolUse (SendMessage, Bash, PowerShell, Chrome navigate, Slack, Basecamp, Google Calendar) | `mesa-guardrails.mjs` (exit 2 blocks) | **G1** Chrome navigate needs a tabId · **G2** no message to a retired agent · **G3** 12-line limit, no acks · **G4** teammates never write to Slack, Basecamp, Google Calendar or GitHub; `gh api` is GET-only for everyone; `mesa salida withdraw` and `mesa review close` are the lead's too · **G5** the lead's Basecamp sends must match a released salida's approved text, and its Slack calls the salida's mode (`slack_send_message_draft` for a draft-mode one, `slack_send_message` for "Claude lo envía", each with the exact text and the salida's `channel_id`/`thread_ts`), its pr-gh.mjs writes need a released github salida for that PR; its Google Calendar `create_event` (the connector, t112) must equal a released calendar salida's approved event (title, start and end as instants, invitees as a set, Meet, description: the body is one field per line, `scripts/hooks/calendar-body.mjs`) and every other Google Calendar write (update, delete, respond) is refused; reads pass; Mesa down = blocked · **G6** git/gh/tests never in the background (only `mesa wait` and the Mesa server) · **G7** draft PRs only, no bare force push, no skipped hooks, no `gh auth` · **G10** blocks curl-style calls to the approve (and its Slack mode), schedule, deny, undo, "Ya lo envié" and permission-decision routes (partial, see section 6.6) · **G11** sandbox only (`MESA_ENV=sandbox`): no Slack/Basecamp/Google Calendar/GitHub write, no `git push`, `mesa salida sent` and `mesa salida drafted` only `--simulated`, no call to :8790 (`docs/SANDBOX.md`) · **G12** a `reviewer`'s `mesa ticket reply` is one line: blocked when the body (heredoc or quoted `--body`) has more than 2 non-empty lines, a `path/file.ext:NN` or a 7-40 hex sha, because the findings are already on the review card (`mesa-review` § Ask); it is also blocked when the body is not visible in the command (`--body -` fed by a pipe or a `<` file, `--body` from a variable or `$(...)`, on any line of the command, or a heredoc with an unquoted delimiter or a `@"..."@` here-string whose text has a `$` or a backtick), and the reply must then be a quoted heredoc (`<<'EOF'`, PowerShell `@'...'@`); the lead, tl, dev and writer are not affected |
 | PermissionRequest (all tools) | `mesa-approval.mjs` | § 6 |
+| PermissionDenied (all tools; auto mode only) | `mesa-denied.mjs` | § 6.7 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
 
 **Global guard (outside this repo).** `C:/Users/z4yross/.claude/hooks/commit-guard.mjs` runs for every session on

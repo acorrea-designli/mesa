@@ -30,6 +30,7 @@ const fwd = (p) => p.replace(/\\/g, "/");
 
 export const HOOK_SCRIPTS = {
   approval: "scripts/hooks/mesa-approval.mjs",
+  denied: "scripts/hooks/mesa-denied.mjs",
   guard: "scripts/hooks/mesa-handoff-guard.mjs",
   rails: "scripts/hooks/mesa-guardrails.mjs",
 };
@@ -45,6 +46,8 @@ export function hookEntries(repo, node, env = "live") {
       },
     ],
     PermissionRequest: [{ hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.approval), timeout: 600 }] }],
+    // t128: a call auto mode denied becomes a "Bloqueado por el modo automático" card; the hook waits up to 120 s for it.
+    PermissionDenied: [{ hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.denied), timeout: 150 }] }],
     Stop: [{ hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.guard), timeout: 15 }] }],
     SubagentStop: [{ hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.guard), timeout: 15 }] }],
   };

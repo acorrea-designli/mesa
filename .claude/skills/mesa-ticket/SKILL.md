@@ -106,6 +106,17 @@ blocked. Mesa never edits settings or files the card for you. The blocked agent:
 2. Retries the exact call once. The `mesa-approval` hook files the ApprovalCard on this ticket; wait for it.
 3. After his decision, removes the ask rule, unless he says to keep it (then say so in the handoff).
 
+## "Bloqueado por el modo automático" (a call auto mode denied)
+
+When auto mode denies a call of a teammate (or of the lead while it has a focus ticket), the `PermissionDenied` hook
+(`mesa-denied.mjs`) files a card on that ticket with the tool, the exact call, the denial reason and the proposed
+rule, and waits 120 s. Nobody in the team writes the rule: Andrés presses **Permitir esta regla** and the Mesa server
+derives it from the stored call (only `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)`, never `.claude`,
+settings, a worktree root, a command or an MCP tool) and appends it to `settings.local.json`; the hook then tells the
+agent to retry once. **Denegar**, a timeout or no rule: the denial stands. The owner reads the card's outcome in the
+ticket, never works around a denial and never edits a settings file; a call with no rule goes to Andrés as a ticket
+question (`docs/TEAM.md` § 6.7).
+
 The lead's own prompts with no ticket show in Hoy, Permisos. While it acts for a ticket it runs
 `mesa lead focus <ref>` (`--clear` when done; it lapses 2 h after the last set, so run it again to renew) so the
 hook files them to that ticket.

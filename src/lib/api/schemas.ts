@@ -387,6 +387,10 @@ export const approvalInput = z.object({
   cwd: z.string().optional(),
   hints: z.array(z.string()).max(10).optional(),
   expiresAt: isoDate.optional(),
+  // t128 part H: a card for a call auto mode already denied. There is no `rule` field on purpose: the server derives it.
+  kind: z.enum(["permission", "denied"]).optional(),
+  reason: z.string().max(2000).optional(),
+  toolInput: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ---------- reviews ----------
