@@ -26,7 +26,10 @@
 //                A Google Calendar create_event (the connector, t112) passes only for a released, unsent, non-sample
 //                `calendar` salida whose approved body (title, start, end, invitees, Meet, description: one field per
 //                line, scripts/hooks/calendar-body.mjs) is exactly what the call writes; any other Google Calendar write
-//                (update, delete, respond, move) is refused outright: Mesa only creates, and only from a released salida.
+//                (delete, respond, move to another calendar) is refused outright. An update_event / patch_event (t131) passes
+//                only for a released, unsent, non-sample calendar MOVE salida (body "Mover: <eventId>", scripts/hooks/
+//                calendar-move.mjs) whose eventId, calendar, start and end instants the call matches exactly, with no
+//                parameter beyond eventId/calendarId/startTime/endTime/timeZone/notificationLevel.
 //                Mesa unreachable = blocked (nothing goes out unseen).
 //   G10 (rule 3) Nobody approves (and so never picks the Slack mode), schedules, denies or undoes a salida, closes a
 //                Slack draft as sent ("Ya lo envié"), approves a plan or decides a permission card through the raw
@@ -45,6 +48,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { eventFromCall, eventMismatches, parseEventBody } from "./calendar-body.mjs";
+import { moveMismatches, parseMoveBody } from "./calendar-move.mjs";
 import { hookSandbox, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
@@ -60,6 +64,7 @@ const GCAL = /^mcp__(?:claude_ai_)?google[_-]?calendar[^_]*__(.+)$/i;
 // authenticate / complete_authentication are the connector's own sign-in (plan action 1): they write nothing to the calendar.
 const GCAL_READ = /^(list|get|find|search|read|check|query|free|suggest|fetch|show|view|lookup|authenticate|complete[_-]?authentication)/i;
 const GCAL_CREATE = /^(create|insert|add)[_-]?event$/i;
+const GCAL_UPDATE = /^(update|patch)[_-]?event$/i;
 const gcalAction = (tool) => GCAL.exec(tool)?.[1] ?? null;
 const isGcalWrite = (tool) => {
   const a = gcalAction(tool);
@@ -255,6 +260,27 @@ async function releasedCalendarSalida(ti, { fetchImpl, base }) {
     const parsed = body === null ? null : parseEventBody(body);
     if (!parsed?.ok) continue;
     const diff = eventMismatches(parsed.fields, call, slackDestination(s));
+    if (!diff.length) return { match: s, id: s.id };
+    if (!near || diff.length < near.mismatches.length) near = { id: s.id, mismatches: diff };
+  }
+  return { match: null, near };
+}
+
+// The released calendar MOVE salida an update_event call is exactly: { match } or { near } (the closest one).
+async function releasedMoveSalida(ti, { fetchImpl, base }) {
+  const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
+  const list = (data.salidas ?? data ?? []).filter((s) => s.source === "calendar" && (s.releasedAt ?? s.released_at) && !s.isSample && !(s.sentAt ?? s.sent_at));
+  let near = null;
+  for (const item of list) {
+    let s = item;
+    if (approvedBody(s) === null) {
+      const full = await mesaCall(`/api/salidas/${encodeURIComponent(item.id)}`, { fetchImpl, base, timeoutMs: 4000 });
+      s = full.salida ?? full;
+    }
+    const body = approvedBody(s);
+    const parsed = body === null ? null : parseMoveBody(body);
+    if (!parsed?.ok) continue;
+    const diff = moveMismatches(parsed.fields, ti, slackDestination(s));
     if (!diff.length) return { match: s, id: s.id };
     if (!near || diff.length < near.mismatches.length) near = { id: s.id, mismatches: diff };
   }
@@ -462,8 +488,20 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
   }
   // Google Calendar: the lead creates an event only from a released calendar salida, with exactly its approved fields.
   if (!teammate && isGcalWrite(tool)) {
+    if (GCAL_UPDATE.test(gcalAction(tool))) {
+      let found;
+      try {
+        found = await releasedMoveSalida(ti, { fetchImpl, base });
+      } catch (err) {
+        return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this move cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and move the event on salida.released.`);
+      }
+      if (!found.match) {
+        return block("G5", found.near ? `rule 3: no released calendar move salida is exactly this update. The nearest is ${found.near.id}; the call differs: ${found.near.mismatches.join("; ")}. Call update_event with only eventId, startTime, endTime and timeZone (plus notificationLevel when Avisar is no) exactly as the approved body says, or propose a new version for Andrés to approve.` : "rule 3: no released calendar move salida in Mesa matches this update. Move an event only on `salida.released` of a calendar salida whose body starts with `Mover: <eventId>` (Andrés approved it and the 20 s undo window is over), then `mesa salida sent <id>`.");
+      }
+      return null;
+    }
     if (!GCAL_CREATE.test(gcalAction(tool))) {
-      return block("G5", `rule 3: ${tool} changes Andrés's Google Calendar. Mesa only creates events, and only from a released calendar salida (create_event on salida.released). Updates, deletes and answers to invitations are his to make in Google Calendar.`);
+      return block("G5", `rule 3: ${tool} changes Andrés's Google Calendar. Mesa only creates events (create_event) and moves them (update_event), and only from a released calendar salida. Deletes, calendar changes and answers to invitations are his to make in Google Calendar.`);
     }
     let found;
     try {

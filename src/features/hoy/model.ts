@@ -3,6 +3,7 @@
 import type { StatusTone } from "@/components/ui/primitives";
 import type { Approval, CalendarEvent, Destination, Item, LineSource, Salida, Source, Station, TicketStatus, WaitOn } from "@/lib/domain/types";
 import { eventWhen, parseEventBody } from "@/lib/domain/calendar-event";
+import { parseMoveBody } from "@/lib/domain/calendar-move";
 import { TICKET_STATUS_LABEL } from "@/lib/domain/ticket-machine";
 import { STATION_LABEL } from "@/lib/domain/types";
 import { chipOfMeta, type FilesChip } from "@/lib/domain/files";
@@ -248,6 +249,7 @@ export function salidaRow(s: Salida, body: string, time: string): HoyRow {
   const quote = firstLine(body);
   // A calendar salida's body is the event, one field per line: the row says what and when, not "Título: …".
   const ev = s.source === "calendar" ? parseEventBody(body) : null;
+  const mv = s.source === "calendar" && !ev?.ok ? parseMoveBody(body) : null;
   return {
     key: `sa:${s.id}`,
     kind: "salida",
@@ -255,8 +257,8 @@ export function salidaRow(s: Salida, body: string, time: string): HoyRow {
     station: "inbox",
     source: s.source,
     time,
-    subject: ev?.ok ? `Crear evento · ${ev.fields.title}` : `Para ${destinationLabel(s.destination)}`,
-    excerpt: ev?.ok ? eventWhen(ev.fields) : quote ? `“${quote}”` : s.title,
+    subject: ev?.ok ? `Crear evento · ${ev.fields.title}` : mv?.ok ? `Mover evento · ${mv.fields.title}` : `Para ${destinationLabel(s.destination)}`,
+    excerpt: ev?.ok ? eventWhen(ev.fields) : mv?.ok ? eventWhen(mv.fields) : quote ? `“${quote}”` : s.title,
     need: "Aprobar",
     tag: { tone: "you", label: "Por enviar" },
     phoneTag: { tone: "you", label: "Firmar" },
