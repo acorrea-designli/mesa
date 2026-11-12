@@ -572,10 +572,17 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
   return (
     <div className="tk-files">
       {atts.map((a) => (
-        <a key={a.id} className="tk-att" href={`/api/tickets/${ticketId}/attachments/${a.id}`} target="_blank" rel="noreferrer">
-          <IcFile />
-          <span className="tk-att-t">{a.filename}</span> <small>{fmtSize(a.size)}</small>
-        </a>
+        <span key={a.id} className="tk-att-row">
+          <a className="tk-att" href={`/api/tickets/${ticketId}/attachments/${a.id}`} target="_blank" rel="noreferrer">
+            <IcFile />
+            <span className="tk-att-t">{a.filename}</span> <small>{fmtSize(a.size)}</small>
+          </a>
+          {a.mime === "application/pdf" ? (
+            <Link className="tk-att tk-review" href={`/tickets/${ticketId}/pdf/${a.id}`} aria-label={`Revisar ${a.filename}`}>
+              Revisar
+            </Link>
+          ) : null}
+        </span>
       ))}
     </div>
   );
