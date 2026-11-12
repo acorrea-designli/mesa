@@ -64,8 +64,9 @@ export function parseMoveBody(body) {
 
 // update_event's parameters (the claude.ai connector's schema): a move may carry ONLY these.
 const ALLOWED = new Set(["eventId", "calendarId", "startTime", "endTime", "timeZone", "notificationLevel"]);
-// Its own unset predicate (lesson review/acorrea-designli/mesa/guard-unknown-params): `false` is a value for every
-// parameter outside the allowed list (allDay: false, guestPermissions: {guestsCanModify: false} change the event).
+// A parameter outside the allowed list counts whenever it is present at all: on update_event "", null, [] and {} can CLEAR a
+// field (title, location, Meet link) and `false` changes one (allDay, guestsCanModify), so only undefined is nothing.
+// isUnset is for the allowed keys only: there an empty value means "the default".
 const isUnset = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0) || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
 
 const offsetAt = (ms, tz) => {
@@ -75,17 +76,17 @@ const offsetAt = (ms, tz) => {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
 };
 
-// The connector's startTime/endTime: an ISO with an offset or Z is exact; one without is wall-clock time in `tz`.
+// The connector reads startTime/endTime as wall-clock time in timeZone (an offset or Z is not part of its format, and with
+// timeZone set it would be read as local time anyway). So only a strict local ISO is accepted, and its instant is
+// resolved in the approved Zona.
+const LOCAL = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 function instantOf(v, tz) {
-  if (typeof v !== "string") return null;
-  const s = v.trim();
-  if (/(Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
-    const ms = Date.parse(s.replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
-    return Number.isNaN(ms) ? null : ms;
-  }
-  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+  const m = typeof v === "string" ? LOCAL.exec(v) : null;
   if (!m || !validZone(tz)) return null;
   const guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0));
+  const d = new Date(guess);
+  // Date.UTC rolls 2026-02-31 over to March: a date that is not on the calendar is not accepted.
+  if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3] || +m[4] > 23 || +m[5] > 59 || +(m[6] ?? 0) > 59) return null;
   const t1 = guess - offsetAt(guess, tz);
   return guess - offsetAt(t1, tz);
 }
@@ -94,7 +95,7 @@ function instantOf(v, tz) {
 export function moveMismatches(approved, ti, destination = {}) {
   const call = ti ?? {};
   const out = [];
-  for (const k of Object.keys(call)) if (!ALLOWED.has(k) && !isUnset(call[k])) out.push(`parameter not in the approved move: ${k}`);
+  for (const k of Object.keys(call)) if (!ALLOWED.has(k) && call[k] !== undefined) out.push(`parameter not in the approved move: ${k}`);
 
   if (call.eventId !== approved.eventId) out.push(`eventId: approved ${approved.eventId}, call ${typeof call.eventId === "string" ? call.eventId : "missing"}`);
   const wantCal = destination?.calendar || "primary";
@@ -103,19 +104,20 @@ export function moveMismatches(approved, ti, destination = {}) {
 
   const tz = isUnset(call.timeZone) ? null : call.timeZone;
   if (tz !== null && tz !== approved.timeZone) out.push(`time zone: approved ${approved.timeZone}, call ${String(tz)}`);
-  // Both times are required: startTime alone keeps the event's duration, which the approval did not cover.
+  // Both times are required (startTime alone keeps the event's duration, which the approval did not cover), as strict local
+  // times (no offset, no Z) with timeZone equal to the approved Zona.
+  if (tz === null) out.push(`timeZone: required, the approved ${approved.timeZone} (startTime and endTime are local times)`);
   for (const [name, raw, want] of [["startTime", call.startTime, approved.start], ["endTime", call.endTime, approved.end]]) {
     if (isUnset(raw)) {
       out.push(`${name}: required (approved ${want})`);
       continue;
     }
-    const hasOffset = typeof raw === "string" && /(Z|[+-]\d{2}:?\d{2})$/i.test(raw.trim());
-    if (!hasOffset && tz !== approved.timeZone) {
-      out.push(`${name}: has no offset, so timeZone must be the approved ${approved.timeZone}`);
+    if (typeof raw !== "string" || !LOCAL.test(raw)) {
+      out.push(`${name}: must be a local time YYYY-MM-DDTHH:MM[:SS] with no offset or Z (got ${JSON.stringify(raw)}); the zone goes in timeZone`);
       continue;
     }
     const got = instantOf(raw, approved.timeZone);
-    if (got !== Date.parse(want)) out.push(`${name}: approved ${want}, call ${got === null ? "unreadable" : new Date(got).toISOString()}`);
+    if (got !== Date.parse(want)) out.push(`${name}: approved ${want}, call ${got === null ? "unreadable" : new Date(got).toISOString()} (read in ${approved.timeZone})`);
   }
 
   // notificationLevel defaults to ALL: Avisar sí passes with ALL or nothing, Avisar no needs NONE.

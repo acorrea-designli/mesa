@@ -159,8 +159,9 @@ creating. Guests receive Google's invitation e-mail when the event is created: t
 
 **Calendar move** (`source: calendar`, body starts with `Mover: <eventId>`, fields `Mover`, `Título` (display only), `Inicio`, `Fin`,
 `Zona`, `Avisar: sí|no`; propose it with `mesa salida propose --source calendar --dest '{"kind":"calendar_event","calendar":"primary","postAs":"Andrés Correa"}' --body -`):
-step 2 is ONE `update_event` call with exactly `eventId`, `startTime` and `endTime` (local time without offset) and `timeZone`
-(the approved Zona), plus `notificationLevel: NONE` only when `Avisar: no` (`Avisar: sí` is the default, ALL). Any other parameter
+step 1 is `get_event` with the `eventId`: if it is not found or its summary differs from `Título`, `MESA salida bounce <id>` with the reason and
+tell Andrés in the ticket (never move an event you could not identify). Step 2 is ONE `update_event` call with exactly `eventId`,
+`startTime` and `endTime` (local time `YYYY-MM-DDTHH:MM:SS`, no offset or Z) and `timeZone` (the approved Zona, required), plus `notificationLevel: NONE` only when `Avisar: no` (`Avisar: sí` is the default, ALL). Any other parameter
 (summary, attendees, Meet, description, reminders, `allDay`, ...) makes G5 refuse the call. Step 3 is `MESA salida sent <id>`.
 Guests get Google's update e-mail when `Avisar: sí`: that is what he approved.
 

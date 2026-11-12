@@ -54,11 +54,12 @@ test("move body: parses the approved fields and refuses a malformed one", () => 
 test("G5: update_event passes only for a released move salida with exactly its eventId and times", async () => {
   const mesa = mesaWith(salida());
   assert.equal(await rule(run(lead, UPDATE, call, mesa.fetchImpl)), null);
-  // an offset on the times makes timeZone optional; the instant is what counts
-  assert.equal(await rule(run(lead, UPDATE, { eventId: ID, startTime: "2026-11-13T16:00:00Z", endTime: "2026-11-13T16:30:00Z" }, mesa.fetchImpl)), null);
+  // seconds are optional
+  assert.equal(await rule(run(lead, UPDATE, { ...call, startTime: "2026-11-13T11:00", endTime: "2026-11-13T11:30" }, mesa.fetchImpl)), null);
   assert.equal(await rule(run(lead, UPDATE, { ...call, calendarId: "primary", notificationLevel: "ALL" }, mesa.fetchImpl)), null);
-  // empty values say nothing
-  assert.equal(await rule(run(lead, UPDATE, { ...call, summary: "", addedAttendees: [], description: null, notificationLevel: "" }, mesa.fetchImpl)), null);
+  // an empty value of an allowed key means "the default"; undefined is absent
+  assert.equal(await rule(run(lead, UPDATE, { ...call, calendarId: "", notificationLevel: "" }, mesa.fetchImpl)), null);
+  assert.equal(await rule(run(lead, UPDATE, { ...call, summary: undefined }, mesa.fetchImpl)), null);
   // patch_event is the same gate
   assert.equal(await rule(run(lead, "mcp__claude_ai_Google_Calendar__patch_event", call, mesa.fetchImpl)), null);
   // the full salida is fetched when the list does not carry the approved body
@@ -74,7 +75,7 @@ test("G5: a different eventId or different times are refused and say what differ
     [{ ...call, eventId: undefined }, /eventId/],
     [{ ...call, startTime: "2026-11-13T12:00:00" }, /startTime/],
     [{ ...call, endTime: "2026-11-13T12:00:00" }, /endTime/],
-    [{ ...call, startTime: "2026-11-13T11:00:00-04:00" }, /startTime/],
+    [{ ...call, startTime: "2026-11-13T11:00:00-04:00" }, /startTime: must be a local time/],
     [{ ...call, startTime: "garbage" }, /startTime/],
     [{ ...call, calendarId: "boss@example.com" }, /calendar: approved primary/],
     [{ ...call, timeZone: "America/New_York" }, /time zone/],
@@ -92,12 +93,34 @@ test("G5: both times are required, and a time with no offset needs the approved 
   const { endTime, ...noEnd } = call;
   const { startTime, ...noStart } = call;
   const { timeZone, ...noZone } = call;
-  const mixed = { eventId: ID, startTime: "2026-11-13T11:00:00-05:00", endTime: "2026-11-13T11:30:00" };
-  for (const [input, re] of [[noEnd, /endTime: required/], [noStart, /startTime: required/], [{ eventId: ID }, /startTime: required/], [noZone, /no offset/], [mixed, /endTime: has no offset/]]) {
+  const mixed = { ...call, startTime: "2026-11-13T11:00:00-05:00" };
+  for (const [input, re] of [[noEnd, /endTime: required/], [noStart, /startTime: required/], [{ eventId: ID }, /startTime: required/], [noZone, /timeZone: required/], [mixed, /startTime: must be a local time/]]) {
     const r = await run(lead, UPDATE, input, mesa.fetchImpl);
     assert.equal(r?.rule, "G5", JSON.stringify(input));
     assert.match(r.reason, re);
   }
+});
+
+test("G5: times with an offset or Z, or in a loose format, are refused (the connector reads the wall clock in timeZone)", async () => {
+  const mesa = mesaWith(salida());
+  const loose = [
+    "2026-11-13T16:00:00Z", // the right instant, but with timeZone Bogota the connector would read 16:00 Bogota
+    "2026-11-13T11:00:00-05:00", // same instant as approved, offset form
+    "2026-11-13T11:00:00.000Z",
+    "Fri Nov 13 2026 11:00:00 GMT-0500",
+    "2026-11-13 11:00:00",
+    "2026-11-13",
+    "11:00",
+    "2026-02-31T11:00:00",
+  ];
+  for (const t of loose) {
+    for (const input of [{ ...call, startTime: t }, { ...call, endTime: t }, { eventId: ID, startTime: t, endTime: t }]) {
+      const r = await run(lead, UPDATE, input, mesa.fetchImpl);
+      assert.equal(r?.rule, "G5", `${t} ${JSON.stringify(input)}`);
+    }
+  }
+  const r = await run(lead, UPDATE, { ...call, startTime: "2026-11-13T16:00:00Z", endTime: "2026-11-13T16:30:00Z" }, mesa.fetchImpl);
+  assert.match(r.reason, /local time/);
 });
 
 test("G5: any parameter outside eventId, calendarId, startTime, endTime, timeZone, notificationLevel is refused", async () => {
@@ -128,7 +151,15 @@ test("G5: any parameter outside eventId, calendarId, startTime, endTime, timeZon
     assert.equal(r?.rule, "G5", k);
     assert.match(r.reason, new RegExp(`parameter not in the approved move: ${k}`));
   }
-  // false is a value for an unknown parameter (lesson #4073): allDay: false and useDefaultReminders: false are refused
+  // false AND the empty values are values for an unknown parameter (lesson #4073): an empty summary, location or
+  // googleMeetUrl can clear the field on the client's event
+  for (const k of ["summary", "description", "location", "googleMeetUrl", "colorId", "addedAttendees", "removedAttendeeEmails", "addedAttachments", "guestPermissions", "overrideReminders"]) {
+    for (const empty of ["", null, [], {}]) {
+      const r = await run(lead, UPDATE, { ...call, [k]: empty }, mesa.fetchImpl);
+      assert.equal(r?.rule, "G5", `${k}=${JSON.stringify(empty)}`);
+      assert.match(r.reason, new RegExp(`parameter not in the approved move: ${k}`));
+    }
+  }
   for (const k of ["allDay", "useDefaultReminders", "guestsCanModify"]) assert.equal(await rule(run(lead, UPDATE, { ...call, [k]: false }, mesa.fetchImpl)), "G5", k);
 });
 
