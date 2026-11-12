@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
 import { createRepos, type Repos } from "../repo";
-import { calendarEnabled } from "./calendar-env";
+import { calendarEnabled, calendarOwnerId } from "./calendar-env";
 import { feedConfig, type Env, type FetchLike } from "./calendar-feed";
-import { CalendarWorker } from "./calendar-worker";
+import { CalendarWorker, WINDOW_AHEAD_DAYS, WINDOW_BACK_DAYS } from "./calendar-worker";
 
 // A fixture feed. The address below is a made-up secret: no test ever prints it, and none may find it stored.
 const SECRET_URL = "https://calendar.google.com/calendar/ical/secret-owner%40example.com/private-0123456789abcdef/basic.ics";
@@ -99,6 +99,24 @@ describe("CalendarWorker", () => {
       ["Revisión de onboarding Bseen", "accepted", "https://meet.google.com/abc-defg-hij", 2],
     ]);
     expect(r.sources.get("calendar")).toMatchObject({ health: "ok", errorCount: 0, lastError: null, lastChecked: T0.toISOString(), cadenceS: 300, backoffUntil: null });
+  });
+
+  it("keeps 13 weeks back to 26 weeks ahead of today (Bogota), nothing beyond", async () => {
+    expect([WINDOW_BACK_DAYS, WINDOW_AHEAD_DAYS]).toEqual([13 * 7, 26 * 7]);
+    const daily = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:daily@google.com", "DTSTART;TZID=America/Bogota:20260101T090000", "DTEND;TZID=America/Bogota:20260101T093000", "SUMMARY:Diaria", "RRULE:FREQ=DAILY", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    await worker(ok(daily)).run({ now: T0 });
+    const rows = r.calendar.list({ from: new Date("2026-01-01T00:00:00Z"), to: new Date("2028-01-01T00:00:00Z") });
+    expect(rows).toHaveLength(WINDOW_BACK_DAYS + WINDOW_AHEAD_DAYS);
+    expect(rows[0]!.startsAt).toBe("2026-08-12T14:00:00.000Z"); // 91 days before 11 Nov
+    expect(rows.at(-1)!.startsAt).toBe("2027-05-11T14:00:00.000Z"); // the last day before today + 182
+  });
+
+  it("remembers the feed's calendar name as the owner when the variable is missing", async () => {
+    const noOwner: Env = { MESA_GCAL_ICS_URL: SECRET_URL };
+    await worker(ok(FEED), noOwner).run({ now: T0 });
+    expect(calendarOwnerId(noOwner)).toBe("andres@example.com");
+    expect(calendarOwnerId({ ...noOwner, MESA_GCAL_OWNER_EMAIL: "Me@Example.com" })).toBe("me@example.com");
+    expect(calendarOwnerId({})).toBeNull(); // no feed on this board
   });
 
   it("keeps ids stable across reads and replaces the rows (a deleted meeting disappears)", async () => {
