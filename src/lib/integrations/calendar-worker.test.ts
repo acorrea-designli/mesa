@@ -162,6 +162,33 @@ describe("CalendarWorker", () => {
     expect(r.sources.get("calendar")).toMatchObject({ health: "ok", errorCount: 0, backoffUntil: null });
   });
 
+  it("the first tick after a start reads through a stored backoff; the next ticks honor it (t129)", async () => {
+    let reads = 0;
+    const counting: FetchLike = async () => {
+      reads += 1;
+      return { ok: true, status: 200, text: async () => FEED, headers: new Headers() };
+    };
+    // an outage before the restart left the calendar degraded, paused for 20 more minutes
+    r.sources.set("calendar", { health: "degraded", note: "sin conexión con Google", lastChecked: at(-2).toISOString(), errorCount: 2, lastError: "sin conexión con Google", cadenceS: 300, backoffUntil: at(20).toISOString() }, at(-2));
+    const w = worker(counting);
+    expect((await w.tick(T0)).state).toBe("ok");
+    expect(reads).toBe(1);
+    expect(r.sources.get("calendar")).toMatchObject({ health: "ok", backoffUntil: null });
+    // a later failure sets a backoff again and the second tick honors it
+    r.sources.set("calendar", { backoffUntil: at(30).toISOString() }, at(2));
+    expect(await w.tick(at(3))).toEqual({ state: "skipped", reason: "not_due" });
+    expect(reads).toBe(1);
+  });
+
+  it("a failed first tick backs off as any other failure (t129)", async () => {
+    r.sources.set("calendar", { health: "degraded", note: "x", lastChecked: at(-2).toISOString(), errorCount: 1, cadenceS: 300, backoffUntil: at(20).toISOString() }, at(-2));
+    const w = worker(status(503));
+    expect((await w.tick(T0)).state).toBe("error");
+    expect(r.sources.get("calendar")).toMatchObject({ health: "degraded", errorCount: 2 });
+    expect(r.sources.get("calendar").backoffUntil).toBe(at(20).toISOString()); // 300 s * 2^2
+    expect(await w.tick(at(5))).toEqual({ state: "skipped", reason: "not_due" });
+  });
+
   it.each([
     ["TimeoutError", "Google no respondió a tiempo"],
     ["TypeError", "sin conexión con Google"],

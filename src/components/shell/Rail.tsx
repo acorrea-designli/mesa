@@ -7,6 +7,7 @@ import { NotifyToggle, SoundToggle } from "@/features/notify/NotifyToggle";
 import { ThemeToggle } from "../ui/interactive";
 import { DeckLine } from "@/features/deck/DeckLine";
 import { UsageLine } from "@/features/usage/UsageLine";
+import { useLiveRefresh } from "@/lib/live/useLive";
 import { usePress } from "@/lib/motion";
 import type { SourceHealth } from "./health";
 import { SourceHealthList } from "./SourceHealthList";
@@ -26,6 +27,9 @@ export const isActive = (path: string, href: string) => (href === "/" ? path ===
 export function Rail({ counts, health = [] }: { counts: Counts; health?: (SourceHealth & { name: string })[] }) {
   const path = usePathname();
   const ref = usePress<HTMLElement>(".nav");
+  // The Fuentes rows change with the clock and with sessions, not only with writes (health-ticker.ts):
+  // refresh on source changes on every screen, including those with no live refresh of their own.
+  useLiveRefresh({ entityTypes: ["source"] });
   return (
     <aside className="rail" ref={ref} aria-label="Navegación">
       <div className="brand">
