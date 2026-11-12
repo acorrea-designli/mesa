@@ -733,6 +733,8 @@ export interface CalendarAttendee {
 export interface CalendarEvent {
   id: string;
   uid: string;
+  /** The occurrence's ORIGINAL start (UTC ISO); with `uid` it names one occurrence of a series. */
+  occurrenceKey: string;
   title: string;
   startsAt: string;
   endsAt: string;
@@ -750,6 +752,8 @@ export interface CalendarEvent {
   recurring: boolean;
   isSample: boolean;
   fetchedAt: string;
+  /** "Abrir en Google" (t127): that event (that occurrence of a series) or, when that cannot be built, its day. Set by the server read model. */
+  googleUrl?: string;
 }
 
 /** GET /api/calendar: the window's events plus the connection and health the screen shows. */

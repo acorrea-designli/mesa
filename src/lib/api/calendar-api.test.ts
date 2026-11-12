@@ -1,6 +1,6 @@
 // /api/calendar*: the stored events and the connection (never the feed address), the free slots, the people, the
 // refresh (409 in sandbox and without the variable) and the meeting request that opens a ticket.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as getCalendar } from "@/app/api/calendar/route";
 import { GET as getFree } from "@/app/api/calendar/free/route";
 import { GET as getPeople } from "@/app/api/calendar/people/route";
@@ -47,6 +47,7 @@ beforeEach(() => {
   delete process.env.MESA_GCAL_OWNER_EMAIL;
 });
 afterEach(() => {
+  vi.useRealTimers();
   process.env = { ...saved };
 });
 
@@ -56,6 +57,20 @@ describe("GET /api/calendar", () => {
     const d = await (await getCalendar(req("/api/calendar?from=2026-11-09&to=2026-11-16"), ctx)).json();
     expect(d).toMatchObject({ configured: false, sandbox: false, health: "none", lastRefresh: null });
     expect(d.events.map((e: { uid: string }) => e.uid)).toEqual(["a"]);
+  });
+
+  it("gives every event its Abrir en Google link: the event when the owner is known, else the day", async () => {
+    process.env.MESA_GCAL_ICS_URL = SECRET;
+    process.env.MESA_GCAL_OWNER_EMAIL = "owner@example.com";
+    r.calendar.replace(
+      [occ("abc123@google.com", "2026-11-12T15:00:00Z", "2026-11-12T15:30:00Z"), occ("foreign@example.org", "2026-11-12T16:00:00Z", "2026-11-12T16:30:00Z")],
+      new Date(),
+    );
+    const d = await (await getCalendar(req("/api/calendar?from=2026-11-09&to=2026-11-16"), ctx)).json();
+    const url = (uid: string) => d.events.find((e: { uid: string }) => e.uid === uid).googleUrl;
+    expect(url("abc123@google.com")).toBe(`https://www.google.com/calendar/event?eid=${Buffer.from("abc123 owner@example.com").toString("base64").replace(/=+$/, "")}`);
+    expect(url("foreign@example.org")).toBe("https://calendar.google.com/calendar/r/day/2026/11/12");
+    expect(JSON.stringify(d)).not.toContain("private-abcdef0123456789");
   });
 
   it("reports the connection and the health, and never the address", async () => {
@@ -89,6 +104,9 @@ describe("GET /api/calendar", () => {
 
 describe("GET /api/calendar/free and /people", () => {
   it("lists the free gaps of a day from the stored events", async () => {
+    // Pinned: today starts at the present moment, so the expected gaps hold only on an earlier day.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-11T12:00:00Z"));
     r.calendar.replace([occ("m", "2026-11-12T15:00:00Z", "2026-11-12T16:00:00Z")], new Date());
     const d = await (await getFree(req("/api/calendar/free?day=2026-11-12&minutes=60"), ctx)).json();
     expect(d.day).toBe("2026-11-12");
