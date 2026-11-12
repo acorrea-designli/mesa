@@ -976,7 +976,7 @@ export function ticketsRepo(db: Db) {
 
     addAttachment(
       id: string,
-      a: Omit<Attachment, "id" | "ticketId" | "createdAt">,
+      a: Omit<Attachment, "id" | "ticketId" | "createdAt" | "reviewedAt">,
       now = new Date(),
     ): Attachment {
       const t = get(id);

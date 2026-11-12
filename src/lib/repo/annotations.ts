@@ -5,7 +5,7 @@ import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, ForbiddenError, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
 import { boundsOf, byPosition, MAX_BODY, MAX_QUOTE, parseGeometry } from "../domain/annotations";
-import type { Annotation, AnnotationKind, AnnotationReply, AnnotationState, AnnotationSummary, Attachment, Author } from "../domain/types";
+import type { Annotation, AnnotationKind, AnnotationReply, AnnotationState, AnnotationSummary, Attachment, Author, PdfDocument } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { touchInteraction } from "./interaction";
 import { ticketsRepo } from "./tickets";
@@ -190,6 +190,41 @@ export function annotationsRepo(db: Db) {
         tickets.andresActed(t.id, now);
         return { count: ids.length, annotationIds: ids };
       });
+    },
+
+    /**
+     * "Terminé" (t135): Andrés marks a PDF as reviewed, or takes it back. The flag is the only source of the
+     * Documentos state; his marks never set it. It counts as him acting on Mesa, not on the ticket (no wake).
+     */
+    setReviewed(id: string, attachmentId: string, reviewed: boolean, now = new Date()): Attachment {
+      return tx(db, () => {
+        const t = tickets.get(id);
+        pdfOf(t.id, attachmentId);
+        db.prepare("UPDATE attachments SET reviewed_at = ? WHERE id = ?").run(reviewed ? nowIso(now) : null, attachmentId);
+        touchInteraction(db, now);
+        return pdfOf(t.id, attachmentId);
+      });
+    },
+
+    /**
+     * Tickets · Documentos (t135): every PDF attachment of every ticket, open or closed, newest first, with its
+     * ticket and Andrés's own marks (open / total). Claude's marks are not his notes.
+     */
+    documents(): PdfDocument[] {
+      const mine = (extra: string) => `(SELECT COUNT(*) FROM annotations a WHERE a.attachment_id = f.id AND a.author = 'andres'${extra})`;
+      return fromRows<PdfDocument>(
+        db
+          .prepare(
+            `SELECT f.id AS attachment_id, f.filename, f.size, f.created_at, f.reviewed_at,
+                    t.id AS ticket_id, t.ref AS ticket_ref, t.title AS ticket_title, t.status AS ticket_status, t.is_sample,
+                    ${mine(" AND a.state = 'open'")} AS open, ${mine("")} AS total
+               FROM attachments f JOIN tickets t ON t.id = f.ticket_id
+              WHERE f.mime = 'application/pdf'
+              ORDER BY f.created_at DESC, f.rowid DESC`,
+          )
+          .all(),
+        { bool: ["is_sample"] },
+      );
     },
 
     /** Open and total marks per PDF that has any (the context's summary), ordered by attachment. */
