@@ -1657,3 +1657,39 @@
     justify-content: center;
   }
 }
+
+/* "En pausa" / "En proceso" controls under the thread title (t126, PauseBar.tsx): neutral outline, never solid ink. */
+.tk-pause {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: var(--ink2);
+}
+.tk-pause.idle {
+  margin: 8px 0 0;
+}
+.tk-pause-why {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tk-pause-dep {
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: underline;
+}
+.tk-pause.form {
+  align-items: stretch;
+}
+.tk-pause.form .tk-field {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.tk-pause-acts {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}

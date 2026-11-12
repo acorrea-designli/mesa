@@ -138,6 +138,9 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
               <Link role="tab" className="tab" aria-selected={data.tab === "you"} href={href({ tab: "you" })}>
                 Te esperan {data.counts.you}
               </Link>
+              <Link role="tab" className="tab" aria-selected={data.tab === "paused"} href={href({ tab: "paused" })}>
+                En pausa {data.counts.paused}
+              </Link>
               <Link role="tab" className="tab" aria-selected={data.tab === "closed"} href={href({ tab: "closed" })}>
                 Cerrados hoy {data.counts.closedToday}
               </Link>
@@ -171,7 +174,7 @@ export function TicketsScreen({ data, explicit, pin }: { data: TicketsData; expl
                   <path d="M174 44H114l-12-12H90" fill="none" stroke="var(--ink)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" opacity=".55" />
                   <circle cx="90" cy="32" r="10" fill="var(--raise)" stroke="var(--ink)" strokeWidth="3" />
                 </svg>
-                <h2>{data.tab === "closed" ? "Nada cerrado hoy" : "Nada pendiente entre tú y Claude"}</h2>
+                <h2>{data.tab === "closed" ? "Nada cerrado hoy" : data.tab === "paused" ? "Nada en pausa ni en proceso" : "Nada pendiente entre tú y Claude"}</h2>
                 <p>Cuando Claude necesite una decisión aparece aquí. Tú también puedes pedirle algo.</p>
                 <Link className="btn p" href={href({ tab, new: "1" })}>
                   <IcPlus />

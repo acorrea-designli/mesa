@@ -60,13 +60,17 @@ const TICKET_STATE: Record<TicketStatus, string> = {
   working: "En curso",
   waiting_andres: "Te espera",
   closed: "Cerrado",
+  paused: "En pausa",
+  ongoing: "En proceso",
 };
 
-/** The owner chip: the live owner agent and the ticket's state, or "Claude · por asignar". */
+/** The owner chip: the live owner agent and the ticket's state, or "Claude · por asignar". A paused or ongoing ticket is nobody's turn, so it is never "por asignar": "En pausa · hasta t125", "En pausa", "En proceso" (with the agent in front when there is one). */
 export function ownerChip(o: TaskOwner | null | undefined): OwnerChip | null {
   if (!o) return null;
-  const unassigned = !o.agent && o.ticketStatus !== "closed";
-  const label = unassigned ? "Claude · por asignar" : `${o.agent ?? "Claude"} · ${TICKET_STATE[o.ticketStatus]}`;
+  const idle = o.ticketStatus === "paused" || o.ticketStatus === "ongoing";
+  const unassigned = !o.agent && o.ticketStatus !== "closed" && !idle;
+  const state = o.ticketStatus === "paused" && o.pausedUntil ? `${TICKET_STATE.paused} · hasta ${o.pausedUntil}` : TICKET_STATE[o.ticketStatus];
+  const label = unassigned ? "Claude · por asignar" : idle && !o.agent ? state : `${o.agent ?? "Claude"} · ${state}`;
   return { ticketRef: o.ticketRef, label, href: `/tickets?t=${encodeURIComponent(o.ticketRef)}`, unassigned, closed: o.ticketStatus === "closed" };
 }
 

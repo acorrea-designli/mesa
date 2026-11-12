@@ -101,6 +101,8 @@ export interface TaskOwner {
   ticketId: string;
   ticketRef: string;
   ticketStatus: TicketStatus;
+  /** Ref of the ticket a paused ticket waits for ("t125"), for the chip "En pausa · hasta t125". */
+  pausedUntil?: string | null;
   /** Live owner agent ("tl-t21"); null until the lead claims the ticket and spawns one. */
   agent: string | null;
   role: string | null;
@@ -113,7 +115,7 @@ export const DISPATCH_KINDS: readonly DispatchKind[] = ["review", "request", "in
 // ---------- tickets ----------
 
 export type TicketDirection = "claude_asks" | "andres_asks";
-export type TicketStatus = "waiting_andres" | "waiting_claude" | "working" | "closed";
+export type TicketStatus = "waiting_andres" | "waiting_claude" | "working" | "closed" | "paused" | "ongoing";
 export type Author = "andres" | "claude";
 
 export interface TicketOption {
@@ -229,6 +231,13 @@ export interface Ticket {
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Why the ticket is paused ("En pausa") or ongoing ("En proceso"); null in every other status (t126). */
+  pauseReason: string | null;
+  /** The ticket a paused ticket waits for, as a ref ("t125"); it resumes when that one closes. Null if none. */
+  pausedUntil: string | null;
+  pausedUntilTicketId: string | null;
+  /** When the ticket entered paused/ongoing. */
+  pausedAt: string | null;
 }
 
 export interface TicketDetail extends Ticket {
@@ -461,6 +470,7 @@ export type WakeKind =
   | "ticket.plan_approved"
   | "ticket.closed"
   | "ticket.reopened"
+  | "ticket.resumed" // a paused/ongoing ticket came back to Claude: { ref, ticketRef, by: "andres"|"dependency", dependencyRef? }; the lead respawns the owner
   | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
   | "ticket.pr_message" // a Slack message about the ticket's PR (repo/intake.ts): { ref, ticketRef, messageId, itemId, repo, pr, who, url, channelId, ts, threadTs }; the lead spawns or reuses writer-<ref>, who records a notice (mesa item pr-notice) or answers with a salida
   | "salida.turn" // Andrés asked for a change

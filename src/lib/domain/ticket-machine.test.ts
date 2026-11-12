@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialTicketStatus, transitionTicket } from "./ticket-machine";
+import { initialTicketStatus, TICKET_STATUS_LABEL, transitionTicket } from "./ticket-machine";
 
 describe("ticket machine", () => {
   it("starts on whoever must act", () => {
@@ -64,5 +64,62 @@ describe("ticket machine", () => {
   it("closing by Andrés wakes; by Claude does not", () => {
     expect(transitionTicket("working", { type: "close", by: "andres" })).toMatchObject({ wake: "ticket.closed" });
     expect(transitionTicket("working", { type: "close", by: "claude" })).toEqual({ ok: true, status: "closed", wake: undefined });
+  });
+
+  describe("paused and ongoing (t126)", () => {
+    const open = ["waiting_andres", "waiting_claude", "working", "paused", "ongoing"] as const;
+
+    it("any open status can be paused or put on ongoing, with no wake; a closed ticket cannot", () => {
+      for (const s of open) {
+        expect(transitionTicket(s, { type: "pause", kind: "paused" })).toEqual({ ok: true, status: "paused" });
+        expect(transitionTicket(s, { type: "pause", kind: "ongoing" })).toEqual({ ok: true, status: "ongoing" });
+      }
+      expect(transitionTicket("closed", { type: "pause", kind: "paused" }).ok).toBe(false);
+      expect(transitionTicket("closed", { type: "pause", kind: "ongoing" }).ok).toBe(false);
+    });
+
+    it("resume by Claude goes to working without a wake; by Andrés or the dependency goes to waiting_claude and wakes", () => {
+      for (const s of ["paused", "ongoing"] as const) {
+        expect(transitionTicket(s, { type: "resume", by: "claude" })).toEqual({ ok: true, status: "working" });
+        expect(transitionTicket(s, { type: "resume", by: "andres" })).toEqual({ ok: true, status: "waiting_claude", wake: "ticket.resumed" });
+        expect(transitionTicket(s, { type: "resume", by: "dependency" })).toEqual({ ok: true, status: "waiting_claude", wake: "ticket.resumed" });
+      }
+    });
+
+    it("resume needs a paused or ongoing ticket", () => {
+      for (const s of ["waiting_andres", "waiting_claude", "working", "closed"] as const) {
+        expect(transitionTicket(s, { type: "resume", by: "claude" }).ok).toBe(false);
+      }
+    });
+
+    it("an informational Claude reply stays paused or ongoing; asking leaves", () => {
+      for (const s of ["paused", "ongoing"] as const) {
+        expect(transitionTicket(s, { type: "claude_reply" })).toEqual({ ok: true, status: s });
+        expect(transitionTicket(s, { type: "claude_reply", asks: true })).toEqual({ ok: true, status: "waiting_andres" });
+      }
+    });
+
+    it("Andrés replying, a plan, an approval, a claim and a close leave paused or ongoing", () => {
+      for (const s of ["paused", "ongoing"] as const) {
+        expect(transitionTicket(s, { type: "andres_reply" })).toEqual({ ok: true, status: "waiting_claude", wake: "ticket.answered" });
+        expect(transitionTicket(s, { type: "claude_plan", needsOk: true })).toEqual({ ok: true, status: "waiting_andres" });
+        expect(transitionTicket(s, { type: "claude_plan", needsOk: false })).toEqual({ ok: true, status: "working" });
+        expect(transitionTicket(s, { type: "approve_plan", planned: true })).toMatchObject({ status: "working", wake: "ticket.plan_approved" });
+        expect(transitionTicket(s, { type: "claim" })).toEqual({ ok: true, status: "working" });
+        expect(transitionTicket(s, { type: "close", by: "claude" })).toMatchObject({ ok: true, status: "closed" });
+      }
+    });
+
+    it("a press of Andrés (andres_acted) and a permission request leave paused and ongoing where they are", () => {
+      for (const s of ["paused", "ongoing"] as const) {
+        expect(transitionTicket(s, { type: "andres_acted" })).toEqual({ ok: true, status: s });
+        expect(transitionTicket(s, { type: "permission_request" })).toEqual({ ok: true, status: s, wake: "ticket.permission_requested" });
+      }
+    });
+
+    it("has labels for both", () => {
+      expect(TICKET_STATUS_LABEL.paused).toBe("En pausa");
+      expect(TICKET_STATUS_LABEL.ongoing).toBe("En proceso");
+    });
   });
 });
