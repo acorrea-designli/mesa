@@ -604,10 +604,22 @@ export interface TeamAgent {
 // ---------- permission approvals ----------
 
 export type ApprovalDecision = "allow" | "read_config" | "deny";
+/**
+ * "permission": a call that asked for permission (PermissionRequest hook). "denied" (t128): a call that auto mode already
+ * denied (PermissionDenied hook); allowing it adds `rule` to settings.local.json, it never runs the call.
+ */
+export type ApprovalKind = "permission" | "denied";
 export interface Approval {
   id: string;
   ticketId: string | null;
   ticketRef: string | null;
+  kind: ApprovalKind;
+  /** The denial reason auto mode gave, e.g. "[Self-Modification]" (kind denied). */
+  reason: string;
+  /** The denied call's raw tool_input as JSON (kind denied); the server derives the rule from it, never from the client. */
+  deniedInput: string;
+  /** The allow rule proposed on a denied card (empty: none can be proposed); after an allow, the rule that was written. */
+  rule: string;
   agent: string;
   tool: string;
   summary: string;

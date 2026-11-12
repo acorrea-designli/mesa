@@ -69,12 +69,15 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
     }
   };
 
+  // t128: a call auto mode already denied. Allowing it adds the rule to settings.local.json (the server derives it);
+  // the card never runs the call.
+  const denied = a.kind === "denied";
   if (expired)
     return (
       <div className="ap-card off" role="status">
         <span className="ap-line" aria-hidden="true" />
         <span>
-          <b>Caducó</b> · el agente preguntará por ticket · {a.tool} de {a.agent}
+          <b>Caducó</b> · {denied ? "el bloqueo sigue" : "el agente preguntará por ticket"} · {a.tool} de {a.agent}
         </span>
       </div>
     );
@@ -83,9 +86,69 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
       <div className="ap-card done" role="status">
         <span className="ap-line" aria-hidden="true" />
         <span>
-          <b>{DONE[a.decision]}</b> · {a.tool} de {a.agent} · {hm(a.decidedAt)}
+          <b>{denied ? (a.decision === "allow" ? "Permitiste la regla" : "Denegaste el bloqueo") : DONE[a.decision]}</b>
+          {denied && a.decision === "allow" && a.rule ? (
+            <>
+              {" "}
+              · <code>{a.rule}</code>
+            </>
+          ) : null}{" "}
+          · {a.tool} de {a.agent} · {hm(a.decidedAt)}
           {a.note ? ` · «${a.note}»` : ""}
         </span>
+      </div>
+    );
+  if (denied)
+    return (
+      <div className="ap-card" ref={ref} role="group" aria-label={`Bloqueado por el modo automático: ${a.agent}`}>
+        <div className="ap-h">
+          <span className="ap-line" aria-hidden="true" />
+          <b>Bloqueado por el modo automático</b>
+          <span className="ap-agent">{a.agent}</span>
+          {showTicket && a.ticketRef ? <span className="ap-agent">· ticket {a.ticketRef}</span> : null}
+          <span className="ap-left">caduca en {left(a.expiresAt, now)}</span>
+        </div>
+        <div className="ap-tool">
+          <span className="ap-tag">{a.tool}</span>
+          <span>{a.summary}</span>
+        </div>
+        {a.detail ? (
+          <pre className="ap-detail" aria-label="Llamada bloqueada">
+            {a.detail}
+          </pre>
+        ) : null}
+        <div className="ap-facts">
+          {a.cwd ? <span>en {a.cwd}</span> : null}
+          {a.reason ? (
+            <span>
+              Motivo: <code>{a.reason}</code>
+            </span>
+          ) : null}
+          <span>
+            {a.rule ? (
+              <>
+                Regla propuesta: <code>{a.rule}</code>
+              </>
+            ) : (
+              "Sin regla que proponer: solo una edición dentro de un worktree, fuera de .claude y de settings, puede llevarla"
+            )}
+          </span>
+        </div>
+        <div className="ap-acts">
+          {a.rule ? (
+            <button className="btn sm p" type="button" disabled={busy} onClick={() => decide("allow")}>
+              Permitir esta regla
+            </button>
+          ) : null}
+          <button className="btn sm" type="button" disabled={busy} onClick={() => decide("deny")}>
+            Denegar
+          </button>
+        </div>
+        <p className="ap-why">
+          {a.rule
+            ? "Permitir agrega esa regla a settings.local.json; el agente reintenta y el modo automático ya no revisa esa carpeta. No ejecuta la llamada por sí solo."
+            : "Denegar deja el bloqueo como está; el agente sigue sin esa llamada."}
+        </p>
       </div>
     );
 

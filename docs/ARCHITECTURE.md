@@ -17,6 +17,7 @@ Product and design sources: `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json`
  lead session (MESA_SESSION=lead) ──▶ bin/mesa ──▶ REST API ◀── mesa wait
    ├─ ephemeral agents (MESA_AGENT, MESA_TICKET) ─▶ bin/mesa
    │    └─ PermissionRequest hook ─▶ scripts/hooks/mesa-approval.mjs ─▶ /api/approvals
+   │    └─ PermissionDenied hook ─▶ scripts/hooks/mesa-denied.mjs ─▶ /api/approvals (kind denied)
    ├─ MCP: Slack, Basecamp (read via mesa-sweep, write only approved salidas)
    └─ engram (primary memory, topic mesa/<ref>)
  gh CLI (server side) ──▶ GitHub notifications polling, review requests, GitHub Project   [lane C]
@@ -54,6 +55,7 @@ Product and design sources: `PRODUCT.md`, `DESIGN.md`, `.impeccable/design.json`
 | `scripts/statusline.mjs`, `src/lib/domain/usage.ts`, `src/lib/domain/tokens.ts`, `src/lib/integrations/transcripts.ts`, `src/lib/repo/usage.ts`, `src/app/api/usage`, `src/features/usage/*` | Claude usage (t45): the statusLine script that saves the plan's 5 h and weekly % to Mesa, the pure view and token aggregation, the incremental transcript reader, the `Uso` block in the rail and the Ajustes sheet, and the `/uso` screen (§ 13). |
 | `scripts/serve.mjs`, `scripts/tunnel.mjs` | `pnpm dev` / `pnpm start` bind, `pnpm tunnel` (cloudflared, Access probe). |
 | `scripts/hooks/mesa-approval.mjs` | PermissionRequest hook (§7). |
+| `scripts/hooks/mesa-denied.mjs` | PermissionDenied hook: the "Bloqueado por el modo automático" card (§7b). |
 | `src/styles/*`, `src/components/*`, `src/lib/motion` | Design system in code (§10). |
 | `bin/mesa` | CLI for sessions and agents (§9). |
 | `db/migrations/*.sql` | Schema, applied in order at startup (`schema_migrations`). |
@@ -84,7 +86,7 @@ All timestamps are ISO-8601 UTC strings. JSON columns are TEXT. Ids are `<prefix
 - **ticket_team** (`0002`): agents attached to a ticket: `name` (PK, `<role>-<ticketRef>[-k]`, never reused), `role`, `owner`, `status` live|retired (the API values for "alive" and "spent"), `spawned_at`, `retired_at`.
 
 ### Approvals and reviews
-- **approvals** (`0002`): permission requests from the hook: `ticket_id` (NULL → shown on Hoy), `agent`, `tool`, `summary` (file or command description), `detail` (diff or exact command), `cwd`, `hints[]` (closest allow rules), `status` pending|decided|expired, `decision` allow|read_config|deny, `note`, `decided_by`, `decided_at`, `expires_at`.
+- **approvals** (`0002`): permission requests from the hook: `ticket_id` (NULL → shown on Hoy), `agent`, `tool`, `summary` (file or command description), `detail` (diff or exact command), `cwd`, `hints[]` (closest allow rules), `status` pending|decided|expired, `decision` allow|read_config|deny, `note`, `decided_by`, `decided_at`, `expires_at`; since `1050` (t128) `kind` permission|denied, `reason`, `denied_input` and `rule` for the auto-mode denial card (§7b).
 - **reviews** (`0002`): one per PR (`repo`, `pr` unique), `ticket_id`, `head_sha` (the reviewed head), `state` open|approving|approved|closed (`closed`: `1010`), `salida_id` (the approve write), `close_reason`, `closed_at` (`1010`).
 - **review_findings** (`0002`): `n` (stable within the review), `label` blocker|nit|comment, `at` (`path:line`), `anchor` (code excerpt), `summary`, `explanation`, `state` open|fixed|waived|dismissed, `sha`, `gh_comment_id` (set by the lead after posting), `salida_id` (the post write).
 
@@ -214,6 +216,15 @@ The button press is the approval of the exact text and destination shown on the 
    - Timeout → deny, telling the agent not to retry and to post a ticket question instead.
 5. An unreachable Mesa, bad input or any crash is a deny. The output never contains `updatedInput` or `updatedPermissions`, so no standing rule is ever created.
 
+### 7b. Calls auto mode denied ("Bloqueado por el modo automático", t128)
+
+`scripts/hooks/mesa-denied.mjs` is a **PermissionDenied** hook (it fires only in auto mode; input `tool_name`, `tool_input`, `tool_use_id`, `reason`; its only output is `hookSpecificOutput.retry: true`, which tells the model it may retry and never undoes the denial). It resolves the agent and ticket like `mesa-approval.mjs` and files `POST /api/approvals {kind: "denied", ticketRef, agent, tool, summary, detail, cwd, reason, toolInput, expiresAt: now + 120 s}`, then long-polls the card like §7 (`retry: true` only after Andrés's allow; deny, timeout, unreachable Mesa or any crash print nothing and the denial stands). Registered by `scripts/install-team.mjs` (`PermissionDenied`, timeout 150 s).
+
+- **No `rule` on the wire.** The server derives it (`deniedRule` in `src/lib/domain/denied-rule.ts`, pure and tested) when the card is filed (shown on the card) and again from the stored `denied_input` when Andrés allows. Only `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)` for an Edit, Write, MultiEdit or NotebookEdit under `G:/WorkSpace/designli-wt` (`MESA_WORKTREES_ROOT`); never outside it, under `.claude` or `.git`, `settings*.json`, a worktree root, a name with a glob/bracket/parenthesis/space, or a Bash/PowerShell/MCP call (the card then offers only Denegar). `isDerivedRule` is checked again before anything is written.
+- **Allow** (`POST /api/approvals/:id/approve` on a `denied` card): `addAllowRule` (`src/lib/integrations/settings-rules.ts`) appends the rule to `permissions.allow` of `G:/WorkSpace/designli/.claude/settings.local.json` (`MESA_SETTINGS_LOCAL`), deduplicated, the rest of the JSON, its indentation and line endings kept, atomic (temp file + rename), never over a file that is not valid JSON, refused on the sandbox board. Then the card is decided (`decided_by: andres`, `decided_at`, `rule` = what was written). A call with no derivable rule is a 409 and nothing is written; `read-config` on a denied card is a 409.
+- **Migration `1050_approval_denied.sql`**: `approvals.kind` (`permission` default | `denied`), `reason`, `denied_input` (the raw `tool_input` JSON), `rule`. Existing rows stay ordinary permission cards.
+- Limits: Claude Code ignores `retry` when the classifier gave no verdict, and a protected-path write goes to the classifier even when an allow rule matches.
+
 ## 8. REST API
 
 JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `invalid_request|invalid_json`, 404 `not_found`, 409 `invalid_transition`, 413 `too_large`, 500 `internal`. Every request first runs the sweep. Request schemas: `src/lib/api/schemas.ts`. Response types: `src/lib/domain/types.ts`. The endpoints for agents, approvals, reviews and health wrap their payload in a named key (`{ brief }`, `{ handoffs }`, …).
@@ -276,7 +287,7 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | GET/POST `/api/approvals` | `?status=&ticket=&hoy=1` / `ApprovalInput` | `{ approvals }` / `{ approval }` 201 |
 | GET `/api/approvals/:id` | `?wait=SECONDS` (≤ 55) | `{ approval }` |
 | GET/PUT/DELETE `/api/lead/focus` | `{ ticket }` (PUT) | `{ ticketRef, expiresAt }`; the ticket the lead acts on (`mesa lead focus`): the hook files the lead's prompts there; PUT sets or renews a 2 h window; 404 unknown, 409 closed; an expired window or a closed ticket reads as null; Hoy, Permisos shows it with "Quitar foco" |
-| POST `/api/approvals/:id/approve` · `/read-config` · `/deny` | `{ note? }` (the UI's three buttons; they stamp `decidedBy: "andres"`, the only decisions that exist) | `{ approval }`; 409 after expiry or once decided |
+| POST `/api/approvals/:id/approve` · `/read-config` · `/deny` | `{ note? }` (the UI's three buttons; they stamp `decidedBy: "andres"`, the only decisions that exist) | `{ approval }`; 409 after expiry or once decided. On a `denied` card `approve` is "Permitir esta regla": it writes the server-derived rule to settings.local.json first (§7b) |
 | GET `/api/reviews` | `?ticket=` | `{ reviews }` (with findings) |
 | GET `/api/reviews/:id` | | `{ review }` |
 | POST `/api/reviews/:id/actions` | `{ action, findingNs?, note? }` | `{ review, salidaIds }`; 409 on a closed review |
@@ -370,7 +381,7 @@ Meeting reminders (t112, decisions 5A and 6C): ten minutes before a meeting, a d
 - **The calendar feed address is a secret** (t112). `MESA_GCAL_ICS_URL` lives only in `.env.local` (`.env.example` lists the name). It is read by `feedConfig()` and used by `fetchFeed()` and by nothing else: not stored in SQLite, not in `source_state`, not in any log, error, API response, wake event or ticket (every failure is a fixed phrase: `Google no entrega el calendario (HTTP 403)`, `sin conexión con Google`, `Google no respondió a tiempo`, …; tests assert the address appears nowhere). The poller never starts in the sandbox, and a value that is not an `https` URL is reported as invalid without echoing it. Anyone holding the address can read the calendar: rotate it in Google Calendar if it leaks.
 - **No secrets in the repo, and no Slack or Basecamp credentials at all.** Those connectors live in Claude's MCP, and GitHub uses the `gh` login. `.env.local` (gitignored) holds only Mesa settings, which `.env.example` lists. `data/` and `*.db` are gitignored.
 - **Every outgoing write needs Andrés's explicit approval of the exact text and destination.** Slack and Basecamp messages and GitHub reviews/comments are salidas, and the review buttons approve the exact text shown on the card. Mesa refuses `sent` and `drafted` before the 20 s undo window ends. For Slack the approval click also picks the mode: Aprobar leaves a draft Andrés sends himself; "Aprobar y que Claude lo envíe" sends through the connector with its "Sent using @Claude" footer.
-- **Permission approvals allow one call at a time.** Allow comes only from an explicit "Dar permiso" before expiry. Everything else is deny, and the hook never emits `updatedPermissions`.
+- **Permission approvals allow one call at a time.** Allow comes only from an explicit "Dar permiso" before expiry. Everything else is deny, and the hook never emits `updatedPermissions`. The one standing rule Mesa ever writes is the "Permitir esta regla" of a denied-call card (§7b): derived by the server, one worktree directory, appended by the server and never by Claude.
 - **Approval rules are only partly enforced by the API.** The local API does not authenticate callers, so "sessions and agents never approve, schedule, deny, undo or decide" rests on CLAUDE.md, guardrail G10 and on the CLI having no such commands. What holds: the only routes that decide an approval are the UI's approve / read-config / deny (decidedBy `andres`), and the hook honours a decision only with `decidedBy` `andres` (anything else is a deny). What does not: those three routes have no credential, so any local process (a script, browser automation, or a shell shape G10 misses) that calls one counts as Andrés. G10 is partial (literal loopback host and port, curl-style tools only; it misses `$MESA_URL`, other host spellings, doubled slashes, quoted or spliced segments and disguised tool names, see docs/TEAM.md section 6), and it also covers `permission-request`. That is the known residual risk until improvement 13; hardening is on hold.
 - **Uploads** are stored under `data/uploads/<ticket>/` with sanitized names and a 25 MB cap.
 - **Sample data is labelled** (`is_sample`) and shown with "Datos de muestra.".

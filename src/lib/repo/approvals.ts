@@ -3,8 +3,10 @@
 // outcome (deny, read_config, expiry) is a deny for the agent.
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
-import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError } from "../db/util";
-import type { Approval, ApprovalDecision } from "../domain/types";
+import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
+import { deniedRule } from "../domain/denied-rule";
+import type { Approval, ApprovalDecision, ApprovalKind } from "../domain/types";
+import { worktreesRoot } from "../integrations/settings-rules";
 import { signal, waitSignal } from "../wake/wake";
 import { ticketsRepo } from "./tickets";
 import { touchInteraction } from "./interaction";
@@ -22,6 +24,10 @@ export interface ApprovalInput {
   cwd?: string;
   hints?: string[];
   expiresAt?: string;
+  /** "denied" (t128): the PermissionDenied hook's card. It needs toolInput; the rule is derived here from it, never sent. */
+  kind?: ApprovalKind;
+  reason?: string;
+  toolInput?: unknown;
 }
 
 const SELECT = "SELECT a.*, t.ref AS ticket_ref FROM approvals a LEFT JOIN tickets t ON t.id = a.ticket_id";
@@ -37,15 +43,33 @@ export function approvalsRepo(db: Db) {
 
   const repo = {
     create(i: ApprovalInput, now = new Date()): Approval {
+      const kind = i.kind ?? "permission";
+      if (kind === "denied" && (!i.toolInput || typeof i.toolInput !== "object" || Array.isArray(i.toolInput))) throw new ValidationError("a denied card needs the denied call's toolInput");
+      const derived = kind === "denied" ? deniedRule(i.tool, i.toolInput, worktreesRoot()) : null;
       const id = newId("ap");
       const ticketId = i.ticketRef ? tickets.get(i.ticketRef).id : null;
       const requested = i.expiresAt ? Date.parse(i.expiresAt) : now.getTime() + DEFAULT_APPROVAL_TTL_MS;
       const expires = Math.min(requested, now.getTime() + MAX_APPROVAL_TTL_MS);
       if (Number.isNaN(expires) || expires <= now.getTime()) throw new TransitionError("expiresAt must be in the future");
       db.prepare(
-        `INSERT INTO approvals (id, ticket_id, agent, tool, summary, detail, cwd, hints, status, expires_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
-      ).run(id, ticketId, i.agent, i.tool, i.summary, i.detail ?? "", i.cwd ?? "", JSON.stringify(i.hints ?? []), new Date(expires).toISOString(), nowIso(now));
+        `INSERT INTO approvals (id, ticket_id, agent, tool, summary, detail, cwd, hints, status, expires_at, created_at, kind, reason, denied_input, rule)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        ticketId,
+        i.agent,
+        i.tool,
+        i.summary,
+        i.detail ?? "",
+        i.cwd ?? "",
+        JSON.stringify(i.hints ?? []),
+        new Date(expires).toISOString(),
+        nowIso(now),
+        kind,
+        i.reason ?? "",
+        kind === "denied" ? JSON.stringify(i.toolInput) : "",
+        derived?.ok ? derived.rule : "",
+      );
       return raw(id);
     },
 
@@ -75,15 +99,32 @@ export function approvalsRepo(db: Db) {
     },
 
     /** Refused after expires_at or once decided: a late "allow" can never reach an agent that was told no. */
-    decide(id: string, d: { decision: ApprovalDecision; actor: string; note?: string }, now = new Date(), opts: { seed?: boolean } = {}): Approval {
+    decide(
+      id: string,
+      d: { decision: ApprovalDecision; actor: string; note?: string },
+      now = new Date(),
+      opts: { seed?: boolean; /** Writes the rule of a denied card (t128); only the server's route passes it. */ writeRule?: (rule: string) => void } = {},
+    ): Approval {
       repo.expire(now);
       const a = raw(id);
       if (a.status === "expired") throw new TransitionError("this approval expired; the agent was already denied");
       if (a.status === "decided") throw new TransitionError(`already decided: ${a.decision}`);
+      let rule = "";
+      if (a.kind === "denied") {
+        if (d.decision === "read_config") throw new TransitionError("a denied card can only be allowed (its rule) or denied");
+        if (d.decision === "allow") {
+          // The rule is derived again here from the stored call: nothing a client sends can change it.
+          const r = deniedRule(a.tool, a.deniedInput ? (JSON.parse(a.deniedInput) as unknown) : null, worktreesRoot());
+          if (!r.ok) throw new TransitionError(`no se puede proponer una regla para esta llamada: ${r.why}`);
+          if (!opts.writeRule) throw new TransitionError("no settings writer for a denied card");
+          rule = r.rule;
+        }
+      }
       tx(db, () => {
+        if (rule) opts.writeRule!(rule);
         db.prepare(
-          "UPDATE approvals SET status = 'decided', decision = ?, note = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
-        ).run(d.decision, d.note ?? "", d.actor, nowIso(now), id);
+          "UPDATE approvals SET status = 'decided', decision = ?, note = ?, decided_by = ?, decided_at = ?, rule = CASE WHEN ? <> '' THEN ? ELSE rule END WHERE id = ? AND status = 'pending'",
+        ).run(d.decision, d.note ?? "", d.actor, nowIso(now), rule, rule, id);
         if (d.actor === "andres") touchInteraction(db, now);
         // His press takes his turn on the ticket (the seed builds sample states and is not a press).
         if (d.actor === "andres" && !opts.seed) tickets.andresActed(a.ticketId, now);
