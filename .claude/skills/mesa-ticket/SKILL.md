@@ -110,7 +110,7 @@ blocked. Mesa never edits settings or files the card for you. The blocked agent:
 
 When auto mode denies a call of a teammate (or of the lead while it has a focus ticket), the `PermissionDenied` hook
 (`mesa-denied.mjs`) files a card on that ticket with the tool, the exact call, the denial reason and the proposed
-rule, and waits 120 s. Nobody in the team writes the rule: Andrés presses **Permitir esta regla** and the Mesa server
+rule, and waits up to 120 s (at once when the card has no rule: it can only be denied). Nobody in the team writes the rule: Andrés presses **Permitir esta regla** and the Mesa server
 derives it from the stored call (only `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)`, never `.claude`,
 settings, a worktree root, a command or an MCP tool) and appends it to `settings.local.json`; the hook then tells the
 agent to retry once. **Denegar**, a timeout or no rule: the denial stands. The owner reads the card's outcome in the

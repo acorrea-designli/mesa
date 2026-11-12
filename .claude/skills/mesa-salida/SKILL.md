@@ -157,7 +157,14 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 
 **Calendar** (`source: calendar`, no mode): step 2 is ONE `create_event` call of the Google Calendar connector
 (`mcp__claude_ai_Google_Calendar__create_event`) with exactly the fields of the approved body: title, start, end
-(with the zone), the invitees as attendees, a Google Meet only when `Meet: sí`, and the description. Hook G5 passes
+(with the zone), the invitees as attendees, a Google Meet only when `Meet: sí`, and the description. The
+connector's own names: `startTime` / `endTime` are LOCAL times without offset (`2026-11-18T16:00:00`) plus the
+top-level `timeZone` (the approved `Zona`); the Meet flag is `addGoogleMeetUrl: true` (a boolean) and only when
+`Meet: sí` (never `googleMeetUrl`, a specific URL that overrides it); a series is `recurrenceData`, an array that is
+EXACTLY `["<the approved Repetir text>"]` (byte for byte, one entry: no second RRULE, RDATE or EXDATE), and the call has
+no `recurrenceData` at all when the body has no `Repetir`. Do not send attachments, availability, colorId, eventType,
+guestPermissions, location, notificationLevel, overrideReminders, useDefaultReminders, visibility, allDay or any other
+recurrence alias: G5 refuses them. Hook G5 passes
 the call only when every field equals the approved ones (instants for the times, the set of addresses for the
 guests) and refuses every other Google Calendar write (delete, respond, move to another calendar): never fix an event after the
 fact, propose a new salida. Step 3 is `MESA salida sent <id> --permalink <the event's link>`; if the connector cannot
