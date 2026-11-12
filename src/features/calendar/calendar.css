@@ -123,6 +123,38 @@
   flex: none;
 }
 
+/* ---------- week switch: previous, back to today, next (t127) ---------- */
+.cal-weeknav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 14px 0 0;
+}
+.cal-weeklabel {
+  margin: 0 auto 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+}
+.cal-weeklabel b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cal-weeklabel span {
+  font-size: 12.5px;
+  color: var(--mute);
+}
+.cal-weekbtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cal-weekbtns .btn {
+  gap: 6px;
+}
+
 /* ---------- week band: one station per day, today burns, what lies ahead drops to about 35% ---------- */
 .cal-band {
   position: relative;
@@ -219,7 +251,7 @@
 .cal-cols,
 .cal-row {
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) 64px 100px;
+  grid-template-columns: 118px minmax(0, 1fr) 64px 132px;
   column-gap: 12px;
   align-items: center;
 }
@@ -273,7 +305,43 @@
 }
 .cal-end {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+/* "Abrir en Google": a quiet text link under Unirse; ink2 and underlined so it still reads as a link. */
+.cal-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+  border-radius: var(--r-control);
+}
+.cal-open:hover {
+  color: var(--ink);
+}
+.cal-open:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.cal-outside {
+  margin: 14px 0 0;
+  color: var(--mute);
+  font-size: 13.5px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+.cal-outside a {
+  color: var(--ink2);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .cal-done {
   font-size: 12.5px;
@@ -511,6 +579,22 @@
   }
   .cal-band {
     margin-top: 8px;
+  }
+  .cal-weekbtns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .cal-weekbtns .btn {
+    height: 40px;
+    justify-content: center;
+  }
+  .cal-weekbtns .cal-wk-this {
+    order: 3;
+    grid-column: 1 / -1;
+  }
+  .cal-open {
+    min-height: 32px;
   }
   .cal-cols {
     display: none;
