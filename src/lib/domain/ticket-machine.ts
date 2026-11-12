@@ -4,7 +4,11 @@
 //   waiting_andres  Claude asked, or posted a plan that needs his OK   ("Te espera")
 //   waiting_claude  Andrés asked or answered; the owner session wakes  ("Espera a Claude")
 //   working         Claude took it and is doing the work                ("Claude trabaja")
+//   paused          blocked on something else, with a reason and maybe a ticket ("En pausa", t126)
+//   ongoing         going on with nobody active right now: CI, a third party ("En proceso", t126)
 //   closed          done                                                ("Cerrado" · Reabrir)
+// paused/ongoing are open states that read neither "Te espera" nor "Claude trabaja". They end on an explicit resume,
+// Andrés's reply, Claude asking or planning, a claim or a close; an informational Claude reply leaves them as they are.
 // A press of Andrés on the ticket's review, salida or permission card is his turn taken (`andres_acted`).
 
 import type { TicketDirection, TicketStatus, WakeKind } from "./types";
@@ -17,8 +21,15 @@ export type TicketEvent =
   | { type: "permission_request" } // "Pídeme permiso": the agent must file an approval card (wakes the owner)
   | { type: "andres_acted" } // Andrés pressed a button on the ticket (review action, salida, permission): his turn is taken
   | { type: "claim" } // a session takes the ticket and starts work
+  | { type: "pause"; kind: PauseKind } // blocked on something else (paused) or going on with nobody active (ongoing)
+  | { type: "resume"; by: ResumeBy } // paused/ongoing ends: Claude -> working (no wake); Andrés or the dependency closing -> waiting_claude + ticket.resumed
   | { type: "close"; by: "andres" | "claude" }
   | { type: "reopen"; by?: "andres" | "claude" }; // by defaults to Andrés (the UI); Claude's reopen is not his interaction
+
+export type PauseKind = "paused" | "ongoing";
+export type ResumeBy = "claude" | "andres" | "dependency";
+
+export const isPauseStatus = (s: TicketStatus): s is PauseKind => s === "paused" || s === "ongoing";
 
 export type TicketEventType = TicketEvent["type"];
 
@@ -63,8 +74,19 @@ export function transitionTicket(status: TicketStatus, ev: TicketEvent): TicketT
       return { ok: true, status: status === "waiting_andres" ? "waiting_claude" : status, wake: "ticket.permission_requested" };
 
     case "claim":
-      if (status !== "waiting_claude") return fail(`cannot claim a ticket that is ${status}`);
+      // A paused/ongoing ticket can be claimed too: the owner picks the work up again.
+      if (status !== "waiting_claude" && !isPauseStatus(status)) return fail(`cannot claim a ticket that is ${status}`);
       return { ok: true, status: "working" };
+
+    case "pause":
+      // From any open status (the closed check above); paused <-> ongoing is a plain switch.
+      return { ok: true, status: ev.kind };
+
+    case "resume":
+      if (!isPauseStatus(status)) return fail("ticket is not paused or ongoing");
+      // Claude resuming goes straight back to work; Andrés or the dependency closing hands it to Claude (the owner wakes).
+      if (ev.by === "claude") return { ok: true, status: "working" };
+      return { ok: true, status: "waiting_claude", wake: "ticket.resumed" };
 
     case "close":
       // Closing by Andrés wakes the owner so it can stop; Claude closing needs no wake.
@@ -80,5 +102,7 @@ export const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
   waiting_andres: "Te espera",
   waiting_claude: "Espera a Claude",
   working: "Claude trabaja",
+  paused: "En pausa",
+  ongoing: "En proceso",
   closed: "Cerrado",
 };

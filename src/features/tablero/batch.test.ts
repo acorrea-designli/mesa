@@ -39,6 +39,16 @@ describe("owner chip", () => {
     expect(ownerChip({ ticketId: "tk", ticketRef: "t21", ticketStatus: "closed", agent: null, role: null })).toMatchObject({ label: "Claude · Cerrado", closed: true, unassigned: false });
   });
 
+  it("reads «En pausa · hasta tN», «En pausa» and «En proceso» for the idle states, never «por asignar» (t126)", () => {
+    const o = (ticketStatus: "paused" | "ongoing", agent: string | null, pausedUntil?: string) => ownerChip({ ticketId: "tk", ticketRef: "t87", ticketStatus, pausedUntil, agent, role: agent ? "tl" : null });
+    expect(o("paused", null, "t125")).toMatchObject({ label: "En pausa · hasta t125", unassigned: false, closed: false });
+    expect(o("paused", null)?.label).toBe("En pausa");
+    expect(o("ongoing", null)?.label).toBe("En proceso");
+    expect(o("paused", "tl-t87", "t125")?.label).toBe("tl-t87 · En pausa · hasta t125");
+    expect(o("ongoing", "tl-t87")?.label).toBe("tl-t87 · En proceso");
+    expect(canDispatch(toCard(task({ owner: { ticketId: "tk", ticketRef: "t87", ticketStatus: "paused", agent: null, role: null } }), "9:00"))).toBe(false);
+  });
+
   it("Dárselo a Claude only for cards without an open ticket, never for samples", () => {
     const open = toCard(task({ owner: { ticketId: "tk", ticketRef: "t2", ticketStatus: "working", agent: "tl-t2", role: "tl" } }), "9:00");
     const closed = toCard(task({ owner: { ticketId: "tk", ticketRef: "t2", ticketStatus: "closed", agent: null, role: null } }), "9:00");

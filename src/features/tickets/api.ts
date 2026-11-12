@@ -65,4 +65,8 @@ export const ticketApi = {
   approveStep: (id: string, actionId: string) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { only: [actionId] } }),
   /** Takes the pre-approval back (autoaprobado -> te pide OK); 409 once Claude started the step. The owner wakes with ticket.plan_approved { revoked }. */
   revokeStep: (id: string, actionId: string) => call<TicketDetail>(`${T(id)}/plan/approve`, { body: { revoke: [actionId] } }),
+  /** "Pausar" (Andrés): En pausa with a reason and, optionally, the open ticket whose closing brings it back. */
+  pause: (id: string, reason: string, untilTicket?: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "pause", by: "andres", reason, untilTicket: untilTicket || undefined } }),
+  /** "Reanudar" (Andrés): back to Claude; the owner wakes with ticket.resumed. */
+  resume: (id: string) => call<TicketDetail>(`${T(id)}/transition`, { body: { event: "resume", by: "andres" } }),
 };

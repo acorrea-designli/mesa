@@ -188,6 +188,18 @@ describe("withTicketNeed", () => {
     expect(withTicketNeed(waitsOnYou, undefined, "waiting_claude")).toBe(waitsOnYou);
   });
 
+  it("a paused or ongoing ticket with no needs reads its own neutral tag, never Te espera nor Claude trabaja (t126)", () => {
+    const waitsOnYou = itemRow({ ...base, waitOn: "you", station: "waiting" }, "09:02");
+    const paused = withTicketNeed(waitsOnYou, [], "paused");
+    expect(paused.tag).toEqual({ tone: "plain", label: "En pausa" });
+    expect(paused.phoneTag).toEqual({ tone: "plain", label: "En pausa" });
+    expect(paused.waitsOnYou).toBe(false);
+    expect(withTicketNeed(itemRow(claudeWaits, "09:02"), [], "ongoing").tag).toEqual({ tone: "plain", label: "En proceso" });
+    // what he still owes keeps showing as Te espera; no ticket detail leaves the row alone
+    expect(withTicketNeed(waitsOnYou, need, "paused").tag.label).toBe("Te espera");
+    expect(withTicketNeed(waitsOnYou, undefined, "paused")).toBe(waitsOnYou);
+  });
+
   it("leaves rows without needs, done rows and salidas unchanged", () => {
     const row = itemRow(claudeWaits, "09:02");
     expect(withTicketNeed(row, [])).toBe(row);

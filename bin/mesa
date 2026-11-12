@@ -37,6 +37,13 @@ Tickets
   mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
   mesa ticket claim <id|ref>      take an Andrés request and start work
   mesa ticket close <id|ref>
+  mesa ticket pause <id|ref> --reason R [--until-ticket tN]
+                  "En pausa": blocked on something else (another ticket, a third party, a date: put the date in R). R is required.
+                  --until-ticket names an open ticket (not this one): when it closes (close or fold) this one resumes by itself,
+                  back to Claude, and its owner wakes with ticket.resumed. From any open status; 400 on a bad ticket, 409 closed
+  mesa ticket ongoing <id|ref> --reason R        "En proceso": going on with nobody active (CI, a third party). R is required
+  mesa ticket resume <id|ref>                    paused/ongoing -> working, no wake. 409 unless paused or ongoing. Andrés replying,
+                  you asking or planning, or a claim also end the pause
   mesa ticket reopen <id|ref> [--reason R]       closed -> waiting_claude (the owner wakes with ticket.reopened)
   mesa ticket fold <primary> <ref>... --why W   (lead, on ticket.batch) group same-topic tickets under one owner: their cards and
                   refs move to <primary>, which gets "Agrupé: … porque W"; each folded ticket closes with "Agrupado en <primary>: W"
@@ -418,6 +425,17 @@ async function main() {
           return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "claim", session: needSession() }));
         case "close":
           return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "close", by: "claude", session }));
+        case "pause":
+        case "ongoing": {
+          const until = opt["until-ticket"];
+          if (until !== undefined && cmd === "ongoing") usage("--until-ticket only goes with pause");
+          if (until !== undefined && (typeof until !== "string" || !until)) usage("--until-ticket wants one ticket ref (tN)");
+          return out(
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: cmd, by: "claude", reason: text(opt.reason, "--reason"), untilTicket: until, session }),
+          );
+        }
+        case "resume":
+          return out(await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "resume", by: "claude", session }));
         case "reopen":
           return out(
             await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: "reopen", by: "claude", reason: typeof opt.reason === "string" ? opt.reason : undefined }),

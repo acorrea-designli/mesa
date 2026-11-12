@@ -21,6 +21,7 @@ import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer"
 import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
 import { QuestionCard } from "./QuestionCard";
+import { PauseBar } from "./PauseBar";
 import { answersOf, livePicks, type Picks } from "./card";
 import { firstLine, repeatsReviewCard } from "@/lib/domain/review-repeat";
 import { clearReply, loadReply, saveReply, type ReplyDraft } from "./drafts";
@@ -322,6 +323,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
             <FilesBadge chip={chipOfMeta(data.item?.meta)} />
           </div>
           <h2>{t.title}</h2>
+          <PauseBar t={t} pick={pick} listening={listening} onChanged={onChanged} />
           {first?.body && first.body !== t.title ? <div className="ctx"><Linked text={first.body} /></div> : null}
 
           {firstCard.length ? (
@@ -476,7 +478,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           </>
         )}
         <div className="meta">
-          <span>{closed ? "Queda en Cerrados hoy hasta medianoche." : t.status === "working" || t.status === "waiting_claude" ? "Se cierra cuando Claude termine o lo marques hecho." : "Al responder despierta la sesión que preguntó."}</span>
+          <span>{closed ? "Queda en Cerrados hoy hasta medianoche." : t.status === "working" || t.status === "waiting_claude" ? "Se cierra cuando Claude termine o lo marques hecho." : t.status === "paused" || t.status === "ongoing" ? "Al responder o reanudar vuelve a Claude." : "Al responder despierta la sesión que preguntó."}</span>
           <span className="tk-mem">
             <IcEngram />
             {t.engram.length ? `En engram · ${t.engram[t.engram.length - 1]!.project || t.project}` : t.project ? `Se guarda en engram · ${t.project}` : "Se guarda en engram"}

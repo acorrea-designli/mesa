@@ -11,7 +11,7 @@ import {
   ValidationError,
 } from "../db/util";
 import { inferKind } from "../domain/dispatch-kind";
-import { initialTicketStatus, transitionTicket, type TicketEvent } from "../domain/ticket-machine";
+import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
 import { answersBody, cardProblem, optionLabel, parseShorthand, type QuestionInput } from "../domain/ticket-questions";
 import type {
   ActionMode,
@@ -116,12 +116,17 @@ export const TASK_STATION_OF: Record<TicketStatus, Station> = {
   waiting_claude: "doing",
   waiting_andres: "waiting",
   closed: "done",
+  paused: "waiting", // "En pausa": Esperando
+  ongoing: "doing", // "En proceso": En curso
 };
+
+/** A ticket row with the ref of the ticket it is paused until (t126). */
+const TICKET_SELECT = "SELECT t.*, d.ref AS paused_until FROM tickets t LEFT JOIN tickets d ON d.id = t.paused_until_ticket_id";
 
 export function ticketsRepo(db: Db) {
   const tasks = tasksRepo(db);
   const get = (id: string): Ticket => {
-    const row = db.prepare("SELECT * FROM tickets WHERE id = ? OR ref = ?").get(id, id);
+    const row = db.prepare(`${TICKET_SELECT} WHERE t.id = ? OR t.ref = ?`).get(id, id);
     if (!row) throw new NotFoundError("ticket", id);
     return fromRow<Ticket>(row, T_SPEC);
   };
@@ -272,6 +277,8 @@ export function ticketsRepo(db: Db) {
          woke_at = CASE WHEN ? THEN ? ELSE woke_at END
        WHERE id = ?`,
     ).run(r.status, ts, r.status, ts, r.wake && !quiet ? 1 : 0, ts, t.id);
+    // The pause fields only live while the ticket is paused/ongoing (pause() writes them after this).
+    if (!isPauseStatus(r.status)) db.prepare("UPDATE tickets SET pause_reason = NULL, paused_until_ticket_id = NULL, paused_at = NULL WHERE id = ?").run(t.id);
     // Closing withdraws what is still open; a reopen does not bring it back (Claude asks again if it still matters).
     if (r.status === "closed") {
       db.prepare("UPDATE ticket_questions SET state = 'withdrawn', withdraw_reason = ? WHERE ticket_id = ? AND state = 'open'").run(CLOSED_WITHDRAW_REASON, t.id);
@@ -286,7 +293,23 @@ export function ticketsRepo(db: Db) {
     if (r.wake && !quiet) {
       emitWake(db, { sessionId: t.ownerSession, kind: r.wake, entityType: "ticket", entityId: t.id, payload: { ref: t.ref, ...payload } }, now);
     }
+    // Whatever closed it (close, fold), the tickets paused until this one come back, in the same transaction.
+    if (r.status === "closed" && t.status !== "closed") resumeDependents(t, now);
     return r.status;
+  };
+
+  /**
+   * Every ticket paused until `t` resumes: back to Claude (waiting_claude), a system line in its thread and a
+   * ticket.resumed { ref, ticketRef, by: "dependency", dependencyRef } wake to its owner. A dependent that is no longer
+   * paused (closed, resumed by hand, switched to ongoing) is not selected, so there is nothing to skip or throw on.
+   */
+  const resumeDependents = (t: Ticket, now: Date) => {
+    const deps = db.prepare("SELECT id FROM tickets WHERE paused_until_ticket_id = ? AND status = 'paused' ORDER BY created_at, id").all(t.id) as { id: string }[];
+    for (const { id } of deps) {
+      const d = get(id);
+      insertMessage(d.id, { author: "claude", body: `Se cerró ${t.ref}: vuelve a Claude` }, nowIso(now));
+      apply(d, { type: "resume", by: "dependency" }, now, { ticketRef: d.ref, by: "dependency", dependencyRef: t.ref });
+    }
   };
 
   const actions = (ticketId: string) =>
@@ -367,13 +390,13 @@ export function ticketsRepo(db: Db) {
       const where: string[] = [];
       const args: string[] = [];
       if (f.status) {
-        where.push("status = ?");
+        where.push("t.status = ?");
         args.push(f.status);
       }
-      if (f.open) where.push("status <> 'closed'");
+      if (f.open) where.push("t.status <> 'closed'");
       return fromRows<Ticket>(
         db
-          .prepare(`SELECT * FROM tickets ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY updated_at DESC`)
+          .prepare(`${TICKET_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY t.updated_at DESC`)
           .all(...args),
         T_SPEC,
       );
@@ -653,6 +676,53 @@ export function ticketsRepo(db: Db) {
       const a = fromRow<PlannedAction>(row, A_SPEC);
       if (!r.changes && a.state !== state) throw new TransitionError("step is not approved; Andres took it back or never approved it");
       return a;
+    },
+
+    /**
+     * "En pausa" (blocked on something else; `untilTicket` = the open ticket whose closing resumes it) or "En proceso"
+     * (going on with nobody active: CI, a third party). Needs a reason. Allowed from any open status, and again to
+     * change the reason, the dependency or the kind. 409 on a closed ticket; 400 on an empty reason, an until-ticket that
+     * is unknown, closed or the ticket itself, or an until-ticket on an ongoing one. It never wakes. Andrés's pause
+     * (`by: "andres"`, the UI) is an interaction of his; Claude's (the CLI) is not.
+     */
+    pause(id: string, o: { kind: PauseKind; reason: string; untilTicket?: string; by: "andres" | "claude" }, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        const ev: TicketEvent = { type: "pause", kind: o.kind };
+        const check = transitionTicket(t.status, ev);
+        if (!check.ok) throw new TransitionError(check.error);
+        const reason = o.reason.trim();
+        if (!reason) throw new ValidationError("a pause needs a reason");
+        let until: string | null = null;
+        if (o.untilTicket) {
+          if (o.kind !== "paused") throw new ValidationError("only a paused ticket can wait for another ticket");
+          const dep = db.prepare("SELECT id, ref, status FROM tickets WHERE id = ? OR ref = ?").get(o.untilTicket, o.untilTicket) as { id: string; ref: string; status: TicketStatus } | undefined;
+          if (!dep) throw new ValidationError(`ticket ${o.untilTicket} does not exist`);
+          if (dep.id === t.id) throw new ValidationError("a ticket cannot wait for itself");
+          if (dep.status === "closed") throw new ValidationError(`${dep.ref} is already closed`);
+          until = dep.id;
+        }
+        apply(t, ev, now);
+        const ts = nowIso(now);
+        // paused_at is when the ticket entered paused/ongoing; changing the reason or switching kind restarts it.
+        db.prepare("UPDATE tickets SET pause_reason = ?, paused_until_ticket_id = ?, paused_at = ? WHERE id = ?").run(reason, until, ts, t.id);
+        if (o.by === "andres") touchInteraction(db, now);
+        return this.detail(t.id);
+      });
+    },
+
+    /**
+     * Paused/ongoing ends by hand. `by: "claude"` (the CLI): working, no wake. `by: "andres"` (the UI "Reanudar"):
+     * waiting_claude and ticket.resumed { ref, ticketRef, by: "andres" } to the owner. 409 unless paused or ongoing.
+     * (A dependency closing resumes through apply, see resumeDependents.)
+     */
+    resume(id: string, o: { by: "andres" | "claude" }, now = new Date()): TicketDetail {
+      return tx(db, () => {
+        const t = get(id);
+        apply(t, { type: "resume", by: o.by }, now, { ticketRef: t.ref, by: o.by });
+        if (o.by === "andres") touchInteraction(db, now);
+        return this.detail(t.id);
+      });
     },
 
     /** claim / close / reopen. `reason` rides on the ticket.reopened wake. */

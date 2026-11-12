@@ -235,6 +235,12 @@ export function withTicketNeed(row: HoyRow, needs: readonly { label: string }[] 
     const tag: Tag = { tone: "cl", label: TICKET_STATUS_LABEL[status] };
     return { ...row, tag, phoneTag: tag, waitsOnYou: false };
   }
+  // t126: a paused or ongoing ticket with nothing owed to Andrés is nobody's turn. The row reads its own neutral tag,
+  // never "Te espera" and never "Espera a Claude" / "Claude trabaja".
+  if (needs && (status === "paused" || status === "ongoing") && (row.waitsOnYou || row.tag.tone === "cl")) {
+    const tag: Tag = { tone: "plain", label: TICKET_STATUS_LABEL[status] };
+    return { ...row, tag, phoneTag: tag, waitsOnYou: false };
+  }
   return row;
 }
 

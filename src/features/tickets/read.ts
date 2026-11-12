@@ -6,7 +6,7 @@ import { related, type RelItem, type RelTicket, type Related } from "@/lib/domai
 import { loadTicketNeeds } from "./needs";
 import type { Approval, Brief, Handoff, Item, PlannedAction, Review, Salida, TeamAgent, Ticket, TicketDetail } from "@/lib/domain/types";
 
-export type TicketTab = "open" | "you" | "closed";
+export type TicketTab = "open" | "you" | "paused" | "closed";
 
 export interface TicketRow extends Ticket {
   excerpt: string;
@@ -43,7 +43,7 @@ export interface TicketsData {
   tab: TicketTab;
   rows: TicketRow[];
   closedToday: TicketRow[];
-  counts: { open: number; you: number; closedToday: number };
+  counts: { open: number; you: number; closedToday: number; paused: number };
   selected: ThreadData | null;
   /** The selected ticket has a message Andrés has not seen: opening it marks it seen. */
   selectedUnread: boolean;
@@ -86,6 +86,9 @@ function excerpt(t: TicketDetail, needs: TicketNeed[], now: Date): string {
   const opts = asked.length === 1 ? asked[0]!.options : null;
   if (t.status === "closed") return last && last.author === "claude" ? `Hecho por Claude · ${clip(last.body, 60)}` : "Cerrado";
   if (t.status === "working") return `Claude trabaja desde las ${hm(t.wokeAt ?? t.updatedAt)}`;
+  // "En pausa" and "En proceso" read their reason (the dependency link lives in the thread header, a row is one link).
+  if (t.status === "paused") return [t.pauseReason, t.pausedUntil ? `hasta ${t.pausedUntil}` : ""].filter(Boolean).join(" · ") || "En pausa";
+  if (t.status === "ongoing") return t.pauseReason || "En proceso";
   if (t.status === "waiting_claude" && last?.chosen) return `Respondiste ${last.chosen} · ${hm(last.createdAt)}`;
   if (t.actions.some((a) => a.state === "planned")) return "Claude va a hacer · te pide OK";
   const parts = [t.project];
@@ -227,9 +230,10 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
   const open = all.filter((t) => t.status !== "closed");
   const waitsOnYou = open.filter((t) => needsOf(t).length > 0);
   const closedToday = all.filter((t) => t.status === "closed" && (t.closedAt ?? t.updatedAt) >= day.toISOString());
-  const tab: TicketTab = opts.tab === "you" || opts.tab === "closed" ? opts.tab : "open";
+  const idle = open.filter((t) => t.status === "paused" || t.status === "ongoing");
+  const tab: TicketTab = opts.tab === "you" || opts.tab === "closed" || opts.tab === "paused" ? opts.tab : "open";
   // Tickets with a need first (by the priority of the first need, then the one waiting longest), then the rest, newest first.
-  const rows = (tab === "you" ? waitsOnYou : tab === "closed" ? closedToday : open).sort((a, b) => {
+  const rows = (tab === "you" ? waitsOnYou : tab === "closed" ? closedToday : tab === "paused" ? idle : open).sort((a, b) => {
     const [ra, rb] = [needRank(needsOf(a)), needRank(needsOf(b))];
     if (ra !== rb) return ra - rb; // Infinity - Infinity is NaN: equal ranks are handled above
     return ra === Infinity ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt);
@@ -274,7 +278,7 @@ export function loadTickets(r: Repos, opts: TicketsQuery, now = new Date()): Tic
     closedToday: tab === "open" ? closedToday.map(row) : [],
     selectedUnread: Boolean(selected && unread.has(selected.ticket.id)),
     unreadCount: [...open, ...closedToday].filter((t) => unread.has(t.id)).length,
-    counts: { open: open.length, you: waitsOnYou.length, closedToday: closedToday.length },
+    counts: { open: open.length, you: waitsOnYou.length, closedToday: closedToday.length, paused: idle.length },
     selected,
     listening,
     pick,

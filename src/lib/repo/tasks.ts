@@ -45,12 +45,14 @@ export interface StationMove {
 export function tasksRepo(db: Db) {
   const ownerOf = (ticketId: string | null): TaskOwner | null => {
     if (!ticketId) return null;
-    const t = db.prepare("SELECT id, ref, status FROM tickets WHERE id = ?").get(ticketId) as { id: string; ref: string; status: TicketStatus } | undefined;
+    const t = db
+      .prepare("SELECT t.id, t.ref, t.status, d.ref AS paused_until FROM tickets t LEFT JOIN tickets d ON d.id = t.paused_until_ticket_id WHERE t.id = ?")
+      .get(ticketId) as { id: string; ref: string; status: TicketStatus; paused_until: string | null } | undefined;
     if (!t) return null;
     const a = db
       .prepare("SELECT name, role FROM ticket_team WHERE ticket_id = ? AND owner = 1 AND status = 'live' ORDER BY spawned_at DESC LIMIT 1")
       .get(t.id) as { name: string; role: string } | undefined;
-    return { ticketId: t.id, ticketRef: t.ref, ticketStatus: t.status, agent: a?.name ?? null, role: a?.role ?? null };
+    return { ticketId: t.id, ticketRef: t.ref, ticketStatus: t.status, pausedUntil: t.paused_until ?? null, agent: a?.name ?? null, role: a?.role ?? null };
   };
 
   const linked = (taskId: string) =>

@@ -26,7 +26,7 @@ export function Dir({ direction }: { direction: Ticket["direction"] }) {
 }
 
 export const statusLabel = (s: Ticket["status"]) =>
-  ({ waiting_andres: "Te espera", waiting_claude: "Espera a Claude", working: "Claude trabaja", closed: "Cerrado" })[s];
+  ({ waiting_andres: "Te espera", waiting_claude: "Espera a Claude", working: "Claude trabaja", closed: "Cerrado", paused: "En pausa", ongoing: "En proceso" })[s];
 
 /** A ticket with something for Andrés reads "Te espera" whatever its stored status (ticket-needs.ts). The action's name goes in the excerpt, never in a second solid tag. */
 export function TicketStatus({ t }: { t: Pick<Ticket, "status"> & { needs?: unknown[] } }) {
@@ -38,6 +38,11 @@ export function TicketStatus({ t }: { t: Pick<Ticket, "status"> & { needs?: unkn
       return <StatusTag tone="cl">Espera a Claude</StatusTag>;
     case "working":
       return <StatusTag tone="cl">Claude trabaja</StatusTag>;
+    // Nobody's turn: a neutral outline, never solid ink and never Claude orange.
+    case "paused":
+      return <StatusTag tone="plain">En pausa</StatusTag>;
+    case "ongoing":
+      return <StatusTag tone="plain">En proceso</StatusTag>;
     case "closed":
       return (
         <StatusTag tone="ok" icon={<IcCheck width={12} height={12} />}>

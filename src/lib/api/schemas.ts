@@ -156,12 +156,22 @@ export const ticketPlanApprove = z
   .object({ reject: z.array(z.string()).optional(), only: z.array(z.string()).min(1).optional(), revoke: z.array(z.string()).min(1).optional() })
   .refine((b) => !(b.only && b.reject?.length), { message: "only and reject cannot be combined" })
   .refine((b) => !(b.revoke && (b.only || b.reject?.length)), { message: "revoke cannot be combined with only or reject" });
-export const ticketTransition = z.object({
-  event: z.enum(["claim", "close", "reopen"]),
-  by: z.enum(["andres", "claude"]).optional(),
-  reason: z.string().optional(),
-  session: z.string().optional(),
-});
+/**
+ * `pause` / `ongoing` (t126) need a reason; `untilTicket` (a ref or id) only goes with `pause`. `by` defaults to
+ * Andrés (the UI), or to Claude on a CLI call (x-mesa-client: cli).
+ */
+export const ticketTransition = z
+  .object({
+    event: z.enum(["claim", "close", "reopen", "pause", "ongoing", "resume"]),
+    by: z.enum(["andres", "claude"]).optional(),
+    reason: z.string().optional(),
+    session: z.string().optional(),
+    untilTicket: z.string().trim().min(1).optional(),
+  })
+  .superRefine((b, ctx) => {
+    if ((b.event === "pause" || b.event === "ongoing") && !b.reason?.trim()) ctx.addIssue({ code: "custom", path: ["reason"], message: "a pause needs a reason" });
+    if (b.untilTicket && b.event !== "pause") ctx.addIssue({ code: "custom", path: ["untilTicket"], message: "only a paused ticket can wait for another ticket" });
+  });
 /** The lead groups same-topic tickets of a ticket.batch (mesa ticket fold <primary> <ref>... --why W). */
 export const ticketFold = z.object({
   from: z.array(z.string().min(1)).min(1).max(50),

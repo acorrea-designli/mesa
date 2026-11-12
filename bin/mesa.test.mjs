@@ -491,6 +491,38 @@ describe("mesa CLI", () => {
     expect(r.json()).toMatchObject({ released: true, salida: { id: "sa_1", status: "draft_created" } });
   });
 
+  it("ticket pause, ongoing and resume post their transition events as Claude; the reason is required (t126)", async () => {
+    const h = await mesa(["help"]);
+    for (const c of ["mesa ticket pause", "--until-ticket", "mesa ticket ongoing", "mesa ticket resume"]) expect(h.stdout).toContain(c);
+
+    expect((await mesa(["ticket", "pause", "t87", "--reason", "Espera la vista de PDF", "--until-ticket", "t125"])).code).toBe(0);
+    expect(requests[0]).toMatchObject({
+      method: "POST",
+      path: "/api/tickets/t87/transition",
+      body: { event: "pause", by: "claude", reason: "Espera la vista de PDF", untilTicket: "t125" },
+    });
+    requests = [];
+    await mesa(["ticket", "pause", "t87", "--reason", "esperando al cliente hasta el viernes"]);
+    expect(requests[0].body).toMatchObject({ event: "pause", by: "claude", reason: "esperando al cliente hasta el viernes" });
+    expect(requests[0].body.untilTicket).toBeUndefined();
+    requests = [];
+    await mesa(["ticket", "ongoing", "t90", "--reason", "CI corriendo"]);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t90/transition", body: { event: "ongoing", by: "claude", reason: "CI corriendo" } });
+    requests = [];
+    await mesa(["ticket", "resume", "t87"]);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t87/transition", body: { event: "resume", by: "claude" } });
+    requests = [];
+    // usage errors never reach the server
+    expect((await mesa(["ticket", "pause", "t87"])).code).toBe(2);
+    expect((await mesa(["ticket", "pause", "t87", "--reason", ""])).code).toBe(2);
+    expect((await mesa(["ticket", "pause", "--reason", "x"])).code).toBe(2);
+    expect((await mesa(["ticket", "ongoing", "t90"])).code).toBe(2);
+    expect((await mesa(["ticket", "ongoing", "t90", "--reason", "x", "--until-ticket", "t1"])).code).toBe(2);
+    expect((await mesa(["ticket", "pause", "t87", "--reason", "x", "--until-ticket", "t1", "--until-ticket", "t2"])).code).toBe(2);
+    expect((await mesa(["ticket", "resume"])).code).toBe(2);
+    expect(requests).toEqual([]);
+  });
+
   it("salida withdraw posts the withdraw event with its reason; the reason is required", async () => {
     const r = await mesa(["salida", "withdraw", "sa_1", "--reason", "stale leftover of mesa#36"]);
     expect(r.code).toBe(0);
