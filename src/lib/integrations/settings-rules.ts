@@ -9,13 +9,14 @@ import { DEFAULT_WORKTREES_ROOT, isDerivedRule } from "../domain/denied-rule";
 
 /** The settings file the rules go to. MESA_SETTINGS_LOCAL overrides it (tests, another machine). */
 export const DEFAULT_SETTINGS_LOCAL = "G:/WorkSpace/designli/.claude/settings.local.json";
-export const worktreesRoot = (env: NodeJS.ProcessEnv = process.env) => env.MESA_WORKTREES_ROOT?.trim() || DEFAULT_WORKTREES_ROOT;
+type Env = Record<string, string | undefined>;
+export const worktreesRoot = (env: Env = process.env) => env.MESA_WORKTREES_ROOT?.trim() || DEFAULT_WORKTREES_ROOT;
 
 /** A TransitionError so the route answers 409 with the Spanish reason and the card stays pending. */
 export class SettingsRuleError extends TransitionError {}
 
 /** The sandbox board (MESA_ENV=sandbox, docs/SANDBOX.md) never writes the live settings file unless a path is given. */
-export function settingsLocalPath(env: NodeJS.ProcessEnv = process.env): string {
+export function settingsLocalPath(env: Env = process.env): string {
   const own = env.MESA_SETTINGS_LOCAL?.trim();
   if (own) return own;
   if (String(env.MESA_ENV ?? "").trim().toLowerCase() === "sandbox") throw new SettingsRuleError("en el sandbox no se escribe el settings.local.json real");

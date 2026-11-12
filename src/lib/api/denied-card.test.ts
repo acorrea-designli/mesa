@@ -114,6 +114,29 @@ describe("Permitir esta regla (approve)", () => {
     }
     expect(written()).toBeNull();
   });
+  it("allows only the rule that was on the card: a changed worktrees folder, a card with no rule and an edited row are refused", async () => {
+    // The worktrees folder changed after the card was filed: the call no longer derives a rule.
+    const a = await file_();
+    process.env.MESA_WORKTREES_ROOT = "D:/other";
+    expect((await APPROVE(req({}), ctx({ id: a.id }))).status).toBe(409);
+    delete process.env.MESA_WORKTREES_ROOT;
+    expect(r.approvals.get(a.id).status).toBe("pending");
+    // A card filed with no rule (the folder was different then) is not allowed once the call derives one now.
+    process.env.MESA_WORKTREES_ROOT = "D:/other";
+    const noRule = await file_();
+    expect(noRule.rule).toBe("");
+    delete process.env.MESA_WORKTREES_ROOT;
+    const res = await APPROVE(req({}), ctx({ id: noRule.id }));
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/no tenía una regla propuesta/);
+    // A stored rule that is not what the call derives (a row edited outside the API).
+    r.db.prepare("UPDATE approvals SET rule = ? WHERE id = ?").run("Edit(//g/WorkSpace/designli-wt/dev-t128-2/**)", a.id);
+    const mismatch = await APPROVE(req({}), ctx({ id: a.id }));
+    expect(mismatch.status).toBe(409);
+    expect(((await mismatch.json()) as { error: { message: string } }).error.message).toMatch(/ya no coincide/);
+    expect(written()).toBeNull();
+    for (const id of [a.id, noRule.id]) expect(r.approvals.get(id).status).toBe("pending");
+  });
   it("leaves the card pending and the file untouched when the settings file is not JSON", async () => {
     fs.writeFileSync(settings, "{ nope");
     const a = await file_();
