@@ -10,12 +10,13 @@ export const metadata: Metadata = { title: "Revisar PDF" };
 export const dynamic = "force-dynamic";
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-export default async function PdfReviewPage({ params }: { params: Promise<{ ref: string; attId: string }> }) {
+export default async function PdfReviewPage({ params, searchParams }: { params: Promise<{ ref: string; attId: string }>; searchParams: Promise<{ from?: string }> }) {
   const { ref, attId } = await params;
+  const { from } = await searchParams;
   const r = repos();
   const data = loadReview(r, decodeURIComponent(ref), decodeURIComponent(attId));
   if (!data) notFound();
   // The thread links by ticket id; the address people share is the ref.
-  if (decodeURIComponent(ref) !== data.ticket.ref) redirect(`/tickets/${encodeURIComponent(data.ticket.ref)}/pdf/${encodeURIComponent(data.attachment.id)}`);
-  return <PdfReview data={data} />;
+  if (decodeURIComponent(ref) !== data.ticket.ref) redirect(`/tickets/${encodeURIComponent(data.ticket.ref)}/pdf/${encodeURIComponent(data.attachment.id)}${from === "docs" ? "?from=docs" : ""}`);
+  return <PdfReview data={data} from={from} />;
 }

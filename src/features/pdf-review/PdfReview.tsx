@@ -8,7 +8,7 @@ import { byPosition } from "@/lib/domain/annotations";
 import type { Annotation } from "@/lib/domain/types";
 import { useToast } from "@/components/ui/interactive";
 import { ApiError } from "@/features/salidas/api";
-import { IcBack } from "@/features/salidas/icons";
+import { IcBack, IcCheck } from "@/features/salidas/icons";
 import { fmtSize } from "@/features/tickets/Composer";
 import { useLive } from "@/lib/live/useLive";
 import { reviewApi } from "./api";
@@ -41,8 +41,13 @@ const sorted = (list: Annotation[]) => [...list].sort(byPosition);
 const put = (list: Annotation[], a: Annotation) => sorted([...list.filter((x) => x.id !== a.id), a]);
 const say = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal");
 
-export function PdfReview({ data }: { data: ReviewData }) {
+/** Where "Volver" goes: Documentos when he came from there, the ticket otherwise. */
+export const backTarget = (ticketRef: string, from?: string) =>
+  from === "docs" ? { href: "/tickets?tab=docs", label: "Documentos" } : { href: `/tickets?t=${encodeURIComponent(ticketRef)}`, label: ticketRef };
+
+export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
   const { ticket, attachment } = data;
+  const back = backTarget(ticket.ref, from);
   const toast = useToast();
   const phone = usePhone();
   const [marks, setMarks] = useState<Annotation[]>(data.annotations);
@@ -55,6 +60,8 @@ export function PdfReview({ data }: { data: ReviewData }) {
   const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [sending, setSending] = useState(false);
+  const [reviewedAt, setReviewedAt] = useState<string | null>(attachment.reviewedAt);
+  const [marking, setMarking] = useState(false);
   const seq = useRef(0);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (flashTimer.current && clearTimeout(flashTimer.current)), []);
@@ -149,6 +156,20 @@ export function PdfReview({ data }: { data: ReviewData }) {
     }
   };
 
+  // "Terminé": he marks the PDF as finished and can press again to undo it. Documentos reads this flag only.
+  const toggleReviewed = async () => {
+    if (marking) return;
+    setMarking(true);
+    try {
+      const a = await reviewApi.reviewed(ticket.id, attachment.id, reviewedAt === null);
+      setReviewedAt(a.reviewedAt);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setMarking(false);
+    }
+  };
+
   const readOnly = phone;
   const url = `/api/tickets/${encodeURIComponent(ticket.id)}/attachments/${encodeURIComponent(attachment.id)}`;
   const step = (dir: 1 | -1) => setZoom(clampScale(Math.round((scale + dir * 0.25) * 100) / 100));
@@ -156,8 +177,8 @@ export function PdfReview({ data }: { data: ReviewData }) {
   return (
     <div className="pr">
       <header className="pr-head">
-        <Link className="btn sm" href={`/tickets?t=${encodeURIComponent(ticket.ref)}`}>
-          <IcBack /> {ticket.ref}
+        <Link className="btn sm" href={back.href} title={`Volver a ${back.label}`}>
+          <IcBack /> Volver<span className="pr-back-to">{back.label}</span>
         </Link>
         <h1 title={attachment.filename}>
           {attachment.filename}
@@ -187,6 +208,10 @@ export function PdfReview({ data }: { data: ReviewData }) {
           </button>
           <output>{Math.round(scale * 100)}%</output>
         </div>
+        <button type="button" className="btn sm pr-done" aria-pressed={reviewedAt !== null} disabled={marking} title={reviewedAt === null ? "Marcar este PDF como revisado" : "Deshacer: volver a pendiente"} onClick={() => void toggleReviewed()}>
+          {reviewedAt === null ? null : <IcCheck width={12} height={12} />}
+          {reviewedAt === null ? "Terminé" : "Terminado"}
+        </button>
         <a className="btn sm" href={url} target="_blank" rel="noreferrer">
           Abrir PDF
         </a>

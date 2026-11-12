@@ -54,6 +54,19 @@
   border-color: var(--ink);
   color: var(--gnd);
 }
+.pr-back-to {
+  margin-left: 6px;
+  font-weight: 500;
+  color: var(--mute);
+}
+.pr-done {
+  gap: 6px;
+}
+/* Terminado: an ink outline, never a fill (a solid ink control means "te espera"). */
+.pr-done[aria-pressed="true"] {
+  border-color: var(--ink);
+  border-width: 2px;
+}
 .pr-zoom output {
   min-width: 44px;
   font-size: 13px;
