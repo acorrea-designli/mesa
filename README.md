@@ -11,7 +11,7 @@ Mesa targets Windows with Git Bash (junctions, `bin/mesa.cmd`). Paths below use 
 | What | Why |
 | --- | --- |
 | Access to the private repo `acorrea-designli/mesa` | to clone it |
-| Node **22.23.2** | `node:sqlite` needs 22.13 or newer. `mise install` reads `mise.toml`; without mise, `.npmrc` makes pnpm download 22.23.2 for its scripts (`use-node-version`). A plain `node` older than 22.13 cannot run `scripts/install-team.mjs` or `bin/mesa`: use `pnpm exec node <script>` |
+| Node **22.23.2** | `node:sqlite` (the server) needs 22.13 or newer. `mise install` reads `mise.toml`; without mise, `.npmrc` makes pnpm download 22.23.2 for its scripts (`use-node-version`). If the `node` on PATH is older than 22.13, run `scripts/install-team.mjs` and `bin/mesa` through `pnpm exec node <script>`: the team hooks are registered with the node that ran the installer |
 | pnpm **10** | `corepack enable` (the repo pins `pnpm@10.33.0`) |
 | `gh` (GitHub CLI), logged in as **your** account | GitHub sync and review writes use that account's token. Give it the `project` scope so Mesa can create and update its Project |
 | `engram` binary on PATH (or `MESA_ENGRAM_BIN`) and its MCP server in Claude Code | the team's memory (`mcp__engram__*`) |
@@ -19,7 +19,7 @@ Mesa targets Windows with Git Bash (junctions, `bin/mesa.cmd`). Paths below use 
 | Slack and Google Calendar connectors in Claude Code | Slack reads and drafts, and the calendar events you approve (`mcp__claude_ai_Slack__*`, `mcp__claude_ai_Google_Calendar__*`). The Calendario screen itself reads the iCal feed (`MESA_GCAL_ICS_URL`) |
 | Claude Code | the team runs in it |
 | `cloudflared` (optional) | phone access through a Cloudflare Tunnel, `docs/ARCHITECTURE.md` § 11 |
-| A private GitHub **Project** named "Mesa" under your login | the board's kanban. Mesa finds it by title and creates it on the first sync when it is missing |
+| A private GitHub **Project** named "Mesa" under your login | the board's kanban. Mesa finds it by title (`MESA_GH_PROJECT_TITLE` renames it) and creates it on the first sync when it is missing |
 
 Mesa holds no Slack, Basecamp or Google credentials: those are reached only through the Claude connectors. GitHub goes through `gh`.
 
@@ -65,7 +65,7 @@ The team (skills, agents, spawn preamble, hooks, permission rules) is installed 
 node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --dry-run --allow
 ```
 
-Read the plan, then run it again without `--dry-run`. `--allow` adds the read-only allow rules, each printed as `merge   permissions.allow: ...`. `--sessions` and `--worktrees` are needed only when they are not `<target>` and `<target>-wt`. `--commit-guard` registers `vendor/commit-guard.mjs` (one-line conventional commits, no AI attribution) as a PreToolUse hook; leave it out when you already run your own. The same identity can come from `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`, `MESA_SLACK_USER_ID`.
+Read the plan, then run it again without `--dry-run`. `--allow` adds the read-only allow rules, each printed as `merge   permissions.allow: ...`. `--sessions` and `--worktrees` are needed only when they are not `<target>` and `<target>-wt`. `--commit-guard` registers `vendor/commit-guard.mjs` (one-line conventional commits, no AI attribution) as a PreToolUse hook; leave it out when you already run your own. The same identity can come from `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`, `MESA_SLACK_USER_ID` set in the shell: `install-team` does not read `.env.local`, so pass the flags or export them.
 
 It writes `.claude/skills`, `.claude/agents`, `.claude/mesa/spawn-preamble.md` and merges hooks and env into `.claude/settings.json` (backing it up first, never removing a key). **Restart Claude Code in the sessions folder after every run**, or it keeps the old hooks, skills and agents.
 
@@ -87,7 +87,7 @@ A dummy copy of the board where nothing leaves, for trying things: `pnpm sandbox
 node scripts/install-team.mjs --target D:/work-sandbox --env sandbox --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --dry-run
 ```
 
-Open Claude Code in that folder and run `/mesa-start`. Details in `docs/SANDBOX.md`.
+Read the plan, then run it again without `--dry-run`. Open Claude Code in that folder and run `/mesa-start`. Details in `docs/SANDBOX.md`.
 
 ## After every pull
 

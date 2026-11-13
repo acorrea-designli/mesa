@@ -151,10 +151,10 @@ github salida for that repo and PR; it writes under the token of `MESA_GH_USER`,
   A finding that already has a thread (`inReplyTo` on the destination, or its `ghCommentId`) continues there:
   `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs reply <repo> <pr> <inReplyTo> <scratchpad>/lead/reply-<salida>.txt`.
   A finding whose file is not in the diff has no `path`: its text goes in the review body.
-- **Andrés's own PRs** (PR author `acorrea-designli`, e.g. acorrea-designli/mesa team PRs; Andrés, t118,
+- **Andrés's own PRs** (PR author `acorrea-designli`, e.g. Mesa repo team PRs; Andrés, t118,
   2026-11-11): nothing is posted to GitHub. Findings stay in Mesa and go to the dev as the reviewer's FAIL. A
   released post salida for such a PR is never sent to GitHub and never bounced back to him: on a Mesa PR
-  (acorrea-designli/mesa) the lead resolves it without asking (Andrés, t112, 2026-11-12: "arregla los fallos o
+  (the Mesa repo) the lead resolves it without asking (Andrés, t112, 2026-11-12: "arregla los fallos o
   mergea, esto es solo mesa, no necesitamos ser tan restrictivos"). Approve or approve_anyway on an open Mesa PR →
   the lead merges it (TEAM.md § 8) and marks the salida `failed --error "merged instead"`. On a merged or closed one
   → `failed --error` with why. Post on a Mesa PR → findings go to a dev as FAIL (spawn one if none), then the salida
