@@ -1,26 +1,56 @@
-// The small Markdown a checklist step's detail may use (t124), parsed to plain data so it is tested without a browser
-// and rendered as React elements only (no HTML is ever injected): paragraphs, "- " / "1. " lists, fenced code blocks
-// and, inside text, `inline code` and **bold**. Anything else stays text.
+// The small Markdown a checklist step's detail and a thread message may use (t124, t150), parsed to plain data so it is
+// tested without a browser and rendered as React elements only (no HTML is ever injected): paragraphs, "- " / "1. "
+// lists, fenced code blocks and, inside text, `inline code`, **bold** and [text](url). A link keeps its address only
+// when it is an explicit http(s) one (links.ts decides); anything else stays text, as does any HTML.
+import { normalizeUrl } from "@/lib/domain/links";
 
-export type Inline = { t: "text"; v: string } | { t: "code"; v: string } | { t: "bold"; v: string };
+export type Inline =
+  | { t: "text"; v: string }
+  | { t: "code"; v: string }
+  /** kids: the bold text parsed again; set only when it holds a link (otherwise v is the whole content). */
+  | { t: "bold"; v: string; kids?: Inline[] }
+  | { t: "link"; v: string; href: string };
 export type Block =
   | { t: "p"; inline: Inline[] }
   | { t: "ul"; items: Inline[][] }
   | { t: "ol"; items: Inline[][] }
   | { t: "code"; v: string; lang: string };
 
-const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*)/;
+// [text](url): the text has no brackets; the address has no spaces and may hold one level of (parens).
+const LINK_SRC = String.raw`\[[^\]\n]+\]\((?:[^\s()]|\([^\s()]*\))+\)`;
+const INLINE = new RegExp("(`[^`\\n]+`|\\*\\*[^*\\n]+\\*\\*|" + LINK_SRC + ")");
+const LINK = /^\[([^\]\n]+)\]\((.+)\)$/s;
 
-/** `code` and **bold** spans of one line of text; the rest is text. */
+/** The address of a link: only an explicit http(s) one, normalized; null leaves the whole "[text](url)" as text. */
+function safeHref(raw: string): string | null {
+  return /^https?:\/\//i.test(raw) ? normalizeUrl(raw) : null;
+}
+
+function piece(p: string): Inline {
+  if (p.length > 2 && p.startsWith("`") && p.endsWith("`")) return { t: "code", v: p.slice(1, -1) };
+  if (p.length > 4 && p.startsWith("**") && p.endsWith("**")) {
+    const v = p.slice(2, -2);
+    const kids = parseInline(v);
+    return kids.some((k) => k.t === "link") ? { t: "bold", v, kids } : { t: "bold", v };
+  }
+  const m = LINK.exec(p);
+  const href = m ? safeHref(m[2]!) : null;
+  if (m && href && m[1]!.trim()) return { t: "link", v: m[1]!, href };
+  return { t: "text", v: p };
+}
+
+/** `code`, **bold** and [text](url) spans of one line of text; the rest is text. */
 export function parseInline(s: string): Inline[] {
-  return s
-    .split(INLINE)
-    .filter((p) => p !== "")
-    .map((p): Inline => {
-      if (p.length > 2 && p.startsWith("`") && p.endsWith("`")) return { t: "code", v: p.slice(1, -1) };
-      if (p.length > 4 && p.startsWith("**") && p.endsWith("**")) return { t: "bold", v: p.slice(2, -2) };
-      return { t: "text", v: p };
-    });
+  const out: Inline[] = [];
+  for (const p of s.split(INLINE)) {
+    if (p === "") continue;
+    const x = piece(p);
+    const last = out.at(-1);
+    // a "[text](javascript:...)" left as text joins its neighbours
+    if (x.t === "text" && last?.t === "text") last.v += x.v;
+    else out.push(x);
+  }
+  return out;
 }
 
 const FENCE = /^\s{0,3}```\s*([\w+-]*)\s*$/;
