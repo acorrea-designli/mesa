@@ -50,7 +50,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { eventFromCall, eventMismatches, parseEventBody } from "./calendar-body.mjs";
 import { moveMismatches, parseMoveBody } from "./calendar-move.mjs";
-import { hookSandbox, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
+import { hookSandbox, mesaCall, mesaRepo, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
 
@@ -110,6 +110,15 @@ function findReplyLine(lines) {
   }
   return -1;
 }
+
+/** `pnpm -C <this checkout> start|dev`: the Mesa server of the checkout these hooks run from may run in the background. */
+export function startsOwnServer(cmd, repo = mesaRepo()) {
+  const m = /^\s*pnpm\s+(?:-C|--dir)\s+("[^"]+"|'[^']+'|\S+)\s+(?:start|dev)\s*$/.exec(cmd);
+  if (!m) return false;
+  const norm = (p) => p.replace(/^["']|["']$/g, "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return norm(m[1]) === norm(repo);
+}
+
 export function ticketReplyShape(cmd) {
   const text = String(cmd ?? "");
   const lines = text.split(/\r?\n/);
@@ -522,9 +531,9 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     const cmd = String(ti.command ?? "");
     const c = cmd.replace(/'[^']*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""'); // quoted text never matches a verb
 
-    const longRunning = /\bmesa\b[^\n|;&]*\bwait\b/.test(cmd) || /^\s*pnpm\s+(-C|--dir)\s+\S*designli[\\/]ops\S*\s+(start|dev)\s*$/.test(cmd);
+    const longRunning = /\bmesa\b[^\n|;&]*\bwait\b/.test(cmd) || /^\s*pnpm\s+(-C|--dir)\s+\S*designli[\\/]ops\S*\s+(start|dev)\s*$/.test(cmd) || startsOwnServer(cmd);
     if (ti.run_in_background === true && !longRunning &&/\b(git|gh|vitest|jest|pnpm|npm|npx|node\s+--test|terraform|tofu)\b/.test(c)) {
-      return block("G6", "rule 8: git, gh, tests and builds run in the FOREGROUND. Only `mesa wait` and the Mesa server (`pnpm -C G:/WorkSpace/designli/ops start`) run in the background.");
+      return block("G6", "rule 8: git, gh, tests and builds run in the FOREGROUND. Only `mesa wait` and the Mesa server (`pnpm -C " + mesaRepo() + " start`) run in the background.");
     }
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a

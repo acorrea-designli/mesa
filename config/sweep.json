@@ -1,6 +1,15 @@
 {
-  "$comment": "Cadence of the Slack/Basecamp sweep (scripts/sweep-tick.mjs, the sweeper role). Times are local to this PC. autoDispatch: Mesa hands new review requests and Slack messages about a PR to Claude on its own (src/lib/repo/intake.ts); false turns it off, MESA_AUTO_DISPATCH=on|off overrides it per server.",
+  "$comment": "Cadence of the Slack/Basecamp sweep (scripts/sweep-tick.mjs, the sweeper role). Times are local to this PC. autoDispatch: Mesa hands new review requests and Slack messages about a PR to Claude on its own (src/lib/repo/intake.ts); false turns it off, MESA_AUTO_DISPATCH=on|off overrides it per server. githubRepos: the repos the sweeper searches for review requests (`node scripts/sweep-tick.mjs config` prints them); an untracked config/sweep.local.json merged over this file replaces them for one machine, and so can any other key that scripts/sweep-tick.mjs reads (cadence, workHours, sources.slack, sources.basecamp); autoDispatch is not one of them (src/lib/repo/intake.ts reads it from this file only: use MESA_AUTO_DISPATCH per machine).",
   "autoDispatch": true,
+  "githubRepos": [
+    "7-Arrow/dre-backend",
+    "7-Arrow/dre-frontend",
+    "7-Arrow/dre-infra",
+    "7-Arrow/dre-connect-intake",
+    "designli/prospec-backend",
+    "designli/prospec-frontend",
+    "designli/prospec-admin"
+  ],
   "workHours": {
     "days": [
       1,

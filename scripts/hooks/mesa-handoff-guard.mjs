@@ -11,9 +11,10 @@
 // The lead (no agent id) and agents whose name does not follow <role>-<ticket> are never blocked.
 // stdout: { decision: "block", reason } or nothing.
 import { pathToFileURL } from "node:url";
-import { agentTranscriptPath, lastUtterance, mesaCall, readStdinJson, resolveAgent } from "./lib.mjs";
+import { agentTranscriptPath, lastUtterance, mesaCall, mesaCli, readStdinJson, resolveAgent } from "./lib.mjs";
 
-const MESA = "node G:/WorkSpace/designli/ops/bin/mesa";
+// The CLI of the checkout this hook runs from (node G:/WorkSpace/designli/ops/bin/mesa on the original owner's machine).
+const MESA = mesaCli();
 
 const handoffCmd = (a, status) =>
   `\`${MESA} handoff ${a.ticketRef} --agent ${a.name} --status ${status} --body - <<'EOF'\` (what is done, what is left, ` +
