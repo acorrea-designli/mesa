@@ -648,6 +648,71 @@
   margin-top: 3px;
   white-space: pre-wrap;
 }
+/* Markdown in a message or the ticket context (MarkdownView.tsx, t150). A plain text keeps its look: paragraphs are
+   separated by one blank line, as the line breaks of the text were before. */
+.tk-md {
+  min-width: 0;
+}
+.tk-md > :is(p, ul, ol, pre) {
+  margin: 0;
+}
+.tk-md > :is(p, ul, ol, pre) + :is(p, ul, ol, pre) {
+  margin-top: 6px;
+}
+.tk-md > p + p {
+  margin-top: 1.5em;
+  margin-top: 1lh;
+}
+.tk-msg .tk-md > :first-child {
+  margin-top: 3px;
+}
+.tk-msg .tk-md :is(ul, ol) {
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.tk-md :is(ul, ol) {
+  padding-left: 22px;
+}
+.tk-md ul {
+  list-style: disc;
+}
+.tk-md ol {
+  list-style: decimal;
+}
+.tk-md li {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.tk-md li + li {
+  margin-top: 2px;
+}
+.tk-md b {
+  font-weight: 700;
+}
+.tk-md-code {
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--raise);
+  color: var(--ink);
+  font: 0.9em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.tk-md-pre {
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--raise);
+  color: var(--ink);
+  font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre;
+  overflow-x: auto;
+  user-select: text;
+}
+.tk-md-pre:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
 /* a Claude reply that repeats the review card: first line, the rest behind a closed toggle */
 .tk-fold {
   margin-top: 4px;

@@ -20,6 +20,7 @@ import { isPdf, placeAttachments } from "./attachments";
 import { ReviewPdf } from "./ReviewPdf";
 import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
+import { Markdown, MarkdownInline } from "./MarkdownView";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
 import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
@@ -339,7 +340,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           </div>
           <h2>{t.title}</h2>
           <PauseBar t={t} pick={pick} listening={listening} onChanged={onChanged} />
-          {first?.body && first.body !== t.title ? <div className="ctx"><Linked text={first.body} /></div> : null}
+          {first?.body && first.body !== t.title ? <div className="ctx"><Markdown className="tk-md" text={first.body} /></div> : null}
 
           {firstCard.length ? (
             <>
@@ -624,13 +625,13 @@ function Message({ m, fold, card, list, closed, onSetStep, answered, all, picks,
       </div>
       {m.body && fold ? (
         <>
-          <p><Linked text={firstLine(m.body)} /></p>
+          <p><MarkdownInline text={firstLine(m.body)} /></p>
           <details className="tk-fold">
             <summary>Ver texto completo</summary>
-            <p><Linked text={m.body} /></p>
+            <Markdown className="tk-md" text={m.body} />
           </details>
         </>
-      ) : m.body ? <p><Linked text={m.body} /></p> : null}
+      ) : m.body ? <Markdown className="tk-md" text={m.body} /> : null}
       {card.length ? <QuestionCard questions={card} picks={picks} onPicks={onPicks} onSend={onSend} disabled={disabled} /> : null}
       {list ? <ChecklistCard checklist={list} disabled={closed} onSet={onSetStep} /> : null}
       {refs.length ? (

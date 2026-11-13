@@ -11,7 +11,7 @@ import { IcCheck } from "@/features/salidas/icons";
 import { confirmPick } from "@/lib/motion";
 import { Linked } from "./Linkified";
 import { confirmed, isChecked, percent, rolledBack, shownCount, type Pending } from "./checklist";
-import { parseDetail, type Block, type Inline } from "./markdown";
+import { Markdown } from "./MarkdownView";
 
 interface Props {
   checklist: Checklist;
@@ -104,79 +104,7 @@ function Step({ s, checked, disabled, onSet }: { s: TicketStep; checked: boolean
           </span>
         </p>
       ) : null}
-      {s.detail ? <Detail text={s.detail} /> : null}
+      {s.detail ? <Markdown text={s.detail} className="tk-ck-d" copyable /> : null}
     </li>
-  );
-}
-
-// ---------- the Markdown detail ----------
-
-function copy(text: string, say: (t: { text: string }) => void) {
-  const done = () => say({ text: "Copiado" });
-  const fail = () => say({ text: "No se pudo copiar: selecciónalo a mano" });
-  if (!navigator.clipboard) return fail();
-  navigator.clipboard.writeText(text).then(done, fail);
-}
-
-function Spans({ inline, say }: { inline: Inline[]; say: (t: { text: string }) => void }) {
-  return (
-    <>
-      {inline.map((x, i) =>
-        x.t === "code" ? (
-          <button key={i} type="button" className="tk-ck-code" title="Copiar" onClick={() => copy(x.v, say)}>
-            {x.v}
-          </button>
-        ) : x.t === "bold" ? (
-          <b key={i}>
-            <Linked text={x.v} />
-          </b>
-        ) : (
-          <Linked key={i} text={x.v} />
-        ),
-      )}
-    </>
-  );
-}
-
-function Detail({ text }: { text: string }) {
-  const say = useToast();
-  const blocks: Block[] = parseDetail(text);
-  return (
-    <div className="tk-ck-d">
-      {blocks.map((b, i) =>
-        b.t === "code" ? (
-          <div key={i} className="tk-ck-pre">
-            <pre tabIndex={0} aria-label={b.lang ? `Código ${b.lang}` : "Código"}>
-              <code>{b.v}</code>
-            </pre>
-            <button type="button" className="btn sm tk-ck-copy" onClick={() => copy(b.v, say)}>
-              Copiar
-            </button>
-          </div>
-        ) : b.t === "ul" || b.t === "ol" ? (
-          b.t === "ul" ? (
-            <ul key={i}>
-              {b.items.map((it, j) => (
-                <li key={j}>
-                  <Spans inline={it} say={say} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <ol key={i}>
-              {b.items.map((it, j) => (
-                <li key={j}>
-                  <Spans inline={it} say={say} />
-                </li>
-              ))}
-            </ol>
-          )
-        ) : (
-          <p key={i}>
-            <Spans inline={b.inline} say={say} />
-          </p>
-        ),
-      )}
-    </div>
   );
 }
