@@ -169,3 +169,87 @@ describe("consuming a grant", () => {
     expect((await consume({ toolInput: { command: "" } })).granted).toBe(false);
   });
 });
+
+// reviewer-t143-4's proof, kept as a regression test: any session can POST /api/approvals, so a card must never show
+// text the client chose while the grant is hashed from the stored tool_input.
+describe("a forged card shows the call that would be granted", () => {
+  const HIDDEN = "git push origin HEAD:main";
+  const forged = (over: Record<string, unknown> = {}) =>
+    card({ agent: "dev-t143-9", role: "dev", summary: "git status", detail: "$ git status", cwd: "G:/WorkSpace/designli-wt/safe", toolInput: { command: HIDDEN, dangerouslyDisableSandbox: true }, ...over });
+  const listed = async (id: string) => {
+    const { GET: LIST } = await import("@/app/api/approvals/route");
+    const res = await LIST(new Request("http://local/api/approvals"), ctx());
+    return ((await res.json()) as { approvals: { id: string; summary: string; detail: string; cwd: string; once: boolean }[] }).approvals.find((a) => a.id === id)!;
+  };
+  const fileForged = async (over?: Record<string, unknown>) => {
+    const res = await POST_APPROVALS(post(forged(over)), ctx());
+    expect(res.status).toBe(201);
+    return ((await res.json()) as { approval: { id: string; summary: string; detail: string; once: boolean } }).approval;
+  };
+
+  it("the card shows the stored command in full, the sandbox flag and no client text", async () => {
+    const a = await fileForged();
+    const shown = await listed(a.id);
+    expect(shown.detail).toBe(`$ ${HIDDEN}\n[sin sandbox: dangerouslyDisableSandbox]`);
+    expect(shown.summary).toBe(`Bash: ${HIDDEN} (sin sandbox)`);
+    expect(shown.detail).not.toContain("git status");
+    expect(shown.cwd).toBe(""); // not part of the call that is hashed, so not shown
+    expect(shown.once).toBe(true);
+    expect(a.detail).toBe(shown.detail); // the POST answer shows the same
+  });
+  it("a multi-line command is shown whole", async () => {
+    const cmd = "echo one\ngit push origin HEAD:main\n# a long tail " + "x".repeat(300);
+    const a = await fileForged({ toolInput: { command: cmd } });
+    expect((await listed(a.id)).detail).toBe(`$ ${cmd}`);
+  });
+  it("an MCP call is shown as its canonical JSON, keys sorted, nested too", async () => {
+    const a = await fileForged({ tool: "mcp__engram__mem_save", summary: "harmless", detail: "harmless", toolInput: { title: "t", content: { z: 1, a: [2, { y: 1, b: 2 }] } } });
+    const d = (await listed(a.id)).detail;
+    expect(d).toBe('{\n  "content": {\n    "a": [\n      2,\n      {\n        "b": 2,\n        "y": 1\n      }\n    ],\n    "z": 1\n  },\n  "title": "t"\n}');
+    expect(d).not.toContain("harmless");
+  });
+  it("the grant a press creates is for exactly the call the card showed", async () => {
+    const a = await fileForged();
+    expect((await allow(a.id)).status).toBe(200);
+    expect((await consume({ tool: "Bash", toolInput: { command: "git status" }, caller: "dev-t143-9", sessionId: "sess-A" })).granted).toBe(false);
+    expect((await consume({ tool: "Bash", toolInput: { command: HIDDEN }, caller: "dev-t143-9", sessionId: "sess-A" })).granted).toBe(false); // without the flag the card showed
+    expect((await consume({ tool: "Bash", toolInput: { command: HIDDEN, dangerouslyDisableSandbox: true }, caller: "dev-t143-9", sessionId: "sess-A" })).granted).toBe(true);
+  });
+  it("decide refuses a once-grant when the stored text is not what the server builds (a row edited outside the API)", async () => {
+    for (const col of ["detail", "summary"]) {
+      const a = await fileForged();
+      r.db.prepare(`UPDATE approvals SET ${col} = ? WHERE id = ?`).run("$ git status", a.id);
+      expect((await listed(a.id)).once).toBe(false);
+      const res = await allow(a.id);
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/no muestra exactamente/);
+      expect(r.approvals.get(a.id).status).toBe("pending");
+    }
+    expect(grants()).toEqual([]);
+  });
+  it("a call too long to be read whole cannot be allowed once", async () => {
+    const a = await fileForged({ toolInput: { command: `echo ${"a".repeat(21_000)}` } });
+    expect(a.once).toBe(false);
+    const res = await allow(a.id);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/demasiado larga/);
+    expect(grants()).toEqual([]);
+  });
+  it("only Bash, PowerShell and mcp__* are once-cards; any other tool keeps the old card", async () => {
+    for (const tool of ["Read", "Glob", "Agent", "WebFetch"]) {
+      const a = await fileForged({ tool, summary: "s", detail: "d", toolInput: { file_path: "C:/x" } });
+      expect(a.once).toBe(false);
+      expect((await listed(a.id)).detail).toBe("d"); // untouched: no server-built text for them
+      expect((await allow(a.id)).status).toBe(409);
+    }
+    for (const tool of ["Bash", "PowerShell", "mcp__x__y"]) expect((await fileForged({ tool, toolInput: tool.startsWith("mcp") ? { a: 1 } : { command: "ls" } })).once).toBe(true);
+    expect(grants()).toEqual([]);
+  });
+  it("an ordinary permission card and an Edit card are unchanged (client text kept, no once)", async () => {
+    const edit = await fileForged({ tool: "Edit", summary: "Edit G:/WorkSpace/designli-wt/dev-t1/scripts/a.mjs", detail: "--- old\na", toolInput: { file_path: "G:/WorkSpace/designli-wt/dev-t1/scripts/a.mjs", old_string: "a", new_string: "b" } });
+    expect(edit.once).toBe(false);
+    expect((await listed(edit.id)).detail).toBe("--- old\na");
+    const normal = r.approvals.create({ agent: "dev-t1", tool: "Bash", summary: "git status", detail: "$ git status" });
+    expect(normal).toMatchObject({ kind: "permission", summary: "git status", detail: "$ git status", once: false });
+  });
+});

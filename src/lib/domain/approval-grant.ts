@@ -13,25 +13,14 @@
 //   everything else   : tool + the whole tool_input, canonical JSON (keys sorted, recursively). An MCP call, a file
 //                       edit, a Write: any difference in any field is a different call.
 import { createHash } from "node:crypto";
+import { canonicalJson } from "./approval-once";
+
+export { canonicalJson };
 
 /** A grant lives this long after the decision; the retry follows the decision within seconds. */
 export const GRANT_TTL_MS = 5 * 60_000;
 
 const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
-
-/** JSON with every object's keys sorted, so two inputs that differ only in key order hash alike. */
-export function canonicalJson(v: unknown): string {
-  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`;
-  if (v && typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    return `{${Object.keys(o)
-      .filter((k) => o[k] !== undefined)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(v) ?? "null";
-}
 
 /** What identifies a call: the part of the input that, when it differs, makes it another call. */
 export function identityOf(tool: string, toolInput: unknown): unknown {

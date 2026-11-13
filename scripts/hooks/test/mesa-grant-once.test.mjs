@@ -21,7 +21,7 @@ const GUARD = fileURLToPath(new URL("../mesa-guardrails.mjs", import.meta.url));
 const bash = (input, command, extra = {}) => ({ ...input, hook_event_name: "PermissionDenied", tool_name: "Bash", tool_input: { command, ...extra }, reason: "[Irreversible Local Destruction]", cwd: "G:/WorkSpace/designli" });
 const decision = (decision, rule = "") =>
   fakeMesa({
-    "POST /api/approvals": [201, { approval: { id: "ap1", rule } }],
+    "POST /api/approvals": [201, { approval: { id: "ap1", rule, once: !rule } }],
     "GET /api/approvals/ap1": { approval: { id: "ap1", status: "decided", decision, decidedBy: "andres" } },
   });
 
@@ -165,6 +165,25 @@ test("end to end: a call a G-rule blocks stays blocked and never asks for the gr
     const plain = await runGuard({ ...lead, tool_name: "Bash", tool_input: { command: "git status" } }, env);
     assert.deepEqual([plain.code, plain.out, plain.hits.length], [0, "", 0]);
     assert.equal(existsSync(env.MESA_GRANT_HINT), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the hook trusts the server's `once`: a card the server cannot allow once returns at once and marks nothing", async () => {
+  const dir = tmp();
+  try {
+    const { input } = fakeAgent({ name: "dev-t143-2" });
+    const env = hintEnv(dir);
+    const mesa = fakeMesa({
+      "POST /api/approvals": [201, { approval: { id: "ap2", rule: "", once: false } }],
+      "GET /api/approvals/ap2": { approval: { id: "ap2", status: "decided", decision: "allow", decidedBy: "andres" } },
+    });
+    const t0 = Date.now();
+    assert.equal(await denied({ ...bash(input, "git status"), tool_name: "Read", tool_input: { file_path: "C:/x" } }, { ...fast, timeoutMs: 5000, env, fetchImpl: mesa.fetchImpl }), null);
+    assert.ok(Date.now() - t0 < 1000);
+    assert.equal(mesa.calls.length, 1); // only the POST: nothing to wait for
+    assert.equal(grantHintFresh(env), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

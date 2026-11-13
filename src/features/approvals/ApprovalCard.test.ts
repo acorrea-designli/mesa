@@ -14,6 +14,7 @@ const base: Approval = {
   deniedInput: "{}",
   rule: "Edit(//g/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/**)",
   sessionId: "",
+  once: false,
   agent: "dev-t128-2",
   tool: "Edit",
   summary: "Edit G:/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/calendar-body.mjs",
@@ -52,9 +53,13 @@ describe("ApprovalCard, a denied call", () => {
     expect(h).toContain("Sin regla que proponer");
     expect(h).toContain("Denegar");
   });
-  it("offers Permitir esta vez for a command or an MCP call, with the exact call shown", () => {
+  it("offers Permitir esta vez only when the server says once, with the exact call shown", () => {
+    const notOnce = html({ rule: "", tool: "Read", summary: "Read x", detail: "x", once: false });
+    expect(notOnce).not.toContain("Permitir esta vez");
+    expect(notOnce).toContain("Sin regla que proponer");
+    expect(html({ rule: "", tool: "Bash", summary: "s", detail: "$ x", once: false })).not.toContain("Permitir esta vez"); // the server refused it
     for (const tool of ["Bash", "PowerShell", "mcp__engram__mem_save"]) {
-      const h = html({ rule: "", tool, summary: "git push --dry-run", detail: "$ git push --dry-run origin x" });
+      const h = html({ rule: "", tool, summary: "git push --dry-run", detail: "$ git push --dry-run origin x", once: true });
       expect(h).toContain("Permitir esta vez");
       expect(h).toContain("git push --dry-run origin x");
       expect(h).toContain("Denegar");
@@ -70,7 +75,7 @@ describe("ApprovalCard, a denied call", () => {
     const denied = html({ status: "decided", decision: "deny", decidedBy: "andres", decidedAt: new Date().toISOString(), note: "no" });
     expect(denied).toContain("Denegaste el bloqueo");
     expect(denied).not.toContain("Permitir esta regla");
-    expect(html({ rule: "", tool: "Bash", status: "decided", decision: "allow", decidedBy: "andres", decidedAt: new Date().toISOString() })).toContain("Permitiste esta vez");
+    expect(html({ rule: "", tool: "Bash", once: true, status: "decided", decision: "allow", decidedBy: "andres", decidedAt: new Date().toISOString() })).toContain("Permitiste esta vez");
     expect(html({ status: "expired" })).toContain("el bloqueo sigue");
   });
   it("leaves the ordinary permission card as it was", () => {

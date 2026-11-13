@@ -542,6 +542,13 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
+    // G10 (t143 PR5): a card is filed only by the permission hooks (node, straight to Mesa). A session that POSTs a card
+    // itself (any host spelling) could dress up what Andres reads, so a curl-style POST to /api/approvals is blocked.
+    // Reads (GET /api/approvals, /api/approvals/<id>) pass. No agent path uses it: the hooks and the CLI never shell out to it.
+    if (/\/api\/approvals(?![\w/-])/.test(cmd) && /(?:^|\s)(?:-X|--request)[\s=]*POST\b|(?:^|\s)(?:-d|--data|--data-raw|--data-binary|--data-urlencode|--json|--post-data|--post-file)(?:\s|=)|-Method\s+Post\b|-Body\b/i.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+      return block("G10", "rule 3: permission cards are filed by the Mesa permission hooks, never by a session. Do not POST to /api/approvals.");
+    }
+
     if (!teammate) {
       const w = /pr-gh\.mjs\s+(approve|review|reply)\s+(\S+)\s+(\d+)/.exec(c);
       if (w) {

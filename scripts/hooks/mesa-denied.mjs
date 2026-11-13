@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // PermissionDenied hook (t128 part H, docs/TEAM.md § 6.7): a call that auto mode already denied becomes a
 // "Bloqueado por el modo automático" card inside the agent's Mesa ticket (Bash, PowerShell, MCP, Edit, any tool). The hook
-// waits up to 120 s for Andrés, except for a file edit that no rule can cover (it can only be denied: it returns at once
-// and the card expires on its own):
+// waits up to 120 s for Andrés when the card can be allowed (the server's answer: a `rule` for an Edit, `once` for a
+// command or MCP call). Any other card can only be denied: the hook returns at once and the card expires on its own:
 //
 //   Permitir esta regla (an Edit card) -> the Mesa server (never this hook, never Claude) derives one narrow Edit rule
 //                          from the stored call and appends it to settings.local.json; this hook then prints retry: true
 //                          so the agent may retry the exact call once.
-//   Permitir esta vez (any other call) -> the Mesa server stores a one-shot grant for exactly that call, bound to the
+//   Permitir esta vez (`once`: Bash, PowerShell, MCP) -> the Mesa server stores a one-shot grant for exactly that call, bound to the
 //                          caller and session; this hook marks the grant hint and prints retry: true, and on the retry
 //                          the PreToolUse hook (mesa-guardrails.mjs, after every G-rule) consumes the grant and allows
 //                          that one call. The same call a second time, or any other call, is denied as before.
@@ -28,7 +28,6 @@ import { pathToFileURL } from "node:url";
 import { markGrantHint, mesaCall, parseName, readStdinJson, resolveAgent } from "./lib.mjs";
 import { describe } from "./mesa-approval.mjs";
 
-const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export const RETRY = { hookSpecificOutput: { hookEventName: "PermissionDenied", retry: true } };
@@ -66,6 +65,7 @@ export async function denied(input, { timeoutMs = 120_000, pollMs = 2000, waitSe
   const ticketRef = agent ? (agent.ticketRef ?? null) : await leadFocus(opts);
 
   let id;
+  let once = false;
   try {
     const data = await mesaCall("/api/approvals", {
       ...opts,
@@ -86,10 +86,11 @@ export async function denied(input, { timeoutMs = 120_000, pollMs = 2000, waitSe
     });
     id = data.approval?.id ?? data.id;
     if (!id) return null;
-    // A file edit the server can derive no rule for (a path outside the worktrees, .claude, settings...) can only be
-    // denied, so there is nothing to wait for: it stays visible and expires on its own. Every other call can be allowed
-    // once, so the hook waits for the decision.
-    if (EDIT_TOOLS.has(call.tool) && !data.approval?.rule) return null;
+    // The server says what the card can offer: a rule (an Edit) or Permitir esta vez (`once`: a Bash, PowerShell or MCP
+    // call whose card shows the exact stored call). A card with neither can only be denied, so there is nothing to wait
+    // for: it stays visible and expires on its own.
+    once = data.approval?.once === true;
+    if (!once && !data.approval?.rule) return null;
   } catch {
     return null;
   }
@@ -109,7 +110,7 @@ export async function denied(input, { timeoutMs = 120_000, pollMs = 2000, waitSe
     // Only a decision stamped by his UI routes counts (see mesa-approval.mjs and docs/TEAM.md § 6.6).
     if (a.decision && a.decidedBy !== "andres") return null;
     if (a.decision === "allow") {
-      if (!EDIT_TOOLS.has(call.tool)) markGrantHint(env);
+      if (once) markGrantHint(env);
       return RETRY;
     }
     if (a.decision) return null;

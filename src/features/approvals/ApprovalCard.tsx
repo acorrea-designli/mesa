@@ -10,8 +10,6 @@ import { rise, usePress } from "@/lib/motion";
 import { call } from "@/features/salidas/api";
 import "./approvals.css";
 
-/** File edits are allowed by a derived rule, never by a grant (the PreToolUse hook does not watch them). */
-const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const PATH: Record<ApprovalDecision, string> = { allow: "approve", read_config: "read-config", deny: "deny" };
 const DONE: Record<ApprovalDecision, string> = {
   allow: "Diste permiso para esta llamada",
@@ -75,7 +73,9 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
   // t143 PR5: any other call (a command, an MCP tool) is allowed once, by a one-shot grant the server stores for exactly
   // that call. The card never runs the call.
   const denied = a.kind === "denied";
-  const once = denied && !a.rule && !EDIT_TOOLS.has(a.tool);
+  // The server decides (a.once): a Bash, PowerShell or MCP call whose card shows the exact stored call, whole. The
+  // card shows only what the server built from that call.
+  const once = denied && a.once;
   if (expired)
     return (
       <div className="ap-card off" role="status">

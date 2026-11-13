@@ -619,3 +619,25 @@ test("hookSandbox reads MESA_ENV or the --env argument the installer adds", asyn
   assert.equal(hookSandbox({}, ["node", "x.mjs", "--env", "sandbox"]), true);
   assert.equal(hookSandbox({ MESA_ENV: "sandbox" }, ["node", "x.mjs", "--env", "live"]), false);
 });
+
+test("G10 (t143 PR5): a session never POSTs a permission card, whatever the host spelling; reads and the hooks pass", async () => {
+  const post = [
+    `curl -s -X POST http://127.0.0.1:8790/api/approvals -H 'content-type: application/json' -d '{"agent":"x"}'`,
+    `curl -s http://localhost:8796/api/approvals --data '{"kind":"denied"}'`,
+    `curl -s -X POST "$MESA_URL/api/approvals" -d @card.json`,
+    `curl -sS --json '{"a":1}' http://127.0.0.2:8790/api/approvals`,
+    `Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8790/api/approvals -Body $card`,
+  ];
+  for (const c of post) {
+    assert.equal(await rule(sh(lead, c)), "G10", c);
+    assert.equal(await rule(sh(mate(), c)), "G10", c);
+  }
+  for (const c of [
+    "curl -s http://127.0.0.1:8790/api/approvals?status=pending",
+    "curl -s http://127.0.0.1:8790/api/approvals/ap_1",
+    "curl -s http://127.0.0.1:8790/api/approvals/ap_1?wait=5",
+    "node G:/WorkSpace/designli/ops/bin/mesa approval ap_1",
+  ]) assert.equal(await rule(sh(mate(), c)), null, c);
+  // the consume route is closed to curl in every method
+  assert.equal(await rule(sh(mate(), "curl -s http://127.0.0.1:8790/api/approvals/grants/consume")), "G10");
+});

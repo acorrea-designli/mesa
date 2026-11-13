@@ -626,6 +626,8 @@ export interface Approval {
   rule: string;
   /** The session that was denied (kind denied); a one-shot grant is bound to it. */
   sessionId: string;
+  /** True when "Permitir esta vez" can allow this card: a denied Bash, PowerShell or MCP call whose card shows the exact stored call, whole. Derived by the server. */
+  once: boolean;
   agent: string;
   tool: string;
   summary: string;
