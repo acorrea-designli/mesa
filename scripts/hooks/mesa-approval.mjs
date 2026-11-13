@@ -18,7 +18,7 @@
 //      only), MESA_APPROVAL_TIMEOUT_MS (default 540000; keep it under the
 //      registered hook timeout of 600 s), MESA_APPROVAL_POLL_MS (default 2000).
 import { pathToFileURL } from "node:url";
-import { closestRules, loadAllowRules, mesaCall, parseName, readStdinJson, resolveAgent } from "./lib.mjs";
+import { closestRules, loadAllowRules, mesaCall, mesaCli, parseName, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const MAX_DETAIL = 20_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,7 +33,7 @@ const deny = (message) => output("deny", message);
 
 const NO_RETRY =
   "Do not retry this call and do not try another route to the same effect. Post a ticket question instead " +
-  "(`node G:/WorkSpace/designli/ops/bin/mesa ticket reply <ticket> --body -` with A/B options and your recommendation) " +
+  "(`" + mesaCli() + " ticket reply <ticket> --body -` with A/B options and your recommendation) " +
   "or send `BLOCKED <ticket> <why>` to team-lead, then continue with whatever does not need this call.";
 
 const cut = (s) => (s.length > MAX_DETAIL ? `${s.slice(0, MAX_DETAIL)}\n[cut: ${s.length - MAX_DETAIL} more characters]` : s);

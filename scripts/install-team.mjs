@@ -1,8 +1,19 @@
 #!/usr/bin/env node
 // Links the Mesa team (skills, agents, spawn preamble) into the sessions folder and wires its hooks.
 //
-//   node scripts/install-team.mjs [--target G:/WorkSpace/designli] [--allow] [--dry-run] [--force]
+//   node scripts/install-team.mjs [--target G:/WorkSpace/designli] [--allow] [--commit-guard] [--dry-run] [--force]
 //   node scripts/install-team.mjs --target G:/WorkSpace/designli-sandbox --env sandbox [--repo G:/WorkSpace/designli/ops]
+//   node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name <name> --git-email <email> --slack-id <U0...>
+//        [--sessions D:/work] [--worktrees D:/work-wt]     (a teammate: renders copies, see below)
+//
+// Two modes. LINK (the original owner's layout: repo G:/WorkSpace/designli/ops, sessions folder G:/WorkSpace/designli,
+// worktrees G:/WorkSpace/designli-wt, his identity) keeps today's junctions and hard links. RENDER (anything else:
+// another repo or sessions folder, worktrees root, or identity) writes real copies of the skills, agents and the spawn
+// preamble with the original owner's paths and identity replaced by the configured ones (scripts/lib/render-team.mjs);
+// it refuses to run without --gh-user, --git-name, --git-email and --slack-id (or MESA_GH_USER, MESA_GIT_NAME,
+// MESA_GIT_EMAIL, MESA_SLACK_USER_ID), so nobody commits or reviews as somebody else by accident. Re-run after every pull.
+// In both modes the live install writes those four identity values into settings.json env (what vendor/pr-gh.mjs and
+// the sweeper read). --commit-guard also registers vendor/commit-guard.mjs as a PreToolUse hook (never by default).
 //
 // --env sandbox installs the same skills, agents and hooks for the sandbox board (docs/SANDBOX.md): the folder is
 // created when missing, env is MESA_URL=http://127.0.0.1:8796, MESA_ENV=sandbox, MESA_SESSION=lead (these three are
@@ -22,11 +33,11 @@
 // It never touches anything else in <target> (that folder holds secrets) and never follows into it.
 // --force replaces a differing agent file or a junction that points somewhere else. --dry-run prints the plan.
 import { copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { CANONICAL, IDENTITY_FIELDS, fwd, isTextFile, leftovers, posixForm, renderText } from "./lib/render-team.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const fwd = (p) => p.replace(/\\/g, "/");
 
 export const HOOK_SCRIPTS = {
   approval: "scripts/hooks/mesa-approval.mjs",
@@ -53,6 +64,11 @@ export function hookEntries(repo, node, env = "live") {
   };
 }
 
+/** The opt-in commit rules hook (vendor/commit-guard.mjs): one-line conventional commits, no AI attribution. */
+export function commitGuardEntry(repo, node) {
+  return { matcher: "Bash|PowerShell", hooks: [{ type: "command", command: `"${fwd(node)}" "${fwd(join(repo, "vendor/commit-guard.mjs"))}"`, timeout: 15 }] };
+}
+
 /**
  * The statusLine that saves Claude's plan usage to Mesa (t45). The URL is explicit so a sandbox session posts to the
  * sandbox board and a live one to the live board, whatever the environment says.
@@ -66,12 +82,20 @@ export const ENV = { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead" };
 export const SANDBOX_ENV = { MESA_URL: "http://127.0.0.1:8796", MESA_ENV: "sandbox", MESA_SESSION: "lead" };
 export const LIVE_FOLDER = "G:/WorkSpace/designli";
 
-const MESA_CLI = "node G:/WorkSpace/designli/ops/bin/mesa";
-export const ALLOW = [
-  `Bash(${MESA_CLI} *)`,
-  `PowerShell(${MESA_CLI} *)`,
-  "Bash(node G:/WorkSpace/designli/ops/.claude/skills/mesa-write/assets/render.mjs *)",
-  "Bash(node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs *)",
+/** The read-only allow rules for a repo checkout; for the original owner's repo they are the rules that always were. */
+export function allowRules(repo = CANONICAL.repo) {
+  const r = fwd(repo);
+  return [
+    `Bash(node ${r}/bin/mesa *)`,
+    `PowerShell(node ${r}/bin/mesa *)`,
+    `Bash(node ${r}/.claude/skills/mesa-write/assets/render.mjs *)`,
+    `Bash(node ${r}/scripts/sweep-tick.mjs *)`,
+    ...ALLOW_COMMON,
+    // t143: the vendored GitHub writer the lead runs after a click (hook G5 still needs a released github salida).
+    `PowerShell(node ${r}/vendor/pr-gh.mjs *)`,
+  ];
+}
+const ALLOW_COMMON = [
   "Bash(gh api user -q .login)",
   "Bash(gh api repos/*)",
   "Bash(gh search prs *)",
@@ -107,6 +131,10 @@ export const ALLOW = [
   "mcp__claude_ai_Slack__slack_search_public_and_private",
   "mcp__claude_ai_Slack__slack_read_user_profile",
 ];
+export const ALLOW = allowRules(CANONICAL.repo);
+
+/** The identity settings.json env carries (vendor/pr-gh.mjs reads MESA_GH_USER; the sweeper reads the Slack id). */
+export const identityEnv = (id) => ({ MESA_GH_USER: id.ghUser, MESA_GIT_NAME: id.gitName, MESA_GIT_EMAIL: id.gitEmail, MESA_SLACK_USER_ID: id.slackUserId });
 
 // Pure merge: adds what is missing, keeps everything that is there. A hook entry counts as present when any
 // existing entry of that event already runs the same script.
@@ -117,7 +145,7 @@ export function mergeSettings(current, { hooks, env, allow, forceEnv = false, st
   for (const [event, entries] of Object.entries(hooks)) {
     s.hooks[event] ??= [];
     for (const entry of entries) {
-      const script = entry.hooks[0].command.match(/scripts\/hooks\/[\w-]+\.mjs/)[0];
+      const script = entry.hooks[0].command.match(/(?:scripts\/hooks|vendor)\/[\w-]+\.mjs/)[0];
       const mine = (e) => (e.hooks ?? []).some((h) => String(h.command ?? "").replace(/\\/g, "/").includes(script));
       const there = s.hooks[event].some(mine);
       if (there && entry.matcher) {
@@ -220,7 +248,96 @@ function agentFiles(dest, src, opt, log) {
   }
 }
 
-export function install({ target, allow = false, dryRun = false, force = false, node = process.execPath, log = console.log, env = "live", repo = REPO }) {
+// ---------- render mode ----------
+
+const MANIFEST = (claude) => join(claude, "mesa", "rendered.json");
+const readManifest = (claude) => {
+  try {
+    return new Set(JSON.parse(readFileSync(MANIFEST(claude), "utf8")).files);
+  } catch {
+    return new Set();
+  }
+};
+
+/** Walks a folder: [relative path, absolute path] of every file. */
+function walk(dir, base = dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = join(dir, e.name);
+    return e.isDirectory() ? walk(p, base) : [[fwd(relative(base, p)), p]];
+  });
+}
+
+/** A rendered file is never written through a link (that would rewrite the repo's own file). */
+function realDir(dir, opt, log) {
+  if (!isLink(dir)) return true;
+  if (!opt.force) {
+    log(`SKIP    ${fwd(dir)} is a link into a checkout (a link-mode install); --force replaces it with rendered copies`);
+    return false;
+  }
+  log(`unlink  ${fwd(dir)}`);
+  if (!opt.dryRun) rmSync(dir, { recursive: false, force: true });
+  return true;
+}
+
+function renderFile(dest, key, content, ctx) {
+  const { opt, log, managed, written } = ctx;
+  if (existsSync(dest)) {
+    if (readFileSync(dest).equals(content)) {
+      written.add(key);
+      return log(`ok      ${fwd(dest)}`);
+    }
+    // A file the last render wrote is ours to refresh; a different file of the same name is the user's.
+    if (!managed.has(key) && !opt.force) return log(`SKIP    ${fwd(dest)} differs and was not rendered by install-team; --force replaces it`);
+  }
+  log(`render  ${fwd(dest)}`);
+  written.add(key);
+  if (!opt.dryRun) {
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, content);
+  }
+}
+
+/** The configured paths may themselves sit under a folder named like the owner's (a worktree): they are not leftovers. */
+function withoutOwnPaths(text, cfg) {
+  let t = text;
+  for (const p of [cfg.repo, cfg.worktrees, cfg.sessions]) t = t.split(fwd(p)).join("<own>").split(posixForm(p)).join("<own>");
+  return t;
+}
+
+function renderTeam({ claude, repo, cfg, opt, log }) {
+  const ctx = { opt, log, managed: readManifest(claude), written: new Set() };
+  const warn = [];
+  const emit = (dest, key, src) => {
+    let content = readFileSync(src);
+    if (isTextFile(src)) {
+      const text = renderText(content.toString("utf8"), cfg);
+      for (const w of leftovers(withoutOwnPaths(text, cfg))) warn.push(`${key} still contains ${w}`);
+      content = Buffer.from(text, "utf8");
+    }
+    renderFile(dest, key, content, ctx);
+  };
+
+  for (const name of readdirSync(join(repo, ".claude", "skills"))) {
+    const dir = join(claude, "skills", name);
+    if (!realDir(dir, opt, log)) continue;
+    for (const [rel, abs] of walk(join(repo, ".claude", "skills", name))) emit(join(dir, rel), `skills/${name}/${rel}`, abs);
+  }
+  const agents = join(claude, "agents");
+  if (realDir(agents, opt, log)) {
+    for (const f of readdirSync(join(repo, ".claude", "agents")).filter((x) => x.endsWith(".md"))) emit(join(agents, f), `agents/${f}`, join(repo, ".claude", "agents", f));
+  }
+  const mesa = join(claude, "mesa");
+  if (realDir(mesa, opt, log)) emit(join(mesa, "spawn-preamble.md"), "mesa/spawn-preamble.md", join(repo, ".claude", "spawn-preamble.md"));
+
+  for (const w of warn) log(`WARN    ${w}`);
+  if (!opt.dryRun && !isLink(mesa)) {
+    mkdirSync(mesa, { recursive: true });
+    writeFileSync(MANIFEST(claude), `${JSON.stringify({ files: [...new Set([...ctx.managed, ...ctx.written])].sort() }, null, 2)}\n`);
+  }
+  return { rendered: [...ctx.written], warnings: warn };
+}
+
+export function install({ target, allow = false, dryRun = false, force = false, node = process.execPath, log = console.log, env = "live", repo = REPO, render = null, identity = null, commitGuard = false }) {
   const claude = join(target, ".claude");
   const opt = { dryRun, force };
   const sandbox = env === "sandbox";
@@ -232,20 +349,26 @@ export function install({ target, allow = false, dryRun = false, force = false, 
   }
   if (!dryRun) mkdirSync(join(claude, "skills"), { recursive: true });
 
-  for (const name of readdirSync(join(repo, ".claude", "skills"))) {
-    junction(join(claude, "skills", name), join(repo, ".claude", "skills", name), opt, log);
+  if (render) {
+    renderTeam({ claude, repo, cfg: render, opt, log });
+  } else {
+    for (const name of readdirSync(join(repo, ".claude", "skills"))) {
+      junction(join(claude, "skills", name), join(repo, ".claude", "skills", name), opt, log);
+    }
+    const agents = join(claude, "agents");
+    if (!existsSync(agents) || isLink(agents)) junction(agents, join(repo, ".claude", "agents"), opt, log);
+    else agentFiles(agents, join(repo, ".claude", "agents"), opt, log);
+    junction(join(claude, "mesa"), join(repo, ".claude"), opt, log);
   }
-  const agents = join(claude, "agents");
-  if (!existsSync(agents) || isLink(agents)) junction(agents, join(repo, ".claude", "agents"), opt, log);
-  else agentFiles(agents, join(repo, ".claude", "agents"), opt, log);
-  junction(join(claude, "mesa"), join(repo, ".claude"), opt, log);
 
   const file = join(claude, "settings.json");
   const current = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+  const hooks = hookEntries(repo, node, env);
+  if (commitGuard) hooks.PreToolUse.push(commitGuardEntry(repo, node));
   const { settings, added } = mergeSettings(current, {
-    hooks: hookEntries(repo, node, env),
-    env: sandbox ? SANDBOX_ENV : ENV,
-    allow: allow ? ALLOW : [],
+    hooks,
+    env: { ...(sandbox ? SANDBOX_ENV : ENV), ...(identity && !sandbox ? identityEnv(identity) : {}) },
+    allow: allow ? (render ? allowRules(repo) : ALLOW) : [],
     forceEnv: sandbox,
     statusLine: statusLineEntry(repo, node, env),
   });
@@ -261,24 +384,95 @@ export function install({ target, allow = false, dryRun = false, force = false, 
   return { added };
 }
 
+// ---------- command line ----------
+
+export class UsageError extends Error {}
+
+const VALUE_FLAGS = ["--target", "--env", "--repo", "--sessions", "--worktrees", ...IDENTITY_FIELDS.map((f) => f.flag)];
+
+/**
+ * argv + environment -> what to install. Mode LINK when every value is the original owner's (or the install is a
+ * sandbox / worktree link with his identity); mode RENDER when a path or an identity differs, which needs the whole
+ * identity (flag, else MESA_GH_USER, MESA_GIT_NAME, MESA_GIT_EMAIL, MESA_SLACK_USER_ID) and refuses without it.
+ */
+export function resolveConfig(argv, env = process.env, defaults = { repo: REPO }) {
+  const opts = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (VALUE_FLAGS.includes(argv[i])) {
+      if (argv[i + 1] === undefined || argv[i + 1].startsWith("--")) throw new UsageError(`${argv[i]} needs a value`);
+      opts[argv[i]] = argv[++i];
+    }
+  }
+  const flag = (n) => argv.includes(n);
+  const mode = opts["--env"] ?? "live";
+  if (mode !== "live" && mode !== "sandbox") throw new UsageError(`--env must be live or sandbox, not ${mode}`);
+  const sandbox = mode === "sandbox";
+  const target = opts["--target"] ?? LIVE_FOLDER;
+  const repo = opts["--repo"] ? resolve(opts["--repo"]) : defaults.repo;
+
+  let sessions = opts["--sessions"];
+  if (!sessions) {
+    if (!sandbox) sessions = target;
+    else if (/-sandbox$/.test(fwd(target))) sessions = fwd(target).replace(/-sandbox$/, "");
+    else throw new UsageError("--sessions is needed when the sandbox target is not named <sessions folder>-sandbox");
+  }
+  const envWorktrees = env.MESA_WORKTREES_ROOT?.trim();
+  const worktrees = opts["--worktrees"] ?? (envWorktrees || `${fwd(sessions)}-wt`);
+
+  const given = {};
+  const identity = {};
+  for (const f of IDENTITY_FIELDS) {
+    const v = (opts[f.flag] ?? env[f.env] ?? "").trim();
+    if (v) {
+      if (!f.ok.test(v)) throw new UsageError(`${f.flag} (${f.env}) must be ${f.what}, got: ${v}`);
+      given[f.key] = true;
+    }
+    identity[f.key] = v || CANONICAL[f.key];
+  }
+
+  const lc = (p) => fwd(resolve(p)).toLowerCase();
+  const identityDiffers = IDENTITY_FIELDS.some((f) => identity[f.key] !== CANONICAL[f.key]);
+  const pathsDiffer = lc(worktrees) !== lc(CANONICAL.worktrees) || lc(sessions) !== lc(CANONICAL.sessions) || (!sandbox && lc(repo) !== lc(CANONICAL.repo));
+  const render = identityDiffers || pathsDiffer;
+  if (render) {
+    const missing = IDENTITY_FIELDS.filter((f) => !given[f.key]);
+    if (missing.length) {
+      throw new UsageError(
+        `this is not the original owner's layout, so the team files are rendered with your paths and identity, and these are missing: ${missing.map((f) => `${f.flag} <value> (or ${f.env})`).join(", ")}. ` +
+          "Without them the agents would commit and review as somebody else.",
+      );
+    }
+  }
+  return {
+    mode: render ? "render" : "link",
+    env: mode,
+    target,
+    repo,
+    allow: flag("--allow"),
+    dryRun: flag("--dry-run"),
+    force: flag("--force"),
+    commitGuard: flag("--commit-guard"),
+    identity,
+    render: render ? { repo: fwd(repo), sessions: fwd(sessions), worktrees: fwd(worktrees), ...identity } : null,
+  };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const argv = process.argv.slice(2);
-  const ti = argv.indexOf("--target");
-  const target = ti >= 0 ? argv[ti + 1] : LIVE_FOLDER;
-  const ei = argv.indexOf("--env");
-  const env = ei >= 0 ? argv[ei + 1] : "live";
-  const ri = argv.indexOf("--repo");
-  const repo = ri >= 0 ? resolve(argv[ri + 1]) : REPO;
-  if (env !== "live" && env !== "sandbox") {
-    console.error(`install-team: --env must be live or sandbox, not ${env}`);
-    process.exit(2);
-  }
-  if (!same(repo, fwd(resolve("G:/WorkSpace/designli/ops")).toLowerCase())) {
-    console.log(`note    linking ${fwd(repo)}, not G:/WorkSpace/designli/ops: hooks and links will point there`);
-  }
+  let cfg;
   try {
-    install({ target, allow: argv.includes("--allow"), dryRun: argv.includes("--dry-run"), force: argv.includes("--force"), env, repo });
-    console.log(argv.includes("--dry-run") ? "dry run: nothing written" : `done. Restart Claude Code in ${fwd(target)} so it loads the hooks, skills and agents.`);
+    cfg = resolveConfig(process.argv.slice(2));
+  } catch (err) {
+    console.error(`install-team: ${err.message}`);
+    process.exit(err instanceof UsageError ? 2 : 1);
+  }
+  if (cfg.mode === "link" && !same(cfg.repo, fwd(resolve(CANONICAL.repo)).toLowerCase())) {
+    console.log(`note    linking ${fwd(cfg.repo)}, not ${CANONICAL.repo}: hooks and links will point there`);
+  }
+  console.log(cfg.mode === "render" ? `mode    render: copies of the skills, agents and preamble for ${cfg.identity.ghUser} (${fwd(cfg.target)})` : "mode    link: junctions into the repo");
+  try {
+    const { identity, ...rest } = cfg;
+    install({ ...rest, identity: rest.env === "live" ? identity : null });
+    console.log(cfg.dryRun ? "dry run: nothing written" : `done. Restart Claude Code in ${fwd(cfg.target)} so it loads the hooks, skills and agents.`);
   } catch (err) {
     console.error(`install-team: ${err.message}`);
     process.exit(1);

@@ -322,6 +322,18 @@ node G:/WorkSpace/designli/ops/scripts/install-team.mjs             # links + ho
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs --allow     # also the read-only allow rules
 ```
 
+For the original owner's layout (repo `G:/WorkSpace/designli/ops`, sessions folder `G:/WorkSpace/designli`, worktrees
+`G:/WorkSpace/designli-wt`, his identity) the skills, agents and preamble are junctions and hard links. On any other layout
+the installer renders real copies with the configured repo path, sessions folder, worktrees root, git name and email,
+GitHub login and Slack id substituted, and refuses to run without the identity:
+`--gh-user`, `--git-name`, `--git-email`, `--slack-id` (or `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`,
+`MESA_SLACK_USER_ID`), plus `--sessions` and `--worktrees` when they are not `<target>` and `<target>-wt`. Both modes write
+those four identity values into the `env` of `<target>/.claude/settings.json` (never overwriting one that is there; vendor/pr-gh.mjs
+reads `MESA_GH_USER`). `--allow` also allows `PowerShell(node <repo>/vendor/pr-gh.mjs *)`. `--commit-guard` registers
+`vendor/commit-guard.mjs` as a PreToolUse hook (never by default). The hooks name the CLI of the checkout they run from.
+The sweeper's GitHub repos come from `node <repo>/scripts/sweep-tick.mjs config`: `githubRepos` in `config/sweep.json`, replaced
+per machine by an untracked `config/sweep.local.json`.
+
 It also adds a `statusLine` (`scripts/statusline.mjs`, plan usage in the terminal and in Mesa's rail, `docs/ARCHITECTURE.md` § 13) when the
 settings have none; an existing one is never replaced. No agent runs this against `G:/WorkSpace/designli`: Andrés does, then reopens the session.
 
