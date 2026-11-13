@@ -13,7 +13,7 @@ import {
 import { identity } from "../config/identity";
 import { inferKind } from "../domain/dispatch-kind";
 import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
-import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, type StepInput } from "../domain/ticket-checklists";
+import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, stepsOwed, type StepInput } from "../domain/ticket-checklists";
 import { answersBody, cardProblem, optionLabel, parseShorthand, type QuestionInput } from "../domain/ticket-questions";
 import type {
   ActionMode,
@@ -765,6 +765,22 @@ export function ticketsRepo(db: Db) {
      * the same row and exactly one wins. Repeating the current state is a no-op; an unknown id is a 404.
      */
     setActionState(actionId: string, state: ActionState, now = new Date()): PlannedAction {
+      // Skipping the last step that asked for an OK leaves nothing for Andrés on the plan: when nothing else waits for him
+      // (no open question, review or checklist step) the status the plan caused (Te espera) goes back to Claude trabaja, like an
+      // approval would, without a wake. Without it the list would keep a "Responder" with nothing to answer.
+      const settleAfterSkip = (ticketId: string, at: Date) =>
+        tx(db, () => {
+          const t = get(ticketId);
+          if (t.status !== "waiting_andres") return;
+          const d = this.detail(t.id);
+          const reviewsOpen = (db.prepare("SELECT COUNT(*) AS n FROM reviews WHERE ticket_id = ? AND state = 'open'").get(t.id) as { n: number }).n;
+          const owed =
+            d.actions.some((x) => x.state === "planned" && x.mode === "needs_ok") ||
+            d.questions.some((q) => q.state === "open") ||
+            stepsOwed(d.checklists.flatMap((c) => c.steps)).open > 0 ||
+            reviewsOpen > 0;
+          if (!owed) apply(t, { type: "plan_skipped" }, at, {}, true);
+        });
       const started = state === "running" || state === "done" || state === "failed";
       // A skipped step stays skipped (a retry of the same state is a no-op), and only an open or failed one can be skipped.
       const guard = state === "skipped" ? " AND state IN ('planned','approved','running','failed')" : started ? " AND state <> 'skipped' AND (mode = 'direct' OR state IN ('approved','running'))" : " AND state <> 'skipped'";
@@ -774,6 +790,7 @@ export function ticketsRepo(db: Db) {
       const row = db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId);
       if (!row) throw new NotFoundError("action", actionId);
       const a = fromRow<PlannedAction>(row, A_SPEC);
+      if (r.changes && state === "skipped") settleAfterSkip(a.ticketId, now);
       if (!r.changes && a.state !== state) throw new TransitionError(state === "skipped" ? `step is ${a.state}; only a step that is still open (or failed) can be skipped` : a.state === "skipped" ? "step was skipped; it does not run again" : `step is not approved; ${identity().ownerName} took it back or never approved it`);
       return a;
     },

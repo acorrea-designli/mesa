@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { openDb } from "../db/sqlite";
 import { NotFoundError, TransitionError } from "../db/util";
 import { UNDO_WINDOW_MS } from "../domain/salida-machine";
+import { ticketNeeds } from "../domain/ticket-needs";
 import { eventsAfter, waitForEvents } from "../wake/wake";
 import { createRepos, type Repos } from "./index";
 
@@ -353,6 +354,36 @@ describe("ticket flow", () => {
         expect(() => r.tickets.approvePlan(t.id, [], at(5))).toThrow(/no plan waiting/);
         expect(() => r.tickets.transition(t.id, { type: "close", by: "claude" })).not.toThrow();
         expect(r.tickets.get(t.id).status).toBe("closed");
+      });
+
+      it("skipping the last step that waits for an OK settles Te espera into Claude trabaja, with no wake", () => {
+        const { t, merge, move } = planned();
+        expect(r.tickets.get(t.id).status).toBe("waiting_andres");
+        r.tickets.setActionState(merge.id, "skipped", at(2));
+        expect(r.tickets.get(t.id).status).toBe("waiting_andres"); // another step still asks for an OK
+        const before = eventsAfter(r.db, "s1", 0).length;
+        r.tickets.setActionState(move.id, "skipped", at(3));
+        expect(r.tickets.get(t.id).status).toBe("working");
+        expect(eventsAfter(r.db, "s1", 0).length).toBe(before);
+        // nothing is left to answer: the list names no need for it
+        expect(ticketNeeds({ ...r.tickets.detail(t.id), steps: [], approvals: [], reviews: [], salidas: [] }, at(4))).toEqual([]);
+        // repeating the skip changes nothing
+        r.tickets.setActionState(move.id, "skipped", at(5));
+        expect(r.tickets.get(t.id).status).toBe("working");
+      });
+
+      it("skipping the last step keeps Te espera while a question is still open, and never touches another status", () => {
+        const asks = r.tickets.create({ direction: "claude_asks", title: "¿Sigo?", ownerSession: "s1", options: [{ key: "A", label: "Sí" }, { key: "B", label: "No" }] }, T0);
+        const d = r.tickets.plan(asks.id, [{ kind: "merge_pr", source: "github", label: "Mergear", mode: "needs_ok" }], "s1");
+        expect(d.status).toBe("waiting_andres");
+        r.tickets.setActionState(d.actions[0]!.id, "skipped", at(2));
+        expect(r.tickets.get(asks.id).status).toBe("waiting_andres"); // the open question is still his
+        // a ticket Claude already moved on (a reply took it off Te espera) keeps its status
+        const other = planned();
+        r.tickets.addMessage(other.t.id, { author: "andres", body: "ojo" }, at(1)); // waiting_claude
+        r.tickets.setActionState(other.merge.id, "skipped", at(2));
+        r.tickets.setActionState(other.move.id, "skipped", at(3));
+        expect(r.tickets.get(other.t.id).status).toBe("waiting_claude");
       });
 
       it("direct steps move from planned without approval", () => {

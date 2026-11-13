@@ -161,7 +161,7 @@ describe("mesa CLI", () => {
       expect(requests).toMatchObject([{ method: "PATCH", path: "/api/actions/pa_1", body: { state } }]);
     }
     expect((await mesa(["ticket", "action", "pa_1"])).code).toBe(2);
-    expect((await mesa(["help"])).stdout).toMatch(/ticket action <actionId> --state running|done|failed|skipped/);
+    expect((await mesa(["help"])).stdout).toContain("ticket action <actionId> --state running|done|failed|skipped");
   });
 
   it("parses repeated options, A/B options and stdin bodies for ticket ask", async () => {

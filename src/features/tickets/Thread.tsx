@@ -843,7 +843,7 @@ function Plan({ actions, verbs, busy, onApprove, onApproveStep, onRevokeStep, on
   );
 }
 
-const ACTION_STATE: Record<string, string> = { rejected: "no se hará", running: "en curso", done: "hecho", failed: "falló", skipped: "Saltado", approved: "aprobado", planned: "" };
+const ACTION_STATE: Record<string, string> = { rejected: "no se hará", running: "en curso", done: "hecho", failed: "falló", skipped: "saltado", approved: "aprobado", planned: "" };
 
 // ---------- agents on the ticket ----------
 
