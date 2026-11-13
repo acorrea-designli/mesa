@@ -33,6 +33,7 @@ export function Chip({
   children,
   className,
   href,
+  title,
 }: {
   source?: LineSource;
   /** plain: edge on porcelain. ref: ink-bordered @ ticket reference. */
@@ -40,14 +41,15 @@ export function Chip({
   children: ReactNode;
   className?: string;
   href?: string;
+  title?: string;
 }) {
   const cls = cx("chip", srcClass(source), variant, className);
   return href ? (
-    <a className={cls} href={href} target="_blank" rel="noopener noreferrer">
+    <a className={cls} href={href} target="_blank" rel="noopener noreferrer" title={title}>
       {children}
     </a>
   ) : (
-    <span className={cls}>{children}</span>
+    <span className={cls} title={title}>{children}</span>
   );
 }
 

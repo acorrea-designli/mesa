@@ -2146,6 +2146,71 @@
   font-weight: 500;
   color: var(--mute);
 }
+/* ---------- source chips (Fuente / Relacionado) ----------
+   One line cut with an ellipsis at the pane's width. On hover or Tab focus the label rolls sideways until its end shows
+   (animation-duration comes from the label length, set inline). No hover (phone) and reduced motion show the whole
+   label wrapped. The rolling needs no measuring: the label box shrinks to the chip, so `left: 100%` (the box's width)
+   plus `translateX(-100%)` (the text's width) lands the text's end on the box's end, and is 0 when the text fits. */
+.tk-pane .tk-src {
+  max-width: 100%;
+  min-width: 0;
+}
+.tk-pane .tk-src > svg,
+.tk-pane .tk-src > b {
+  flex: none;
+}
+.tk-pane .tk-src .tk-cl {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tk-pane .tk-src:hover .tk-cl,
+  .tk-pane .tk-src:focus-visible .tk-cl {
+    text-overflow: clip;
+  }
+  .tk-pane .tk-src:hover .tk-cl-i,
+  .tk-pane .tk-src:focus-visible .tk-cl-i {
+    display: inline-block;
+    position: relative;
+    left: 0;
+    animation: tk-cl-roll 4s linear 0.3s forwards;
+  }
+}
+@keyframes tk-cl-roll {
+  to {
+    left: 100%;
+    transform: translateX(-100%);
+  }
+}
+@media (hover: none) {
+  .tk-pane .tk-src,
+  .tk-pane .tk-src .tk-cl {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .tk-pane .tk-src .tk-cl {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: reduce) {
+  .tk-pane .tk-src:hover,
+  .tk-pane .tk-src:focus-visible,
+  .tk-pane .tk-src:hover .tk-cl,
+  .tk-pane .tk-src:focus-visible .tk-cl {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .tk-pane .tk-src:hover .tk-cl,
+  .tk-pane .tk-src:focus-visible .tk-cl {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
 /* On desktop the header only exists when the ticket has a PDF, and then it only carries this access. */
 @media (min-width: 721px) {
   .tk-phead.has-pdf {
