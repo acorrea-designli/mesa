@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Counts } from "@/lib/domain/types";
+import { useIdentity } from "../identity";
 import { BrandMark } from "../line/Line";
 import { NotifyToggle, SoundToggle } from "@/features/notify/NotifyToggle";
 import { ThemeToggle } from "../ui/interactive";
@@ -31,6 +32,7 @@ export const isActive = (path: string, href: string) => (href === "/" ? path ===
 
 export function Rail({ counts, health = [] }: { counts: Counts; health?: (SourceHealth & { name: string })[] }) {
   const path = usePathname();
+  const { ownerName } = useIdentity();
   const ref = usePress<HTMLElement>(".nav");
   // The Fuentes rows change with the clock and with sessions, not only with writes (health-ticker.ts):
   // refresh on source changes on every screen, including those with no live refresh of their own. "proyectos" keeps
@@ -42,7 +44,7 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
         <BrandMark />
         Mesa
       </div>
-      <div className="who">Designli · Andrés</div>
+      <div className="who">Designli · {ownerName}</div>
       <nav className="rail-nav">
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className="nav" aria-current={isActive(path, n.href) ? "page" : undefined}>

@@ -9,6 +9,7 @@ import type { Picks } from "@/features/tickets/card";
 import { UsageBlock } from "@/features/usage/UsageBlock";
 import { Tip } from "@/features/usage/Tip";
 import { TIP_PACE, UsoView } from "@/features/usage/UsoView";
+import { useIdentity } from "@/components/identity";
 import { addUsage, summarize, type Buckets, type Role } from "@/lib/domain/tokens";
 import { groupChecklists } from "@/lib/domain/ticket-checklists";
 import { SOURCES, type Checklist, type Source, type TicketQuestion, type TicketStep } from "@/lib/domain/types";
@@ -188,6 +189,7 @@ function KitChecklist() {
 }
 
 export function KitDemo() {
+  const { ownerName } = useIdentity();
   const [tab, setTab] = useState<Filter>("all");
   const [sheet, setSheet] = useState(false);
   const toast = useToast();
@@ -290,7 +292,7 @@ export function KitDemo() {
       </section>
 
       <section>
-        <Label>Checklist de pasos: hecho por Andrés, verificado por Claude, abierto con detalle y código; todo hecho y cerrado; y uno que falla al marcar</Label>
+        <Label>Checklist de pasos: hecho por {ownerName}, verificado por Claude, abierto con detalle y código; todo hecho y cerrado; y uno que falla al marcar</Label>
         <KitChecklist />
       </section>
 

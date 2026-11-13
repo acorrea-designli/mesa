@@ -5,6 +5,8 @@
 //   MESA_URL      board URL (default http://127.0.0.1:8790)
 //   MESA_SESSION  this session's id (or --session); required for wait and ownership
 //   MESA_TOKEN    only needed when MESA_URL is not localhost
+//   MESA_OWNER_FULL_NAME / MESA_OWNER_NAME  the owner's name as a calendar salida's postAs (default "Andrés Correa")
+//   MESA_PROJECT  the project `mesa session` registers when --project is not given
 //   MESA_ENV      "sandbox" for the dummy board (docs/SANDBOX.md); the server decides, the CLI only passes flags
 //
 // Output is JSON on stdout for sessions (MESA_SESSION set, --json, or stdout not a terminal)
@@ -14,6 +16,9 @@
 import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
 import process from "node:process";
+
+// The owner's name as the help text says it (MESA_OWNER_NAME; "Andrés" for the original owner).
+const OWNER = process.env.MESA_OWNER_NAME?.trim() || "Andrés";
 
 const HELP = `mesa <command> [options]
 
@@ -170,7 +175,7 @@ Items and memory
   mesa ignore remove <id> | remove <source> <projectKey>
   mesa engram link --entity ticket:<id> --project P [--topic KEY] [--obs ID]
 
---body - reads the body from stdin. --session overrides MESA_SESSION. --json / --human pick the output.`;
+--body - reads the body from stdin. --session overrides MESA_SESSION. --json / --human pick the output.`.replaceAll("Andrés", OWNER);
 
 // ---------- args ----------
 function parse(argv) {
@@ -227,6 +232,9 @@ function options(opt) {
   });
   return opts.length ? opts : undefined;
 }
+
+// The owner as a calendar salida's postAs: MESA_OWNER_FULL_NAME, else MESA_OWNER_NAME, else the canonical full name.
+const ownerFullName = () => process.env.MESA_OWNER_FULL_NAME?.trim() || process.env.MESA_OWNER_NAME?.trim() || "Andrés Correa";
 
 // ---------- http ----------
 const BASE = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, "");
@@ -372,7 +380,7 @@ async function main() {
 
   switch (group) {
     case "session":
-      return out(await call("POST", "/api/sessions", { id: needSession(), label: opt.label, project: opt.project, cwd: process.cwd() }));
+      return out(await call("POST", "/api/sessions", { id: needSession(), label: opt.label, project: opt.project ?? (process.env.MESA_PROJECT?.trim() || undefined), cwd: process.cwd() }));
 
     case "wait": {
       const s = needSession();
@@ -753,7 +761,7 @@ async function main() {
           if (opt.description && opt.description !== true) lines.push(`Descripción: ${String(opt.description).trim()}`);
           const created = await call("POST", "/api/salidas", {
             source: "calendar",
-            destination: { kind: "calendar_event", calendar: String(opt.calendar ?? "primary"), invitees, meet, ...(recurrence ? { recurrence } : {}), postAs: "Andrés Correa" },
+            destination: { kind: "calendar_event", calendar: String(opt.calendar ?? "primary"), invitees, meet, ...(recurrence ? { recurrence } : {}), postAs: ownerFullName() },
             body: lines.join("\n"),
             title: `Evento: ${String(opt.title)}`,
             context: opt.context,

@@ -52,7 +52,7 @@ export const dynamic = "force-dynamic";
 export default function RootLayout({ children }: { children: ReactNode }) {
   const r = repos();
   const counts = r.counts();
-  const { ghUser, sessionsDir } = identity();
+  const { ghUser, sessionsDir, ownerName } = identity();
   const sandbox = isSandbox() ? { copy: readSandboxCopy(r.db) } : undefined;
   return (
     <html lang="es" className={hanken.variable} data-env={sandbox ? "sandbox" : undefined} suppressHydrationWarning>
@@ -63,7 +63,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <ToastProvider>
-          <IdentityProvider value={{ ghUser, sessionsDir }}>
+          <IdentityProvider value={{ ghUser, sessionsDir, ownerName }}>
             <AppShell counts={counts} sandbox={sandbox}>{children}</AppShell>
           </IdentityProvider>
         </ToastProvider>

@@ -8,6 +8,7 @@ import { GRANT_TTL_MS, grantHash, grantable } from "../domain/approval-grant";
 import { MAX_SHOWN_CHARS, onceEligible, onceUnavailableWhy, shownCall } from "../domain/approval-once";
 import { deniedRule, EDIT_TOOLS } from "../domain/denied-rule";
 import type { Approval, ApprovalDecision, ApprovalKind } from "../domain/types";
+import { identity } from "../config/identity";
 import { worktreesRoot } from "../integrations/settings-rules";
 import { signal, waitSignal } from "../wake/wake";
 import { ticketsRepo } from "./tickets";
@@ -168,7 +169,7 @@ export function approvalsRepo(db: Db) {
           } else {
             // Any other call (a command, an MCP tool): "Permitir esta vez" stores a one-shot grant for exactly this call,
             // hashed here from the stored input. Only his UI decision creates one.
-            if (d.actor !== "andres") throw new TransitionError("solo Andrés, desde la tarjeta, puede permitir esta llamada");
+            if (d.actor !== "andres") throw new TransitionError(`solo ${identity().ownerName}, desde la tarjeta, puede permitir esta llamada`);
             if (!onceEligible(a.tool)) throw new TransitionError(`no se puede permitir esta llamada: ${onceUnavailableWhy(a.tool)}`);
             const refusal = onceRefusal(a);
             if (refusal) throw new TransitionError(`no se puede permitir esta llamada: ${refusal}`);

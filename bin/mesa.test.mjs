@@ -117,6 +117,27 @@ describe("mesa CLI", () => {
     }
   });
 
+  it("help names the owner by MESA_OWNER_NAME, and Andrés when it is not set", async () => {
+    const canonical = (await mesa(["help"], { env: { MESA_OWNER_NAME: "" } })).stdout;
+    expect(canonical).toContain("Andrés");
+    const ana = (await mesa(["help"], { env: { MESA_OWNER_NAME: "Ana" } })).stdout;
+    expect(ana).not.toMatch(/Andr[eé]s/);
+    expect(ana).toContain("nothing is sent without Ana's approval");
+  });
+
+  it("a calendar salida is posted as MESA_OWNER_FULL_NAME, else MESA_OWNER_NAME, else the canonical full name", async () => {
+    const postAs = async (env) => {
+      requests = [];
+      handler = () => ({ status: 200, body: { id: "s1" } });
+      const r = await mesa(["calendar", "propose", "--title", "Sync", "--start", "2026-11-16T10:00:00-05:00", "--end", "2026-11-16T10:30:00-05:00"], { env });
+      expect(r.code, r.stderr).toBe(0);
+      return requests.find((q) => q.path === "/api/salidas")?.body.destination.postAs;
+    };
+    expect(await postAs({ MESA_OWNER_NAME: "", MESA_OWNER_FULL_NAME: "" })).toBe("Andrés Correa");
+    expect(await postAs({ MESA_OWNER_NAME: "Ana", MESA_OWNER_FULL_NAME: "" })).toBe("Ana");
+    expect(await postAs({ MESA_OWNER_NAME: "Ana", MESA_OWNER_FULL_NAME: "Ana Dev Lopez" })).toBe("Ana Dev Lopez");
+  });
+
   it("has no approve, schedule, deny or undo for salidas, and no approval decisions", async () => {
     for (const cmd of ["approve", "schedule", "deny", "undo", "unqueue"]) {
       const r = await mesa(["salida", cmd, "s1"]);

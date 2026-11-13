@@ -6,8 +6,8 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ALLOW, ENV, UsageError, allowRules, commitGuardEntry, hookEntries, identityEnv, install, mergeSettings, resolveConfig } from "../install-team.mjs";
-import { CANONICAL, fwd, leftovers, maskPath, renderText } from "../lib/render-team.mjs";
+import { ALLOW, ENV, UsageError, projectFromFolder, allowRules, commitGuardEntry, hookEntries, identityEnv, install, mergeSettings, resolveConfig } from "../install-team.mjs";
+import { CANONICAL, asciiFold, fwd, leftovers, maskPath, ownerLeftoverSkip, renderText } from "../lib/render-team.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CANON_REPO = "G:/WorkSpace/designli/ops";
@@ -58,7 +58,7 @@ const TODAY_ALLOW = [
 const NEW_ALLOW = ["Bash(node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs *)", "PowerShell(node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs *)"];
 const NEW_ENV = ["env.MESA_GH_USER", "env.MESA_GIT_NAME", "env.MESA_GIT_EMAIL", "env.MESA_SLACK_USER_ID"];
 
-const ana = (extra = {}) => ({ "--gh-user": "ana-dev", "--git-name": "Ana Dev", "--git-email": "ana@example.com", "--slack-id": "U0ANA1234", ...extra });
+const ana = (extra = {}) => ({ "--gh-user": "ana-dev", "--git-name": "Ana Dev", "--git-email": "ana@example.com", "--slack-id": "U0ANA1234", "--owner-name": "Ana", ...extra });
 const flags = (o) => Object.entries(o).flat();
 
 // ---------- criterion 4: the canonical output is today's plus only the listed additions ----------
@@ -97,6 +97,8 @@ test("a link-mode install writes today's settings entries plus only the identity
   assert.deepEqual(s.permissions.allow, [...TODAY_ALLOW, ...NEW_ALLOW]);
   assert.deepEqual({ ...s.env }, { ...ENV, MESA_GH_USER: "acorrea-designli", MESA_GIT_NAME: "acorrea-designli", MESA_GIT_EMAIL: "andres.correa@designli.co", MESA_SLACK_USER_ID: "U06E2UBDC73" });
   assert.deepEqual(identityEnv(CANONICAL), { MESA_GH_USER: "acorrea-designli", MESA_GIT_NAME: "acorrea-designli", MESA_GIT_EMAIL: "andres.correa@designli.co", MESA_SLACK_USER_ID: "U06E2UBDC73" });
+  // the canonical identity carries no owner or project env: the readers default to those values, so his settings.json is as it was
+  assert.ok(!JSON.stringify(s.env).includes("MESA_OWNER") && !JSON.stringify(s.env).includes("MESA_PROJECT"));
   // links and hard links exactly as before
   assert.ok(lstatSync(join(after, ".claude", "skills", "mesa-start")).isSymbolicLink());
   assert.ok(lstatSync(join(after, ".claude", "mesa")).isSymbolicLink());
@@ -141,11 +143,11 @@ test("--commit-guard registers vendor/commit-guard.mjs as a PreToolUse hook, onc
 // ---------- which mode ----------
 
 test("the original owner's values keep the link mode, with or without his identity spelled out", () => {
-  for (const env of [{}, { MESA_GH_USER: "acorrea-designli", MESA_GIT_NAME: "acorrea-designli", MESA_GIT_EMAIL: "andres.correa@designli.co", MESA_SLACK_USER_ID: "U06E2UBDC73" }]) {
+  for (const env of [{}, { MESA_GH_USER: "acorrea-designli", MESA_GIT_NAME: "acorrea-designli", MESA_GIT_EMAIL: "andres.correa@designli.co", MESA_SLACK_USER_ID: "U06E2UBDC73", MESA_OWNER_NAME: "Andrés" }]) {
     const c = resolveConfig(["--repo", CANON_REPO], env);
     assert.equal(c.mode, "link");
     assert.equal(c.render, null);
-    assert.deepEqual(c.identity, { ghUser: "acorrea-designli", gitName: "acorrea-designli", gitEmail: "andres.correa@designli.co", slackUserId: "U06E2UBDC73" });
+    assert.deepEqual(c.identity, { ghUser: "acorrea-designli", gitName: "acorrea-designli", gitEmail: "andres.correa@designli.co", slackUserId: "U06E2UBDC73", ownerName: "Andrés", ownerFullName: "Andrés Correa", project: "designli" });
     assert.equal(c.target, "G:/WorkSpace/designli");
   }
 });
@@ -159,7 +161,7 @@ test("a different layout without the whole identity is refused, naming what is m
   assert.throws(() => resolveConfig(["--target", "D:/work"], {}), (e) => e instanceof UsageError && /--gh-user/.test(e.message) && /--git-email/.test(e.message) && /--slack-id/.test(e.message) && /--git-name/.test(e.message));
   assert.throws(() => resolveConfig(["--target", "D:/work", "--gh-user", "ana-dev"], {}), (e) => e instanceof UsageError && !/--gh-user/.test(e.message) && /--git-name/.test(e.message));
   // the environment counts like the flags
-  const c = resolveConfig(["--target", "D:/work"], { MESA_GH_USER: "ana-dev", MESA_GIT_NAME: "Ana Dev", MESA_GIT_EMAIL: "ana@example.com", MESA_SLACK_USER_ID: "U0ANA1234" });
+  const c = resolveConfig(["--target", "D:/work"], { MESA_GH_USER: "ana-dev", MESA_GIT_NAME: "Ana Dev", MESA_GIT_EMAIL: "ana@example.com", MESA_SLACK_USER_ID: "U0ANA1234", MESA_OWNER_NAME: "Ana" });
   assert.equal(c.mode, "render");
 });
 
@@ -186,12 +188,14 @@ test("flags and values are validated, and the worktrees root defaults next to th
 // ---------- rendering ----------
 
 test("renderText replaces every spelling of his paths, his identity, and nothing twice", () => {
-  const cfg = { repo: "D:/mesa", sessions: "D:/work/ana", worktrees: "D:/work/ana-wt", ghUser: "ana-dev", gitName: "Ana Dev", gitEmail: "ana@example.com", slackUserId: "U0ANA1234" };
+  const cfg = { repo: "D:/mesa", sessions: "D:/work/ana", worktrees: "D:/work/ana-wt", ghUser: "ana-dev", gitName: "Ana Dev", gitEmail: "ana@example.com", slackUserId: "U0ANA1234", ownerName: "Ana", ownerFullName: "Ana Dev Lopez", project: "ana-work" };
   const text = [
     "node G:/WorkSpace/designli/ops/bin/mesa wait",
     "pwd is /g/WorkSpace/designli (or G:\\WorkSpace\\designli); sandbox /g/WorkSpace/designli-sandbox",
     "git -C G:/WorkSpace/designli-wt/dev-<ticket> -c user.name=\"acorrea-designli\" -c user.email=\"andres.correa@designli.co\" commit",
     "Edit(//g/WorkSpace/designli-wt/<worktree>/**) select(.user.login==\"acorrea-designli\") <@U06E2UBDC73>",
+    "Andrés's calendar; \"postAs\":\"Andrés Correa\"; basecamp query \"Andres\"; nothing is sent without Andrés's approval.",
+    "MESA session --label lead --project designli; project: \"designli-sandbox\"; session/designli-sandbox-lead",
   ].join("\n");
   const out = renderText(text, cfg);
   assert.equal(
@@ -201,9 +205,16 @@ test("renderText replaces every spelling of his paths, his identity, and nothing
       "pwd is /d/work/ana (or D:\\work\\ana); sandbox /d/work/ana-sandbox",
       "git -C D:/work/ana-wt/dev-<ticket> -c user.name=\"Ana Dev\" -c user.email=\"ana@example.com\" commit",
       "Edit(//d/work/ana-wt/<worktree>/**) select(.user.login==\"ana-dev\") <@U0ANA1234>",
+      "Ana's calendar; \"postAs\":\"Ana Dev Lopez\"; basecamp query \"Ana\"; nothing is sent without Ana's approval.",
+      "MESA session --label lead --project ana-work; project: \"ana-work-sandbox\"; session/ana-work-sandbox-lead",
     ].join("\n"),
   );
   assert.deepEqual(leftovers(out), []);
+  // the original owner's name is a leftover, in both spellings
+  assert.deepEqual(leftovers("Andrés's board"), ["Andrés"]);
+  assert.deepEqual(leftovers("Andres decides"), ["Andres"]);
+  // without a full name or a project, the owner's name and the canonical project stand in
+  assert.equal(renderText('Andrés Correa project: "designli"', { ...cfg, ownerFullName: undefined, project: undefined }), 'Ana project: "designli"');
   // a replacement that itself contains a canonical-looking string is not substituted again
   assert.equal(renderText("G:/WorkSpace/designli/ops", { ...cfg, repo: "H:/acorrea-designli/ops" }), "H:/acorrea-designli/ops");
 });
@@ -257,7 +268,7 @@ test("a teammate install's settings carry his identity env, his hook paths and a
   const { target, cfg } = renderedInstall();
   const raw = readFileSync(join(target, ".claude", "settings.json"), "utf8");
   const s = JSON.parse(raw);
-  assert.deepEqual({ ...s.env }, { ...ENV, MESA_GH_USER: "ana-dev", MESA_GIT_NAME: "Ana Dev", MESA_GIT_EMAIL: "ana@example.com", MESA_SLACK_USER_ID: "U0ANA1234" });
+  assert.deepEqual({ ...s.env }, { ...ENV, MESA_GH_USER: "ana-dev", MESA_GIT_NAME: "Ana Dev", MESA_GIT_EMAIL: "ana@example.com", MESA_SLACK_USER_ID: "U0ANA1234", MESA_OWNER_NAME: "Ana", MESA_OWNER_FULL_NAME: "Ana", MESA_PROJECT: "ana" });
   assert.deepEqual(s.permissions.allow.slice(0, 4), allowRules(fwd(REPO)).slice(0, 4));
   for (const shell of ["Bash", "PowerShell"]) assert.ok(s.permissions.allow.includes(`${shell}(node ${fwd(REPO)}/vendor/pr-gh.mjs *)`));
   assert.deepEqual(left(raw, cfg.render), []);
@@ -342,4 +353,44 @@ test("a render with --commit-guard registers the guard at his repo path", () => 
 test("maskPath hides a configured path in the forward-slash, backslash and /d/ spellings", () => {
   const t = "a D:/work/z4yross/ana b D:\\work\\z4yross\\ana c /d/work/z4yross/ana";
   assert.equal(maskPath(t, "D:/work/z4yross/ana"), "a <own> b <own> c <own>");
+});
+
+// ---------- the name and the project of someone else ----------
+
+test("the unaccented spelling of the name (a search query) is rendered ASCII, the accented one as given", () => {
+  const cfg = { repo: "D:/mesa", sessions: "D:/work", worktrees: "D:/work-wt", ghUser: "jose-dev", gitName: "Jose", gitEmail: "j@example.com", slackUserId: "U0JOSE123", ownerName: "José", ownerFullName: "José Pérez", project: "work" };
+  assert.equal(asciiFold("José Pérez"), "Jose Perez");
+  assert.equal(renderText('Andrés approves; {query: "Andres"}; Andrés Correa', cfg), 'José approves; {query: "Jose"}; José Pérez');
+  assert.deepEqual(leftovers(renderText("Andrés and Andres", cfg)), []);
+});
+
+test("a teammate who shares the name keeps it: no leftover warning for Andrés, Andres or a name that contains them", () => {
+  for (const ownerName of ["Andrés", "Andres", "Andrés Felipe", "Juan Andres"]) {
+    assert.deepEqual(ownerLeftoverSkip({ ownerName }), ["Andrés", "Andres"], ownerName);
+  }
+  assert.deepEqual(ownerLeftoverSkip({ ownerName: "Ana" }), []);
+  assert.deepEqual(ownerLeftoverSkip({ ownerName: "Ana", ownerFullName: "Ana Andrés" }), ["Andrés", "Andres"]);
+  // end to end: rendering for an owner called Andrés Felipe warns about nothing
+  const root = tmp();
+  const target = join(root, "work");
+  mkdirSync(target);
+  const cfg = resolveConfig(["--target", target, "--repo", REPO, ...flags(ana({ "--owner-name": "Andrés Felipe" }))], {});
+  const log = [];
+  const { identity, ...rest } = cfg;
+  install({ ...rest, node: NODE, identity, log: (l) => log.push(l) });
+  assert.deepEqual(log.filter((l) => l.startsWith("WARN")), []);
+  assert.ok(readFileSync(join(target, ".claude", "mesa", "spawn-preamble.md"), "utf8").includes("Andrés Felipe"));
+});
+
+test("the engram project defaults to the sessions folder's name unless it is the original owner's layout", () => {
+  assert.equal(projectFromFolder("D:/work/ana"), "ana");
+  assert.equal(projectFromFolder("D:/My Work/"), "My-Work");
+  assert.equal(projectFromFolder("/"), "mesa");
+  assert.equal(resolveConfig(["--target", "D:/work/ana", ...flags(ana())], {}).render.project, "ana");
+  assert.equal(resolveConfig(["--target", "D:/work/ana", ...flags(ana({ "--project": "ana-main" }))], {}).render.project, "ana-main");
+  assert.equal(resolveConfig(["--target", "D:/work/ana", ...flags(ana())], { MESA_PROJECT: "from-env" }).render.project, "from-env");
+  assert.throws(() => resolveConfig(["--target", "D:/work/ana", ...flags(ana({ "--project": "a b" }))], {}), /--project/);
+  // the original owner's own layout keeps designli, with or without his identity spelled out
+  assert.equal(resolveConfig(["--repo", CANON_REPO], {}).identity.project, "designli");
+  assert.equal(resolveConfig(["--env", "sandbox", "--target", "G:/WorkSpace/designli-sandbox", "--repo", REPO], {}).identity.project, "designli");
 });

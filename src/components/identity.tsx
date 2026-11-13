@@ -7,9 +7,10 @@ import { CANONICAL } from "@/lib/config/identity";
 export interface ClientIdentity {
   ghUser: string;
   sessionsDir: string;
+  ownerName: string;
 }
 
-const Ctx = createContext<ClientIdentity>({ ghUser: CANONICAL.ghUser, sessionsDir: CANONICAL.sessionsDir });
+const Ctx = createContext<ClientIdentity>({ ghUser: CANONICAL.ghUser, sessionsDir: CANONICAL.sessionsDir, ownerName: CANONICAL.ownerName });
 
 export function IdentityProvider({ value, children }: { value: ClientIdentity; children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

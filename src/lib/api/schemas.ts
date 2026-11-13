@@ -1,5 +1,6 @@
 // Request schemas for the REST API. The response types live in domain/types.ts.
 import { z } from "zod";
+import { identity } from "../config/identity";
 import { SOURCES, STATIONS } from "../domain/types";
 import { checklistProblem, MAX_STEP_NOTE, MAX_STEPS } from "../domain/ticket-checklists";
 import { cardProblem, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS } from "../domain/ticket-questions";
@@ -134,7 +135,7 @@ export const ticketMessage = z
   })
   .superRefine((m, ctx) => {
     if (m.author === "andres" && (m.questions?.length || m.options?.length)) ctx.addIssue({ code: "custom", message: "only Claude asks questions", path: ["questions"] });
-    if (m.author === "claude" && (m.answers?.length || m.chosen)) ctx.addIssue({ code: "custom", message: "only Andrés answers questions", path: ["answers"] });
+    if (m.author === "claude" && (m.answers?.length || m.chosen)) ctx.addIssue({ code: "custom", message: `only ${identity().ownerName} answers questions`, path: ["answers"] });
     checkCard(m, ctx);
   });
 

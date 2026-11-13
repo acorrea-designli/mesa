@@ -8,6 +8,9 @@
 //   MESA_GIT_NAME         git author name the team's agents commit with
 //   MESA_GIT_EMAIL        git author email the team's agents commit with
 //   MESA_SLACK_USER_ID    Slack member id the sweeper reads mentions and DMs for
+//   MESA_OWNER_NAME       how the board, the hooks and the team files call the owner (default "Andrés")
+//   MESA_OWNER_FULL_NAME  the owner's full name, the "postAs" of a calendar salida (default: MESA_OWNER_NAME, else "Andrés Correa")
+//   MESA_PROJECT          the project the lead registers its session under (default "designli")
 //   MESA_SESSIONS_DIR     folder the Claude Code sessions of this board run in (parent of this repo)
 //   MESA_WORKTREES_ROOT   where the team's worktrees live (default: the sessions folder + "-wt")
 //   MESA_SETTINGS_LOCAL   the settings.local.json that "Permitir esta regla" appends to
@@ -21,6 +24,9 @@ export const CANONICAL = {
   gitName: "acorrea-designli",
   gitEmail: "andres.correa@designli.co",
   slackUserId: "U06E2UBDC73",
+  ownerName: "Andrés",
+  ownerFullName: "Andrés Correa",
+  project: "designli",
   sessionsDir: "G:/WorkSpace/designli",
   worktreesRoot: "G:/WorkSpace/designli-wt",
   settingsLocal: "G:/WorkSpace/designli/.claude/settings.local.json",
@@ -31,6 +37,9 @@ export interface Identity {
   gitName: string;
   gitEmail: string;
   slackUserId: string;
+  ownerName: string;
+  ownerFullName: string;
+  project: string;
   sessionsDir: string;
   worktreesRoot: string;
   settingsLocal: string;
@@ -40,6 +49,7 @@ const pick = (env: Env, key: string): string | undefined => env[key]?.trim() || 
 const slashes = (p: string): string => p.replace(/\\/g, "/").replace(/\/+$/, "");
 
 export function identity(env: Env = process.env): Identity {
+  const ownerName = pick(env, "MESA_OWNER_NAME") ?? CANONICAL.ownerName;
   const sessions = pick(env, "MESA_SESSIONS_DIR");
   const sessionsDir = sessions ? slashes(sessions) : CANONICAL.sessionsDir;
   return {
@@ -47,6 +57,9 @@ export function identity(env: Env = process.env): Identity {
     gitName: pick(env, "MESA_GIT_NAME") ?? CANONICAL.gitName,
     gitEmail: pick(env, "MESA_GIT_EMAIL") ?? CANONICAL.gitEmail,
     slackUserId: pick(env, "MESA_SLACK_USER_ID") ?? CANONICAL.slackUserId,
+    ownerName,
+    ownerFullName: pick(env, "MESA_OWNER_FULL_NAME") ?? pick(env, "MESA_OWNER_NAME") ?? CANONICAL.ownerFullName,
+    project: pick(env, "MESA_PROJECT") ?? CANONICAL.project,
     sessionsDir,
     worktreesRoot: pick(env, "MESA_WORKTREES_ROOT") ?? (sessions ? `${sessionsDir}-wt` : CANONICAL.worktreesRoot),
     settingsLocal: pick(env, "MESA_SETTINGS_LOCAL") ?? (sessions ? `${sessionsDir}/.claude/settings.local.json` : CANONICAL.settingsLocal),

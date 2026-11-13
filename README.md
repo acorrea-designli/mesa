@@ -45,6 +45,8 @@ Copy `.env.example` to `.env.local` (gitignored) and fill what applies; every va
 | `MESA_GH_USER` | your GitHub login (the board syncs and the review writer posts as this account) |
 | `MESA_GIT_NAME`, `MESA_GIT_EMAIL` | the identity the team's agents commit with |
 | `MESA_SLACK_USER_ID` | your Slack member id (`U0...`) |
+| `MESA_OWNER_NAME` | the name the board, the hooks and the team call you by (the rail shows `Designli · <name>`); `MESA_OWNER_FULL_NAME` is the name a calendar event is posted as (default: the same) |
+| `MESA_PROJECT` | the project the lead registers its session under (default `designli`) |
 | `MESA_SESSIONS_DIR` | the folder your Claude Code sessions run in |
 | `MESA_WORKTREES_ROOT` | where worktrees go (default: the sessions folder plus `-wt`) |
 | `MESA_GCAL_ICS_URL` | optional: the secret iCal address of your Google Calendar |
@@ -62,10 +64,10 @@ The GitHub worker (notifications, review requests, the Project) starts only when
 The team (skills, agents, spawn preamble, hooks, permission rules) is installed into your sessions folder with `scripts/install-team.mjs`. On any layout other than the original owner's it renders real copies of the skills, agents and preamble with your paths and identity, and it refuses to run without the whole identity. Dry run first:
 
 ```
-node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --dry-run --allow
+node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --owner-name "<Your Name>" --dry-run --allow
 ```
 
-Read the plan, then run it again without `--dry-run`. `--allow` adds the read-only allow rules, each printed as `merge   permissions.allow: ...`. `--sessions` and `--worktrees` are needed only when they are not `<target>` and `<target>-wt`. `--commit-guard` registers `vendor/commit-guard.mjs` (one-line conventional commits, no AI attribution) as a PreToolUse hook; leave it out when you already run your own. The same identity can come from `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`, `MESA_SLACK_USER_ID` set in the shell: `install-team` does not read `.env.local`, so pass the flags or export them.
+Read the plan, then run it again without `--dry-run`. `--allow` adds the read-only allow rules, each printed as `merge   permissions.allow: ...`. `--sessions` and `--worktrees` are needed only when they are not `<target>` and `<target>-wt`. `--commit-guard` registers `vendor/commit-guard.mjs` (one-line conventional commits, no AI attribution) as a PreToolUse hook; leave it out when you already run your own. The same identity can come from `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`, `MESA_SLACK_USER_ID`, `MESA_OWNER_NAME` set in the shell (`--owner-full-name` and `--project` are optional): `install-team` does not read `.env.local`, so pass the flags or export them.
 
 It writes `.claude/skills`, `.claude/agents`, `.claude/mesa/spawn-preamble.md` and merges hooks and env into `.claude/settings.json` (backing it up first, never removing a key). **Restart Claude Code in the sessions folder after every run**, or it keeps the old hooks, skills and agents.
 
