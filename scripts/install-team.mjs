@@ -3,17 +3,20 @@
 //
 //   node scripts/install-team.mjs [--target G:/WorkSpace/designli] [--allow] [--commit-guard] [--dry-run] [--force]
 //   node scripts/install-team.mjs --target G:/WorkSpace/designli-sandbox --env sandbox [--repo G:/WorkSpace/designli/ops]
-//   node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name <name> --git-email <email> --slack-id <U0...>
-//        [--sessions D:/work] [--worktrees D:/work-wt]     (a teammate: renders copies, see below)
+//   node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name <name> --git-email <email> --slack-id <U0...> --owner-name <name>
+//        [--owner-full-name <full name>] [--project <engram project>] [--sessions D:/work] [--worktrees D:/work-wt]
+//                                                       (a teammate: renders copies, see below)
 //
 // Two modes. LINK (the original owner's layout: repo G:/WorkSpace/designli/ops, sessions folder G:/WorkSpace/designli,
 // worktrees G:/WorkSpace/designli-wt, his identity) keeps today's junctions and hard links. RENDER (anything else:
 // another repo or sessions folder, worktrees root, or identity) writes real copies of the skills, agents and the spawn
 // preamble with the original owner's paths and identity replaced by the configured ones (scripts/lib/render-team.mjs);
-// it refuses to run without --gh-user, --git-name, --git-email and --slack-id (or MESA_GH_USER, MESA_GIT_NAME,
-// MESA_GIT_EMAIL, MESA_SLACK_USER_ID), so nobody commits or reviews as somebody else by accident. Re-run after every pull.
-// In both modes the live install writes those four identity values into settings.json env (what vendor/pr-gh.mjs and
-// the sweeper read). --commit-guard also registers vendor/commit-guard.mjs as a PreToolUse hook (never by default).
+// it refuses to run without --gh-user, --git-name, --git-email, --slack-id and --owner-name (or MESA_GH_USER, MESA_GIT_NAME,
+// MESA_GIT_EMAIL, MESA_SLACK_USER_ID, MESA_OWNER_NAME), so nobody commits or reviews as somebody else by accident and the
+// team calls you by your name, not the original owner's. --owner-full-name (MESA_OWNER_FULL_NAME, default: the owner name)
+// is the name a calendar event is posted as; --project (MESA_PROJECT, default designli) is the engram project of the lead.
+// Re-run after every pull. In both modes the live install writes those identity values into settings.json env (what
+// vendor/pr-gh.mjs, the sweeper, the hooks and the mesa CLI read). --commit-guard also registers vendor/commit-guard.mjs as a PreToolUse hook (never by default).
 //
 // --env sandbox installs the same skills, agents and hooks for the sandbox board (docs/SANDBOX.md): the folder is
 // created when missing, env is MESA_URL=http://127.0.0.1:8796, MESA_ENV=sandbox, MESA_SESSION=lead (these three are
@@ -35,7 +38,7 @@
 import { copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { CANONICAL, IDENTITY_FIELDS, fwd, isTextFile, leftovers, maskPath, renderText } from "./lib/render-team.mjs";
+import { CANONICAL, IDENTITY_FIELDS, OPTIONAL_FIELDS, fwd, isTextFile, leftovers, maskPath, renderText } from "./lib/render-team.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -135,8 +138,26 @@ const ALLOW_COMMON = [
 ];
 export const ALLOW = allowRules(CANONICAL.repo);
 
-/** The identity settings.json env carries (vendor/pr-gh.mjs reads MESA_GH_USER; the sweeper reads the Slack id). */
-export const identityEnv = (id) => ({ MESA_GH_USER: id.ghUser, MESA_GIT_NAME: id.gitName, MESA_GIT_EMAIL: id.gitEmail, MESA_SLACK_USER_ID: id.slackUserId });
+/** The identity settings.json env carries (vendor/pr-gh.mjs reads MESA_GH_USER; the sweeper reads the Slack id; the hooks and the CLI the owner's name). */
+/**
+ * What the hooks, the CLI and the sandbox need to name the owner (the sandbox sends nothing, so it gets only these). A value
+ * that is the original owner's is left out: the readers default to it, so his settings.json stays as it always was.
+ */
+export const ownerEnv = (id) =>
+  Object.fromEntries(
+    [
+      ["MESA_OWNER_NAME", id.ownerName, CANONICAL.ownerName],
+      ["MESA_OWNER_FULL_NAME", id.ownerFullName, CANONICAL.ownerFullName],
+      ["MESA_PROJECT", id.project, CANONICAL.project],
+    ].filter(([, v, canon]) => v !== canon),
+  );
+export const identityEnv = (id) => ({
+  MESA_GH_USER: id.ghUser,
+  MESA_GIT_NAME: id.gitName,
+  MESA_GIT_EMAIL: id.gitEmail,
+  MESA_SLACK_USER_ID: id.slackUserId,
+  ...ownerEnv(id),
+});
 
 // Pure merge: adds what is missing, keeps everything that is there. A hook entry counts as present when any
 // existing entry of that event already runs the same script.
@@ -313,7 +334,9 @@ function renderTeam({ claude, repo, cfg, opt, log }) {
     let content = readFileSync(src);
     if (isTextFile(src)) {
       const text = renderText(content.toString("utf8"), cfg);
-      for (const w of leftovers(withoutOwnPaths(text, cfg))) warn.push(`${key} still contains ${w}`);
+      // A teammate who is also called Andrés keeps the name: it is then the configured one, not a leftover.
+      const skip = cfg.ownerName === CANONICAL.ownerName ? ["Andrés", "Andres"] : [];
+      for (const w of leftovers(withoutOwnPaths(text, cfg), skip)) warn.push(`${key} still contains ${w}`);
       content = Buffer.from(text, "utf8");
     }
     renderFile(dest, key, content, ctx);
@@ -369,7 +392,7 @@ export function install({ target, allow = false, dryRun = false, force = false, 
   if (commitGuard) hooks.PreToolUse.push(commitGuardEntry(repo, node));
   const { settings, added } = mergeSettings(current, {
     hooks,
-    env: { ...(sandbox ? SANDBOX_ENV : ENV), ...(identity && !sandbox ? identityEnv(identity) : {}) },
+    env: { ...(sandbox ? SANDBOX_ENV : ENV), ...(identity ? (sandbox ? ownerEnv(identity) : identityEnv(identity)) : {}) },
     allow: allow ? (render ? allowRules(repo) : ALLOW) : [],
     forceEnv: sandbox,
     statusLine: statusLineEntry(repo, node, env),
@@ -390,7 +413,7 @@ export function install({ target, allow = false, dryRun = false, force = false, 
 
 export class UsageError extends Error {}
 
-const VALUE_FLAGS = ["--target", "--env", "--repo", "--sessions", "--worktrees", ...IDENTITY_FIELDS.map((f) => f.flag)];
+const VALUE_FLAGS = ["--target", "--env", "--repo", "--sessions", "--worktrees", ...IDENTITY_FIELDS.map((f) => f.flag), ...OPTIONAL_FIELDS.map((f) => f.flag)];
 
 /**
  * argv + environment -> what to install. Mode LINK when every value is the original owner's (or the install is a
@@ -432,8 +455,15 @@ export function resolveConfig(argv, env = process.env, defaults = { repo: REPO }
     identity[f.key] = v || CANONICAL[f.key];
   }
 
+  // Optional values: the full name follows the owner's name when only that one was given; the project defaults to the canonical one.
+  for (const f of OPTIONAL_FIELDS) {
+    const v = (opts[f.flag] ?? env[f.env] ?? "").trim();
+    if (v && !f.ok.test(v)) throw new UsageError(`${f.flag} (${f.env}) must be ${f.what}, got: ${v}`);
+    identity[f.key] = v || (f.key === "ownerFullName" && identity.ownerName !== CANONICAL.ownerName ? identity.ownerName : CANONICAL[f.key]);
+  }
+
   const lc = (p) => fwd(resolve(p)).toLowerCase();
-  const identityDiffers = IDENTITY_FIELDS.some((f) => identity[f.key] !== CANONICAL[f.key]);
+  const identityDiffers = [...IDENTITY_FIELDS, ...OPTIONAL_FIELDS].some((f) => identity[f.key] !== CANONICAL[f.key]);
   const pathsDiffer = lc(worktrees) !== lc(CANONICAL.worktrees) || lc(sessions) !== lc(CANONICAL.sessions) || (!sandbox && lc(repo) !== lc(CANONICAL.repo));
   const render = identityDiffers || pathsDiffer;
   if (render) {
@@ -473,7 +503,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log(cfg.mode === "render" ? `mode    render: copies of the skills, agents and preamble for ${cfg.identity.ghUser} (${fwd(cfg.target)})` : "mode    link: junctions into the repo");
   try {
     const { identity, ...rest } = cfg;
-    install({ ...rest, identity: rest.env === "live" ? identity : null });
+    install({ ...rest, identity });
     console.log(cfg.dryRun ? "dry run: nothing written" : `done. Restart Claude Code in ${fwd(cfg.target)} so it loads the hooks, skills and agents.`);
   } catch (err) {
     console.error(`install-team: ${err.message}`);

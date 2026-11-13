@@ -18,7 +18,9 @@
 //      only), MESA_APPROVAL_TIMEOUT_MS (default 540000; keep it under the
 //      registered hook timeout of 600 s), MESA_APPROVAL_POLL_MS (default 2000).
 import { pathToFileURL } from "node:url";
-import { closestRules, loadAllowRules, mesaCall, mesaCli, parseName, readStdinJson, resolveAgent } from "./lib.mjs";
+import { closestRules, loadAllowRules, mesaCall, mesaCli, ownerName, parseName, readStdinJson, resolveAgent } from "./lib.mjs";
+
+const OWNER = ownerName();
 
 const MAX_DETAIL = 20_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -62,7 +64,7 @@ export function describe(input) {
 
 export function readConfigMessage(hints, ticketRef) {
   const lines = [
-    `Andrés answered "Lee tus configuraciones" on ${ticketRef ?? "Mesa"}: this call is denied because an allowed shape already exists.`,
+    `${OWNER} answered "Lee tus configuraciones" on ${ticketRef ?? "Mesa"}: this call is denied because an allowed shape already exists.`,
     "Read your own allow rules (permissions.allow in .claude/settings.json and .claude/settings.local.json at the project root, and the user settings.json) and the command sheet in your role definition, then retry with an allowed shape. Do not ask again for this call.",
   ];
   if (hints.rules.length) lines.push(`Closest allow rules: ${hints.rules.join("; ")}`);
@@ -148,13 +150,13 @@ export async function approve(
     // process that POSTs to /approve, /read-config or /deny is stamped "andres" and honoured here (docs/TEAM.md
     // section 6; improvement 13 is the fix).
     if (a.decision && a.decidedBy !== "andres") {
-      return deny(`Denied: approval ${id} was decided by "${a.decidedBy ?? "unknown"}", not by Andrés in Mesa, so it does not count. ${NO_RETRY}`);
+      return deny(`Denied: approval ${id} was decided by "${a.decidedBy ?? "unknown"}", not by ${OWNER} in Mesa, so it does not count. ${NO_RETRY}`);
     }
     if (a.decision === "allow") return output("allow");
     if (a.decision === "read_config") return deny(readConfigMessage(hints, ticketRef));
     if (a.decision === "deny") {
-      const note = a.note ? ` Note from Andrés: ${a.note}` : "";
-      return deny(`Denied by Andrés in Mesa (${ticketRef ?? "approval"} ${id}): ${call.tool} (${call.summary}) was not approved.${note} ${NO_RETRY}`);
+      const note = a.note ? ` Note from ${OWNER}: ${a.note}` : "";
+      return deny(`Denied by ${OWNER} in Mesa (${ticketRef ?? "approval"} ${id}): ${call.tool} (${call.summary}) was not approved.${note} ${NO_RETRY}`);
     }
     if (a.status && a.status !== "pending") {
       return deny(`Denied: approval ${id} was closed (${a.status}) without a decision. ${NO_RETRY}`);

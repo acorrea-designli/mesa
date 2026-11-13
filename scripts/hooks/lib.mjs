@@ -10,6 +10,9 @@ import { fileURLToPath } from "node:url";
 export const mesaRepo = (env = process.env) => (env.MESA_REPO?.trim() || fileURLToPath(new URL("../../", import.meta.url))).replace(/\\/g, "/").replace(/\/+$/, "");
 export const mesaCli = (env = process.env) => `node ${mesaRepo(env)}/bin/mesa`;
 
+// The owner's name as the hook messages say it (MESA_OWNER_NAME from the settings env; "Andrés" for the original owner).
+export const ownerName = (env = process.env) => env.MESA_OWNER_NAME?.trim() || "Andrés";
+
 // Agent names: <role>-<ticketRef>[-k], e.g. reviewer-t12, reviewer-t12-2, tl-t14. Never reused.
 export const ROLES = ["tl", "reviewer", "dev", "devops", "researcher", "writer"];
 export const NAME_RE = new RegExp(`^(${ROLES.join("|")})-(t\\d+)(?:-(\\d+))?$`);

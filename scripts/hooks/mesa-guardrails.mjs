@@ -50,7 +50,9 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { eventFromCall, eventMismatches, parseEventBody } from "./calendar-body.mjs";
 import { moveMismatches, parseMoveBody } from "./calendar-move.mjs";
-import { callerName, grantHintFresh, hookSandbox, mesaCall, mesaRepo, readStdinJson, resolveAgent } from "./lib.mjs";
+import { callerName, grantHintFresh, hookSandbox, mesaCall, mesaRepo, ownerName, readStdinJson, resolveAgent } from "./lib.mjs";
+
+const OWNER = ownerName();
 
 const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
 
@@ -354,8 +356,8 @@ function slackRefusal(tool, found) {
   if (found.wrongMode) {
     const id = found.wrongMode.id;
     return wantMode === "draft"
-      ? `rule 3: salida ${id} was approved as "Claude lo envía" (mode send), not as a draft. Send it with slack_send_message (the connector adds "Sent using @Claude", which Andrés accepted with that button), then \`mesa salida sent ${id} --permalink <url>\`.`
-      : `rule 3: salida ${id} was approved as a draft (mode draft, the default): Andrés sends it himself. Create it with slack_send_message_draft (same channel_id, thread_ts and exact text), then \`mesa salida drafted ${id}\`. slack_send_message is only for a salida approved as "Claude lo envía"; never switch a draft to a send.`;
+      ? `rule 3: salida ${id} was approved as "Claude lo envía" (mode send), not as a draft. Send it with slack_send_message (the connector adds "Sent using @Claude", which ${OWNER} accepted with that button), then \`mesa salida sent ${id} --permalink <url>\`.`
+      : `rule 3: salida ${id} was approved as a draft (mode draft, the default): ${OWNER} sends it himself. Create it with slack_send_message_draft (same channel_id, thread_ts and exact text), then \`mesa salida drafted ${id}\`. slack_send_message is only for a salida approved as "Claude lo envía"; never switch a draft to a send.`;
   }
   if (found.mismatch) {
     const { id, expected, got } = found.mismatch;
@@ -363,7 +365,7 @@ function slackRefusal(tool, found) {
   }
   const which = wantMode === "draft" ? "mode draft (Aprobar)" : "mode send (Aprobar y que Claude lo envíe)";
   const other = wantMode === "draft" ? "slack_send_message_draft is only for" : "slack_send_message is only for";
-  return `rule 3: no released, unsent Slack salida in ${which} has exactly this text. ${other} a released salida in that mode, on salida.released (Andrés approved it and the 20 s undo window is over), with the approved version's text unchanged. A salida already drafted or sent is done.`;
+  return `rule 3: no released, unsent Slack salida in ${which} has exactly this text. ${other} a released salida in that mode, on salida.released (${OWNER} approved it and the 20 s undo window is over), with the approved version's text unchanged. A salida already drafted or sent is done.`;
 }
 
 // A released GitHub salida for this repo and PR (approve, review and reply all go out as github salidas).
@@ -461,11 +463,11 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
   }
 
   if (teammate && isGcalWrite(tool)) {
-    return block("G4", `rule 3: ${agent.name} cannot write to Google Calendar. Propose a calendar salida ("mesa salida propose --source calendar ...") and let the lead create the event after Andrés approves it.`);
+    return block("G4", `rule 3: ${agent.name} cannot write to Google Calendar. Propose a calendar salida ("mesa salida propose --source calendar ...") and let the lead create the event after ${OWNER} approves it.`);
   }
 
   if (teammate && (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool))) {
-    return block("G4", `rule 3: ${agent.name} cannot write to Slack or Basecamp. Propose a salida (\`mesa salida propose ...\`) or a planned action and let the lead send it after Andrés approves.`);
+    return block("G4", `rule 3: ${agent.name} cannot write to Slack or Basecamp. Propose a salida (\`mesa salida propose ...\`) or a planned action and let the lead send it after ${OWNER} approves.`);
   }
 
   // The claude.ai Slack connector appends "Sent using @Claude" to every slack_send_message and has no param to turn it
@@ -506,12 +508,12 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
         return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this move cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and move the event on salida.released.`);
       }
       if (!found.match) {
-        return block("G5", found.near ? `rule 3: no released calendar move salida is exactly this update. The nearest is ${found.near.id}; the call differs: ${found.near.mismatches.join("; ")}. Call update_event with only eventId, startTime, endTime and timeZone (plus notificationLevel when Avisar is no) exactly as the approved body says, or propose a new version for Andrés to approve.` : "rule 3: no released calendar move salida in Mesa matches this update. Move an event only on `salida.released` of a calendar salida whose body starts with `Mover: <eventId>` (Andrés approved it and the 20 s undo window is over), then `mesa salida sent <id>`.");
+        return block("G5", found.near ? `rule 3: no released calendar move salida is exactly this update. The nearest is ${found.near.id}; the call differs: ${found.near.mismatches.join("; ")}. Call update_event with only eventId, startTime, endTime and timeZone (plus notificationLevel when Avisar is no) exactly as the approved body says, or propose a new version for ${OWNER} to approve.` : "rule 3: no released calendar move salida in Mesa matches this update. Move an event only on `salida.released` of a calendar salida whose body starts with `Mover: <eventId>` (" + OWNER + " approved it and the 20 s undo window is over), then `mesa salida sent <id>`.");
       }
       return null;
     }
     if (!GCAL_CREATE.test(gcalAction(tool))) {
-      return block("G5", `rule 3: ${tool} changes Andrés's Google Calendar. Mesa only creates events (create_event) and moves them (update_event), and only from a released calendar salida. Deletes, calendar changes and answers to invitations are his to make in Google Calendar.`);
+      return block("G5", `rule 3: ${tool} changes ${OWNER}'s Google Calendar. Mesa only creates events (create_event) and moves them (update_event), and only from a released calendar salida. Deletes, calendar changes and answers to invitations are his to make in Google Calendar.`);
     }
     let found;
     try {
@@ -520,7 +522,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this event cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and create it on salida.released.`);
     }
     if (!found.match) {
-      return block("G5", found.near ? `rule 3: no released calendar salida is exactly this event. The nearest is ${found.near.id}; the call differs: ${found.near.mismatches.join("; ")}. Create the event with exactly the approved fields (the approved version's body), or propose a new version for Andrés to approve.` : "rule 3: no released calendar salida in Mesa matches this event. Create it only on `salida.released` (Andrés approved it and the 20 s undo window is over), then `mesa salida sent <id> --permalink <event link>`.");
+      return block("G5", found.near ? `rule 3: no released calendar salida is exactly this event. The nearest is ${found.near.id}; the call differs: ${found.near.mismatches.join("; ")}. Create the event with exactly the approved fields (the approved version's body), or propose a new version for ${OWNER} to approve.` : "rule 3: no released calendar salida in Mesa matches this event. Create it only on `salida.released` (" + OWNER + " approved it and the 20 s undo window is over), then `mesa salida sent <id> --permalink <event link>`.");
     }
   }
   if (tool === "mcp__claude_ai_Slack__slack_schedule_message") {
@@ -539,7 +541,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
     if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
-      return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
+      return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are " + OWNER + "'s, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
     // G10 (t143 PR5): a card is filed only by the permission hooks (node, straight to Mesa). A session that POSTs a card
@@ -559,17 +561,17 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
           return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this GitHub write cannot be matched to an approved salida.`);
         }
         if (!s) {
-          return block("G5", `rule 3: no released github salida for ${w[2]}#${w[3]}. GitHub writes go out only on salida.released (Andrés approved it and the 20 s undo window is over).`);
+          return block("G5", `rule 3: no released github salida for ${w[2]}#${w[3]}. GitHub writes go out only on salida.released (${OWNER} approved it and the 20 s undo window is over).`);
         }
       }
     }
 
     if (teammate) {
       if (/pr-gh\.mjs\s+(approve|review|reply)\b/.test(c)) {
-        return block("G4", "rule 3: GitHub reviews and comments are the lead's to send, after Andrés presses Approve / Post in Mesa. Record findings in the ticket instead.");
+        return block("G4", "rule 3: GitHub reviews and comments are the lead's to send, after " + OWNER + " presses Approve / Post in Mesa. Record findings in the ticket instead.");
       }
       if (/\bgh\s+pr\s+(review|comment|merge|close|reopen|edit|ready)\b|\bgh\s+issue\s+(comment|create|close|reopen|edit|delete)\b|\bgh\s+release\s+create\b/.test(c)) {
-        return block("G4", "rule 3: that gh command writes to GitHub on Andrés's behalf. Only `gh pr create --draft` for your own branch is yours; everything else goes through the lead after approval.");
+        return block("G4", "rule 3: that gh command writes to GitHub on " + OWNER + "'s behalf. Only `gh pr create --draft` for your own branch is yours; everything else goes through the lead after approval.");
       }
       if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|drafted|failed|hold|bounce|deleted|restored|withdraw)\b/.test(c)) {
         return block("G4", "rule 3: only the lead reports a salida as sent, drafted, failed, held, bounced, deleted or restored, or withdraws one.");
@@ -581,10 +583,10 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
     // Everyone: GitHub writes go only through pr-gh.mjs (the lead, after a click), so a raw `gh api` write is never right.
     if (/\bgh\s+api\b/.test(c) && /(?:^|\s)(?:-X|--method)[\s=]*(POST|PUT|PATCH|DELETE)\b|(?:^|\s)(?:-f|-F|--field|--raw-field|--input)\s/i.test(c)) {
-      return block("G4", "rule 3: `gh api` is for GET reads only. GitHub writes go through pr-gh.mjs, run by the lead after Andrés clicks in Mesa.");
+      return block("G4", "rule 3: `gh api` is for GET reads only. GitHub writes go through pr-gh.mjs, run by the lead after " + OWNER + " clicks in Mesa.");
     }
     if (/\bgh\s+pr\s+create\b/.test(c) && !/--draft\b|(^|\s)-d(\s|$)/.test(c)) {
-      return block("G7", "rule 10: open agent PRs as drafts (`gh pr create --draft ...`). Andrés decides when one is ready.");
+      return block("G7", "rule 10: open agent PRs as drafts (`gh pr create --draft ...`). " + OWNER + " decides when one is ready.");
     }
     if (/git\s+push\b[^\n|;&]*\s(--force|-f)(\s|$)/.test(c) && !/--force-with-lease/.test(c)) {
       return block("G7", "rule 10: bare `git push --force`. Use --force-with-lease on your own branch only.");
@@ -593,7 +595,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       return block("G7", "rule 10: never skip the commit hooks.");
     }
     if (/\bgh\s+auth\s+(switch|login|logout|refresh)\b/.test(c)) {
-      return block("G7", "rule 10: `gh auth` changes are Andrés's. If the account is wrong, BLOCKED to team-lead.");
+      return block("G7", "rule 10: `gh auth` changes are " + OWNER + "'s. If the account is wrong, BLOCKED to team-lead.");
     }
     // Commit message shape and attribution are enforced by the commit-guard hook
     // (vendor/commit-guard.mjs, registered by `install-team --commit-guard`), not here.
@@ -610,7 +612,7 @@ export const grantAllowOutput = (approvalId) => ({
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: `Andres allowed this exact call once from the Mesa card ${approvalId}`,
+    permissionDecisionReason: `${OWNER} allowed this exact call once from the Mesa card ${approvalId}`,
   },
 });
 

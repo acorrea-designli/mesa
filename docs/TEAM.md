@@ -367,10 +367,10 @@ node G:/WorkSpace/designli/ops/scripts/install-team.mjs --allow     # also the r
 For the original owner's layout (repo `G:/WorkSpace/designli/ops`, sessions folder `G:/WorkSpace/designli`, worktrees
 `G:/WorkSpace/designli-wt`, his identity) the skills, agents and preamble are junctions and hard links. On any other layout
 the installer renders real copies with the configured repo path, sessions folder, worktrees root, git name and email,
-GitHub login and Slack id substituted, and refuses to run without the identity:
-`--gh-user`, `--git-name`, `--git-email`, `--slack-id` (or `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`,
-`MESA_SLACK_USER_ID`), plus `--sessions` and `--worktrees` when they are not `<target>` and `<target>-wt`. Both modes write
-those four identity values into the `env` of `<target>/.claude/settings.json` (never overwriting one that is there; vendor/pr-gh.mjs
+GitHub login, Slack id, the owner's name ("Andrés" in his files) and the engram project substituted, and refuses to run without the identity:
+`--gh-user`, `--git-name`, `--git-email`, `--slack-id`, `--owner-name` (or `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`,
+`MESA_SLACK_USER_ID`, `MESA_OWNER_NAME`; optional `--owner-full-name` / `MESA_OWNER_FULL_NAME` and `--project` / `MESA_PROJECT`), plus `--sessions` and `--worktrees` when they are not `<target>` and `<target>-wt`. Both modes write
+those identity values (and, in a sandbox, the owner's name and project) into the `env` of `<target>/.claude/settings.json` (never overwriting one that is there; vendor/pr-gh.mjs
 reads `MESA_GH_USER`). `--allow` also allows `Bash(node <repo>/vendor/pr-gh.mjs *)` and `PowerShell(node <repo>/vendor/pr-gh.mjs *)`; `--dry-run --allow` lists every rule it would add. `--commit-guard` registers
 `vendor/commit-guard.mjs` as a PreToolUse hook (never by default). The hooks name the CLI of the checkout they run from.
 The sweeper's GitHub repos come from `node <repo>/scripts/sweep-tick.mjs config`: `githubRepos` in `config/sweep.json`, replaced

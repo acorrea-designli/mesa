@@ -10,6 +10,7 @@ import {
   TransitionError,
   ValidationError,
 } from "../db/util";
+import { identity } from "../config/identity";
 import { inferKind } from "../domain/dispatch-kind";
 import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
 import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, type StepInput } from "../domain/ticket-checklists";
@@ -499,7 +500,7 @@ export function ticketsRepo(db: Db) {
           db.prepare("UPDATE tickets SET owner_session = ? WHERE id = ?").run(m.session, t.id);
           t = get(t.id);
         }
-        if (m.author === "claude" && (m.answers?.length || m.chosen)) throw new ValidationError("only Andrés answers questions");
+        if (m.author === "claude" && (m.answers?.length || m.chosen)) throw new ValidationError(`only ${identity().ownerName} answers questions`);
         // His answers: explicit, a lone chosen key, or typed shorthand ("1A 2C"; a bare "A" with one open question).
         // A reply that answers nothing closes nothing: every open question stays open until answered or withdrawn.
         const { answers, qs } = m.author === "andres" ? resolveAnswers(t.id, m) : { answers: [], qs: [] };
@@ -770,7 +771,7 @@ export function ticketsRepo(db: Db) {
       const row = db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId);
       if (!row) throw new NotFoundError("action", actionId);
       const a = fromRow<PlannedAction>(row, A_SPEC);
-      if (!r.changes && a.state !== state) throw new TransitionError("step is not approved; Andres took it back or never approved it");
+      if (!r.changes && a.state !== state) throw new TransitionError(`step is not approved; ${identity().ownerName} took it back or never approved it`);
       return a;
     },
 
@@ -888,7 +889,7 @@ export function ticketsRepo(db: Db) {
         for (const t of [p, ...froms]) {
           if (t.status === "closed") throw new TransitionError(`${t.ref} is closed`);
           if (t.isSample) throw new TransitionError(`${t.ref} is a sample ticket`);
-          if (t.direction !== "andres_asks") throw new TransitionError(`${t.ref} is not an Andrés request`);
+          if (t.direction !== "andres_asks") throw new TransitionError(`${t.ref} is not an ${identity().ownerName} request`);
         }
         const why = o.why.trim();
         const ts = nowIso(now);

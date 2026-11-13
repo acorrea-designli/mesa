@@ -8,6 +8,9 @@ describe("identity", () => {
       gitName: "acorrea-designli",
       gitEmail: "andres.correa@designli.co",
       slackUserId: "U06E2UBDC73",
+      ownerName: "Andrés",
+      ownerFullName: "Andrés Correa",
+      project: "designli",
       sessionsDir: "G:/WorkSpace/designli",
       worktreesRoot: "G:/WorkSpace/designli-wt",
       settingsLocal: "G:/WorkSpace/designli/.claude/settings.local.json",
@@ -25,11 +28,19 @@ describe("identity", () => {
       MESA_GIT_NAME: "Ana Dev",
       MESA_GIT_EMAIL: "ana@example.com",
       MESA_SLACK_USER_ID: "U0ANA",
+      MESA_OWNER_NAME: "Ana",
+      MESA_OWNER_FULL_NAME: "Ana Dev Lopez",
+      MESA_PROJECT: "ana-work",
       MESA_SESSIONS_DIR: "D:\\work\\ana\\",
       MESA_WORKTREES_ROOT: "E:/wt",
       MESA_SETTINGS_LOCAL: "E:/s.json",
     });
-    expect(i).toEqual({ ghUser: "ana-dev", gitName: "Ana Dev", gitEmail: "ana@example.com", slackUserId: "U0ANA", sessionsDir: "D:/work/ana", worktreesRoot: "E:/wt", settingsLocal: "E:/s.json" });
+    expect(i).toEqual({ ghUser: "ana-dev", gitName: "Ana Dev", gitEmail: "ana@example.com", slackUserId: "U0ANA", ownerName: "Ana", ownerFullName: "Ana Dev Lopez", project: "ana-work", sessionsDir: "D:/work/ana", worktreesRoot: "E:/wt", settingsLocal: "E:/s.json" });
+  });
+
+  it("the full name falls back to the owner name, then to the canonical full name", () => {
+    expect(identity({ MESA_OWNER_NAME: "Ana" }).ownerFullName).toBe("Ana");
+    expect(identity({}).ownerFullName).toBe("Andrés Correa");
   });
 
   it("derives the worktrees root and the settings file from the sessions folder", () => {
