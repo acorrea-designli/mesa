@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="es" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=1440">
+<title>Mesa · Proyectos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Mesa mockup: proyectos (t152), chosen direction A (Línea del proyecto). Shell and tokens from screens/tablero.html, rail health from estados.html (B), phone frame from telefono.html (A). PRs, issues, board statuses, Mesa reviews and tickets are real (2026-11-13); checks, conflicts, GitHub review decisions, the outage and the empty project are sample marks. Datos de muestra. -->
+<style>
+:root{--gnd:#eceae5;--deep:#e2dfd8;--raise:#fbfaf7;--rule:#d3cfc5;--ink:#1c1d21;--dim:#6f717a;--gh:#e60012;--sl:#00a3a8;--cl:#f39700;--bc:#00b07c;--ca:#5b5bd6}
+:root{--mute:#5d5f68;--ink2:#3e4047;--rule2:#dcd8cf;--edge:#c3beb2;--gh-tint:#fbe6e5;--cl-tint:#fdf0dc;--shade:rgba(28,29,33,.10)}
+[data-theme="dark"]{--gnd:#17191d;--deep:#111316;--raise:#20232a;--rule:#2b2f37;--ink:#f1efe9;--dim:#8e939c;--gh:#ff5d52;--sl:#2ec5c2;--cl:#ffb428;--bc:#3cc983;--ca:#8a8aff;--mute:#9a9fa8;--ink2:#c7cbd2;--rule2:#23262d;--edge:#3d424b;--gh-tint:#3a1f1e;--cl-tint:#3a2d14;--shade:rgba(0,0,0,.40)}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--deep);color-scheme:light}
+[data-theme="dark"]{color-scheme:dark}
+body{width:1440px;background:var(--deep);color:var(--ink);font:500 14px/1.3 "Hanken Grotesk",sans-serif;font-variant-numeric:tabular-nums}
+a{color:inherit;text-decoration:none}
+svg{display:block}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* mock chrome */
+.mk-bar{height:56px;display:flex;align-items:center;gap:18px;padding:0 28px;border-bottom:1px solid var(--rule);background:var(--deep)}
+.mk-bar strong{font-size:15px;font-weight:700}
+.mk-sub{color:var(--mute);font-size:12.5px}
+.mk-seg{display:flex;border:1px solid var(--edge);border-radius:6px;overflow:hidden}
+.mk-seg button{height:30px;padding:0 12px;font-size:13px;font-weight:600;color:var(--ink2);border-right:1px solid var(--edge);white-space:nowrap}
+.mk-seg button:last-child{border-right:0}
+.mk-seg button[aria-pressed="true"]{background:var(--ink);color:var(--gnd)}
+.mk-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12.5px;color:var(--mute)}
+[data-v]{display:none}
+body[data-view="desk"] [data-v="desk"],body[data-view="spur"] [data-v="spur"],body[data-view="prospec"] [data-v="prospec"],body[data-view="empty"] [data-v="empty"],body[data-view="limit"] [data-v="limit"],body[data-view="phone"] [data-v="phone"]{display:block}
+
+/* app frame and rail */
+.app{width:1440px;height:900px;background:var(--gnd);display:grid;grid-template-columns:184px 1fr;overflow:hidden}
+.rail{background:var(--deep);border-right:1px solid var(--rule);padding:22px 14px;display:flex;flex-direction:column;gap:3px}
+.brand{display:flex;align-items:center;gap:10px;font:700 20px/1.3 "Hanken Grotesk";letter-spacing:.02em;margin:0 6px 4px}
+.rail-who{color:var(--mute);font-size:12px;margin:0 6px 22px 38px}
+.nav{display:flex;justify-content:space-between;align-items:center;height:38px;padding:0 10px;border-radius:6px;color:var(--ink2);font-weight:600;border-left:3px solid transparent}
+.nav b{font-weight:600;font-size:13px;color:var(--mute)}
+.nav.on{background:var(--raise);color:var(--ink);border-left-color:var(--ink)}
+.nav.on b{color:var(--ink)}
+.nav.foot{margin-top:auto;color:var(--mute)}
+.rl-health{margin-top:auto;padding:12px 10px 10px;border-top:1px solid var(--rule);display:flex;flex-direction:column;gap:7px}
+.rl-health+.nav.foot{margin-top:0}
+.rl-src{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.rl-src small{margin-left:auto;font-size:12px;font-weight:600;color:var(--mute)}
+.rl-src.bad{color:var(--ink)}
+.rl-src.bad small{color:var(--ink);font-weight:700}
+.rl-src svg{width:24px;margin:0 -4px}
+.ln{display:inline-block;width:16px;height:5px;border-radius:3px;background:var(--ink);flex:none}
+.ln.gh{background:var(--gh)}.ln.sl{background:var(--sl)}.ln.cl{background:var(--cl)}.ln.bc{background:var(--bc)}.ln.ca{background:var(--ca)}
+
+/* shared */
+.main{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.head{display:flex;align-items:center;gap:14px;padding:20px 28px 0;height:62px}
+.head h1{font:700 20px/1.3 "Hanken Grotesk"}
+.head h1 span{font-weight:500;font-size:13px;color:var(--mute);margin-left:12px}
+.head .btn{margin-left:auto}
+.tools{display:flex;align-items:center;gap:6px;padding:12px 28px 0}
+.tab{height:30px;padding:0 12px;display:flex;align-items:center;gap:7px;border:1px solid var(--rule);border-radius:6px;color:var(--ink2);font-weight:600;font-size:13px;white-space:nowrap}
+.tab b{font-weight:600;color:var(--mute)}
+.tab.on{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.tab.on b{color:var(--gnd);opacity:.75}
+.sync{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute)}
+.sync b{color:var(--ink);font-weight:600}
+.btn{height:40px;padding:0 16px;border-radius:6px;display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.btn.p{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.st{height:24px;padding:0 8px;border-radius:4px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border:1px solid var(--edge);color:var(--ink);white-space:nowrap}
+.st.you{background:var(--ink);color:var(--gnd);border-color:var(--ink)}
+.st.blk{border:1.5px solid var(--ink)}
+.st.draft{border-style:dashed;color:var(--mute)}
+.st.ok{color:var(--ink2)}
+.st.off{border-style:dashed;color:var(--mute)}
+.lk{height:22px;padding:0 7px;border:1px solid var(--edge);border-radius:4px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--ink);background:var(--raise);white-space:nowrap}
+.lk.cl{border-color:var(--cl);background:var(--cl-tint)}
+.lk small{font-weight:500;color:var(--mute);font-size:12px}
+.chk{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;color:var(--mute);white-space:nowrap}
+.chk.bad{color:var(--ink)}
+.repo{font-size:13px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.more{height:34px;border:1px dashed var(--edge);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;color:var(--ink2);margin-top:8px}
+.foot-note{margin:auto 28px 12px;padding-top:8px;font-size:12px;color:var(--mute)}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--mute);text-transform:uppercase}
+
+/* svg line language */
+.sv-ln{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+.s-gh{stroke:var(--gh)}.s-ink{stroke:var(--ink)}
+.sv-dash{stroke-dasharray:1 11}
+.sv-cap{fill:var(--gnd);stroke:var(--ink);stroke-width:2.5}
+.sv-cap.on{fill:var(--raise);stroke-width:3.5}
+.sv-tick{fill:var(--raise);stroke:var(--ink);stroke-width:1.6}
+.sv-tick.draft{stroke-dasharray:2 2.4}
+.sv-tick.you{fill:var(--ink)}
+.sv-ring{fill:var(--gnd);stroke:var(--ink);stroke-width:3}
+.sv-txt{fill:var(--ink)}.sv-mute{fill:var(--mute)}
+.dimmed{opacity:.35}
+
+/* ---------- A · Línea del proyecto ---------- */
+.a-band{padding:14px 28px 0;position:relative}
+.a-band svg{overflow:visible}
+.a-sel{display:flex;align-items:center;gap:12px;padding:4px 28px 10px;border-bottom:1px solid var(--rule)}
+.a-sel h2{font-size:16px;font-weight:700;white-space:nowrap}
+.a-sel>span{font-size:13px;color:var(--mute);white-space:nowrap}
+.a-sel .tabs{margin-left:auto;display:flex;gap:6px}
+.a-list{padding:0 28px;overflow:hidden}
+.a-grid{display:grid;grid-template-columns:minmax(0,1fr) 112px 130px 158px 196px 108px;column-gap:14px;align-items:center}
+.a-cols{height:32px;align-items:flex-end;padding-bottom:6px}
+.a-iss{height:42px;border-bottom:1px solid var(--rule2);display:flex;align-items:center;gap:10px;margin-top:4px}
+.a-iss .ic{width:16px;display:flex;justify-content:center;flex:none}
+.a-iss .n{font-size:13px;font-weight:700;color:var(--ink2);white-space:nowrap}
+.a-iss .t{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.a-iss .meta{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:600;color:var(--mute);white-space:nowrap}
+.a-iss .bst{height:22px;padding:0 9px;border:2px solid var(--ink);border-radius:11px;display:inline-flex;align-items:center;font-size:12px;font-weight:700;color:var(--ink)}
+.a-iss .bst.none{border-style:dashed;border-width:1.5px;color:var(--ink2)}
+.a-pr{height:50px;border-bottom:1px solid var(--rule2)}
+.a-pr.sel{background:var(--raise);border-radius:6px;border-bottom-color:transparent;box-shadow:0 0 0 1px var(--rule)}
+.a-who{display:flex;align-items:center;min-width:0;padding-left:30px;position:relative;height:100%}
+.a-who::before{content:"";position:absolute;left:7px;top:-6px;bottom:24px;width:2px;background:var(--rule)}
+.a-who::after{content:"";position:absolute;left:7px;top:24px;width:14px;height:2px;background:var(--rule)}
+.subj{min-width:0}
+.subj b{display:block;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subj small{display:block;font-size:12.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.tags{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;min-width:0}
+.rv{font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.rv.ch{color:var(--ink);font-weight:700}
+.grp{display:flex;align-items:center;gap:10px;height:40px;margin-top:6px;font-size:13px;font-weight:700;color:var(--ink2)}
+.grp small{font-size:12.5px;font-weight:600;color:var(--mute)}
+.grp .rule{flex:1;height:1px;background:var(--rule)}
+.train{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:14px;min-height:58px;border:1px dashed var(--edge);border-radius:6px;padding:8px 14px;margin-top:6px}
+.train .subj b{font-size:14px}
+.train .tags{gap:8px}
+.empty{margin:26px 28px 0;padding:22px 24px;border:1px solid var(--rule);border-radius:8px;background:var(--raise);display:grid;grid-template-columns:44px 1fr;column-gap:16px;row-gap:6px;max-width:760px}
+.empty h3{font-size:17px;font-weight:700}
+.empty p{font-size:14px;color:var(--ink2);line-height:1.5}
+.empty .acts{display:flex;gap:8px;margin-top:10px}
+.stale .subj b,.stale .repo{color:var(--mute)}
+
+/* ---------- phone ---------- */
+.ph-stage{display:flex;gap:40px;justify-content:center;padding:28px 28px 34px;background:var(--deep)}
+.ph-col{display:flex;flex-direction:column;gap:12px;align-items:center}
+.ph-col>.note{font-size:13px;font-weight:700}
+.ph-col>.note span{font-weight:500;color:var(--mute);margin-left:6px}
+.ph{width:390px;height:844px;border-radius:40px;border:1px solid var(--edge);background:var(--gnd);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 10px 30px var(--shade);font-size:15px}
+.ph-sb{height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:4px 30px 0;font-size:14px;font-weight:700}
+.ph-sb small{font-size:12px;font-weight:600;color:var(--mute)}
+.ph-top{min-height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 18px}
+.ph-top h1{font:700 21px/1.3 "Hanken Grotesk"}
+.ph-top .back{display:flex;align-items:center;gap:4px;font-size:15px;font-weight:600;height:44px;padding-right:8px}
+.ph-top .right{margin-left:auto;font-size:13px;color:var(--mute);font-weight:600}
+.ph-proj{flex:none;display:flex;gap:6px;padding:0 18px 10px}
+.ph-proj .tab{height:34px;font-size:13.5px}
+.ph-band{flex:none;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.ph-sts{flex:none;display:flex;gap:6px;padding:10px 18px;overflow:hidden;border-bottom:1px solid var(--rule)}
+.ph-sts .tab{height:34px;flex:none;font-size:13.5px}
+.ph-list{flex:1;overflow:hidden;padding:0 18px}
+.ph-iss{display:flex;align-items:center;gap:8px;height:40px;font-size:13px;font-weight:700;color:var(--ink2);border-bottom:1px solid var(--rule2)}
+.ph-iss .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);font-size:14px}
+.ph-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;align-items:center;min-height:64px;border-bottom:1px solid var(--rule2);padding:6px 0 6px 18px;position:relative}
+.ph-row::before{content:"";position:absolute;left:6px;top:0;bottom:50%;width:2px;background:var(--rule)}
+.ph-row::after{content:"";position:absolute;left:6px;top:50%;width:8px;height:2px;background:var(--rule)}
+.ph-row .subj b{font-size:15px}
+.ph-row .subj small{font-size:13px}
+.ph-row .r{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.ph-row.sel{background:var(--raise);margin:0 -18px;padding-left:36px;padding-right:18px}
+.ph-row.sel::before,.ph-row.sel::after{left:24px}
+.ph-tabs{flex:none;height:82px;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:22px;background:var(--deep)}
+.ph-tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:600;color:var(--ink2)}
+.ph-tabs a .ln{width:20px;opacity:.3}
+.ph-tabs a.on{color:var(--ink)}
+.ph-tabs a.on .ln{opacity:1}
+.ph-tabs a b{font-weight:600;color:var(--mute);margin-left:3px}
+.ph-body{flex:1;overflow:hidden;padding:4px 20px 0}
+.ph-body .kind{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--mute)}
+.ph-body .kind i{width:10px;height:10px;border-radius:50%;background:var(--gh)}
+.ph-body h2{font:700 22px/1.3 "Hanken Grotesk";margin-top:8px;text-wrap:balance}
+.ph-body .by{font-size:13px;color:var(--mute);margin-top:6px}
+.ph-body .k{margin-top:12px}
+.kv{display:grid;grid-template-columns:22px 1fr;column-gap:8px;row-gap:8px;margin-top:8px;align-items:start}
+.kv .ic{padding-top:2px}
+.kv b{font-size:14.5px;font-weight:700;display:block}
+.kv span{font-size:13px;color:var(--mute);display:block;margin-top:2px;line-height:1.4}
+.quote{margin-top:8px;font-size:13px;line-height:1.5;color:var(--ink2);border-left:2px solid var(--rule);padding-left:12px}
+.quote code{font-size:12px;font-family:ui-monospace,monospace;color:var(--ink)}
+.route{margin-top:8px;background:var(--raise);border:1px solid var(--rule);border-radius:6px;padding:4px 14px}
+.route .row{display:flex;align-items:center;gap:10px;min-height:28px;font-size:13.5px}
+.route .row em{font-style:normal;color:var(--mute);margin-left:auto;font-size:12.5px;white-space:nowrap}
+.ph-dock{flex:none;padding:12px 20px 14px;border-top:1px solid var(--rule);background:var(--deep);display:flex;flex-direction:column;gap:8px}
+.ph-dock .btn{height:52px;justify-content:center;font-size:16px;width:100%}
+.ph-dock .btn.p{height:56px;font-size:17px}
+.ph-dock .two{display:flex;gap:8px}
+.ph-dock .two .btn{flex:1}
+</style></head>
+<body data-view="desk">
+<header class="mk-bar"><strong>Mesa · Proyectos</strong><span class="mk-sub">maqueta · A · Línea del proyecto</span><div class="mk-seg" role="group" aria-label="Vista"><button type="button" data-show="desk" aria-pressed="false">DRE · estación</button><button type="button" data-show="spur" aria-pressed="false">Sin issue</button><button type="button" data-show="prospec" aria-pressed="false">Prospec</button><button type="button" data-show="empty" aria-pressed="false">Sin PRs</button><button type="button" data-show="limit" aria-pressed="false">GitHub limitado</button><button type="button" data-show="phone" aria-pressed="false">Teléfono</button></div>
+<div class="mk-right"><span>Datos de muestra.</span><div class="mk-seg"><button type="button" data-theme-toggle aria-pressed="false">Grafito (oscuro)</button></div></div></header>
+<section data-v="desk"></section>
+<section data-v="spur"></section>
+<section data-v="prospec"></section>
+<section data-v="empty"></section>
+<section data-v="limit"></section>
+<section data-v="phone"></section>
+<script>
+// ---------- data (real, 2026-11-13; checks, conflicts and GitHub review decisions are sample) ----------
+const DRE_ISS={
+ 484:{t:"Dispositions: screen fixes after review",s:"In Development"},
+ 471:{t:"Dispositions: add a county to each court",s:"In Development"},
+ 483:{t:"Dispositions: hardening after merge",s:"In Development"},
+ 468:{t:"DRE Connect: enable a tenant without a contract number",s:"In QA"},
+ 472:{t:"Only a Super Admin can change a user's state",s:"Sin estado"},
+ 473:{t:"Audit log: certification status and date changes",s:"Sin estado"},
+ 474:{t:"CEU: lock attachments and edits on approved credits",s:"Sin estado"},
+ 475:{t:"Audit log: roster edits on approved courses",s:"Sin estado"}};
+// st: ok = aprobaste, sin merge · blk = bloqueante abierto en tu review · rev = sin tu review · mine = tuya
+// gr: GitHub review decision (sample): ap = aprobada, ch = cambios pedidos, rq = review pendiente
+const DRE=[
+ {r:"frontend",n:610,t:"Super Admin state filter and column on Dispositions",a:"jrodriguez",d:1,i:484,st:"ok",tk:"t141",gr:"ap"},
+ {r:"frontend",n:609,t:"Courts cover several counties on Disposition",a:"jrodriguez",d:1,i:471,st:"ok",tk:"t140",gr:"ap"},
+ {r:"backend",n:490,t:"Super Admin state filter, lighter evaluation list",a:"jrodriguez",d:1,i:484,st:"ok",tk:"t139",gr:"ap"},
+ {r:"backend",n:489,t:"Counties as a platform module; a disposition court",a:"jrodriguez",d:1,i:471,st:"ok",tk:"t138",gr:"ap"},
+ {r:"frontend",n:608,t:"Disposition screen fixes: module-off gating",a:"jrodriguez",d:1,i:484,st:"blk",tk:"t137",ck:"bad",gr:"ch"},
+ {r:"backend",n:488,t:"Disposition hardening: never fail a submit",a:"jrodriguez",d:1,i:483,st:"ok",tk:"t136",gr:"ap"},
+ {r:"backend",n:487,t:"Bump fast-xml-parser and @aws-sdk/xml-builder",a:"dependabot",d:2,st:"ok",tk:"t120",gr:"ap",dep:1},
+ {r:"backend",n:484,t:"Drop the transitional contractVerified field",a:"jrodriguez",d:3,i:468,st:"blk",draft:1,tk:"t103",ck:"run",gr:"ch"},
+ {r:"backend",n:482,t:"Lock the evidence on approved CEU credits",a:"7AIDEV",d:3,i:474,st:"ok",tk:"t77",gr:"ap"},
+ {r:"frontend",n:600,t:"State is read-only on the edit-user form",a:"7AIDEV",d:3,i:472,st:"ok",tk:"t75",gr:"ap"},
+ {r:"backend",n:481,t:"Only a Super Admin can change a user's state",a:"7AIDEV",d:3,i:472,st:"ok",tk:"t76",gr:"ap"},
+ {r:"backend",n:480,t:"Audit certification status and date changes",a:"7AIDEV",d:3,i:473,st:"ok",tk:"t74",gr:"ap"},
+ {r:"backend",n:479,t:"Record who and what changed when a course roster changes",a:"7AIDEV",d:3,i:475,st:"ok",tk:"t72",gr:"ap"},
+ {r:"frontend",n:598,t:"Release 9 November 2026 (v1.15.0)",a:"jrodriguez",d:4,st:"ok",tk:"t61",rel:1,gr:"ap"},
+ {r:"backend",n:477,t:"Release 9 November 2026 (v1.15.0)",a:"jrodriguez",d:4,st:"ok",tk:"t62",rel:1,gr:"ap"},
+ {r:"frontend",n:587,t:"Fix sign-in sending users to Access Denied",a:"7AIDEV",d:8,st:"ok",tk:"t7",gr:"ap"},
+ {r:"frontend",n:586,t:"Let Super Admins edit the default recertification",a:"7AIDEV",d:8,st:"ok",tk:"t8",gr:"ap"},
+ {r:"frontend",n:567,t:"Fail the build if emitted HTML would ship an inline script",a:"7AIDEV",d:13,st:"ok",tk:"t2",gr:"ap"},
+ {r:"frontend",n:566,t:"View-as lands on Access Denied instead of the dashboard",a:"7AIDEV",d:13,st:"ok",tk:"t4",gr:"ap"},
+ {r:"infra",n:70,t:"Not-found page in place of S3's raw XML error",a:"7AIDEV",d:13,st:"ok",tk:"t5",gr:"ap"},
+ {r:"frontend",n:565,t:"Static not-found page in place of S3's raw XML error",a:"7AIDEV",d:13,st:"ok",tk:"t6",gr:"ap"},
+ {r:"backend",n:452,t:"Seeders: never create or change accounts in production",a:"7AIDEV",d:14,st:"rev",ck:"conf",gr:"rq"},
+ {r:"backend",n:439,t:"Labs: backfill Midwest Regional Forensic Laboratory",a:"7AIDEV",d:15,st:"rev",gr:"rq"},
+ {r:"frontend",n:546,t:"Approval dashboard: open evaluations in the same tab",a:"7AIDEV",d:16,st:"rev",gr:"rq"},
+ {r:"frontend",n:492,t:"PWA: report failed service-worker update checks",a:"7AIDEV",d:25,st:"rev",gr:"rq"},
+ {r:"infra",n:61,t:"Bastion: remove tweak and the terraform key pair",a:"acorrea",d:29,st:"mine",gr:"rq"}];
+const PRO_ISS={219:{t:"Salesperson workspace: estimates pipeline, estimate detail and team queue",s:"In QA"}};
+const PRO=[
+ {r:"backend",n:46,t:"Manager assign and reassign, salesperson availability",a:"ialfaro",d:0,i:219,st:"ok",tk:"t156",gr:"ap",ck:"run"},
+ {r:"backend",n:44,t:"Cortex: go-live mission for December 7 and the subscription decision",a:"dsanchez",d:4,st:"ok",tk:"t70",gr:"ap"},
+ {r:"backend",n:3,t:"Create staging PR",a:"github-actions",d:227,train:1},
+ {r:"frontend",n:2,t:"Create staging PR",a:"github-actions",d:227,train:1},
+ {r:"admin",n:1,t:"Create staging PR",a:"github-actions",d:67,train:1}];
+
+// ---------- icons ----------
+const I={
+ check:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5l3 3 6-7"/></svg>',
+ stop:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="5.2"/><path d="M4.4 7h5.2"/></svg>',
+ eye:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 7s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4-5.5-4-5.5-4z"/><circle cx="7" cy="7" r="1.6"/></svg>',
+ mine:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="5" r="2.4"/><path d="M2.5 12.5c.8-2.2 2.5-3.3 4.5-3.3s3.7 1.1 4.5 3.3"/></svg>',
+ issue:'<svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4.6"/><circle cx="6" cy="6" r="1.2" fill="currentColor" stroke="none"/></svg>',
+ ckok:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.5l2.5 2.5L10 3"/></svg>',
+ ckbad:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 3l6 6M9 3L3 9"/></svg>',
+ ckrun:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1.5 2.2"><circle cx="6" cy="6" r="4.4"/></svg>',
+ conf:'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3h3l2 6h3M2 9h3l2-6h3"/></svg>',
+ ext:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h4v4M12 2L6.5 7.5M10 8.5V12H2V4h3.5"/></svg>',
+ train:'<svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 7h20M15 2l5 5-5 5"/></svg>',
+ back:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>'};
+const brk='<svg width="32" height="14" viewBox="0 0 32 14" aria-hidden="true"><path d="M2 7H11" class="sv-ln s-gh" stroke-width="4"/><path d="M21 7H30" class="sv-ln s-gh" stroke-width="4"/><path d="M13 11L19 3" class="sv-ln s-ink" stroke-width="2"/></svg>';
+const ringI='<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" class="sv-ring" style="stroke-width:2.6"/></svg>';
+const dotI='<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" class="sv-tick"/></svg>';
+
+const ST_TAG={ok:I.check+'Aprobaste · sin merge',blk:I.stop+'1 bloqueante',rev:I.eye+'Sin tu review',mine:I.mine+'Tuya'};
+function stTag(p,off){
+ if(off)return '<span class="st off">Sin datos</span>';
+ const out=[];
+ if(p.draft)out.push('<span class="st draft">Borrador</span>');
+ if(p.st)out.push('<span class="st'+(p.st==="blk"?' blk':p.st==="ok"?' ok':'')+'">'+ST_TAG[p.st]+'</span>');
+ return out.join("");}
+function ck(p,off){
+ if(off)return '<span class="chk">'+I.ckrun+'sin datos</span>';
+ if(p.ck==="bad")return '<span class="chk bad">'+I.ckbad+'fallan 1 de 4</span>';
+ if(p.ck==="run")return '<span class="chk">'+I.ckrun+'corriendo</span>';
+ if(p.ck==="conf")return '<span class="chk bad">'+I.conf+'conflictos</span>';
+ return '<span class="chk">'+I.ckok+'pasan</span>';}
+function gr(p){
+ if(p.gr==="ap")return '<span class="rv">'+I.check+'Aprobada</span>';
+ if(p.gr==="ch")return '<span class="rv ch">'+I.stop+'Cambios pedidos</span>';
+ return '<span class="rv">Review pendiente</span>';}
+const tk=p=>p.tk?'<span class="lk cl">'+p.tk+'</span>':'<span class="lk"><small>sin ticket</small></span>';
+const ago=d=>d===0?'hoy':d===1?'hace 1 día':'hace '+d+' días';
+
+// ---------- shell ----------
+function rail(health){
+ const h=health?'<div class="rl-health"><div class="lbl" style="margin-bottom:2px">Fuentes</div><div class="rl-src bad">'+brk+'GitHub<small>11:05</small></div><div class="rl-src"><span class="ln sl"></span>Slack<small>al día</small></div><div class="rl-src"><span class="ln bc"></span>Basecamp<small>al día</small></div><div class="rl-src"><span class="ln cl"></span>Claude<small>escucha</small></div></div>':'';
+ return '<aside class="rail"><div class="brand"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><path d="M3 21H12L19 14H25" class="s-gh"/><path d="M3 14H25" stroke="var(--sl)"/><circle cx="19" cy="14" r="3.2" class="sv-ring" style="stroke-width:2"/></svg>Mesa</div><div class="rail-who">Designli · Andrés</div><a class="nav" href="#">Hoy <b>9</b></a><a class="nav" href="#">Tablero <b>22</b></a><a class="nav" href="#">Tickets <b>4</b></a><a class="nav" href="#">Salidas <b>3</b></a><a class="nav" href="#">Calendario <b>5</b></a><a class="nav on" href="#">Proyectos <b>31</b></a>'+h+'<a class="nav foot" href="#">Hecho hoy <b>11</b></a></aside>';}
+function head(path){return '<div class="head"><h1>Proyectos<span>GitHub Project · '+path+'</span></h1><a class="btn sm" href="#">Abrir el board en GitHub '+I.ext+'</a></div>';}
+function projTabs(on,sync){return '<div class="tools"><span class="tab'+(on==="dre"?' on':'')+'">DRE-RMS-backlog <b>26</b></span><span class="tab'+(on==="pro"?' on':'')+'">Prospec <b>'+(on==="empty"?'0':'5')+'</b></span><span class="sync">'+(sync||I.ckok+'<span>Leído de GitHub · <b>hace 2 min</b></span>')+'</span></div>';}
+
+// ---------- the band ----------
+// cfg: {W, L, lines:{repo:y}, st:[{k,x,c,none}], order:{station:[issue...]}, prs, sel, spur:{label,y}, train, dash, empty}
+function band(cfg){
+ const {W,L,lines,st,order,prs,sel}=cfg;const H=cfg.H||232;const spurY=cfg.spurY||196;
+ let s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" font-family="Hanken Grotesk" role="img" aria-label="Línea del proyecto">';
+ for(const [r,y] of Object.entries(lines))s+='<text x="0" y="'+(y+4)+'" font-size="12.5" font-weight="600" class="sv-mute">'+r+'</text>';
+ const dash=cfg.dash?' sv-dash':'';
+ s+='<g class="sv-ln'+(cfg.empty?' dimmed':'')+'" style="stroke-width:5">';
+ for(const y of Object.values(lines))s+='<path d="M'+L+' '+y+'H'+W+'" class="s-gh'+dash+'"/>';
+ s+='</g>';
+ // the spur: PRs with no issue on the board, branching off the lowest line
+ const lastY=Math.max(...Object.values(lines));
+ const loose=prs.filter(p=>!p.i&&!p.train);
+ if(loose.length&&!cfg.empty){
+  const end=L+60+loose.length*24+10;const on=sel==="spur";
+  s+='<g'+(on?'':' class="dimmed"')+'><path d="M'+(L+10)+' '+lastY+'l'+(spurY-lastY)+' '+(spurY-lastY)+'H'+end+'" class="sv-ln s-gh'+dash+'" style="stroke-width:5"/>';
+  let sx=L+60;loose.forEach(p=>{s+='<circle cx="'+sx+'" cy="'+spurY+'" r="5" class="sv-tick'+(p.st==="rev"||p.st==="mine"?' you':'')+'"/>';sx+=24;});
+  s+='<text x="'+(end+14)+'" y="'+(spurY+4)+'" font-size="13" font-weight="700" class="sv-txt">Sin issue</text><text x="'+(end+80)+'" y="'+(spurY+4)+'" font-size="12.5" font-weight="600" class="sv-mute">'+cfg.spurNote+'</text></g>';}
+ // the release train: develop to staging, one dashed track
+ if(cfg.train){const tr=prs.filter(p=>p.train);const y=spurY;const x0=cfg.trainX;
+  s+='<path d="M'+x0+' '+lastY+'l'+(y-lastY)+' '+(y-lastY)+'H'+(x0+200)+'" class="sv-ln s-gh" style="stroke-width:5;stroke-dasharray:10 7;stroke-linecap:butt"/>';
+  tr.forEach((p,k)=>{s+='<circle cx="'+(x0+(y-lastY)+30+k*24)+'" cy="'+y+'" r="5" class="sv-tick"/>';});
+  s+='<text x="'+(x0+214)+'" y="'+(y+4)+'" font-size="13" font-weight="700" class="sv-txt">Tren a staging</text><text x="'+(x0+322)+'" y="'+(y+4)+'" font-size="12.5" font-weight="600" class="sv-mute">'+tr.length+' PRs «Create staging PR», una por repo</text>';}
+ // stations
+ for(const t of st){
+  const on=t.k===sel;const quiet=!on&&t.quiet;
+  s+='<text x="'+t.x+'" y="20" font-size="15" font-weight="700" class="sv-txt"'+(quiet?' opacity=".6"':'')+'>'+t.k+'</text>';
+  s+='<text x="'+t.x+'" y="38" font-size="12.5" font-weight="600" class="sv-mute">'+t.c+'</text>';
+  const top=Math.min(...Object.values(lines))-18,hgt=lastY-top+18;
+  s+='<rect x="'+t.x+'" y="'+top+'" width="22" height="'+hgt+'" rx="11" class="sv-cap'+(on?' on':'')+'"'+(t.none?' stroke-dasharray="4 4"':'')+'/>';
+  if(on)s+='<path d="M'+(t.x-4)+' '+(top+hgt+12)+'h30" class="sv-ln s-ink" style="stroke-width:3"/>';}
+ // issues: a stop per issue after its station; PRs are ticks on their repo's line
+ const groups={};for(const p of prs)if(p.i)(groups[p.i]=groups[p.i]||[]).push(p);
+ for(const [stk,list] of Object.entries(order)){
+  const t=st.find(x=>x.k===stk);let x=t.x+50;const dim=stk!==sel;
+  s+='<g'+(dim?' class="dimmed"':'')+'>';
+  for(const n of list){
+   const ps=groups[n],repos=[...new Set(ps.map(p=>p.r))];
+   const byRepo={};ps.forEach(p=>(byRepo[p.r]=byRepo[p.r]||[]).push(p));
+   const multi=repos.length>1;
+   if(multi){const ys=repos.map(r=>lines[r]);s+='<path d="M'+x+' '+Math.min(...ys)+'V'+Math.max(...ys)+'" class="sv-ln s-ink" style="stroke-width:3"/>';}
+   for(const r of repos){byRepo[r].forEach((p,k)=>{const cx=x+k*16,cy=lines[r];
+    if(multi&&k===0)s+='<circle cx="'+cx+'" cy="'+cy+'" r="7" class="sv-ring"/>';
+    else s+='<circle cx="'+cx+'" cy="'+cy+'" r="5" class="sv-tick'+(p.draft?' draft':'')+'"/>';
+    if(p.st==="blk")s+='<path d="M'+(cx-5)+' '+(cy-13)+'h10" class="sv-ln s-ink" style="stroke-width:2.5"/>';});}
+   s+='<text x="'+(x-8)+'" y="'+(lastY+30)+'" font-size="12" font-weight="700" class="sv-txt">'+(cfg.pre||'')+n+'</text>';
+   x+=Math.max(...repos.map(r=>byRepo[r].length))*16+56;}
+  s+='</g>';}
+ // legend
+ if(cfg.legend!==false)s+='<g transform="translate('+(W-372)+','+(H-6)+')" font-size="12" font-weight="600" class="sv-mute"><circle cx="5" cy="-4" r="5" class="sv-tick"/><text x="16" y="0">PR</text><circle cx="50" cy="-4" r="5" class="sv-tick you"/><text x="61" y="0">te toca</text><circle cx="124" cy="-4" r="6" class="sv-ring"/><text x="136" y="0">issue en 2 repos</text><path d="M252 -12h10" class="sv-ln s-ink" style="stroke-width:2.5"/><text x="268" y="0">bloqueante</text></g>';
+ return s+'</svg>';}
+
+const DRE_ST=[{k:"Sin estado",x:96,c:"4 issues · 5 PRs",none:1},{k:"To-do",x:356,c:"44 issues · sin PRs",quiet:1},{k:"In Development",x:480,c:"3 issues · 6 PRs"},{k:"In QA",x:770,c:"1 issue · 1 PR"},{k:"Approved by QA",x:900,c:"sin PRs",quiet:1},{k:"Ready for UAT",x:1060,c:"sin PRs",quiet:1}];
+const DRE_ORDER={"Sin estado":[472,473,474,475],"In Development":[484,471,483],"In QA":[468]};
+const DRE_LINES={backend:84,frontend:106,infra:128};
+function dreBand(sel,o){return band(Object.assign({W:1200,L:96,lines:DRE_LINES,st:DRE_ST,order:DRE_ORDER,prs:DRE,sel,pre:"GHI-",spurNote:"14 PRs · releases, dependabot y fixes sin issue"},o||{}));}
+
+// ---------- A rows ----------
+function prRow(p,o){o=o||{};
+ return '<div class="a-grid a-pr'+(o.sel?' sel':'')+(o.off?' stale':'')+'"><div class="a-who"><div class="subj"><b>#'+p.n+' · '+p.t+'</b><small>'+(o.off?'Dato de las 10:38 · ':'')+p.a+' · abierta '+ago(p.d)+'</small></div></div><span class="repo">'+(o.repoMap||REPO_DRE)[p.r]+'</span><span>'+ck(p,o.off)+'</span><span>'+(o.off?'<span class="rv">sin datos</span>':gr(p))+'</span><span class="tags">'+stTag(p,o.off)+'</span><span class="tags">'+tk(p)+'</span></div>';}
+const REPO_DRE={backend:"dre-backend",frontend:"dre-frontend",infra:"dre-infra"};
+const REPO_PRO={backend:"prospec-backend",frontend:"prospec-frontend",admin:"prospec-admin"};
+function issHead(n,ps,iss,o){o=o||{};const repos=[...new Set(ps.map(p=>p.r))];
+ return '<div class="a-iss"><span class="ic">'+(repos.length>1?ringI:I.issue)+'</span><span class="n">'+(o.pre||'GHI-')+n+'</span><span class="t">'+iss.t+'</span><span class="meta">'+ps.length+(ps.length>1?' PRs':' PR')+' · '+repos.map(r=>(o.repoMap||REPO_DRE)[r]).join(' + ')+'<span class="bst'+(iss.s==="Sin estado"?' none':'')+'">'+iss.s+'</span></span></div>';}
+const COLS='<div class="a-grid a-cols lbl"><span style="padding-left:30px">Issue y PR</span><span>Repo</span><span>Checks</span><span>Review en GitHub</span><span>Tu review en Mesa</span><span>Ticket</span></div>';
+
+function frame(inner,o){o=o||{};return '<div class="app">'+rail(o.health)+'<main class="main">'+inner+'<p class="foot-note">Datos de muestra: PRs, issues del board y tickets reales al 13 nov; checks, conflictos y decisiones de review de ejemplo.</p></main></div>';}
+
+// 1 · desk: DRE, In Development selected
+function vDesk(){
+ let rows='';
+ for(const n of [484,471,483]){const ps=DRE.filter(p=>p.i===n);rows+=issHead(n,ps,DRE_ISS[n])+ps.map(p=>prRow(p,{sel:p.n===608})).join('');}
+ return frame(head('7-Arrow / DRE-RMS-backlog')+projTabs("dre")+'<div class="a-band">'+dreBand("In Development")+'</div>'+
+ '<div class="a-sel"><h2>In Development</h2><span>3 issues con PRs abiertas · 6 PRs · 1 bloqueante tuyo</span><div class="tabs"><span class="tab on">Esta estación <b>6</b></span><span class="tab">Todo el proyecto <b>26</b></span><span class="tab">Te tocan <b>5</b></span></div></div>'+
+ '<div class="a-list">'+COLS+rows+'</div>');}
+
+// 2 · spur: DRE, "Sin issue" selected, capped
+function vSpur(){
+ const loose=DRE.filter(p=>!p.i);
+ const you=loose.filter(p=>p.st==="rev"||p.st==="mine"),rel=loose.filter(p=>p.rel),rest=loose.filter(p=>!p.rel&&p.st==="ok");
+ let rows='<div class="grp">Te tocan<small>'+you.length+'</small><span class="rule"></span></div>'+you.slice(0,3).map(p=>prRow(p)).join('')+'<a class="more" href="#">'+(you.length-3)+' más que te tocan</a>';
+ rows+='<div class="grp">Release v1.15.0<small>backend #477 + frontend #598 · las dos aprobadas</small><span class="rule"></span></div>';
+ rows+='<div class="grp">Aprobaste, sin merge<small>'+rest.length+'</small><span class="rule"></span></div><a class="more" href="#" style="margin-top:0">Ver las '+rest.length+': dependabot #487, sign-in #587, recertification #586…</a>';
+ return frame(head('7-Arrow / DRE-RMS-backlog')+projTabs("dre")+'<div class="a-band">'+dreBand("spur")+'</div>'+
+ '<div class="a-sel"><h2>Sin issue en el board</h2><span>14 PRs que no cuelgan de ninguna issue · 5 te tocan</span><div class="tabs"><span class="tab on">Esta rama <b>14</b></span><span class="tab">Todo el proyecto <b>26</b></span><span class="tab">Te tocan <b>5</b></span></div></div>'+
+ '<div class="a-list">'+COLS+rows+'</div>');}
+
+// 3 · Prospec: an issue in QA, a PR with no issue, the release train
+const PRO_ST=[{k:"Todo",x:96,c:"36 issues · sin PRs",quiet:1},{k:"In Development",x:250,c:"1 issue · sin PRs",quiet:1},{k:"Pending PR approval",x:420,c:"sin issues",quiet:1},{k:"Ready for QA",x:610,c:"sin issues",quiet:1},{k:"In QA",x:760,c:"2 issues · 1 PR"},{k:"Ready for UAT",x:960,c:"64 issues · sin PRs",quiet:1}];
+function vProspec(){
+ const b=band({W:1200,L:96,lines:{backend:84,frontend:106,admin:128},st:PRO_ST,order:{"In QA":[219]},prs:PRO,sel:"In QA",pre:"#",spurNote:"1 PR · docs de Cortex",train:1,trainX:640});
+ const p46=PRO[0],p44=PRO[1],tr=PRO.filter(p=>p.train);
+ let rows=issHead(219,[p46],PRO_ISS[219],{pre:"#",repoMap:REPO_PRO})+prRow(p46,{repoMap:REPO_PRO});
+ rows+='<div class="grp">Sin issue<small>1</small><span class="rule"></span></div>'+prRow(p44,{repoMap:REPO_PRO});
+ rows+='<div class="grp">Tren a staging<small>develop → staging · las abre el bot, no piden review</small><span class="rule"></span></div>';
+ rows+='<div class="train"><div class="subj"><b>'+I.train.replace('<svg','<svg style="display:inline;vertical-align:-2px;margin-right:8px"')+'3 PRs «Create staging PR»</b><small>github-actions · prospec-backend #3 y prospec-frontend #2 abiertas desde el 31 mar, prospec-admin #1 desde el 7 sep</small></div><div class="tags"><span class="repo">backend #3</span><span class="repo">frontend #2</span><span class="repo">admin #1</span><a class="btn sm" href="#">Abrir en GitHub '+I.ext+'</a></div></div>';
+ return frame(head('designli / Prospec')+projTabs("pro")+'<div class="a-band">'+b+'</div>'+
+ '<div class="a-sel"><h2>In QA</h2><span>1 issue con PR abierta · la otra (#245) ya no tiene PRs</span><div class="tabs"><span class="tab on">Esta estación <b>1</b></span><span class="tab">Todo el proyecto <b>5</b></span><span class="tab">Te tocan <b>0</b></span></div></div>'+
+ '<div class="a-list">'+COLS+rows+'</div>');}
+
+// 4 · empty: a project with no open PRs (Prospec after the merge, sample)
+function vEmpty(){
+ const b=band({W:1200,L:96,lines:{backend:84,frontend:106,admin:128},st:PRO_ST.map(t=>Object.assign({},t,{c:t.c.replace(/ · .*$/,'')+(t.k==="In QA"?' · sin PRs':''),quiet:1})),order:{},prs:[],sel:"",empty:1,legend:false});
+ return frame(head('designli / Prospec')+projTabs("empty")+'<div class="a-band">'+b+'</div>'+
+ '<div class="a-sel"><h2>Nada abierto</h2><span>0 PRs en prospec-backend, prospec-frontend y prospec-admin</span></div>'+
+ '<div class="empty">'+dotI.replace('width="16" height="16"','width="40" height="40"')+'<div><h3>Prospec no tiene PRs abiertas.</h3><p>La última se fusionó hoy a las 10:12: prospec-backend #46, «Manager assign and reassign». El board sigue: 36 issues en Todo y 2 en In QA.</p><div class="acts"><a class="btn sm" href="#">Abrir el board en GitHub '+I.ext+'</a><a class="btn sm" href="#">Ver DRE-RMS-backlog · 26</a></div></div></div>');}
+
+// 5 · GitHub rate-limited (Estados B: the rail says it, rows are marked, no alert)
+function vLimit(){
+ let rows='';
+ for(const n of [484,471]){const ps=DRE.filter(p=>p.i===n);rows+=issHead(n,ps,DRE_ISS[n])+ps.map(p=>prRow(p,{off:1})).join('');}
+ return frame(head('7-Arrow / DRE-RMS-backlog')+projTabs("dre",brk+'<span>GitHub en pausa hasta las <b>11:05</b> · lo que ves es de las 10:38</span>')+'<div class="a-band">'+dreBand("In Development",{dash:1})+'</div>'+
+ '<div class="a-sel"><h2>In Development</h2><span>Estado del board de las 10:38 · checks y reviews sin datos hasta las 11:05</span><div class="tabs"><span class="tab on">Esta estación <b>6</b></span><span class="tab">Todo el proyecto <b>26</b></span></div></div>'+
+ '<div class="a-list">'+COLS+rows+'</div>',{health:1});}
+
+// 6 · phone (Teléfono A · Corredor)
+function phTabs(){return '<nav class="ph-tabs"><a href="#"><span class="ln gh"></span><span>Hoy<b>9</b></span></a><a href="#"><span class="ln gh"></span><span>Tablero</span></a><a href="#"><span class="ln gh"></span><span>Tickets</span></a><a href="#"><span class="ln gh"></span><span>Salidas</span></a><a href="#" class="on"><span class="ln gh"></span><span>Proyectos</span></a></nav>';}
+function corridor(){
+ // the band collapsed to the selected station: lines solid in, dimmed after, neighbours named at the edges
+ const W=390,lines={backend:62,frontend:84,infra:106};let s='<svg width="'+W+'" height="150" viewBox="0 0 '+W+' 150" font-family="Hanken Grotesk">';
+ s+='<text x="18" y="22" font-size="12" font-weight="600" class="sv-mute">‹ To-do</text><text x="'+(W-18)+'" y="22" font-size="12" font-weight="600" class="sv-mute" text-anchor="end">In QA ›</text>';
+ s+='<text x="'+(W/2)+'" y="22" font-size="15" font-weight="700" class="sv-txt" text-anchor="middle">In Development</text>';
+ for(const y of Object.values(lines)){s+='<path d="M0 '+y+'H'+W+'" class="sv-ln s-gh" style="stroke-width:5"/>';}
+ s+='<rect x="30" y="44" width="22" height="80" rx="11" class="sv-cap on"/>';
+ const iss=[[484,96],[471,196],[483,286]];
+ for(const [n,x] of iss){const ps=DRE.filter(p=>p.i===n);const repos=[...new Set(ps.map(p=>p.r))];const byRepo={};ps.forEach(p=>(byRepo[p.r]=byRepo[p.r]||[]).push(p));
+  if(repos.length>1){s+='<path d="M'+x+' '+lines[repos[0]]+'V'+lines[repos[repos.length-1]]+'" class="sv-ln s-ink" style="stroke-width:3"/>';}
+  for(const r of repos)byRepo[r].forEach((p,k)=>{const cx=x+k*16,cy=lines[r];s+=(repos.length>1&&k===0)?'<circle cx="'+cx+'" cy="'+cy+'" r="7" class="sv-ring"/>':'<circle cx="'+cx+'" cy="'+cy+'" r="5" class="sv-tick"/>';if(p.st==="blk")s+='<path d="M'+(cx-5)+' '+(cy-13)+'h10" class="sv-ln s-ink" style="stroke-width:2.5"/>';});
+  s+='<text x="'+(x-8)+'" y="136" font-size="12" font-weight="700" class="sv-txt">GHI-'+n+'</text>';}
+ return s+'</svg>';}
+function phRow(p,sel){return '<div class="ph-row'+(sel?' sel':'')+'"><div class="subj"><b>'+REPO_DRE[p.r].replace('dre-','')+' #'+p.n+'</b><small>'+p.t+'</small></div><div class="r">'+(p.st==="blk"?'<span class="st blk">'+I.stop+'1 bloqueante</span>':'<span class="st ok">'+I.check+'Aprobaste</span>')+'<span class="lk cl">'+p.tk+'</span></div></div>';}
+function vPhone(){
+ const sb='<div class="ph-sb"><span>10:42</span><small>vía túnel · Mesa en tu PC</small></div>';
+ // frame 1: the corridor
+ let list='';for(const n of [484,471]){const ps=DRE.filter(p=>p.i===n);list+='<div class="ph-iss">'+([...new Set(ps.map(p=>p.r))].length>1?ringI:I.issue)+'GHI-'+n+' <span class="t">'+DRE_ISS[n].t+'</span></div>'+ps.map(p=>phRow(p,p.n===608)).join('');}
+ const f1='<div class="ph">'+sb+'<div class="ph-top"><h1>Proyectos</h1><span class="right">hace 2 min</span></div><div class="ph-proj"><span class="tab on">DRE-RMS-backlog <b>26</b></span><span class="tab">Prospec <b>5</b></span></div><div class="ph-band">'+corridor()+'</div><div class="ph-sts"><span class="tab">Sin estado <b>5</b></span><span class="tab on">In Development <b>6</b></span><span class="tab">In QA <b>1</b></span><span class="tab">Sin issue <b>14</b></span></div><div class="ph-list">'+list+'</div>'+phTabs()+'</div>';
+ // frame 2: one PR full screen
+ const f2='<div class="ph">'+sb+'<div class="ph-top"><a class="back" href="#">'+I.back+'In Development</a><span class="right">1 de 6</span></div><div class="ph-body"><div class="kind"><i></i>dre-frontend · PR #608</div><h2>Disposition screen fixes: module-off gating</h2><div class="by">jrodriguez · abierta hace 1 día · hacia develop</div>'+
+ '<div class="lbl k">Estado</div><div class="kv"><span class="ic">'+I.stop+'</span><div><b>1 bloqueante abierto en tu review</b><span>Esperando al autor desde ayer</span><div class="quote"><code>disposition.constant.ts:79</code> · Un registro cuya única respuesta es None vuelve como <code>no_impairment_charges</code> y aquí nada lo etiqueta.</div></div><span class="ic">'+I.ckbad+'</span><div><b>Checks fallan · cambios pedidos</b><span>1 de 4 · build · sin conflictos</span></div></div>'+
+ '<div class="lbl k">Issue en el board</div><div class="route"><div class="row">'+ringI+'<b>GHI-484</b><em>In Development</em></div><div class="row" style="color:var(--ink2)">Va con backend #490 y frontend #610<em>aprobadas</em></div></div>'+
+ '<div class="lbl k">Ticket en Mesa</div><div class="route"><div class="row"><span class="lk cl">t137</span>Review dre-frontend#608<em>cerrado</em></div></div></div>'+
+ '<div class="ph-dock"><a class="btn p" href="#">Abrir en GitHub '+I.ext+'</a><div class="two"><a class="btn" href="#">Ver ticket t137</a><a class="btn" href="#">Revisar de nuevo</a></div></div>'+phTabs()+'</div>';
+ // frame 3: the spur, capped
+ const loose=DRE.filter(p=>!p.i);const you=loose.filter(p=>p.st==="rev"||p.st==="mine");
+ let l3='<div class="ph-iss">Te tocan <span class="t" style="color:var(--mute);font-weight:600">· 5</span></div>'+you.slice(0,3).map(p=>'<div class="ph-row"><div class="subj"><b>'+REPO_DRE[p.r].replace('dre-','')+' #'+p.n+'</b><small>'+p.t+'</small></div><div class="r"><span class="st">'+(p.st==="mine"?I.mine+'Tuya':I.eye+'Sin tu review')+'</span><span class="lk"><small>'+p.d+' días</small></span></div></div>').join('')+'<a class="more" href="#">2 más que te tocan</a>';
+ l3+='<div class="ph-iss" style="margin-top:6px">Release v1.15.0 <span class="t" style="color:var(--mute);font-weight:600">· backend #477 + frontend #598</span></div><div class="ph-iss">Aprobaste, sin merge <span class="t" style="color:var(--mute);font-weight:600">· 7</span></div><a class="more" href="#">Ver las 7</a>';
+ const f3='<div class="ph">'+sb+'<div class="ph-top"><h1>Proyectos</h1><span class="right">hace 2 min</span></div><div class="ph-proj"><span class="tab on">DRE-RMS-backlog <b>26</b></span><span class="tab">Prospec <b>5</b></span></div><div class="ph-sts"><span class="tab">In Development <b>6</b></span><span class="tab">In QA <b>1</b></span><span class="tab on">Sin issue <b>14</b></span></div><div class="ph-list">'+l3+'</div>'+phTabs()+'</div>';
+ return '<div class="ph-stage"><div class="ph-col"><div class="note">Proyecto<span>la línea se recoge al corredor de la estación</span></div>'+f1+'</div><div class="ph-col"><div class="note">Una PR<span>pantalla completa</span></div>'+f2+'</div><div class="ph-col"><div class="note">Sin issue<span>lo que te toca primero, el resto plegado</span></div>'+f3+'</div></div>';}
+
+const V={desk:[vDesk,"DRE · In Development"],spur:[vSpur,"DRE · PRs sin issue"],prospec:[vProspec,"Prospec · issue en QA, PR sin issue, tren a staging"],empty:[vEmpty,"Proyecto sin PRs"],limit:[vLimit,"GitHub limitado (Estados B)"],phone:[vPhone,"Teléfono 390 (Teléfono A)"]};
+(function(){var d=document.documentElement,b=document.body,q=new URLSearchParams(location.search);
+for(var k in V)document.querySelector('[data-v="'+k+'"]').innerHTML=V[k][0]();
+if(q.get('v')&&V[q.get('v')])b.dataset.view=q.get('v');if(q.get('theme')==='dark')d.dataset.theme='dark';
+function sync(){document.querySelectorAll('[data-show]').forEach(function(t){t.setAttribute('aria-pressed',String(t.dataset.show===b.dataset.view))});
+document.querySelector('[data-theme-toggle]').setAttribute('aria-pressed',String(d.dataset.theme==='dark'))}
+document.querySelectorAll('[data-show]').forEach(function(t){t.addEventListener('click',function(){b.dataset.view=t.dataset.show;sync()})});
+document.querySelector('[data-theme-toggle]').addEventListener('click',function(){d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';sync()});
+sync()})();
+</script>
+</body></html>
