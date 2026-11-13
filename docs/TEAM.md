@@ -241,7 +241,7 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    and tool-name disguises (`cu''rl`, `c\url`). G10 and the rule that agents never decide are the only barrier until
    improvement 13 (a credential for Andrés's UI). **The same gaps now reach "Permitir esta vez"** (t143 PR5): a local
    process that POSTs `approve` on a card stamps `andres` and creates a grant for the call stored on that card. The real
-   protection is what the card shows: for a command or MCP call the server builds the summary and the call from the
+   protection is what the card shows: for a SendMessage, command or MCP call the server builds the summary and the call from the
    stored input (what is shown is what the grant is hashed from, so a forged card cannot display one call and grant
    another), shows it whole with no height limit, puts the line count in the summary of a multi-line command, and turns
    bidi controls, zero-width characters and every other control or format character into visible `\u{XXXX}`. G10 also
@@ -262,11 +262,17 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
      path; dedup, the rest of the JSON kept, atomic write, refused in the sandbox). The hook answers
      `hookSpecificOutput.retry: true`; the agent retries the exact call, and an allow rule resolves a call before
      auto mode's check (permission-modes, decision order step 1). The decided card records who, when and the rule.
-   - **Permitir esta vez** (Bash, PowerShell and `mcp__*` only, the server's `once` flag on the card; t143 PR5). Any
+   - **Permitir esta vez** (every denied call the guardrails' PreToolUse hook sees except a file edit: `SendMessage`,
+     Bash, PowerShell and `mcp__*`; the server's `once` flag on the card; t143 PR5, widened to SendMessage in t150).
+     The button lets that exact call through once: no rule is written and nothing runs by itself. Any
      session can POST a card, so for these the **server builds the summary and the exact call the card shows** from
-     the stored `tool_input` (the full command, `[sin sandbox]` when flagged, canonical JSON for an MCP call) and
-     ignores the client's text and cwd; the grant is refused when the stored text differs from that or is over 20 000
-     characters (it could not be read whole). Every other tool keeps the old card. On press the server stores a
+     the stored `tool_input` (the full command, `[sin sandbox]` when flagged, canonical JSON for a SendMessage or an
+     MCP call) and ignores the client's text and cwd; the grant is refused when the stored text differs from that or is
+     over 20 000 characters (it could not be read whole). A card that cannot be granted says why in one line (`onceWhy`:
+     a file edit has only its rule path; a tool the hook does not see, such as Read or Agent, could never consume a
+     grant) and offers only Denegar. A SendMessage grant covers the whole canonical input (`to`, `message`, `summary`),
+     so a reworded retry is another call and stays blocked. A SendMessage that a G-rule blocks (G2 retired recipient,
+     G3 length or acknowledgement) is never granted and never consumes the grant. On press the server stores a
      one-shot **grant** when Andrés presses it (`approvals.decide`, actor `andres`; no other route or actor creates
      one). The grant is derived from the stored call, never from the client: the tool, a sha-256 of the call's
      identity (`src/lib/domain/approval-grant.ts`: for Bash and PowerShell the exact `command` plus
@@ -279,8 +285,8 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
      atomic UPDATE (two concurrent retries cannot both match), and the hook answers `permissionDecision: "allow"`.
      The same call a second time, another call, another agent or another session is denied as before. Verified in the
      docs (hooks: allow skips the permission prompt) and with a real auto-mode run: a classifier-denied call passed on
-     the retry after `retry: true` plus a PreToolUse allow. The rails matcher includes `mcp__.*` so any MCP call can
-     be granted; file edits stay on the rule path. A session cannot call the consume route with curl (G10).
+     the retry after `retry: true` plus a PreToolUse allow. The rails matcher includes `SendMessage` and `mcp__.*` so
+     those calls can be granted; file edits stay on the rule path. A session cannot call the consume route with curl (G10).
    - **Denegar**, a timeout, an unreachable Mesa or any crash: no retry, the denial stands, and the card shows how it
      ended. There is no "Lee tus configuraciones" on this card.
    - The only rule Mesa proposes is `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)` for an Edit, Write,
@@ -288,7 +294,7 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
      Windows `G:` is `//g/`). **No rule** (the card offers only Denegar) for: a path outside the worktrees folder, a
      `..`, anything under a protected folder (`.git`, `.config/git`, `.vscode`, `.idea`, `.husky`, `.cargo`,
      `.devcontainer`, `.yarn`, `.mvn`, `.claude`), `settings*.json`, a file in a worktree root, a name with a glob,
-     bracket, parenthesis or space. A Bash, PowerShell or MCP call has no rule: it gets Permitir esta vez. Never `*`, `**`, a drive or a worktree
+     bracket, parenthesis or space. A SendMessage, Bash, PowerShell or MCP call has no rule: it gets Permitir esta vez. Never `*`, `**`, a drive or a worktree
      root. On allow the server also compares the re-derived rule with the one stored on the card (the one Andrés
      saw) and writes nothing when they differ or the card had none.
    - Limits: Claude Code ignores `retry` when the classifier gave no verdict, and writes to protected paths are

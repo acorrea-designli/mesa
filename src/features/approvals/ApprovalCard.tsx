@@ -136,7 +136,7 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
             ) : once ? (
               "Permiso de una sola vez para esta llamada exacta, de este agente y esta sesión; caduca a los 5 minutos"
             ) : (
-              "Sin regla que proponer: solo una edición dentro de un worktree, fuera de .claude y de settings, puede llevarla"
+              `Sin botón de permiso: ${a.onceWhy || "esta llamada no se puede permitir"}`
             )}
           </span>
         </div>
@@ -159,7 +159,7 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
           {a.rule
             ? "Permitir agrega esa regla a settings.local.json; el agente reintenta y el modo automático ya no revisa esa carpeta. No ejecuta la llamada por sí solo."
             : once
-              ? "Permitir esta vez deja pasar solo esta llamada, una vez: el agente la reintenta y cualquier otra, o la misma otra vez, sigue bloqueada. No crea ninguna regla ni ejecuta nada por sí solo."
+              ? "Permitir esta vez deja pasar solo esta llamada exacta, una vez: el agente la reintenta y cualquier otra, o la misma otra vez, sigue bloqueada. No crea ninguna regla ni ejecuta nada por sí solo. Las reglas de Mesa (G) siguen mandando."
               : "Denegar deja el bloqueo como está; el agente sigue sin esa llamada."}
         </p>
       </div>

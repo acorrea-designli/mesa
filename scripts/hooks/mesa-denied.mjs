@@ -2,12 +2,12 @@
 // PermissionDenied hook (t128 part H, docs/TEAM.md § 6.7): a call that auto mode already denied becomes a
 // "Bloqueado por el modo automático" card inside the agent's Mesa ticket (Bash, PowerShell, MCP, Edit, any tool). The hook
 // waits up to 120 s for Andrés when the card can be allowed (the server's answer: a `rule` for an Edit, `once` for a
-// command or MCP call). Any other card can only be denied: the hook returns at once and the card expires on its own:
+// SendMessage, command or MCP call). Any other card can only be denied: the hook returns at once and the card expires on its own:
 //
 //   Permitir esta regla (an Edit card) -> the Mesa server (never this hook, never Claude) derives one narrow Edit rule
 //                          from the stored call and appends it to settings.local.json; this hook then prints retry: true
 //                          so the agent may retry the exact call once.
-//   Permitir esta vez (`once`: Bash, PowerShell, MCP) -> the Mesa server stores a one-shot grant for exactly that call, bound to the
+//   Permitir esta vez (`once`: SendMessage, Bash, PowerShell, MCP) -> the Mesa server stores a one-shot grant for exactly that call, bound to the
 //                          caller and session; this hook marks the grant hint and prints retry: true, and on the retry
 //                          the PreToolUse hook (mesa-guardrails.mjs, after every G-rule) consumes the grant and allows
 //                          that one call. The same call a second time, or any other call, is denied as before.
@@ -86,7 +86,7 @@ export async function denied(input, { timeoutMs = 120_000, pollMs = 2000, waitSe
     });
     id = data.approval?.id ?? data.id;
     if (!id) return null;
-    // The server says what the card can offer: a rule (an Edit) or Permitir esta vez (`once`: a Bash, PowerShell or MCP
+    // The server says what the card can offer: a rule (an Edit) or Permitir esta vez (`once`: a SendMessage, Bash, PowerShell or MCP
     // call whose card shows the exact stored call). A card with neither can only be denied, so there is nothing to wait
     // for: it stays visible and expires on its own.
     once = data.approval?.once === true;

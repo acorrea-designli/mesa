@@ -5,7 +5,7 @@ import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
 import { GRANT_TTL_MS, grantHash, grantable } from "../domain/approval-grant";
-import { MAX_SHOWN_CHARS, onceEligible, shownCall } from "../domain/approval-once";
+import { MAX_SHOWN_CHARS, onceEligible, onceUnavailableWhy, shownCall } from "../domain/approval-once";
 import { deniedRule, EDIT_TOOLS } from "../domain/denied-rule";
 import type { Approval, ApprovalDecision, ApprovalKind } from "../domain/types";
 import { worktreesRoot } from "../integrations/settings-rules";
@@ -50,7 +50,9 @@ const parse = (s: string): unknown => {
  * short enough to be read whole.
  */
 function onceRefusal(a: Pick<Approval, "kind" | "tool" | "rule" | "deniedInput" | "summary" | "detail">): string | null {
-  if (a.kind !== "denied" || a.rule || !onceEligible(a.tool)) return "solo se puede permitir una orden (Bash, PowerShell) o una herramienta MCP";
+  if (a.kind !== "denied") return "solo una llamada bloqueada por el modo automático se puede permitir una vez";
+  if (!onceEligible(a.tool)) return onceUnavailableWhy(a.tool);
+  if (a.rule) return "esta tarjeta ya propone una regla; se permite con la regla, no una vez";
   const stored = parse(a.deniedInput);
   const g = grantable(a.tool, stored);
   if (!g.ok) return g.why;
@@ -59,7 +61,11 @@ function onceRefusal(a: Pick<Approval, "kind" | "tool" | "rule" | "deniedInput" 
   if (a.summary !== shown.summary || a.detail !== shown.detail) return "la tarjeta no muestra exactamente la llamada que se permitiría";
   return null;
 }
-const withOnce = (a: Approval): Approval => ({ ...a, once: onceRefusal(a) === null });
+const withOnce = (a: Approval): Approval => {
+  const why = onceRefusal(a);
+  // `onceWhy` is the one line a denied card shows when it cannot be allowed once; a permission card has none.
+  return { ...a, once: why === null, onceWhy: a.kind === "denied" && why !== null ? why : "" };
+};
 
 export function approvalsRepo(db: Db) {
   const tickets = ticketsRepo(db);
@@ -163,7 +169,7 @@ export function approvalsRepo(db: Db) {
             // Any other call (a command, an MCP tool): "Permitir esta vez" stores a one-shot grant for exactly this call,
             // hashed here from the stored input. Only his UI decision creates one.
             if (d.actor !== "andres") throw new TransitionError("solo Andrés, desde la tarjeta, puede permitir esta llamada");
-            if (!onceEligible(a.tool)) throw new TransitionError("no se puede proponer una regla para esta llamada: solo una edición de archivo lleva regla, y solo una orden (Bash, PowerShell) o una herramienta MCP se permite una vez");
+            if (!onceEligible(a.tool)) throw new TransitionError(`no se puede permitir esta llamada: ${onceUnavailableWhy(a.tool)}`);
             const refusal = onceRefusal(a);
             if (refusal) throw new TransitionError(`no se puede permitir esta llamada: ${refusal}`);
             grant = { hash: grantHash(a.tool, stored) };

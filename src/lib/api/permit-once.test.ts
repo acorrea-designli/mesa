@@ -115,6 +115,46 @@ describe("creating a grant", () => {
   });
 });
 
+describe("a denied SendMessage (t150)", () => {
+  const MSG = { to: "tl-t150-2", summary: "READY t150", message: "READY t150 PR https://github.com/acorrea-designli/mesa/pull/59 at abc1234" };
+  const send = (over: Record<string, unknown> = {}) => consume({ tool: "SendMessage", toolInput: MSG, caller: "dev-t150-4", sessionId: "sess-A", ...over });
+  const fileMsg = (over: Record<string, unknown> = {}) => file({ agent: "dev-t150-4", role: "dev", tool: "SendMessage", toolInput: MSG, reason: "Classifier unavailable", ...over });
+
+  it("Andres allowing it stores one grant over the whole input; the retry passes once with the exact input", async () => {
+    const id = await fileMsg();
+    expect(r.approvals.get(id)).toMatchObject({ once: true, onceWhy: "", rule: "" });
+    expect((await allow(id)).status).toBe(200);
+    expect(grants()).toHaveLength(1);
+    expect(grants()[0]).toMatchObject({ tool: "SendMessage", caller: "dev-t150-4", session_id: "sess-A", used_at: null });
+    expect(await send({ toolInput: { message: MSG.message, to: MSG.to, summary: MSG.summary } })).toEqual({ granted: true, approvalId: id }); // key order does not matter
+    expect(grants()[0]!.used_at).toEqual(expect.any(String));
+  });
+  it("a second identical call is not granted", async () => {
+    await allow(await fileMsg());
+    expect((await send()).granted).toBe(true);
+    expect((await send()).granted).toBe(false);
+  });
+  it("a different message, recipient or summary is not granted and consumes nothing", async () => {
+    await allow(await fileMsg());
+    expect((await send({ toolInput: { ...MSG, message: `${MSG.message} ` } })).granted).toBe(false);
+    expect((await send({ toolInput: { ...MSG, message: "READY t150 PR other at abc" } })).granted).toBe(false);
+    expect((await send({ toolInput: { ...MSG, to: "team-lead" } })).granted).toBe(false);
+    expect((await send({ toolInput: { ...MSG, summary: "other" } })).granted).toBe(false);
+    expect((await send({ tool: "Bash" })).granted).toBe(false);
+    expect((await send({ caller: "tl-t150-2" })).granted).toBe(false);
+    expect((await send({ sessionId: "sess-B" })).granted).toBe(false);
+    expect(grants()[0]!.used_at).toBeNull();
+    expect((await send()).granted).toBe(true);
+  });
+  it("only Andres creates the grant, and pending or denied cards create none", async () => {
+    const id = await fileMsg();
+    expect(() => r.approvals.decide(id, { decision: "allow", actor: "dev-t150-4" })).toThrow(/solo Andr/);
+    expect(grants()).toEqual([]);
+    expect((await DENY(post({}), ctx({ id }))).status).toBe(200);
+    expect((await send()).granted).toBe(false);
+  });
+});
+
 describe("consuming a grant", () => {
   it("lets exactly that call through once: the second time, and any other call, are not granted", async () => {
     const id = await file();
@@ -235,14 +275,32 @@ describe("a forged card shows the call that would be granted", () => {
     expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/demasiado larga/);
     expect(grants()).toEqual([]);
   });
-  it("only Bash, PowerShell and mcp__* are once-cards; any other tool keeps the old card", async () => {
+  it("a denied SendMessage is a once-card shown as its canonical JSON, and says nothing the stored call does not", async () => {
+    const input = { to: "tl-t150-2", summary: "READY t150", message: "READY t150 PR https://x/pull/1 at abc" };
+    const a = await fileForged({ tool: "SendMessage", summary: "harmless", detail: "harmless", toolInput: input });
+    expect(a.once).toBe(true);
+    const shown = await listed(a.id);
+    expect(shown.summary).toBe("SendMessage");
+    expect(shown.detail).toBe('{\n  "message": "READY t150 PR https://x/pull/1 at abc",\n  "summary": "READY t150",\n  "to": "tl-t150-2"\n}');
+    expect(shown.detail).not.toContain("harmless");
+  });
+  it("only SendMessage, Bash, PowerShell and mcp__* are once-cards; any other tool keeps the old card and says why", async () => {
     for (const tool of ["Read", "Glob", "Agent", "WebFetch"]) {
       const a = await fileForged({ tool, summary: "s", detail: "d", toolInput: { file_path: "C:/x" } });
       expect(a.once).toBe(false);
       expect((await listed(a.id)).detail).toBe("d"); // untouched: no server-built text for them
       expect((await allow(a.id)).status).toBe(409);
+      expect(r.approvals.get(a.id).onceWhy).toContain(`no se puede permitir ${tool} una vez`);
     }
-    for (const tool of ["Bash", "PowerShell", "mcp__x__y"]) expect((await fileForged({ tool, toolInput: tool.startsWith("mcp") ? { a: 1 } : { command: "ls" } })).once).toBe(true);
+    for (const tool of ["Bash", "PowerShell", "SendMessage", "mcp__x__y"]) {
+      const a = await fileForged({ tool, toolInput: tool === "Bash" || tool === "PowerShell" ? { command: "ls" } : tool === "SendMessage" ? { to: "x", message: "m" } : { a: 1 } });
+      expect(a.once).toBe(true);
+      expect(r.approvals.get(a.id).onceWhy).toBe("");
+    }
+    // a file edit says its own reason, and never gets a grant
+    const edit = await fileForged({ tool: "Write", toolInput: { file_path: "C:/outside/x.txt", content: "z" } });
+    expect(r.approvals.get(edit.id)).toMatchObject({ once: false, onceWhy: expect.stringContaining("una edición de archivo") });
+    expect((await allow(edit.id)).status).toBe(409);
     expect(grants()).toEqual([]);
   });
   it("an ordinary permission card and an Edit card are unchanged (client text kept, no once)", async () => {
