@@ -200,7 +200,7 @@ export const ticketFold = z.object({
 export const ticketUnfold = z.object({ ticket: z.string().min(1) });
 /** What a session may report. "approved" is Andrés's (POST /api/tickets/:id/plan/approve), never a session's. */
 export const actionState = z.object({
-  state: z.enum(["running", "done", "failed"]),
+  state: z.enum(["running", "done", "failed", "skipped"]),
 });
 
 const slackDest = z.object({

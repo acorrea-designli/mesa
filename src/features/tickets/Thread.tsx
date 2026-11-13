@@ -772,7 +772,7 @@ function Plan({ actions, verbs, busy, onApprove, onApproveStep, onRevokeStep, on
         {actions.map((a) => {
           const [head, ...tail] = a.label.split(" · ");
           const detail = typeof a.target.detail === "string" ? a.target.detail : "";
-          const off = reject.includes(a.id) || a.state === "rejected";
+          const off = reject.includes(a.id) || a.state === "rejected" || a.state === "skipped";
           const approved = a.state === "approved";
           // Only a needs_ok step while the plan still waits toggles: planned (and not marked "no hacer") or autoaprobado.
           const toggles = a.mode === "needs_ok" && ((a.state === "planned" && !off) || (approved && waiting.length > 0));
@@ -843,7 +843,7 @@ function Plan({ actions, verbs, busy, onApprove, onApproveStep, onRevokeStep, on
   );
 }
 
-const ACTION_STATE: Record<string, string> = { rejected: "no se hará", running: "en curso", done: "hecho", failed: "falló", approved: "aprobado", planned: "" };
+const ACTION_STATE: Record<string, string> = { rejected: "no se hará", running: "en curso", done: "hecho", failed: "falló", skipped: "Saltado", approved: "aprobado", planned: "" };
 
 // ---------- agents on the ticket ----------
 

@@ -756,22 +756,25 @@ export function ticketsRepo(db: Db) {
     },
 
     /**
-     * A session reports a step as running, done or failed (PATCH /api/actions/:id). A needs_ok step may only move to
-     * those states from `approved` or `running`: a step Andrés took back (planned), rejected, or never approved is
+     * A session reports a step as running, done, failed or skipped (PATCH /api/actions/:id). A needs_ok step may only move to
+     * running, done or failed from `approved` or `running`: a step Andrés took back (planned), rejected, or never approved is
      * refused with a TransitionError (409), and a failed or done step needs a new approval before it runs again.
-     * Direct steps are unguarded. The guard is part of the UPDATE's WHERE, so a revoke and a running mark race on
+     * `skipped` ("Saltado", the step will not be done) is final and is allowed from any step still open (planned, approved,
+     * running) or failed; a done or rejected step cannot be skipped (409), and a skipped one never reopens.
+     * Direct steps are otherwise unguarded. The guard is part of the UPDATE's WHERE, so a revoke and a running mark race on
      * the same row and exactly one wins. Repeating the current state is a no-op; an unknown id is a 404.
      */
     setActionState(actionId: string, state: ActionState, now = new Date()): PlannedAction {
       const started = state === "running" || state === "done" || state === "failed";
-      const guard = started ? " AND (mode = 'direct' OR state IN ('approved','running'))" : "";
+      // A skipped step stays skipped (a retry of the same state is a no-op), and only an open or failed one can be skipped.
+      const guard = state === "skipped" ? " AND state IN ('planned','approved','running','failed')" : started ? " AND state <> 'skipped' AND (mode = 'direct' OR state IN ('approved','running'))" : " AND state <> 'skipped'";
       const r = db
         .prepare(`UPDATE planned_actions SET state = ?, updated_at = ? WHERE id = ? AND state <> ?${guard}`)
         .run(state, nowIso(now), actionId, state);
       const row = db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId);
       if (!row) throw new NotFoundError("action", actionId);
       const a = fromRow<PlannedAction>(row, A_SPEC);
-      if (!r.changes && a.state !== state) throw new TransitionError(`step is not approved; ${identity().ownerName} took it back or never approved it`);
+      if (!r.changes && a.state !== state) throw new TransitionError(state === "skipped" ? `step is ${a.state}; only a step that is still open (or failed) can be skipped` : a.state === "skipped" ? "step was skipped; it does not run again" : `step is not approved; ${identity().ownerName} took it back or never approved it`);
       return a;
     },
 

@@ -237,7 +237,8 @@ export interface TicketRef {
 }
 
 export type ActionMode = "direct" | "needs_ok";
-export type ActionState = "planned" | "approved" | "rejected" | "running" | "done" | "failed";
+/** `skipped` (t169): Claude decided not to do the step (no longer applies, done by someone else). Final, and never blocks closing the ticket. */
+export type ActionState = "planned" | "approved" | "rejected" | "running" | "done" | "failed" | "skipped";
 export interface PlannedAction {
   id: string;
   ticketId: string;

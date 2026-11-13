@@ -152,7 +152,7 @@ Before work that does anything beyond reading, the owner posts the plan, one act
 
 Rule of thumb: reading and preparing are `direct`; anything another person can see, or that changes a live system,
 is `needs_ok`. Anything that writes to a client goes through Salidas. Mark progress with
-`MESA ticket action <actionId> --state running|done|failed`. A `needs_ok` action waits for
+`MESA ticket action <actionId> --state running|done|failed`, or `--state skipped` for a step you decided not to do (it no longer applies, someone else did it): final, it asks for no OK and never blocks closing the ticket. A `needs_ok` action waits for
 `ticket.plan_approved`; a `needs_ok` action already `approved` was pre-approved by Andrés: run it without
 asking again (a wake with `partial: true` approved only its `approved` ids). Andrés can take a pre-approval back
 (the chip toggles "autoaprobado" <-> "te pide OK") while you have not started it: that wake carries

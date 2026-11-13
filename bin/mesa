@@ -63,7 +63,7 @@ Tickets
                   and no wake. 409 on a closed, sample or Claude-asked ticket, or when <ref> is <primary>
   mesa ticket unfold <primary> <ref>              (lead, when Andrés says "separa tN") split a folded ticket out again: it reopens
                   unclaimed, its card comes back, and the lead gets ticket.created with splitFrom. 409 if it was not folded there
-  mesa ticket action <actionId> --state running|done|failed
+  mesa ticket action <actionId> --state running|done|failed|skipped   skipped = the step will not be done (final; never blocks closing)
   mesa ticket show <id|ref>
   mesa ticket context <ref> [--messages N]     resume payload: brief, plan, last messages, team, handoffs, approvals, findings
   mesa ticket brief <ref> [--body -] [--goal G] [--step S] [--next N] [--decision D]... [--question Q]...

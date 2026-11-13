@@ -341,6 +341,20 @@ describe("ticket flow", () => {
         expect(state(t.id, 0)).toBe("failed");
       });
 
+      it("a planned needs_ok step can be skipped: it stays skipped, is not pending and cannot be taken back", () => {
+        const { t, merge, move } = planned();
+        expect(r.tickets.setActionState(merge.id, "skipped", at(2)).state).toBe("skipped");
+        expect(state(t.id, 0)).toBe("skipped");
+        expect(() => r.tickets.setActionState(merge.id, "running", at(3))).toThrow(/skipped/);
+        expect(() => r.tickets.revokeActions(t.id, [merge.id])).toThrow(TransitionError);
+        r.tickets.setActionState(move.id, "skipped", at(4));
+        expect(r.tickets.detail(t.id).actions.filter((a) => a.state === "planned" && a.mode === "needs_ok")).toEqual([]);
+        // the plan has nothing left to approve, and the ticket still closes
+        expect(() => r.tickets.approvePlan(t.id, [], at(5))).toThrow(/no plan waiting/);
+        expect(() => r.tickets.transition(t.id, { type: "close", by: "claude" })).not.toThrow();
+        expect(r.tickets.get(t.id).status).toBe("closed");
+      });
+
       it("direct steps move from planned without approval", () => {
         const { t, direct } = planned();
         expect(r.tickets.setActionState(direct.id, "running", at(1)).state).toBe("running");

@@ -60,7 +60,7 @@ node G:/WorkSpace/designli/ops/bin/mesa ticket reply <ticket> --body - --option 
 node G:/WorkSpace/designli/ops/bin/mesa ticket questions <ticket> --json - <<'EOF'
 node G:/WorkSpace/designli/ops/bin/mesa ticket question withdraw <tq id> --why "<one line>"
 node G:/WorkSpace/designli/ops/bin/mesa ticket plan <ticket> --action "<kind>:<source>:<direct|needs_ok>:<label>"
-node G:/WorkSpace/designli/ops/bin/mesa ticket action <actionId> --state running|done|failed
+node G:/WorkSpace/designli/ops/bin/mesa ticket action <actionId> --state running|done|failed|skipped
 node G:/WorkSpace/designli/ops/bin/mesa handoff <ticket> --agent tl-<ticket> --status paused|blocked|done --body - <<'EOF'
 gh api repos/<owner>/<repo>/contents/<path>?ref=<sha> -H "Accept: application/vnd.github.raw"
 gh api repos/<owner>/<repo>/pulls/<n>

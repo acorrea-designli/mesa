@@ -153,6 +153,17 @@ describe("mesa CLI", () => {
     expect(r.stderr).toMatch(/missing --title/);
   });
 
+  it("ticket action reports a step, skipped included, and documents it in help", async () => {
+    for (const state of ["running", "done", "failed", "skipped"]) {
+      requests = [];
+      const r = await mesa(["ticket", "action", "pa_1", "--state", state]);
+      expect(r.code).toBe(0);
+      expect(requests).toMatchObject([{ method: "PATCH", path: "/api/actions/pa_1", body: { state } }]);
+    }
+    expect((await mesa(["ticket", "action", "pa_1"])).code).toBe(2);
+    expect((await mesa(["help"])).stdout).toMatch(/ticket action <actionId> --state running|done|failed|skipped/);
+  });
+
   it("parses repeated options, A/B options and stdin bodies for ticket ask", async () => {
     handler = () => ({ body: { id: "tk_1", ref: "t1", messages: [] } });
     const r = await mesa(
