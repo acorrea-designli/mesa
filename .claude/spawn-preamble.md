@@ -53,8 +53,9 @@ no `&&`, no pipes), so it matches the allow rule.
     never edit or switch branches in a repo's main checkout. Stage explicit paths. Commits are one line,
     `type(scope): subject`, lowercase, imperative, no trailing period, at most 72 characters, a single `-m`, no body,
     no trailer, no Co-Authored-By, committed with
-    `git -C <wt> -c user.name="acorrea-designli" -c user.email="andres.correa@designli.co" commit -m "..."`. The global
-    commit guard (`G:/WorkSpace/designli/ops/vendor/commit-guard.mjs`, registered in the user's settings) blocks any other commit shape
+    `git -C <wt> -c user.name="acorrea-designli" -c user.email="andres.correa@designli.co" commit -m "..."`. The commit
+    guard (`G:/WorkSpace/designli/ops/vendor/commit-guard.mjs`, registered by `install-team --commit-guard`; a guard
+    of the same rules already in the user's own profile counts too) blocks any other commit shape
     and any AI attribution in commits and in `gh pr`/`gh issue` bodies. Never `--no-verify` or a bare force push.
     PRs open as drafts with `gh pr create --draft` (hook G7).
 11. **Language.** English for everything on disk and on GitHub, and for client text unless the client's thread is in
