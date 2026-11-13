@@ -30,7 +30,7 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 
 - `DESIGN.md` and `.impeccable/design.json`: tokens, components, rules (the five line colours mean source only: GitHub red, Slack teal, Claude orange, Basecamp green, Calendario indigo; `--mute` for secondary text, never `--dim`; only "Te espera" / "Por enviar" is solid ink; exact-text block has a top line stub).
 - `.impeccable/surfaces/src-app-page-tsx.md`: direction contract ("Mapa de metro").
-- `.impeccable/mocks/screens/*.md` + `*.html`: per-screen decisions and approved mockups. Chosen: Hoy, Tablero B, Tickets A, Salidas B, Teléfono A + paridad, Estados B, Calendario A (Agenda + pedir, with Calendario as the fifth line colour). Motion: `motion.md` + `mesa-motion.js`, implemented in `src/lib/motion`.
+- `.impeccable/mocks/screens/*.md` + `*.html`: per-screen decisions and approved mockups. Chosen: Hoy, Tablero B, Tickets A, Salidas B, Teléfono A + paridad, Estados B, Calendario A (Agenda + pedir, with Calendario as the fifth line colour), Proyectos A (Línea del proyecto). Motion: `motion.md` + `mesa-motion.js`, implemented in `src/lib/motion`.
 - Ignore `.impeccable/live/` and the `impeccable-live` script tags in the mocks. Do not edit the mocks.
 
 ## Safety rules for Claude sessions using Mesa
