@@ -46,7 +46,7 @@ test("the Slack id from the environment still wins over the local file", () => {
 });
 
 test("`sweep-tick.mjs config` prints what the skill reads", () => {
-  const out = JSON.parse(execFileSync(process.execPath, [join(REPO, "scripts", "sweep-tick.mjs"), "config"], { encoding: "utf8", env: { ...process.env, MESA_SLACK_USER_ID: "" } }));
+  const out = JSON.parse(execFileSync(process.execPath, [join(REPO, "scripts", "sweep-tick.mjs"), "config"], { encoding: "utf8", env: { ...process.env, MESA_SLACK_USER_ID: "", MESA_SWEEPER_SESSION: "sweeper" } }));
   assert.equal(out.ok, true);
   assert.deepEqual(out.githubRepos, TODAY);
   assert.equal(out.slackUserId, "U06E2UBDC73");

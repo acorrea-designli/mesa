@@ -328,7 +328,8 @@ function parseArgs(argv) {
 async function main() {
   const { pos, opt } = parseArgs(process.argv.slice(2));
   const config = loadConfig();
-  const store = makeStore();
+  // Only the commands that talk to Mesa build the store (it reads MESA_SWEEPER_SESSION, from the repo's .env.local too).
+  const store = ["wait", "report", "status"].includes(pos[0]) ? makeStore() : null;
   let out;
   if (pos[0] === "wait") out = await wait(config, store);
   else if (pos[0] === "report") {
