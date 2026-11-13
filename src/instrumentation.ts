@@ -16,7 +16,7 @@ export async function register() {
   const { startSweeper } = await import("./lib/wake/sweeper");
   startSweeper();
   const { startGithubWorker } = await import("./lib/integrations/github-worker");
-  startGithubWorker();
+  void startGithubWorker().catch((err) => console.error("[mesa] github worker failed to start", err));
   const { startCalendarWorker } = await import("./lib/integrations/calendar-worker");
   startCalendarWorker();
   const { startHealthTicker } = await import("./lib/integrations/health-ticker");

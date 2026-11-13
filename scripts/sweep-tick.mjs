@@ -30,7 +30,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const loadConfig = (path = join(REPO, "config", "sweep.json")) => JSON.parse(readFileSync(path, "utf8"));
+// MESA_SLACK_USER_ID (the board owner's Slack member id) overrides sources.slack.userId of the file; blank = the file's value.
+export function loadConfig(path = join(REPO, "config", "sweep.json"), env = process.env) {
+  const config = JSON.parse(readFileSync(path, "utf8"));
+  const slackId = env.MESA_SLACK_USER_ID?.trim();
+  if (slackId && config.sources?.slack) config.sources.slack.userId = slackId;
+  return config;
+}
 const FORCE_FLAG = join(tmpdir(), "mesa-team", "sweep-force.json");
 const ms = (iso) => (iso ? Date.parse(iso) : NaN);
 const max = (...xs) => Math.max(...xs.filter((x) => Number.isFinite(x)), -Infinity);

@@ -1,6 +1,6 @@
 import { error, json, route } from "@/lib/api/http";
 import { isSandbox, SANDBOX_REFUSAL } from "@/lib/env";
-import { githubEnabled, githubWorker } from "@/lib/integrations/github-worker";
+import { githubEnabled, githubNoToken, githubWorker } from "@/lib/integrations/github-worker";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
  */
 export const POST = route(async () => {
   if (isSandbox()) return error(409, "sandbox", SANDBOX_REFUSAL);
+  if (githubNoToken()) return error(409, "github_off", "GitHub sync is off on this server: gh has no token for the configured login (MESA_GH_USER)");
   if (!githubEnabled()) return error(409, "github_off", "GitHub sync is off on this server (set MESA_GITHUB=on)");
   return json(await githubWorker().run({ force: true }));
 });

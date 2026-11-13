@@ -1,10 +1,11 @@
 // The gh CLI, run server side with Andrés's own login. Mesa never stores a token: when
-// MESA_GH_USER is set (default acorrea-designli) the token is read from gh's keyring for
+// MESA_GH_USER is set (default acorrea-designli, src/lib/config/identity.ts) the token is read from gh's keyring for
 // that account at runtime and passed only to the child process, so a different active
 // gh account on this PC does not change who Mesa reads as.
 import { execFile } from "node:child_process";
+import { identity } from "../config/identity";
 
-export const GH_USER = process.env.MESA_GH_USER ?? "acorrea-designli";
+export const GH_USER = identity().ghUser;
 
 export interface GhResult {
   code: number;
@@ -37,6 +38,14 @@ function exec(file: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: n
     });
     if (input !== undefined) child.stdin?.end(input);
   });
+}
+
+/** True when the gh keyring holds a token for `login`, or GH_TOKEN is set: Mesa can then act as that account. */
+export async function ghTokenAvailable(login: string = GH_USER, env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  if (env.GH_TOKEN) return true;
+  if (!login) return false;
+  const t = await exec("gh", ["auth", "token", "-u", login], { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" }, 10_000);
+  return t.code === 0 && Boolean(t.stdout.trim());
 }
 
 const g = globalThis as unknown as { __mesaGhToken?: { value: string; at: number } };

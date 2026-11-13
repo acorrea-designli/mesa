@@ -5,12 +5,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { TransitionError } from "../db/util";
+import { CANONICAL, identity } from "../config/identity";
 import { DEFAULT_WORKTREES_ROOT, isDerivedRule } from "../domain/denied-rule";
 
 /** The settings file the rules go to. MESA_SETTINGS_LOCAL overrides it (tests, another machine). */
-export const DEFAULT_SETTINGS_LOCAL = "G:/WorkSpace/designli/.claude/settings.local.json";
+export const DEFAULT_SETTINGS_LOCAL = CANONICAL.settingsLocal;
 type Env = Record<string, string | undefined>;
-export const worktreesRoot = (env: Env = process.env) => env.MESA_WORKTREES_ROOT?.trim() || DEFAULT_WORKTREES_ROOT;
+export const worktreesRoot = (env: Env = process.env) => identity(env).worktreesRoot;
 
 /** A TransitionError so the route answers 409 with the Spanish reason and the card stays pending. */
 export class SettingsRuleError extends TransitionError {}
@@ -20,7 +21,7 @@ export function settingsLocalPath(env: Env = process.env): string {
   const own = env.MESA_SETTINGS_LOCAL?.trim();
   if (own) return own;
   if (String(env.MESA_ENV ?? "").trim().toLowerCase() === "sandbox") throw new SettingsRuleError("en el sandbox no se escribe el settings.local.json real");
-  return DEFAULT_SETTINGS_LOCAL;
+  return identity(env).settingsLocal;
 }
 
 /** Adds `rule` to permissions.allow. Returns whether the file changed (false: the rule was already there). */

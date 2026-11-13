@@ -73,6 +73,7 @@ describe("settingsLocalPath", () => {
   it("comes from MESA_SETTINGS_LOCAL, else the sessions folder's file", () => {
     expect(settingsLocalPath({ MESA_SETTINGS_LOCAL: "X:/a/settings.local.json" })).toBe("X:/a/settings.local.json");
     expect(settingsLocalPath({})).toBe(DEFAULT_SETTINGS_LOCAL);
+    expect(settingsLocalPath({ MESA_SESSIONS_DIR: "D:/work/ana" })).toBe("D:/work/ana/.claude/settings.local.json");
   });
   it("is refused on the sandbox board unless a path is given", () => {
     expect(() => settingsLocalPath({ MESA_ENV: "sandbox" })).toThrow(/sandbox/);

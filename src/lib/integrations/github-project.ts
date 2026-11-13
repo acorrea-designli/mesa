@@ -1,4 +1,4 @@
-// Tablero <-> the private GitHub Project "Mesa" (owner acorrea-designli).
+// Tablero <-> the private GitHub Project "Mesa" (owner: the configured login, MESA_GH_USER).
 // - ensureProject: find the Project by title, create it only if missing, make sure its
 //   Status field has the five station options, and record the ids in settings.
 // - push: every task with sync_state pending becomes (or updates) a Project item and gets
