@@ -9,7 +9,7 @@
 // always off, MESA_GITHUB=on included: no polling, no Project push or pull.
 import { isSandbox } from "../env";
 import { repos, type Repos } from "../repo";
-import { GH_USER, GhError, ghTokenAvailable, runGh, type GhRunner } from "./gh";
+import { GH_USER, GhError, ghTokenState, runGh, type GhRunner, type GhTokenState } from "./gh";
 import { ingestTick, initialIngestState, healthNote, type IngestState, type TickResult } from "./github-ingest";
 import { ensureProject, pullProject, pushPending, readProjectSettings, type ProjectSettings, type PullResult, type PushResult } from "./github-project";
 import { publishChange } from "../live/bus";
@@ -127,18 +127,27 @@ export function githubWorker(): GithubWorker {
   return g.__mesaGithub.worker;
 }
 
-/** Start the loop (idempotent across hot reloads). */
-export async function startGithubWorker(hasToken: (login: string) => Promise<boolean> = ghTokenAvailable): Promise<void> {
-  if (!githubEnabled()) return;
-  if (g.__mesaGithub?.timer) return;
-  // Mesa syncs only as the configured login. Without a token for it (a fresh install where gh is not logged in as that
-  // account) the worker stays off instead of falling back to whatever account gh has active.
-  if (!(await hasToken(GH_USER).catch(() => false))) {
+/**
+ * Whether the worker may start. Mesa syncs only as the configured login; without a token for it (a fresh install where gh
+ * is not logged in as that account) the worker stays off instead of falling back to whatever account gh has active. Only a clear "no token for
+ * this login" turns it off (one log line, and githubEnabled() answers false from then on): a gh that is missing, slow or
+ * failing starts the worker as before, and its passes report the error.
+ */
+export async function githubMayStart(tokenState: (login: string) => Promise<GhTokenState> = ghTokenState): Promise<boolean> {
+  if ((await tokenState(GH_USER).catch((): GhTokenState => "unknown")) === "missing") {
     flags.__mesaGithubNoToken = true;
     console.warn(`[mesa] github worker off: gh has no token for "${GH_USER}" (log gh in as that account, set MESA_GH_USER, or set MESA_GITHUB=off)`);
-    return;
+    return false;
   }
   flags.__mesaGithubNoToken = false;
+  return true;
+}
+
+/** Start the loop (idempotent across hot reloads). */
+export async function startGithubWorker(tokenState?: (login: string) => Promise<GhTokenState>): Promise<void> {
+  if (!githubEnabled()) return;
+  if (g.__mesaGithub?.timer) return;
+  if (!(await githubMayStart(tokenState))) return;
   const worker = githubWorker();
   const state = g.__mesaGithub!;
   if (state.timer) return;

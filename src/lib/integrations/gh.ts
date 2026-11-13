@@ -40,12 +40,20 @@ function exec(file: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: n
   });
 }
 
-/** True when the gh keyring holds a token for `login`, or GH_TOKEN is set: Mesa can then act as that account. */
-export async function ghTokenAvailable(login: string = GH_USER, env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
-  if (env.GH_TOKEN) return true;
-  if (!login) return false;
-  const t = await exec("gh", ["auth", "token", "-u", login], { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" }, 10_000);
-  return t.code === 0 && Boolean(t.stdout.trim());
+export type GhTokenState = "present" | "missing" | "unknown";
+
+/**
+ * Whether gh can act as `login`. "missing" only when gh answers clearly that it holds no token for that account (exit
+ * 1 with its "no oauth token found" / "not logged in" message); a missing gh, a timeout or any other failure is
+ * "unknown", which callers treat like "present" (the normal error handling then reports it, as before).
+ */
+export async function ghTokenState(login: string = GH_USER, env: NodeJS.ProcessEnv = process.env, run: typeof exec = exec): Promise<GhTokenState> {
+  if (env.GH_TOKEN) return "present";
+  if (!login) return "unknown";
+  const t = await run("gh", ["auth", "token", "-u", login], { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" }, 10_000);
+  if (t.code === 0 && t.stdout.trim()) return "present";
+  if (t.code === 1 && /no (oauth )?tokens? found|not logged in/i.test(t.stderr)) return "missing";
+  return "unknown";
 }
 
 const g = globalThis as unknown as { __mesaGhToken?: { value: string; at: number } };
