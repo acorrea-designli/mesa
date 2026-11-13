@@ -49,7 +49,7 @@ export const FOLDED_REF_LABEL = "Agrupado en";
 export const PERMISSION_REQUEST_BODY = "Pídeme permiso";
 
 const T_SPEC = { bool: ["is_sample"] };
-const M_SPEC = { json: ["options"] };
+const M_SPEC = { json: ["options"], bool: ["asks"] };
 const A_SPEC = { json: ["target"] };
 const Q_SPEC = { json: ["options"] };
 
@@ -229,6 +229,21 @@ export function ticketsRepo(db: Db) {
         .all(ticketId),
     );
 
+  /** A plain question of Claude (`asks`) that no later message of Andrés answered. */
+  const askedAndUnanswered = (ticketId: string): boolean =>
+    Boolean(
+      db
+        .prepare(
+          `SELECT 1 FROM ticket_messages m
+            WHERE m.ticket_id = ? AND m.asks = 1
+              AND NOT EXISTS (SELECT 1 FROM ticket_messages a
+                               WHERE a.ticket_id = m.ticket_id AND a.author = 'andres'
+                                 AND (a.created_at > m.created_at OR (a.created_at = m.created_at AND a.rowid > m.rowid)))
+            LIMIT 1`,
+        )
+        .get(ticketId),
+    );
+
   const insertMessage = (ticketId: string, m: MessageInput, ts: string): string => {
     const id = newId("tm");
     const card = cardInput(m);
@@ -257,6 +272,8 @@ export function ticketsRepo(db: Db) {
         chosen: m.chosen ?? null,
         kind: m.kind ?? null,
         aboutMessageId: m.aboutMessageId ?? null,
+        // A plain question (no card, no checklist): it stays open until Andrés writes again.
+        asks: m.author === "claude" && Boolean(m.ask) && !card && !m.steps?.length,
         createdAt: ts,
       },
       M_SPEC,
@@ -478,6 +495,7 @@ export function ticketsRepo(db: Db) {
             recommended: input.recommended,
             recommendation: input.recommendation,
             refs: input.refs,
+            ask: input.direction === "claude_asks",
           },
           ts,
         );
@@ -766,8 +784,9 @@ export function ticketsRepo(db: Db) {
      */
     setActionState(actionId: string, state: ActionState, now = new Date()): PlannedAction {
       // Skipping the last step that asked for an OK leaves nothing for Andrés on the plan: when nothing else waits for him
-      // (no open question, review or checklist step) the status the plan caused (Te espera) goes back to Claude trabaja, like an
-      // approval would, without a wake. Without it the list would keep a "Responder" with nothing to answer.
+      // (no open question, unanswered plain ask, review or checklist step) the status the plan caused (Te espera) goes back to
+      // Claude trabaja, like an approval would, without a wake. Without it the list would keep a "Responder" with nothing to
+      // answer. Only a step that was planned and asked for an OK can have caused it: skipping any other step never moves the status.
       const settleAfterSkip = (ticketId: string, at: Date) =>
         tx(db, () => {
           const t = get(ticketId);
@@ -778,9 +797,11 @@ export function ticketsRepo(db: Db) {
             d.actions.some((x) => x.state === "planned" && x.mode === "needs_ok") ||
             d.questions.some((q) => q.state === "open") ||
             stepsOwed(d.checklists.flatMap((c) => c.steps)).open > 0 ||
-            reviewsOpen > 0;
+            reviewsOpen > 0 ||
+            askedAndUnanswered(t.id);
           if (!owed) apply(t, { type: "plan_skipped" }, at, {}, true);
         });
+      const before = db.prepare("SELECT state, mode FROM planned_actions WHERE id = ?").get(actionId) as { state: ActionState; mode: string } | undefined;
       const started = state === "running" || state === "done" || state === "failed";
       // A skipped step stays skipped (a retry of the same state is a no-op), and only an open or failed one can be skipped.
       const guard = state === "skipped" ? " AND state IN ('planned','approved','running','failed')" : started ? " AND state <> 'skipped' AND (mode = 'direct' OR state IN ('approved','running'))" : " AND state <> 'skipped'";
@@ -790,7 +811,7 @@ export function ticketsRepo(db: Db) {
       const row = db.prepare("SELECT * FROM planned_actions WHERE id = ?").get(actionId);
       if (!row) throw new NotFoundError("action", actionId);
       const a = fromRow<PlannedAction>(row, A_SPEC);
-      if (r.changes && state === "skipped") settleAfterSkip(a.ticketId, now);
+      if (r.changes && state === "skipped" && before?.state === "planned" && before.mode === "needs_ok") settleAfterSkip(a.ticketId, now);
       if (!r.changes && a.state !== state) throw new TransitionError(state === "skipped" ? `step is ${a.state}; only a step that is still open (or failed) can be skipped` : a.state === "skipped" ? "step was skipped; it does not run again" : `step is not approved; ${identity().ownerName} took it back or never approved it`);
       return a;
     },

@@ -137,6 +137,8 @@ export interface TicketMessage {
   kind: "permission_request" | null;
   /** For a permission request: the latest Claude message when he pressed the button. */
   aboutMessageId: string | null;
+  /** A plain question from Claude without a card (`reply --ask`): open until a later message of Andrés. */
+  asks: boolean;
   createdAt: string;
 }
 
