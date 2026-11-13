@@ -694,6 +694,21 @@ describe("PDF review (t125)", () => {
     expect((await mesa(["ticket", "annotations"])).code).toBe(2);
   });
 
+  it("ticket annotations prints general comments untouched (kind comment, page 0 = the whole document), and the help says so", async () => {
+    const marks = [
+      { id: "an_1", page: 0, kind: "comment", geometry: {}, rect: { x: 0, y: 0, w: 0, h: 0 }, quote: "", body: "todo el informe", state: "open", replies: [] },
+      { id: "an_2", page: 2, kind: "comment", geometry: {}, rect: { x: 0, y: 0, w: 0, h: 0 }, quote: "", body: "esta página", state: "open", replies: [] },
+      { id: "an_3", page: 2, kind: "note", geometry: { x: 1, y: 1 }, rect: { x: 1, y: 1, w: 0, h: 0 }, quote: "", body: "pin", state: "open", replies: [] },
+    ];
+    handler = () => ({ body: marks });
+    const r = await mesa(["ticket", "annotations", "t87", "--att", "at_1", "--open"]);
+    expect(r.code).toBe(0);
+    expect(r.json()).toEqual(marks);
+    const help = await mesa(["help"]);
+    expect(help.stdout).toMatch(/kind highlight\|note\|rect\|ellipse\|arrow\|comment/);
+    expect(help.stdout).toMatch(/general comment: no geometry, page 0 = the whole document/);
+  });
+
   it("ticket annotation-reply posts Claude's body (stdin works) to the mark's replies", async () => {
     handler = () => ({ status: 201, body: { id: "an_1", replies: [{ author: "claude", body: "Es sin IVA" }] } });
     const r = await mesa(["ticket", "annotation-reply", "t87", "an_1", "--body", "-"], { stdin: "Es sin IVA\n" });
@@ -704,5 +719,13 @@ describe("PDF review (t125)", () => {
     expect((await mesa(["ticket", "annotation-reply", "t87", "an_1"])).code).toBe(2);
     expect((await mesa(["ticket", "annotation-reply", "t87", "--body", "x"])).code).toBe(2);
     expect(requests).toEqual([]);
+  });
+
+  it("ticket annotation-reply works unchanged on a general comment", async () => {
+    handler = () => ({ status: 201, body: { id: "an_9", kind: "comment", page: 0, replies: [{ author: "claude", body: "Listo" }] } });
+    const r = await mesa(["ticket", "annotation-reply", "t87", "an_9", "--body", "-"], { stdin: "Listo\n" });
+    expect(r.code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t87/annotations/an_9/replies", body: { body: "Listo" } });
+    expect(r.json()).toMatchObject({ kind: "comment", page: 0 });
   });
 });

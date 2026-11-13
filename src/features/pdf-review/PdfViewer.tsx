@@ -4,6 +4,7 @@
 // pdf.js is loaded on the client only (it touches DOM globals at import time).
 import type { PDFDocumentLoadingTask, PDFPageProxy, RenderTask } from "pdfjs-dist";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { isGeneral, WHOLE_DOCUMENT } from "@/lib/domain/annotations";
 import type { Annotation, AnnotationGeometry, AnnotationKind } from "@/lib/domain/types";
 import { arrowBarbs, clampPt, DRAG_MIN_PX, hitTest, mergeLineRects, r2, rectFromDrag, toPage, type Pt } from "./geometry";
 
@@ -117,14 +118,16 @@ export function PdfViewer({ url, zoom, onScale, tool, readOnly, marks, order, se
   const scale = zoom === "fit" ? (maxW && boxW ? clampScale((boxW - 2 * PAD) / maxW) : 1) : zoom;
   useEffect(() => onScale(scale), [scale, onScale]);
 
-  // Scroll to the mark of a clicked card.
+  // Scroll to the mark of a clicked card. A general comment (t147) has no mark: one on a page scrolls to the top of
+  // that page, one on the whole document (page 0) does not scroll.
   useEffect(() => {
     if (!focus) return;
     const m = marks.find((x) => x.id === focus.id);
+    if (!m || (isGeneral(m) && m.page === WHOLE_DOCUMENT)) return;
     const box = scroller.current;
-    const pageEl = box?.querySelector<HTMLElement>(`[data-page="${m?.page}"]`);
-    if (!m || !box || !pageEl) return;
-    const top = pageEl.offsetTop + m.rect.y * scale - box.clientHeight / 3;
+    const pageEl = box?.querySelector<HTMLElement>(`[data-page="${m.page}"]`);
+    if (!box || !pageEl) return;
+    const top = isGeneral(m) ? pageEl.offsetTop - PAD : pageEl.offsetTop + m.rect.y * scale - box.clientHeight / 3;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     box.scrollTo({ top: Math.max(0, top), behavior: reduce ? "auto" : "smooth" });
     // Only a new request scrolls; the marks changing under it must not.
@@ -177,7 +180,7 @@ export function PdfViewer({ url, zoom, onScale, tool, readOnly, marks, order, se
                 num={i + 1}
                 scale={scale}
                 ink={inkOn ? tool : null}
-                marks={marks.filter((m) => m.page === i + 1)}
+                marks={marks.filter((m) => m.page === i + 1 && !isGeneral(m))}
                 order={order}
                 selectedId={selectedId}
                 flash={flash}
