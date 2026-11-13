@@ -244,15 +244,30 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    auto mode denies a call, Claude Code runs this hook (it fires only in auto mode, with `tool_name`, `tool_input`,
    `reason`; it cannot undo the denial, it can only tell the model it may retry). The hook resolves the agent and the
    ticket like `mesa-approval.mjs` (the lead's focus ticket for the lead) and files a card of `kind: "denied"` with
-   the tool, the exact call, the denial reason and the proposed rule. With a rule on the card it then waits up to
-   **120 s**; a card with no rule (it can only be denied) makes the hook return at once, so the agent is never stalled
-   for a card nobody can allow, and the card stays visible and expires on its own:
+   the tool, the exact call, the denial reason, the denied session and the proposed rule (Edit only). It then waits up
+   to **120 s** for every card except a file edit with no rule (it can only be denied: the hook returns at once, so
+   the agent is never stalled for a card nobody can allow, and the card stays visible and expires on its own):
    - **Permitir esta regla**: the Mesa **server** (never Claude, never a rule sent by a client) derives the rule again
      from the stored call (`src/lib/domain/denied-rule.ts`) and appends it to
      `G:/WorkSpace/designli/.claude/settings.local.json` `permissions.allow` (`MESA_SETTINGS_LOCAL` overrides the
      path; dedup, the rest of the JSON kept, atomic write, refused in the sandbox). The hook answers
      `hookSpecificOutput.retry: true`; the agent retries the exact call, and an allow rule resolves a call before
      auto mode's check (permission-modes, decision order step 1). The decided card records who, when and the rule.
+   - **Permitir esta vez** (any call that is not a file edit: Bash, PowerShell, MCP; t143 PR5): the server stores a
+     one-shot **grant** when Andrés presses it (`approvals.decide`, actor `andres`; no other route or actor creates
+     one). The grant is derived from the stored call, never from the client: the tool, a sha-256 of the call's
+     identity (`src/lib/domain/approval-grant.ts`: for Bash and PowerShell the exact `command` plus
+     `dangerouslyDisableSandbox`, leaving out `description`, `timeout` and `run_in_background` because the retry words
+     the description differently; for any other tool the whole canonical `tool_input`), the caller (agent name, or
+     `lead`) and the denied session, expiring **5 min** after the decision. The hook answers `retry: true` and
+     touches a hint file (`MESA_GRANT_HINT`, default `<tmp>/mesa-grant-hint`); on the retry `mesa-guardrails.mjs`,
+     **after every G-rule passed** (a G-rule deny still wins and never asks), asks `POST /api/approvals/grants/consume`
+     only while the hint is under 6 min old. Mesa hashes the call itself and consumes a matching unused grant in one
+     atomic UPDATE (two concurrent retries cannot both match), and the hook answers `permissionDecision: "allow"`.
+     The same call a second time, another call, another agent or another session is denied as before. Verified in the
+     docs (hooks: allow skips the permission prompt) and with a real auto-mode run: a classifier-denied call passed on
+     the retry after `retry: true` plus a PreToolUse allow. The rails matcher includes `mcp__.*` so any MCP call can
+     be granted; file edits stay on the rule path. A session cannot call the consume route with curl (G10).
    - **Denegar**, a timeout, an unreachable Mesa or any crash: no retry, the denial stands, and the card shows how it
      ended. There is no "Lee tus configuraciones" on this card.
    - The only rule Mesa proposes is `Edit(//g/WorkSpace/designli-wt/<worktree>/<dir>/**)` for an Edit, Write,
@@ -260,15 +275,16 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
      Windows `G:` is `//g/`). **No rule** (the card offers only Denegar) for: a path outside the worktrees folder, a
      `..`, anything under a protected folder (`.git`, `.config/git`, `.vscode`, `.idea`, `.husky`, `.cargo`,
      `.devcontainer`, `.yarn`, `.mvn`, `.claude`), `settings*.json`, a file in a worktree root, a name with a glob,
-     bracket, parenthesis or space, and every Bash, PowerShell or MCP call. Never `*`, `**`, a drive or a worktree
+     bracket, parenthesis or space. A Bash, PowerShell or MCP call has no rule: it gets Permitir esta vez. Never `*`, `**`, a drive or a worktree
      root. On allow the server also compares the re-derived rule with the one stored on the card (the one Andrés
      saw) and writes nothing when they differ or the card had none.
    - Limits: Claude Code ignores `retry` when the classifier gave no verdict, and writes to protected paths are
      routed to the classifier even when an allow rule matches (permission-modes, protected paths). Whether the hook
      fires inside subagents is not stated in the docs; the first live use (t128 H7) is the check.
 
-**The lead's prompts.** They stay in his terminal (the hook passes the main thread through); `MESA_APPROVAL_LEAD=1`
-routes them to Mesa too. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the
+**The lead's prompts.** They stay in his terminal (the hook passes the main thread through) unless `MESA_APPROVAL_LEAD=1`
+routes them to Mesa too; `install-team` writes that key into the team's settings env (t143 PR5), so the lead's prompts
+and denied calls reach Mesa out of the box. A lead prompt with no ticket shows in Hoy, Permisos with the same three buttons. While the
 lead acts for one ticket it names it with `mesa lead focus <ref>` (stored by Mesa; it lapses 2 h after the last
 `mesa lead focus <ref>`, so re-run it to renew; `--clear` or the "Quitar foco" button on Hoy removes it; a closed
 ticket counts as none) and the hook files the lead's prompts to that ticket. The lead clears the focus when it moves

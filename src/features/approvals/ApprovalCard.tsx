@@ -10,6 +10,8 @@ import { rise, usePress } from "@/lib/motion";
 import { call } from "@/features/salidas/api";
 import "./approvals.css";
 
+/** File edits are allowed by a derived rule, never by a grant (the PreToolUse hook does not watch them). */
+const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const PATH: Record<ApprovalDecision, string> = { allow: "approve", read_config: "read-config", deny: "deny" };
 const DONE: Record<ApprovalDecision, string> = {
   allow: "Diste permiso para esta llamada",
@@ -70,8 +72,10 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
   };
 
   // t128: a call auto mode already denied. Allowing it adds the rule to settings.local.json (the server derives it);
-  // the card never runs the call.
+  // t143 PR5: any other call (a command, an MCP tool) is allowed once, by a one-shot grant the server stores for exactly
+  // that call. The card never runs the call.
   const denied = a.kind === "denied";
+  const once = denied && !a.rule && !EDIT_TOOLS.has(a.tool);
   if (expired)
     return (
       <div className="ap-card off" role="status">
@@ -86,7 +90,7 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
       <div className="ap-card done" role="status">
         <span className="ap-line" aria-hidden="true" />
         <span>
-          <b>{denied ? (a.decision === "allow" ? "Permitiste la regla" : "Denegaste el bloqueo") : DONE[a.decision]}</b>
+          <b>{denied ? (a.decision === "allow" ? (a.rule ? "Permitiste la regla" : "Permitiste esta vez") : "Denegaste el bloqueo") : DONE[a.decision]}</b>
           {denied && a.decision === "allow" && a.rule ? (
             <>
               {" "}
@@ -129,6 +133,8 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
               <>
                 Regla propuesta: <code>{a.rule}</code>
               </>
+            ) : once ? (
+              "Permiso de una sola vez para esta llamada exacta, de este agente y esta sesión; caduca a los 5 minutos"
             ) : (
               "Sin regla que proponer: solo una edición dentro de un worktree, fuera de .claude y de settings, puede llevarla"
             )}
@@ -140,6 +146,11 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
               Permitir esta regla
             </button>
           ) : null}
+          {once ? (
+            <button className="btn sm p" type="button" disabled={busy} onClick={() => decide("allow")}>
+              Permitir esta vez
+            </button>
+          ) : null}
           <button className="btn sm" type="button" disabled={busy} onClick={() => decide("deny")}>
             Denegar
           </button>
@@ -147,7 +158,9 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
         <p className="ap-why">
           {a.rule
             ? "Permitir agrega esa regla a settings.local.json; el agente reintenta y el modo automático ya no revisa esa carpeta. No ejecuta la llamada por sí solo."
-            : "Denegar deja el bloqueo como está; el agente sigue sin esa llamada."}
+            : once
+              ? "Permitir esta vez deja pasar solo esta llamada, una vez: el agente la reintenta y cualquier otra, o la misma otra vez, sigue bloqueada. No crea ninguna regla ni ejecuta nada por sí solo."
+              : "Denegar deja el bloqueo como está; el agente sigue sin esa llamada."}
         </p>
       </div>
     );

@@ -1,7 +1,7 @@
 // Shared helpers for the Mesa team hooks. Node builtins only (no install step), so the hooks run from any checkout.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 // The checkout these hooks run from (scripts/hooks/lib.mjs -> the repo root), so a command the hooks print or recognise
@@ -117,6 +117,36 @@ export function resolveAgent(input) {
   if (said) return parseName(said[1]);
   if (fromId) return parseName(fromId[1]);
   return agentId ? { name: String(agentId), role: null, ticketRef: null } : null;
+}
+
+// Who is calling, as the name a one-shot grant is bound to: the agent's name, or "lead" for the main thread. A
+// separately launched session (claude -p) carries its identity in MESA_AGENT, like the denied hook reads it.
+export function callerName(input, env = process.env) {
+  let agent = resolveAgent(input);
+  if ((!agent || !agent.role) && env.MESA_AGENT) agent = parseName(env.MESA_AGENT);
+  return agent?.name ?? "lead";
+}
+
+// "Permitir esta vez" (t143 PR5): after Andrés allows a denied call, mesa-denied.mjs touches this file; the PreToolUse
+// hook asks Mesa to consume a grant only while it is fresh, so no ordinary call pays an HTTP round trip. The file is
+// only a hint to ask: it grants nothing (Mesa decides), so anyone who writes it gains nothing.
+export const GRANT_HINT_MS = 6 * 60_000; // a little longer than the grant's own 5 minutes
+export const grantHintFile = (env = process.env) => env.MESA_GRANT_HINT?.trim() || join(tmpdir(), "mesa-grant-hint");
+export function markGrantHint(env = process.env) {
+  const f = grantHintFile(env);
+  try {
+    if (existsSync(f)) utimesSync(f, new Date(), new Date());
+    else writeFileSync(f, "1");
+  } catch {
+    // no hint: the retried call is simply denied again, which is the safe direction
+  }
+}
+export function grantHintFresh(env = process.env, now = Date.now()) {
+  try {
+    return now - statSync(grantHintFile(env)).mtimeMs < GRANT_HINT_MS;
+  } catch {
+    return false;
+  }
 }
 
 // The last thing the agent said: its last assistant text or the message of its last SendMessage, whichever is later.

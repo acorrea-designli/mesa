@@ -624,6 +624,8 @@ export interface Approval {
   deniedInput: string;
   /** The allow rule proposed on a denied card (empty: none can be proposed); after an allow, the rule that was written. */
   rule: string;
+  /** The session that was denied (kind denied); a one-shot grant is bound to it. */
+  sessionId: string;
   agent: string;
   tool: string;
   summary: string;

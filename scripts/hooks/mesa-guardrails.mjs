@@ -50,7 +50,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { eventFromCall, eventMismatches, parseEventBody } from "./calendar-body.mjs";
 import { moveMismatches, parseMoveBody } from "./calendar-move.mjs";
-import { hookSandbox, mesaCall, mesaRepo, readStdinJson, resolveAgent } from "./lib.mjs";
+import { callerName, grantHintFresh, hookSandbox, mesaCall, mesaRepo, readStdinJson, resolveAgent } from "./lib.mjs";
 
 const RETIRED_CACHE = join(tmpdir(), "mesa-team", "retired.json");
 
@@ -538,7 +538,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
       return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are Andrés's, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
@@ -594,6 +594,36 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
   return null;
 }
 
+// "Permitir esta vez" (t143 PR5): runs only after every G-rule above let the call through, so no grant can lift a block.
+// When Andres allowed this exact call from a card, Mesa holds a one-shot grant bound to the caller and session;
+// consuming it here (Mesa hashes the call itself) answers permissionDecision "allow" for this one retry. Anything else,
+// an unreachable Mesa included, answers nothing and the call goes on as before. Skipped unless the denied hook marked a
+// recent allow, so an ordinary call costs no round trip.
+export const grantAllowOutput = (approvalId) => ({
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "allow",
+    permissionDecisionReason: `Andres allowed this exact call once from the Mesa card ${approvalId}`,
+  },
+});
+
+export async function grantAllow(input, { fetchImpl = fetch, base, env = process.env, now = Date.now() } = {}) {
+  try {
+    if (!grantHintFresh(env, now)) return null;
+    const ti = input?.tool_input;
+    if (!input?.tool_name || !ti || typeof ti !== "object" || Array.isArray(ti)) return null;
+    const data = await mesaCall("/api/approvals/grants/consume", {
+      fetchImpl,
+      base,
+      timeoutMs: 3000,
+      body: { tool: String(input.tool_name), toolInput: ti, caller: callerName(input, env), sessionId: String(input.session_id ?? "") },
+    });
+    return data.granted === true && data.approvalId ? grantAllowOutput(data.approvalId) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   let input;
   try {
@@ -601,12 +631,19 @@ async function main() {
   } catch {
     process.exit(0);
   }
-  const r = await check(input).catch(() => null);
+  let r;
+  try {
+    r = await check(input);
+  } catch {
+    r = undefined; // a crash in a rule never grants anything
+  }
   if (r) {
     process.stderr.write(`BLOCKED by Mesa guardrail ${r.rule}: ${r.reason}\n`);
     process.exit(2);
   }
-  process.exit(0);
+  const allow = r === null ? await grantAllow(input) : null;
+  if (allow) process.stdout.write(`${JSON.stringify(allow)}\n`);
+  process.exitCode = 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

@@ -104,7 +104,6 @@ describe("Permitir esta regla (approve)", () => {
   });
   it("refuses a call with no derivable rule (409) and writes nothing; the card stays pending", async () => {
     for (const over of [
-      { tool: "Bash", toolInput: { command: "rm x" } },
       { toolInput: { file_path: "G:/WorkSpace/designli/.claude/settings.json" } },
       { toolInput: { file_path: "G:/WorkSpace/designli-wt/dev-t128-2/package.json" } },
     ]) {
