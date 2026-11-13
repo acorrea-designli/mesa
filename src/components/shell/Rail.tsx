@@ -20,7 +20,12 @@ export const NAV = [
   { href: "/tickets", label: "Tickets", count: (c: Counts) => c.tickets, line: "claude" as const },
   { href: "/salidas", label: "Salidas", count: (c: Counts) => c.salidas, line: "slack" as const },
   { href: "/calendario", label: "Calendario", count: (c: Counts) => c.calendar, line: "calendar" as const },
+  // Open PRs of the client GitHub Projects (t152); GitHub red, as PR lines are.
+  { href: "/proyectos", label: "Proyectos", count: (c: Counts) => c.proyectos, line: "github" as const },
 ];
+
+/** The phone tab bar (t152): Proyectos takes Calendario's place, which moves into the Más sheet. */
+export const PHONE_NAV = NAV.filter((n) => n.href !== "/calendario");
 
 export const isActive = (path: string, href: string) => (href === "/" ? path === "/" : path.startsWith(href));
 
@@ -28,8 +33,9 @@ export function Rail({ counts, health = [] }: { counts: Counts; health?: (Source
   const path = usePathname();
   const ref = usePress<HTMLElement>(".nav");
   // The Fuentes rows change with the clock and with sessions, not only with writes (health-ticker.ts):
-  // refresh on source changes on every screen, including those with no live refresh of their own.
-  useLiveRefresh({ entityTypes: ["source"] });
+  // refresh on source changes on every screen, including those with no live refresh of their own. "proyectos" keeps
+  // the Proyectos count current when the GitHub Projects reader writes the cache.
+  useLiveRefresh({ entityTypes: ["source", "proyectos"] });
   return (
     <aside className="rail" ref={ref} aria-label="Navegación">
       <div className="brand">

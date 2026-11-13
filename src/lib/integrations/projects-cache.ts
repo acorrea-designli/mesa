@@ -105,6 +105,13 @@ export function projectsCache(db: Db) {
       return rows.filter((r) => !want || want.has(r.repo.toLowerCase())).map(toPr);
     },
 
+    /** Open PRs of these repos: the rail count. */
+    count(repos: string[]): number {
+      if (!repos.length) return 0;
+      const want = new Set(repos.map((r) => r.toLowerCase()));
+      return (db.prepare("SELECT repo, COUNT(*) AS n FROM gh_open_prs GROUP BY repo").all() as { repo: string; n: number }[]).reduce((n, r) => n + (want.has(r.repo.toLowerCase()) ? r.n : 0), 0);
+    },
+
     repoRead(repo: string): RepoRead | null {
       const r = db.prepare("SELECT * FROM gh_repo_reads WHERE repo = ?").get(repo) as
         | { repo: string; etag: string | null; read_at: string; pr_count: number; truncated: number }

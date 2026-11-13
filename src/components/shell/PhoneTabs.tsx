@@ -4,13 +4,14 @@ import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
 import type { Counts } from "@/lib/domain/types";
 import { LineStub } from "../line/Line";
-import { isActive, NAV } from "./Rail";
+import { isActive, PHONE_NAV } from "./Rail";
 import type { SourceHealth } from "./health";
 import { SettingsSheet } from "./SettingsSheet";
 
 /**
  * Phone bottom tab bar (replaces the rail at <= 720px): each tab is a line stub at 30% that goes full ink when active.
- * The last tab, "Más", opens the Ajustes sheet with the rail's foot controls (theme, avisos, Teléfono, Fuentes...).
+ * The last tab, "Más", opens the Ajustes sheet with the rail's foot controls (theme, avisos, Teléfono, Fuentes...) and
+ * Calendario, whose tab Proyectos took (t152).
  */
 export function PhoneTabs({ counts, health = [] }: { counts: Counts; health?: (SourceHealth & { name: string })[] }) {
   const path = usePathname();
@@ -19,7 +20,7 @@ export function PhoneTabs({ counts, health = [] }: { counts: Counts; health?: (S
   return (
     <>
       <nav className="ph-tabs" aria-label="Navegación">
-        {NAV.map((n) => {
+        {PHONE_NAV.map((n) => {
           const on = isActive(path, n.href);
           return (
             <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined}>

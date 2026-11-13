@@ -89,6 +89,14 @@ export function mesaLinks(db: Db, keys: Set<string>): MesaLinks {
   return out;
 }
 
+/** The first open blocker of a Mesa review ("path:line" and its summary): the quote on the phone's PR screen. */
+export function blockerQuote(db: Db, reviewId: string): { at: string; text: string } | null {
+  const f = db.prepare("SELECT at, summary FROM review_findings WHERE review_id = ? AND state = 'open' AND label = 'blocker' ORDER BY n LIMIT 1").get(reviewId) as
+    | { at: string; summary: string }
+    | undefined;
+  return f ? { at: f.at, text: f.summary } : null;
+}
+
 export interface ProjectsPayload {
   projects: { key: string; name: string; boardUrl: string; openPrs: number }[];
   /** Open PRs across every configured repo: the rail count. */

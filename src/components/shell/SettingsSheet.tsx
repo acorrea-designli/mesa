@@ -60,6 +60,18 @@ export function SettingsSheet({ open, onClose, counts, health }: { open: boolean
   return (
     <Sheet open={open} onClose={onClose} title="Ajustes">
       <div className="set-list">
+        {/* Calendario lives here on the phone: its tab went to Proyectos (t152). */}
+        <Link
+          href="/calendario"
+          className="nav"
+          aria-current={path.startsWith("/calendario") ? "page" : undefined}
+          onClick={(e) => {
+            e.preventDefault();
+            closeThen(() => router.push("/calendario"));
+          }}
+        >
+          Calendario <b>{counts.calendar}</b>
+        </Link>
         <Link
           href="/telefono"
           className="nav theme"
