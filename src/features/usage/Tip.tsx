@@ -36,6 +36,8 @@ export interface TipProps {
   pinned?: boolean;
   /** CSS selector of marks inside the same card (.us-panel) the bubble must never cover (the big figure, the number line). */
   avoid?: string;
+  /** Where the bubble opens first: "up" (default) or "down", for a trigger that sits under the numbers it would cover (the key and "reinicia"). "down" never flips up. */
+  side?: "up" | "down";
 }
 
 const GAP = 8;
@@ -57,7 +59,7 @@ function dodge(box: HTMLElement, avoid: string, min: number, max: number) {
     let r = box.getBoundingClientRect();
     if (!hits(m, r)) continue;
     if (box.dataset.side === "down") {
-      box.style.setProperty("--dy", `${Math.round(m.bottom + GAP - (r.top + PAD))}px`);
+      box.style.setProperty("--dy", `${Math.round(px("--dy") + m.bottom + GAP - (r.top + PAD))}px`);
       continue;
     }
     const leftRoom = m.left - GAP - min;
@@ -72,7 +74,7 @@ function dodge(box: HTMLElement, avoid: string, min: number, max: number) {
   }
 }
 
-export function Tip({ tip, children, className, btnClass, tabbable = true, style, pinned = false, avoid }: TipProps) {
+export function Tip({ tip, children, className, btnClass, tabbable = true, style, pinned = false, avoid, side = "up" }: TipProps) {
   const id = useId();
   const tipId = `${id}tip`;
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -111,9 +113,9 @@ export function Tip({ tip, children, className, btnClass, tabbable = true, style
     box.style.setProperty("--dx", "0px");
     box.style.setProperty("--dy", "0px");
     box.style.removeProperty("--maxw");
-    box.dataset.side = "up";
+    box.dataset.side = side;
     let r = box.getBoundingClientRect();
-    if (r.top < 8) {
+    if (side === "up" && r.top < 8) {
       box.dataset.side = "down";
       r = box.getBoundingClientRect();
     }
@@ -126,7 +128,12 @@ export function Tip({ tip, children, className, btnClass, tabbable = true, style
     const shift = r.left + dx < min ? min - r.left : dx;
     box.style.setProperty("--dx", `${Math.round(shift)}px`);
     if (avoid) dodge(box, avoid, min, max);
-  }, [open, avoid]);
+    // Opening below the page's own numbers: on a touch screen, bring a bubble that ends under the fold or the tab bar into view.
+    if (side === "down" && !window.matchMedia("(hover: hover)").matches) {
+      const over = box.getBoundingClientRect().bottom - PAD - (window.innerHeight - 72);
+      if (over > 0) window.scrollBy(0, over);
+    }
+  }, [open, avoid, side]);
 
   return (
     <span
@@ -161,7 +168,7 @@ export function Tip({ tip, children, className, btnClass, tabbable = true, style
       >
         {children}
       </button>
-      <span ref={boxRef} className={`us-tipbox${open ? " open" : ""}`} data-side="up">
+      <span ref={boxRef} className={`us-tipbox${open ? " open" : ""}`} data-side={side}>
         <span id={tipId} role="tooltip" className="us-tipbubble">
           {tip}
         </span>

@@ -43,7 +43,7 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
           {none ? (
             <small>usado</small>
           ) : (
-            <Tip tip={TIP_LEFT} btnClass="us-tip-txt">
+            <Tip tip={TIP_LEFT} btnClass="us-tip-txt" avoid=".us-bar, .us-line">
               <small>usado</small>
             </Tip>
           )}
@@ -51,7 +51,7 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
         {none ? (
           <span className="us-big none">sin dato</span>
         ) : (
-          <Tip tip={TIP_LEFT} tabbable={false} btnClass="us-tip-big">
+          <Tip tip={TIP_LEFT} tabbable={false} btnClass="us-tip-big" avoid=".us-bar, .us-line">
             <span className="us-big">{used}%</span>
           </Tip>
         )}
@@ -69,12 +69,12 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
         {none ? (
           <span>Se llena con la próxima medición</span>
         ) : (
-          <Tip tip={TIP_RESET} btnClass="us-tip-txt">
+          <Tip tip={TIP_RESET} btnClass="us-tip-txt" side="down">
             reinicia {w.resets}
           </Tip>
         )}
         {none ? null : (
-          <Tip tip={TIP_PACE} className="us-key" btnClass="us-tip-txt">
+          <Tip tip={TIP_PACE} className="us-key" btnClass="us-tip-txt" side="down">
             <i aria-hidden="true" /> tiempo que ya pasó
           </Tip>
         )}
