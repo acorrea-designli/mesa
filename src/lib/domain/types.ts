@@ -560,6 +560,8 @@ export interface Counts {
   itemsDoneToday: number;
   /** Calendario: meetings left today (not over, not declined, not all-day); 0 on a board without the feed. */
   calendar: number;
+  /** Proyectos: open PRs across the repos of config/projects.json, from the /proyectos cache (t152). */
+  proyectos: number;
   stations: Record<Station, number>;
 }
 

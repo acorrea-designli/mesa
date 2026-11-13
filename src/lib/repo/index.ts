@@ -24,6 +24,8 @@ import { sessionsRepo, sweeperSession } from "./sessions";
 import { tasksRepo } from "./tasks";
 import { usageRepo } from "./usage";
 import { weekRepo } from "./week";
+import { allRepos, loadProjects } from "../integrations/projects-config";
+import { projectsCache } from "../integrations/projects-cache";
 import { ticketsRepo } from "./tickets";
 
 export function createRepos(db: Db) {
@@ -97,6 +99,7 @@ function counts(db: Db, now = new Date()): Counts {
     approvals: n("SELECT COUNT(*) AS n FROM approvals WHERE status = 'pending'"),
     doneToday: weekRepo(db).doneToday(now),
     calendar: meetingsLeft(calendarRepo(db).list({ from: new Date(bogotaStart(localDay(now))), to: new Date(bogotaStart(addDays(localDay(now), 1))) }), now),
+    proyectos: projectsCache(db).count(allRepos(loadProjects().projects)),
     itemsDoneToday: n(`SELECT COUNT(*) AS n FROM items WHERE station = 'done' AND updated_at >= ? AND NOT ${ITEM_IGNORED("items")}`, dayStart.toISOString()),
     stations,
   };
