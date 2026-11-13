@@ -71,7 +71,7 @@ export function substitutions(cfg) {
   // The name: the full form first (the sort below keeps it ahead of the short one), both spellings of the short one.
   out.push([CANONICAL.ownerFullName, cfg.ownerFullName ?? cfg.ownerName]);
   out.push([CANONICAL.ownerName, cfg.ownerName]);
-  out.push(["Andres", cfg.ownerName]);
+  out.push(["Andres", asciiFold(cfg.ownerName)]); // the unaccented spelling (a search query) stays ASCII
   // The engram project the lead registers and passes on engram calls (the sandbox one is <project>-sandbox).
   const project = cfg.project ?? CANONICAL.project;
   for (const prefix of ["--project ", "project: \"", "session/"]) out.push([`${prefix}${CANONICAL.project}`, `${prefix}${project}`]);
@@ -98,6 +98,16 @@ export const LEFTOVERS = [
   "U06E2UBDC73",
   "z4yross",
 ];
+/** "Andrés" -> "Andres": the name without its accents. */
+export const asciiFold = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+/**
+ * The names that are not leftovers because the configured owner is called that (or contains it: "Andrés Felipe", "Andres"):
+ * a teammate who shares the name keeps it in every file.
+ */
+export const ownerLeftoverSkip = (cfg) =>
+  [cfg.ownerName, cfg.ownerFullName ?? cfg.ownerName].some((n) => asciiFold(n).includes("Andres")) ? ["Andrés", "Andres"] : [];
+
 export const leftovers = (text, skip = []) => LEFTOVERS.filter((s) => !skip.includes(s) && text.includes(s));
 
 const TEXT_EXT = new Set([".md", ".mjs", ".js", ".json", ".html", ".css", ".txt", ".yml", ".yaml"]);

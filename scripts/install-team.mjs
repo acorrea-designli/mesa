@@ -38,7 +38,7 @@
 import { copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { CANONICAL, IDENTITY_FIELDS, OPTIONAL_FIELDS, fwd, isTextFile, leftovers, maskPath, renderText } from "./lib/render-team.mjs";
+import { CANONICAL, IDENTITY_FIELDS, OPTIONAL_FIELDS, fwd, isTextFile, leftovers, maskPath, ownerLeftoverSkip, renderText } from "./lib/render-team.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -335,7 +335,7 @@ function renderTeam({ claude, repo, cfg, opt, log }) {
     if (isTextFile(src)) {
       const text = renderText(content.toString("utf8"), cfg);
       // A teammate who is also called Andrés keeps the name: it is then the configured one, not a leftover.
-      const skip = cfg.ownerName === CANONICAL.ownerName ? ["Andrés", "Andres"] : [];
+      const skip = ownerLeftoverSkip(cfg);
       for (const w of leftovers(withoutOwnPaths(text, cfg), skip)) warn.push(`${key} still contains ${w}`);
       content = Buffer.from(text, "utf8");
     }
@@ -413,6 +413,12 @@ export function install({ target, allow = false, dryRun = false, force = false, 
 
 export class UsageError extends Error {}
 
+/** The engram project of an install that is not the original owner's: the name of its sessions folder, made safe. */
+export const projectFromFolder = (sessions) => {
+  const name = fwd(sessions).split("/").filter(Boolean).pop() ?? "";
+  return name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[^A-Za-z0-9]+/, "") || "mesa";
+};
+
 const VALUE_FLAGS = ["--target", "--env", "--repo", "--sessions", "--worktrees", ...IDENTITY_FIELDS.map((f) => f.flag), ...OPTIONAL_FIELDS.map((f) => f.flag)];
 
 /**
@@ -455,16 +461,23 @@ export function resolveConfig(argv, env = process.env, defaults = { repo: REPO }
     identity[f.key] = v || CANONICAL[f.key];
   }
 
-  // Optional values: the full name follows the owner's name when only that one was given; the project defaults to the canonical one.
+  const lc = (p) => fwd(resolve(p)).toLowerCase();
+  const pathsDiffer = lc(worktrees) !== lc(CANONICAL.worktrees) || lc(sessions) !== lc(CANONICAL.sessions) || (!sandbox && lc(repo) !== lc(CANONICAL.repo));
+  const notTheirs = pathsDiffer || IDENTITY_FIELDS.some((f) => identity[f.key] !== CANONICAL[f.key]);
+
+  // Optional values: the full name follows the owner's name when only that one was given. The engram project is the
+  // original owner's only on his own layout; anywhere else it defaults to the sessions folder's name, so one person's
+  // engram records never land in another's project.
   for (const f of OPTIONAL_FIELDS) {
     const v = (opts[f.flag] ?? env[f.env] ?? "").trim();
     if (v && !f.ok.test(v)) throw new UsageError(`${f.flag} (${f.env}) must be ${f.what}, got: ${v}`);
-    identity[f.key] = v || (f.key === "ownerFullName" && identity.ownerName !== CANONICAL.ownerName ? identity.ownerName : CANONICAL[f.key]);
+    let fallback = CANONICAL[f.key];
+    if (f.key === "ownerFullName" && identity.ownerName !== CANONICAL.ownerName) fallback = identity.ownerName;
+    if (f.key === "project" && notTheirs) fallback = projectFromFolder(sessions);
+    identity[f.key] = v || fallback;
   }
 
-  const lc = (p) => fwd(resolve(p)).toLowerCase();
   const identityDiffers = [...IDENTITY_FIELDS, ...OPTIONAL_FIELDS].some((f) => identity[f.key] !== CANONICAL[f.key]);
-  const pathsDiffer = lc(worktrees) !== lc(CANONICAL.worktrees) || lc(sessions) !== lc(CANONICAL.sessions) || (!sandbox && lc(repo) !== lc(CANONICAL.repo));
   const render = identityDiffers || pathsDiffer;
   if (render) {
     const missing = IDENTITY_FIELDS.filter((f) => !given[f.key]);

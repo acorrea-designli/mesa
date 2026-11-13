@@ -17,6 +17,9 @@ import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
 import process from "node:process";
 
+// The owner's name as the help text says it (MESA_OWNER_NAME; "Andrés" for the original owner).
+const OWNER = process.env.MESA_OWNER_NAME?.trim() || "Andrés";
+
 const HELP = `mesa <command> [options]
 
 Sessions
@@ -172,7 +175,7 @@ Items and memory
   mesa ignore remove <id> | remove <source> <projectKey>
   mesa engram link --entity ticket:<id> --project P [--topic KEY] [--obs ID]
 
---body - reads the body from stdin. --session overrides MESA_SESSION. --json / --human pick the output.`;
+--body - reads the body from stdin. --session overrides MESA_SESSION. --json / --human pick the output.`.replaceAll("Andrés", OWNER);
 
 // ---------- args ----------
 function parse(argv) {
