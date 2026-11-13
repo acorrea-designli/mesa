@@ -9,7 +9,8 @@ import { chartSeries, usoDate, type UsagePoint, type UsageView, type WindowView 
 import { HistoryChart } from "./HistoryChart";
 import { DayColumns, RankedBars } from "./RankedBars";
 import { TokenTable } from "./TokenTable";
-import { UsageMeter } from "./UsageMeter";
+import { Tip } from "./Tip";
+import { tickPct, UsageMeter } from "./UsageMeter";
 import "./usage.css";
 
 export interface UsoData {
@@ -24,23 +25,57 @@ export interface UsoData {
 const POLL_MS = 30_000;
 type Period = "hoy" | "semana";
 
+// What each mark means, in short static Spanish (decision 2B: no live pace reading). The bar is % restante, the chart % usado.
+const TIP_LEFT =
+  "Lo que aún puedes gastar en esta ventana: 100% menos lo usado. La barra muestra lo restante; la gráfica de abajo, lo usado.";
+const TIP_PACE =
+  "Dónde estaría la barra ahora si gastaras parejo hasta el reinicio. Relleno más allá de la marca: te sobra; antes de la marca: gastas más rápido que el reloj.";
+const TIP_RESET = "Cuando la ventana vuelve a 100% restante.";
+
 function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; history: UsagePoint[] }) {
   const none = w.remaining === null;
+  const tick = tickPct(w);
   return (
     <article className={view.state === "stale" ? "us-panel stale" : "us-panel"} aria-label={w.label === "5 h" ? "Ventana de 5 horas" : "Ventana semanal"}>
       <div className="us-panel-top">
         <h3>
-          {w.label} <small>restante</small>
+          {w.label}{" "}
+          {none ? (
+            <small>restante</small>
+          ) : (
+            <Tip tip={TIP_LEFT} btnClass="us-tip-txt">
+              <small>restante</small>
+            </Tip>
+          )}
         </h3>
-        {none ? <span className="us-big none">sin dato</span> : <span className="us-big">{w.remaining}%</span>}
+        {none ? (
+          <span className="us-big none">sin dato</span>
+        ) : (
+          <Tip tip={TIP_LEFT} tabbable={false} btnClass="us-tip-big">
+            <span className="us-big">{w.remaining}%</span>
+          </Tip>
+        )}
       </div>
-      <UsageMeter w={w} size="lg" />
+      <div className="us-bar">
+        <UsageMeter w={w} size="lg" />
+        {tick === null ? null : (
+          <Tip tip={TIP_PACE} tabbable={false} className="us-tip-tick" style={{ left: `${tick}%` }} btnClass="us-tip-hit">
+            <span className="us-sr">ritmo parejo</span>
+          </Tip>
+        )}
+      </div>
       <div className="us-panel-sub">
-        <span>{none ? "Se llena con la próxima medición" : `reinicia ${w.resets}`}</span>
+        {none ? (
+          <span>Se llena con la próxima medición</span>
+        ) : (
+          <Tip tip={TIP_RESET} btnClass="us-tip-txt">
+            reinicia {w.resets}
+          </Tip>
+        )}
         {none ? null : (
-          <span className="us-key">
+          <Tip tip={TIP_PACE} className="us-key" btnClass="us-tip-txt">
             <i aria-hidden="true" /> ritmo parejo
-          </span>
+          </Tip>
         )}
       </div>
       <HistoryChart title={w.key === "five_hour" ? "Ventana de 5 h" : "Semana"} series={chartSeries(history, w, view.at)} />
