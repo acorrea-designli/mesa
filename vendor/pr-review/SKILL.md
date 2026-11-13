@@ -59,7 +59,7 @@ When the PR was already reviewed at a known SHA — the `pr-monitor` state holds
    - **fixed** — the problem is gone. State in one line what the code does now, so the verdict is checkable.
    - **still open** — unchanged. Do not re-explain it; it was explained when it was raised. One line plus its thread link.
    - **changed** — the code was rewritten and the problem mutated into a different one. Close the old finding and open a new one describing the new shape.
-3. **A thread reply is not verification.** "Fixed in `abc1234`" says where to look, not that it works. The verdict comes from reading the code at the current head. A dev who believes they fixed something and did not is exactly the case a re-review exists to catch.
+3. **A thread reply is not verification.** "Fixed in `<sha>`" says where to look, not that it works. The verdict comes from reading the code at the current head. A dev who believes they fixed something and did not is exactly the case a re-review exists to catch.
 4. **New findings come from the range** — or from something in the range that breaks code outside it. The scope limits what you read, not what a change is allowed to break.
 5. Report as `N fixed · M still open · K new`. Continuations of an open finding go as a reply in its existing thread (`in_reply_to`), never as a fresh comment; only genuinely new findings go into a new pending review.
 
@@ -102,12 +102,12 @@ The report exists to answer, over time, whether Copilot's pass can be trusted on
 Keep it scannable — this is what the user "reviews":
 
 ```
-1. [blocker] apps/mobile/src/api/uploads.api.web.ts:26
-   fetch(file.uri) can reject and there's no catch — upload silently no-ops.
+1. [blocker] src/example/client.ts:26
+   fetch(url) can reject and there's no catch — the request silently no-ops.
    fix: wrap in try/catch or let the error propagate to the caller's handler.
 
-2. [nit] uploads.api.web.ts:5
-   duplicates fileFormatOf from uploads.api.ts — extract a shared util if it grows.
+2. [nit] src/example/client.ts:5
+   duplicates parseName from src/example/util.ts — extract a shared helper if it grows.
 ```
 
 Then ask which to keep (all / by number / none). The candidate list itself is English; the question to the user follows their language.
@@ -116,8 +116,8 @@ Then ask which to keep (all / by number / none). The candidate list itself is En
 
 Good:
 - `Race condition: two callers can both pass this check before either writes. Use a transaction or upsert.`
-- `Unhandled: fetch can reject and this promise has no catch — the upload silently no-ops.`
-- `nit: duplicates fileFormatOf from uploads.api.ts — consider a shared util if it grows.`
+- `Unhandled: fetch can reject and this promise has no catch — the request silently no-ops.`
+- `nit: duplicates parseName from util.ts — consider a shared helper if it grows.`
 
 Bad (never do this):
 - `Great work on this PR! I noticed a small thing...` (praise, preamble)

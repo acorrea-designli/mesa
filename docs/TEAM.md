@@ -287,8 +287,8 @@ piping hook JSON into it; tests: `pnpm test:team` (node:test, Node 22.13 or newe
 | PermissionDenied (all tools; auto mode only) | `mesa-denied.mjs` | § 6.7 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
 
-**Commit guard.** `vendor/commit-guard.mjs` (a copy lives in this repo; register it as a PreToolUse hook for Bash and
-PowerShell in the user's `settings.json`, see `vendor/README.md`) runs for every session on the PC it is registered on: a `git commit` must be one `-m "type(scope): subject"` (lowercase, no trailing period, at most 72
+**Commit guard.** `vendor/commit-guard.mjs` (a copy lives in this repo; `install-team --commit-guard` registers it as a PreToolUse hook for Bash and
+PowerShell, see `vendor/README.md`; a guard with the same rules in the user's own profile counts too) runs for every session on the PC it is registered on: a `git commit` must be one `-m "type(scope): subject"` (lowercase, no trailing period, at most 72
 characters) with no attribution, and `gh pr` / `gh issue` bodies carry no AI attribution. The Mesa hooks do not
 duplicate it (G9 was retired for that reason).
 

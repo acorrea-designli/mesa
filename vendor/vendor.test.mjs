@@ -38,6 +38,9 @@ const PROFILE_REFS = [
   new RegExp(j("AppData/Local/", "(mise|pnpm)")),
 ];
 
+// camelCase names that are GitHub API fields or Mesa state fields, not client code.
+const GITHUB_FIELDS = new Set(["headRefOid", "baseRefName", "headRefName", "ghCommentId", "reviewDecision", "lastTickAt"]);
+
 function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
@@ -60,6 +63,19 @@ test("vendor/ carries no personal identifier, id, token or absolute profile path
     for (const re of PERSONAL) {
       const m = re.exec(text);
       if (m) hits.push(`${relative(repo, f)}: ${re} matches "${m[0]}"`);
+    }
+    // Client code: a hex sha, a GitHub comment id, a camelCase identifier (markdown only: that is where examples
+    // live), or a file name shaped like an app layer. Examples use <sha> and made-up values.
+    const sha = /\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/i.exec(text);
+    if (sha) hits.push(`${relative(repo, f)}: hex sha "${sha[0]}"`);
+    const id = /\b\d{9,}\b/.exec(text);
+    if (id) hits.push(`${relative(repo, f)}: comment-id-like number "${id[0]}"`);
+    const layer = /\b[\w-]+\.(service|controller|repository|module|api|dto)\.[a-z]+\b/.exec(text);
+    if (layer) hits.push(`${relative(repo, f)}: app-layer file name "${layer[0]}"`);
+    if (f.endsWith(".md")) {
+      for (const m of text.matchAll(/\b[a-z]+(?:[A-Z][a-z0-9]+){2,}\b/g)) {
+        if (!GITHUB_FIELDS.has(m[0])) hits.push(`${relative(repo, f)}: code identifier "${m[0]}"`);
+      }
     }
     // An email address, except the placeholders and the attribution the commit guard looks for.
     for (const m of text.matchAll(/[\w.+-]+@[\w-]+\.[a-z]{2,}/gi)) {
@@ -92,14 +108,15 @@ test("Mesa skills, agents and the preamble reference vendor/, not another person
 });
 
 test("pr-gh.mjs refuses to run without a configured login", async () => {
+  // A checkout whose own .env.local sets MESA_GH_USER (a real install) gets past the check and would make a live
+  // GitHub call, so look first and never run the script then.
+  const envLocal = join(repo, ".env.local");
+  const configured = existsSync(envLocal) && /^\s*(export\s+)?MESA_GH_USER\s*=\s*\S/m.test(readFileSync(envLocal, "utf8"));
+  if (configured) return;
   const { spawnSync } = await import("node:child_process");
   const env = { ...process.env };
   delete env.MESA_GH_USER;
   const r = spawnSync(process.execPath, [join(here, "pr-gh.mjs"), "whoami"], { env, encoding: "utf8" });
-  // A checkout whose own .env.local sets MESA_GH_USER (a real install) legitimately gets past the check.
-  const envLocal = join(repo, ".env.local");
-  const configured = existsSync(envLocal) && /^\s*(export\s+)?MESA_GH_USER\s*=\s*\S/m.test(readFileSync(envLocal, "utf8"));
-  if (configured) return;
   assert.equal(r.status, 1);
   const out = JSON.parse(r.stdout.trim().split("\n").pop());
   assert.equal(out.ok, false);

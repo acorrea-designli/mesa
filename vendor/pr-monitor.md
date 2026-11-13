@@ -42,7 +42,7 @@ State shape (`version: 2`). In Mesa the same fields live in each finding and in 
   "version": 2,
   "prs": {
     "owner/repo#285": {
-      "head": "15e6fb79...",
+      "head": "<sha>",
       "reviewedAt": "2026-09-07T11:20:00",
       "checkedAt": "2026-09-07T11:36:00",
       "outcome": "reported",
@@ -51,12 +51,12 @@ State shape (`version: 2`). In Mesa the same fields live in each finding and in 
         {
           "id": 1,
           "label": "blocker",
-          "at": "src/x/y.service.ts:72",
-          "anchor": "if (await this.isNoOpDocumentSave(evaluationId, dto, transaction)) {",
-          "summary": "no-op replay returns 200 after the status reset already committed",
+          "at": "src/example/save.ts:72",
+          "anchor": "if (await store.isDuplicate(input)) {",
+          "summary": "duplicate save returns 200 after the earlier write already committed",
           "state": "open",
-          "sha": "2ca68448",
-          "ghCommentId": 3951307385
+          "sha": "<sha7>",
+          "ghCommentId": 1001
         }
       ]
     }
@@ -255,7 +255,7 @@ For each finding with `state: "open"`:
 3. `dismissed` ones **never** come back, not even if the review finds them again in the same place. One line
    mentioning them and move on.
 
-**The author's thread verifies nothing.** "Fixed in `abc1234`" is a hint about where to look, not evidence. The
+**The author's thread verifies nothing.** "Fixed in `<sha>`" is a hint about where to look, not evidence. The
 verdict comes from reading the code at the current head. This is the rule that saves the most money: a dev who
 believes they fixed something and did not is exactly the case the review exists to catch.
 

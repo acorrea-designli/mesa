@@ -10,7 +10,7 @@ the team (`scripts/install-team.mjs`) never links them next to a user's own `pr-
 | `pr-monitor.md` | the review-pass rules: gate, boxes, review state, what each click does | `mesa-review`, `mesa-sweep` § 1 |
 | `slack-triage.md` | the Slack triage logic (three searches, three buckets) | `mesa-sweep` § 3 |
 | `pr-gh.mjs` | the one script that writes reviews, approvals and replies to GitHub, under `MESA_GH_USER`'s token | `mesa-review` § Lead writes |
-| `commit-guard.mjs` (+ test) | the PreToolUse hook that enforces one-line conventional commits and no AI attribution | register it in your user `settings.json` (see below) |
+| `commit-guard.mjs` (+ test) | the PreToolUse hook that enforces one-line conventional commits and no AI attribution | registered by `install-team --commit-guard` (see below) |
 
 ## Rules for what lives here
 
@@ -36,20 +36,8 @@ whichever account `gh` has active.
 
 ## commit-guard.mjs
 
-A Claude Code hook. Register it for the `Bash` and `PowerShell` tools in your user `settings.json`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [{ "type": "command", "command": "node <mesa-repo>/vendor/commit-guard.mjs" }]
-      }
-    ]
-  }
-}
-```
+A Claude Code PreToolUse hook for the `Bash` and `PowerShell` tools. `install-team --commit-guard` registers it; there
+is no step to do by hand. A guard with the same rules already in your own profile counts too.
 
 The Mesa team's commit rule (preamble rule 10) is enforced by it: exactly one `-m "type(scope): subject"`, lowercase,
 at most 72 characters, no trailer, no attribution in commits or in `gh pr` / `gh issue` bodies.
