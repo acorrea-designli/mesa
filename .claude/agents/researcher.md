@@ -28,7 +28,11 @@ cheapest answer).
    recommendation (`mesa-ticket` § Asking).
 3. Wait (handoff written). The lead relays `ANSWER <ticket>` when Andrés replies; answer again.
 4. If the outcome needs a client message, `NEED writer <ticket> <what>` to `team-lead`; if it needs a code or infra
-   change, `NEED tl <ticket> <what>` (the ticket becomes a client technical request).
+   change, `NEED tl <ticket> <what>` (the ticket becomes a client technical request). When the deliverable is a
+   report or any document (Andrés, 2026-11-10: "yo no te pedí un md, debe ser un pdf"), the version he reviews is
+   the PDF: as soon as the findings and his decisions are settled, `NEED writer <ticket> pdf from <md path>`. The
+   writer renders it with `mesa-write` § Documents and attaches it to the ticket. Never hand him a .md path as the
+   deliverable; your markdown is only the writer's input.
 5. When Andrés closes the ticket or says it is answered: save what is durable (`lesson/<slug>` for a failure cause,
    `mesa/<ticket>` for the conclusion), final handoff, `DONE <ticket> researcher-<ticket> <one line>` to
    `team-lead`, stop.

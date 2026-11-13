@@ -38,7 +38,8 @@ no `&&`, no pipes), so it matches the allow rule.
 9. **When a call is blocked, reshape before asking.** Read your allow rules (`permissions.allow` in
    `.claude/settings.json` and `.claude/settings.local.json`) and your role's command sheet, then retry with an
    allowed shape: the bare command, one per call, the right tool (Bash vs PowerShell rules are separate), no `cd`,
-   `&&`, pipes or redirections. Only then does the call reach Andrés as a card in your ticket. If he answers
+   `&&`, pipes or redirections. Only then does the call reach Andrés as a card in your ticket. Never ask him in the ticket whether you may run a
+   call: run it so the card fires (TEAM.md § 6). If he answers
    "Lee tus configuraciones", the hook's message names the closest rule: use it. A deny, a timeout or an unreachable
    Mesa means stop trying that call: post a ticket question or send `BLOCKED`. If Andrés presses "Pídeme permiso"
    on your ticket (`ticket.permission_requested`, relayed as `ANSWER <ref> permission_requested <id>`): add the

@@ -202,6 +202,11 @@ that is not a project.
 
 Agents get blocked by trivial things; a block must become a decision, not a dead agent.
 
+**Never ask about a permission; send the card** (Andrés, 2026-11-13). When the lead or an agent needs his OK to run a
+call, it runs the call so the card fires (with `mesa lead focus <ref>` for the lead). It never asks him in a ticket
+whether it may run it, as an A/B or otherwise. A call that ends denied with no card he can allow is a bug to fix, not
+a question for him.
+
 1. **Reshape first** (preamble rule 9). An agent whose call is not allowed reads its allow rules
    (`.claude/settings.json`, `.claude/settings.local.json`) and its role's command sheet, and retries with an
    allowed shape: bare command, one per call, the right tool, no `cd`, `&&`, pipes or redirections.
@@ -350,6 +355,8 @@ Only the lead acts outward, and only after Andrés's approval:
   is Andrés's or in flight. A closed review comes back with `mesa review open` at any head. Use a reason Andrés can read.
 
 ## 9. Install
+
+Step by step for a new machine (prerequisites, `.env.local`, the identity flags, first run, post-pull steps): `README.md`. This section is the reference for what `install-team` does.
 
 ```
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs --dry-run   # the plan

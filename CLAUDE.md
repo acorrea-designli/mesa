@@ -7,7 +7,7 @@ Andrés's personal work-ops board: GitHub PR reviews, Basecamp requests, Slack r
 ## Run
 
 - Node **22.23.2** (`mise.toml`; `.npmrc` sets `use-node-version` so pnpm scripts use it even if the `node` on PATH is older). `node:sqlite` needs ≥ 22.13.
-- `pnpm install`
+- `pnpm install`. Installing Mesa and its Claude team on another machine (prerequisites, `.env.local`, `install-team` with your identity, first run): `README.md`.
 - `pnpm dev` serves on `127.0.0.1:8790` (never 8770 or 8771: other boards use them; `MESA_HOST` overrides the address). Open http://localhost:8790. `pnpm start` also starts the Cloudflare tunnel as its child (when `MESA_PUBLIC_URL` and `MESA_CF_TUNNEL` are set; `MESA_TUNNEL=on` for dev, `off` to disable). Phone: `pnpm tunnel` (Cloudflare Tunnel behind Cloudflare Access; `status` proves Access is in front, exit 3 if Mesa answers directly) and the QR or short code on `/telefono`; `docs/ARCHITECTURE.md` § 11.
 - `pnpm check` runs typecheck, lint and tests (vitest, plus `pnpm test:team`: node:test for the team hooks and scripts). `pnpm build` must pass before a PR.
 - Data lives in `data/mesa.db` (gitignored; `MESA_DB` overrides). Migrations in `db/migrations` apply on startup; `pnpm db:migrate` applies them by hand.

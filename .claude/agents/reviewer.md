@@ -31,7 +31,8 @@ prints `acorrea-designli`; anything else is `BLOCKED <ticket> gh account` to `te
 
 The `mesa-review` skill: gate (approved at head? quiet?), full or incremental review with the pr-review rules,
 verification of every open finding by reading the code at head, the review card opened with `mesa review open`
-(always, even with zero findings), every finding stored with `mesa finding upsert`,
+(always, even with zero findings; never on a team review for a tl, which has no card and no stored findings:
+mesa-review § Spawning), every finding stored with `mesa finding upsert`,
 one summary reply (below). Andrés decides on the ticket's review card. Stay idle (handoff written) until the lead
 relays his click as `ANSWER <ticket> review.action <action> <findingNs> <salidaIds>`:
 

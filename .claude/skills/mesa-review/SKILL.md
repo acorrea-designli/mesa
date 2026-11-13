@@ -45,7 +45,11 @@ apply as written. Never edit or disable pr-monitor or pr-review.
   at most 5 at a time in pr-monitor's order (tracked advance, moved, new, untracked advance; oldest first). The
   rest wait for a slot; say `+N en cola`.
 - **Team review**: the tl's `NEED reviewer <ref> PR <url>` → `reviewer-<ref>` (or `-2`, `-3` for further PRs) as a
-  teammate. Verdict by message to the implementer and the tl; findings still recorded; no GitHub writes.
+  teammate. Verdict by message to the implementer and the tl; no GitHub writes. **No review card for Andrés**
+  (Andrés, t112, 2026-11-11: "yo no debería estar revisando cuando es de mesa, que el mismo dev lo corrija"):
+  a team review never runs `MESA review open` or `MESA finding upsert`. Its findings live in the PASS/FAIL message,
+  the handoff's `review-state` block (with the numbered findings and their state) and engram; the tl and the dev
+  close the loop, and the merge follows the plan Andrés already approved.
 
 ## Review (reviewer)
 
@@ -67,7 +71,7 @@ apply as written. Never edit or disable pr-monitor or pr-review.
    `dismissed` and `waived` findings are never reported again, even if found again in the same place.
 6. **New findings** come from the range, or from something in it that breaks code outside it. Verify each before
    writing it: a false blocker costs more than a missed nit.
-7. **Record**, always starting with `MESA review open <ref> --repo owner/name --pr N --sha <head>` (the full head
+7. **Record** (a team review skips this step: § Spawning, Team review), always starting with `MESA review open <ref> --repo owner/name --pr N --sha <head>` (the full head
    sha you reviewed). It creates the review card on the ticket, with Approve, even when the pass has zero findings;
    it is idempotent, and a new head reopens a card that was already approved. Without it a clean pass has no card.
    Then every finding with `MESA finding upsert <ref> --json -` (new ones without `n`, Mesa numbers them; changed
@@ -147,6 +151,14 @@ github salida for that repo and PR; it writes under the token of `MESA_GH_USER`,
   A finding that already has a thread (`inReplyTo` on the destination, or its `ghCommentId`) continues there:
   `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs reply <repo> <pr> <inReplyTo> <scratchpad>/lead/reply-<salida>.txt`.
   A finding whose file is not in the diff has no `path`: its text goes in the review body.
+- **Andrés's own PRs** (PR author `acorrea-designli`, e.g. Mesa repo team PRs; Andrés, t118,
+  2026-11-11): nothing is posted to GitHub. Findings stay in Mesa and go to the dev as the reviewer's FAIL. A
+  released post salida for such a PR is never sent to GitHub and never bounced back to him: on a Mesa PR
+  (the Mesa repo) the lead resolves it without asking (Andrés, t112, 2026-11-12: "arregla los fallos o
+  mergea, esto es solo mesa, no necesitamos ser tan restrictivos"). Approve or approve_anyway on an open Mesa PR →
+  the lead merges it (TEAM.md § 8) and marks the salida `failed --error "merged instead"`. On a merged or closed one
+  → `failed --error` with why. Post on a Mesa PR → findings go to a dev as FAIL (spawn one if none), then the salida
+  is marked failed. Stale Mesa leftovers (old salidas, review cards) the lead clears itself.
 - Then for each salida `MESA salida sent <id> --permalink <url>` (or `failed --error`), `MESA finding upsert` with the
   returned `ghCommentId`, and one `SENT <ref> <salidaIds> <commentIds>` to the reviewer.
 - **Sandbox** (`echo $MESA_ENV` prints `sandbox`): no pr-gh.mjs call (hook G11 blocks it). For each salida

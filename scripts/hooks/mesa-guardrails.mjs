@@ -42,8 +42,8 @@
 //                no Slack or Basecamp write, no pr-gh.mjs write, no gh write (api with a method or fields, pr, issue,
 //                repo, release, workflow ...), no git push, no `mesa salida sent` without --simulated, and no call to
 //                the live board on :8790. Live mode is unaffected. docs/SANDBOX.md.
-//   (G9 retired: commit message shape and attribution belong to the global commit-guard hook,
-//    C:/Users/z4yross/.claude/hooks/commit-guard.mjs.)
+//   (G9 retired: commit message shape and attribution belong to the commit-guard hook,
+//    vendor/commit-guard.mjs, registered by `install-team --commit-guard` or by the user's own profile.)
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -595,8 +595,8 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     if (/\bgh\s+auth\s+(switch|login|logout|refresh)\b/.test(c)) {
       return block("G7", "rule 10: `gh auth` changes are Andrés's. If the account is wrong, BLOCKED to team-lead.");
     }
-    // Commit message shape and attribution are enforced by the global commit-guard hook
-    // (C:/Users/z4yross/.claude/hooks/commit-guard.mjs), not here.
+    // Commit message shape and attribution are enforced by the commit-guard hook
+    // (vendor/commit-guard.mjs, registered by `install-team --commit-guard`), not here.
   }
   return null;
 }
