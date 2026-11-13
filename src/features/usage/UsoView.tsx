@@ -1,6 +1,6 @@
 "use client";
-// /uso: the Claude usage screen. Plan windows (% remaining as a meter with a pace tick, and the % used over time as
-// a chart), then tokens for one period at a time (Hoy / Semana): tokens nuevos, who spent them, by model, by day, and
+// /uso: the Claude usage screen. Plan windows (% used as a meter with a tick for the time elapsed, a line of numbers under
+// it, and the % used over time as a chart), then tokens for one period at a time (Hoy / Semana): tokens nuevos, who spent them, by model, by day, and
 // the table view. The server renders the first frame; this polls GET /api/usage every 30 s so the figures stay live.
 import { useEffect, useId, useState } from "react";
 import { Tabs } from "@/components/ui/interactive";
@@ -10,7 +10,7 @@ import { HistoryChart } from "./HistoryChart";
 import { DayColumns, RankedBars } from "./RankedBars";
 import { TokenTable } from "./TokenTable";
 import { Tip } from "./Tip";
-import { tickPct, UsageMeter } from "./UsageMeter";
+import { tickLeft, tickPct, usedPct, UsageMeter } from "./UsageMeter";
 import "./usage.css";
 
 export interface UsoData {
@@ -25,15 +25,15 @@ export interface UsoData {
 const POLL_MS = 30_000;
 type Period = "hoy" | "semana";
 
-// What each mark means, in short static Spanish (decision 2B: no live pace reading). The bar is % restante, the chart % usado.
-const TIP_LEFT =
-  "Lo que aún puedes gastar en esta ventana: 100% menos lo usado. La barra muestra lo restante; la gráfica de abajo, lo usado.";
-const TIP_PACE =
-  "Dónde estaría la barra ahora si gastaras parejo hasta el reinicio. Relleno más allá de la marca: te sobra; antes de la marca: gastas más rápido que el reloj.";
-const TIP_RESET = "Cuando la ventana vuelve a 100% restante.";
+// What each mark means, in short static Spanish (decision 2B: no live pace reading, never a forecast). The bar is what you
+// have used, filling left to right like the chart below; the tick is the time that already passed.
+const TIP_LEFT = "Lo que ya usaste de esta ventana. La barra se llena de izquierda a derecha, igual que la gráfica de abajo.";
+export const TIP_PACE = "El tiempo que ya pasó de la ventana. Si la barra llega más allá de la marca, gastas más rápido que el reloj.";
+const TIP_RESET = "Cuando la ventana vuelve a 0% usado.";
 
 function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; history: UsagePoint[] }) {
-  const none = w.remaining === null;
+  const used = usedPct(w);
+  const none = used === null;
   const tick = tickPct(w);
   return (
     <article className={view.state === "stale" ? "us-panel stale" : "us-panel"} aria-label={w.label === "5 h" ? "Ventana de 5 horas" : "Ventana semanal"}>
@@ -41,10 +41,10 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
         <h3>
           {w.label}{" "}
           {none ? (
-            <small>restante</small>
+            <small>usado</small>
           ) : (
             <Tip tip={TIP_LEFT} btnClass="us-tip-txt">
-              <small>restante</small>
+              <small>usado</small>
             </Tip>
           )}
         </h3>
@@ -52,18 +52,19 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
           <span className="us-big none">sin dato</span>
         ) : (
           <Tip tip={TIP_LEFT} tabbable={false} btnClass="us-tip-big">
-            <span className="us-big">{w.remaining}%</span>
+            <span className="us-big">{used}%</span>
           </Tip>
         )}
       </div>
       <div className="us-bar">
         <UsageMeter w={w} size="lg" />
         {tick === null ? null : (
-          <Tip tip={TIP_PACE} tabbable={false} className="us-tip-tick" style={{ left: `${tick}%` }} btnClass="us-tip-hit">
-            <span className="us-sr">ritmo parejo</span>
+          <Tip tip={TIP_PACE} tabbable={false} className="us-tip-tick" style={{ left: tickLeft(tick) }} btnClass="us-tip-hit" avoid=".us-big, .us-line">
+            <span className="us-sr">tiempo que ya pasó</span>
           </Tip>
         )}
       </div>
+      {none ? null : <p className="us-line">{`Usado ${used}% · Tiempo ${w.elapsed}`}</p>}
       <div className="us-panel-sub">
         {none ? (
           <span>Se llena con la próxima medición</span>
@@ -74,7 +75,7 @@ function PlanWindow({ w, view, history }: { w: WindowView; view: UsageView; hist
         )}
         {none ? null : (
           <Tip tip={TIP_PACE} className="us-key" btnClass="us-tip-txt">
-            <i aria-hidden="true" /> ritmo parejo
+            <i aria-hidden="true" /> tiempo que ya pasó
           </Tip>
         )}
       </div>
@@ -115,7 +116,7 @@ export function UsoView({ initial, live = true }: { initial: UsoData; /** false 
 
   const { view, tokens, history } = data;
   const slice = tokens ? (period === "hoy" ? tokens.today : tokens.week) : null;
-  const none = view.state === "none" || view.windows.every((w) => w.remaining === null);
+  const none = view.state === "none" || view.windows.every((w) => w.used === null);
 
   return (
     <div className="us">

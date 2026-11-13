@@ -8,7 +8,7 @@ import { QuestionCard } from "@/features/tickets/QuestionCard";
 import type { Picks } from "@/features/tickets/card";
 import { UsageBlock } from "@/features/usage/UsageBlock";
 import { Tip } from "@/features/usage/Tip";
-import { UsoView } from "@/features/usage/UsoView";
+import { TIP_PACE, UsoView } from "@/features/usage/UsoView";
 import { addUsage, summarize, type Buckets, type Role } from "@/lib/domain/tokens";
 import { groupChecklists } from "@/lib/domain/ticket-checklists";
 import { SOURCES, type Checklist, type Source, type TicketQuestion, type TicketStep } from "@/lib/domain/types";
@@ -318,8 +318,8 @@ export function KitDemo() {
       <section>
         <Label>Uso: ayuda sobre una marca (abierta aquí; en /uso sale al pasar, tocar o enfocar, y se cierra con Escape)</Label>
         <div className="kit-line" style={{ alignItems: "flex-start", paddingTop: 96, paddingLeft: 150 }}>
-          <Tip pinned className="us-key" btnClass="us-tip-txt" tip="Dónde estaría la barra ahora si gastaras parejo hasta el reinicio. Relleno más allá de la marca: te sobra; antes de la marca: gastas más rápido que el reloj.">
-            <i aria-hidden="true" /> ritmo parejo
+          <Tip pinned className="us-key" btnClass="us-tip-txt" tip={TIP_PACE}>
+            <i aria-hidden="true" /> tiempo que ya pasó
           </Tip>
         </div>
       </section>

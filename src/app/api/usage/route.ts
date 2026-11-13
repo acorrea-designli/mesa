@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/usage[?tokens=1][&history=1] -> { now, view, tokens, history }
- * `view` is the latest statusLine snapshot as the rail shows it (% remaining per window, reset time, age, stale).
+ * `view` is the latest statusLine snapshot as the rail shows it (% used and time elapsed per window, reset time, age, stale).
  * `tokens` is the tokens spent today and this week by role and model, read incrementally from the Claude Code
  * transcripts; it is null unless asked for (`tokens=1`) or when there is no transcripts folder.
  * `history` is the plan % over time (usage.history, [{ t, fiveHourUsed, sevenDayUsed }], oldest first), the series

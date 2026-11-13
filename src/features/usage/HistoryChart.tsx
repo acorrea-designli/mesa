@@ -17,8 +17,8 @@ function edge(start: number, end: number, which: 0 | 1): string {
   return a === b ? (which === 0 ? at : bt) : stampLabel(which === 0 ? start : end);
 }
 
-// What each mark means. The chart is % USED (the plan bar above is % restante), so the line climbs as the plan is spent.
-const TIP_LINE = "Lo que has usado de verdad, medición a medición. La gráfica muestra % usado: sube, al revés que la barra.";
+// What each mark means. The chart is % USED, the same reading as the plan bar above (it fills left to right as the plan is spent), so the line climbs.
+const TIP_LINE = "Lo que has usado de verdad, medición a medición. La gráfica muestra % usado: sube igual que se llena la barra de arriba.";
 const TIP_EVEN = "Gastar parejo: 0% al empezar la ventana y 100% al reiniciar. Por encima de esta línea gastas más rápido que el reloj.";
 const TIP_DOT = "Última medición. Con el cursor, el dedo o las flechas sobre la gráfica se mueve a la que elijas; el texto de arriba la lee.";
 

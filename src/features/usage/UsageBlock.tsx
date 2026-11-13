@@ -1,16 +1,16 @@
-// "Uso": Claude plan usage as two meters (5 h, semana) with % remaining and a pace tick. Presentational (no hooks),
+// "Uso": Claude plan usage as two meters (5 h, semana) with % used and a tick for the time elapsed. Presentational (no hooks),
 // so /kit shows it in every state. The rail (desktop) and the Ajustes sheet (phone) mount UsageLine. The whole block
 // is one link to /uso; in Ajustes `onDetail` closes the sheet first and routes there.
 import Link from "next/link";
 import type { MouseEvent } from "react";
 import type { UsageView } from "@/lib/domain/usage";
-import { meterLabel, UsageMeter } from "./UsageMeter";
+import { meterLabel, usedPct, UsageMeter } from "./UsageMeter";
 import "./usage.css";
 
 export const DETAIL_HREF = "/uso";
 
 export function UsageBlock({ view, onDetail, current }: { view: UsageView; onDetail?: (href: string) => void; current?: boolean }) {
-  const none = view.state === "none" || view.windows.every((w) => w.remaining === null);
+  const none = view.state === "none" || view.windows.every((w) => w.used === null);
   const go = onDetail
     ? (e: MouseEvent) => {
         e.preventDefault();
@@ -25,11 +25,11 @@ export function UsageBlock({ view, onDetail, current }: { view: UsageView; onDet
         <span key={w.key} className="us-win">
           <span className="us-top">
             <span>{w.label}</span>
-            {w.remaining === null ? (
+            {usedPct(w) === null ? (
               <small>sin dato</small>
             ) : (
               <b>
-                {w.remaining}%<small> restante</small>
+                {usedPct(w)}%<small> usado</small>
               </b>
             )}
           </span>

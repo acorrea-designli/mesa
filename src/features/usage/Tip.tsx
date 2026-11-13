@@ -34,9 +34,45 @@ export interface TipProps {
   style?: CSSProperties;
   /** Always open (the /kit gallery). */
   pinned?: boolean;
+  /** CSS selector of marks inside the same card (.us-panel) the bubble must never cover (the big figure, the number line). */
+  avoid?: string;
 }
 
-export function Tip({ tip, children, className, btnClass, tabbable = true, style, pinned = false }: TipProps) {
+const GAP = 8;
+const PAD = 8; // the vertical padding of .us-tipbox: the visible bubble is the box minus it
+
+/**
+ * Moves an open bubble off the marks it must not cover (`avoid`, looked up inside the nearest card). Above the trigger it
+ * slides to the side of the mark with more room (the left of the big figure, usually), narrowing itself when even that
+ * is short; below the trigger (no room above) it drops under the mark. The page's own numbers stay readable while the
+ * bubble is open. `min` and `max` are the horizontal bounds the bubble must stay inside.
+ */
+function dodge(box: HTMLElement, avoid: string, min: number, max: number) {
+  const scope = box.closest(".us-panel") ?? document;
+  const marks = Array.from(scope.querySelectorAll(avoid)).map((el) => el.getBoundingClientRect()).filter((m) => m.width > 0);
+  const px = (name: string) => parseFloat(box.style.getPropertyValue(name)) || 0;
+  const hits = (m: DOMRect, r: DOMRect) => r.left < m.right + GAP && r.right > m.left - GAP && r.top + PAD < m.bottom && r.bottom - PAD > m.top;
+  const slide = (by: number) => box.style.setProperty("--dx", `${Math.round(px("--dx") + by)}px`);
+  for (const m of marks) {
+    let r = box.getBoundingClientRect();
+    if (!hits(m, r)) continue;
+    if (box.dataset.side === "down") {
+      box.style.setProperty("--dy", `${Math.round(m.bottom + GAP - (r.top + PAD))}px`);
+      continue;
+    }
+    const leftRoom = m.left - GAP - min;
+    const rightRoom = max - (m.right + GAP);
+    const toLeft = Math.min(r.width, leftRoom) >= Math.min(r.width, rightRoom);
+    const room = Math.floor(toLeft ? leftRoom : rightRoom);
+    if (room < r.width) {
+      box.style.setProperty("--maxw", `${Math.max(room, 0)}px`);
+      r = box.getBoundingClientRect();
+    }
+    slide(toLeft ? m.left - GAP - r.right : m.right + GAP - r.left);
+  }
+}
+
+export function Tip({ tip, children, className, btnClass, tabbable = true, style, pinned = false, avoid }: TipProps) {
   const id = useId();
   const tipId = `${id}tip`;
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -73,6 +109,8 @@ export function Tip({ tip, children, className, btnClass, tabbable = true, style
     const box = boxRef.current;
     if (!open || !box) return;
     box.style.setProperty("--dx", "0px");
+    box.style.setProperty("--dy", "0px");
+    box.style.removeProperty("--maxw");
     box.dataset.side = "up";
     let r = box.getBoundingClientRect();
     if (r.top < 8) {
@@ -87,7 +125,8 @@ export function Tip({ tip, children, className, btnClass, tabbable = true, style
     const dx = r.right > max ? max - r.right : 0;
     const shift = r.left + dx < min ? min - r.left : dx;
     box.style.setProperty("--dx", `${Math.round(shift)}px`);
-  }, [open]);
+    if (avoid) dodge(box, avoid, min, max);
+  }, [open, avoid]);
 
   return (
     <span
