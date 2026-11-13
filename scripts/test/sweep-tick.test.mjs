@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -15,6 +15,7 @@ import {
   makeStore,
   report,
   splitMark,
+  sweeperSessionName,
   tickSources,
   wait,
   writeForce,
@@ -139,7 +140,7 @@ test("report persists the new state", async () => {
 
 test("there is no local fallback: Mesa errors surface", async () => {
   const fetchImpl = async () => ({ status: 404, json: async () => ({ error: { code: "not_found" } }) });
-  const store = makeStore({ fetchImpl, base: "http://x" });
+  const store = makeStore({ fetchImpl, base: "http://x", session: "sweeper" });
   await assert.rejects(report(config, store, "slack", { new: 0 }, { now: () => tue10 }), /404 on GET \/api\/sources/);
   const r = await wait(config, store, { now: () => tue10, maxSec: 5 });
   assert.equal(r.reason, "mesa_down");
@@ -151,7 +152,7 @@ test("force drops a flag the waiting store picks up once, limited to the named s
   // Mesa has the sources but its wait endpoint fails: only the flag can wake the store.
   const fetchImpl = async (url) =>
     url.endsWith("/api/sources") ? { status: 200, json: async () => ({ sources: {}, lastInteractionAt: null }) } : { status: 500, json: async () => ({}) };
-  const store = makeStore({ fetchImpl, base: "http://x", forcePath });
+  const store = makeStore({ fetchImpl, base: "http://x", forcePath, session: "sweeper" });
   assert.equal(await store.forcedWithin(0.05, 0.01), null);
   writeForce(["slack"], forcePath);
   assert.deepEqual(await store.forcedWithin(1, 0.01), { sources: ["slack"] });
@@ -183,7 +184,7 @@ test("report PATCHes Mesa with only the source fields, including the current cad
     if (url.endsWith("/api/sources")) return { status: 200, json: async () => ({ sources: { slack: { source: "slack", health: "ok", updatedAt: "x", watermark: "w0" } }, lastInteractionAt: iso(tue10) }) };
     return { status: 200, json: async () => ({ source: {} }) };
   };
-  const store = makeStore({ fetchImpl, base: "http://m" });
+  const store = makeStore({ fetchImpl, base: "http://m", session: "sweeper" });
   await report(config, store, "slack", { new: 1, watermark: "w1" }, { now: () => tue10 });
   const patch = calls.find((c) => c.method === "PATCH");
   assert.ok(patch.url.endsWith("/api/sources/slack"));
@@ -201,7 +202,7 @@ test("Barrer ahora: wait returns on sweep.requested for the sweeper session", as
     return { status: 200, json: async () => ({}) };
   };
   const dir = mkdtempSync(join(tmpdir(), "sweep-wake-"));
-  const store = makeStore({ fetchImpl, base: "http://m", forcePath: join(dir, "f.json") });
+  const store = makeStore({ fetchImpl, base: "http://m", forcePath: join(dir, "f.json"), session: "sweeper" });
   const r = await wait(config, store, { now: () => at("2026-11-03T23:00:00"), maxSec: 60 });
   assert.equal(r.forced, true);
   assert.deepEqual(r.sources, ["basecamp"]);
@@ -325,4 +326,17 @@ test("MESA_SLACK_USER_ID overrides the Slack user id of the file; blank keeps it
   assert.equal(file, "U06E2UBDC73");
   assert.equal(loadConfig(undefined, { MESA_SLACK_USER_ID: "U0ANA" }).sources.slack.userId, "U0ANA");
   assert.equal(loadConfig(undefined, { MESA_SLACK_USER_ID: "  " }).sources.slack.userId, file);
+});
+
+// ---------- the sweeper's session name ----------
+
+test("the sweeper session comes from the environment, then from the repo's .env.local, then \"sweeper\"", () => {
+  const repo = mkdtempSync(join(tmpdir(), "mesa-sweeper-session-"));
+  assert.equal(sweeperSessionName({}, repo), "sweeper"); // no .env.local at all
+  writeFileSync(join(repo, ".env.local"), "MESA_GH_USER=ana-dev\nMESA_SWEEPER_SESSION=sweeper-ana\n");
+  assert.equal(sweeperSessionName({}, repo), "sweeper-ana");
+  assert.equal(sweeperSessionName({ MESA_SWEEPER_SESSION: "from-env" }, repo), "from-env"); // the environment wins
+  assert.equal(sweeperSessionName({ MESA_SWEEPER_SESSION: "  " }, repo), "sweeper-ana"); // blank is unset
+  writeFileSync(join(repo, ".env.local"), "MESA_SWEEPER_SESSION=\n"); // the line copied from .env.example, left blank
+  assert.equal(sweeperSessionName({}, repo), "sweeper");
 });

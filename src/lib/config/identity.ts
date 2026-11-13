@@ -10,7 +10,7 @@
 //   MESA_SLACK_USER_ID    Slack member id the sweeper reads mentions and DMs for
 //   MESA_OWNER_NAME       how the board, the hooks and the team files call the owner (default "Andrés")
 //   MESA_OWNER_FULL_NAME  the owner's full name, the "postAs" of a calendar salida (default: MESA_OWNER_NAME, else "Andrés Correa")
-//   MESA_PROJECT          the project the lead registers its session under (default "designli")
+//   MESA_PROJECT          the project the lead registers its session under (default "designli"; install-team sets the sessions folder's name for anyone else)
 //   MESA_SESSIONS_DIR     folder the Claude Code sessions of this board run in (parent of this repo)
 //   MESA_WORKTREES_ROOT   where the team's worktrees live (default: the sessions folder + "-wt")
 //   MESA_SETTINGS_LOCAL   the settings.local.json that "Permitir esta regla" appends to
