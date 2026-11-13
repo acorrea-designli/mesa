@@ -22,7 +22,7 @@ import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
 import { Markdown, MarkdownInline } from "./MarkdownView";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
-import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
+import { hasUnseenStep, isNearBottom, nextApprovalPill, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
 import { checklistOf } from "@/lib/domain/ticket-checklists";
 import { ChecklistCard } from "./ChecklistCard";
@@ -111,16 +111,23 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   // while he reads history is off screen. "Ver plan nuevo ↓" / "Plan pendiente ↓"
   // take its place over the composer, win over "nuevo mensaje", never scroll by themselves, and hide when the plan
   // is in view or nothing is planned. The plan's rows arrive (and its stubs grow) when it comes into view.
+  // The permission pill ("Permiso pendiente ↓") is the same rule for the pending approval cards: it shows when one
+  // arrives (or is still taller than what fits on opening) while its block is off screen, and never scrolls by itself.
   const planRef = useRef<HTMLDivElement>(null);
+  const approvalRef = useRef<HTMLDivElement>(null);
   const planned = t.status === "closed" ? [] : t.actions.filter((a) => a.state === "planned").map((a) => a.id);
   const actionIds = t.actions.map((a) => a.id);
-  const live = useRef({ planned, actionIds });
+  const pendingIds = data.approvals.filter((a) => a.status === "pending").map((a) => a.id);
+  const live = useRef({ planned, actionIds, pendingIds });
   useLayoutEffect(() => {
-    live.current = { planned, actionIds };
+    live.current = { planned, actionIds, pendingIds };
   });
   const [planPill, setPlanPill] = useState<PlanPillKind | null>(null);
   const planPillNow = useRef<PlanPillKind | null>(null);
   const seenSteps = useRef<string[]>([]);
+  const [approvalPill, setApprovalPill] = useState(false);
+  const approvalPillNow = useRef(false);
+  const seenApprovals = useRef<string[]>([]);
   const opened = useRef(false);
   const arrivalDue = useRef(false);
   const checkPlan = () => {
@@ -128,7 +135,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     if (!s) return; // the thread is not on screen (phone list view): it is judged when it appears
     const opening = !opened.current;
     opened.current = true;
-    const { planned: waiting, actionIds: all } = live.current;
+    const { planned: waiting, actionIds: all, pendingIds: pendingNow } = live.current;
     const el = planRef.current;
     // On the phone the window scrolls and the sticky header and the composer cover its edges: the plan is in
     // view only between the header's bottom and the composer's top.
@@ -153,6 +160,21 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
       arrivalDue.current = false;
       arrivePlan(el);
     }
+    const appEl = approvalRef.current;
+    const appInView = appEl ? planInView(appEl.getBoundingClientRect(), view) : false;
+    const appNext = nextApprovalPill({ current: approvalPillNow.current, pending: pendingNow, seen: seenApprovals.current, inView: appInView, opening });
+    seenApprovals.current = pendingNow;
+    if (appNext !== approvalPillNow.current) {
+      approvalPillNow.current = appNext;
+      setApprovalPill(appNext);
+    }
+  };
+  const goApproval = () => {
+    approvalPillNow.current = false;
+    setApprovalPill(false);
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    nearBottom.current = true; // a pending permission is the end of the thread: he stays pinned there
+    approvalRef.current?.scrollIntoView({ block: "start", behavior });
   };
   const goPlan = () => {
     planPillNow.current = null;
@@ -176,6 +198,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   // new rows have settled (the pin runs in the resize observer).
   const actionsKey = actionIds.join(",");
   const plannedKey = planned.join(",");
+  const pendingKey = pendingIds.join(",");
   useEffect(() => {
     if (!opened.current) return;
     let second = 0;
@@ -187,7 +210,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
       cancelAnimationFrame(second);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionsKey, plannedKey]);
+  }, [actionsKey, plannedKey, pendingKey]);
   useLayoutEffect(() => {
     if (!lastMsg || seenMsg.current === lastMsg.id) return;
     seenMsg.current = lastMsg.id;
@@ -299,7 +322,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
       setBusy(false);
     }
   };
-  const shown = visiblePill({ plan: planPill, message: pill });
+  const shown = visiblePill({ approval: approvalPill, plan: planPill, message: pill });
 
   const fileIn = useRef<HTMLInputElement>(null);
   const actions: SlashAction[] = [
@@ -443,9 +466,13 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
               Always rendered, so the resize observer already watches it when a card arrives and keeps him at the end. */}
           <div className="tk-bottom">
             {planAtBottom ? planCard : null}
-            {pending.map((a) => (
-              <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
-            ))}
+            {pending.length ? (
+              <div className="tk-appwrap" ref={approvalRef}>
+                {pending.map((a) => (
+                  <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -462,7 +489,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
               if (shown === "message") {
                 toBottom(true);
                 setPill(false);
-              } else goPlan();
+              } else if (shown === "approval") goApproval();
+              else goPlan();
             }}
           >
             {pillLabel(shown).text} <span aria-hidden="true">{pillLabel(shown).arrow}</span>

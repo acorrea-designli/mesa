@@ -49,17 +49,37 @@ export function nextPlanPill(s: { current: PlanPillKind | null; planned: readonl
   return hasUnseenStep(s.planned, s.seen) ? "nuevo" : s.current;
 }
 
-export type VisiblePill = "plan-nuevo" | "plan-pendiente" | "message" | null;
+// ---------- the permission pill ----------
+// A pending permission card (a denied call waiting for his decision) also sits at the bottom, above the composer. One
+// that arrives while he reads history is off screen: "Permiso pendiente ↓" jumps to it. Same rule as the plan pill.
 
-/** One pill at a time: the plan wins over "nuevo mensaje", which comes back once the plan pill is gone if still due. */
-export function visiblePill(s: { plan: PlanPillKind | null; message: boolean }): VisiblePill {
+/**
+ * Whether the permission pill shows after the thread opens, a card arrives or the thread scrolls. No pending card, or
+ * the cards in view, hides it. On opening it shows (the cards are taller than what fits); later a pending card the
+ * thread had not seen shows it; otherwise it stays as it was, until he taps it, sees the cards or none is left.
+ */
+export function nextApprovalPill(s: { current: boolean; pending: readonly string[]; seen: readonly string[]; inView: boolean; opening: boolean }): boolean {
+  if (!s.pending.length || s.inView) return false;
+  if (s.opening) return true;
+  return hasUnseenStep(s.pending, s.seen) ? true : s.current;
+}
+
+export type VisiblePill = "approval" | "plan-nuevo" | "plan-pendiente" | "message" | null;
+
+/**
+ * One pill at a time: a pending permission wins (it blocks Claude), then the plan, then "nuevo mensaje"; each comes
+ * back once the one above it is gone if still due.
+ */
+export function visiblePill(s: { approval?: boolean; plan: PlanPillKind | null; message: boolean }): VisiblePill {
+  if (s.approval) return "approval";
   if (s.plan) return s.plan === "nuevo" ? "plan-nuevo" : "plan-pendiente";
   return s.message ? "message" : null;
 }
 
-/** The pill's words. Every pill points down: what it brings him to (a message, the waiting plan) is at the end. */
+/** The pill's words. Every pill points down: what it brings him to (a message, the waiting plan or permission) is at the end. */
 export function pillLabel(p: Exclude<VisiblePill, null>): { text: string; arrow: "↓" } {
-  return { text: p === "plan-nuevo" ? "Ver plan nuevo" : p === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje", arrow: "↓" };
+  const text = p === "approval" ? "Permiso pendiente" : p === "plan-nuevo" ? "Ver plan nuevo" : p === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje";
+  return { text, arrow: "↓" };
 }
 
 export type OnNewMessage = "scroll" | "pill";
