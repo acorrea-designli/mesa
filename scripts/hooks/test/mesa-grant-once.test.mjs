@@ -115,13 +115,23 @@ test("no grant, an unreachable Mesa and a malformed answer all answer nothing", 
 
 // The real hook as Claude Code runs it: stdin JSON in, exit code and stdout out, against a local fake Mesa that
 // always grants. A G-rule block must still win, and the grant must not even be asked for then.
-function runGuard(input, env) {
+function runGuard(input, env, { retired = [] } = {}) {
   return new Promise((resolve) => {
     const hits = [];
+    const bodies = [];
     const server = createServer((req, res) => {
       hits.push(req.url);
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(req.url.includes("/grants/consume") ? { granted: true, approvalId: "ap_demo" } : {}));
+      let raw = "";
+      req.on("data", (d) => (raw += d));
+      req.on("end", () => {
+        try {
+          bodies.push(raw ? JSON.parse(raw) : null);
+        } catch {
+          bodies.push(null);
+        }
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(req.url.includes("/grants/consume") ? { granted: true, approvalId: "ap_demo" } : req.url.startsWith("/api/team") ? { agents: retired.map((name) => ({ name })) } : {}));
+      });
     });
     server.listen(0, "127.0.0.1", () => {
       const child = spawn(process.execPath, [GUARD], { env: { ...process.env, ...env, MESA_URL: `http://127.0.0.1:${server.address().port}` } });
@@ -131,7 +141,7 @@ function runGuard(input, env) {
       child.stderr.on("data", (d) => (err += d));
       child.on("close", (code) => {
         server.close();
-        resolve({ code, out, err, hits });
+        resolve({ code, out, err, hits, bodies });
       });
       child.stdin.end(JSON.stringify(input));
     });
@@ -165,6 +175,63 @@ test("end to end: a call a G-rule blocks stays blocked and never asks for the gr
     const plain = await runGuard({ ...lead, tool_name: "Bash", tool_input: { command: "git status" } }, env);
     assert.deepEqual([plain.code, plain.out, plain.hits.length], [0, "", 0]);
     assert.equal(existsSync(env.MESA_GRANT_HINT), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("end to end, SendMessage (t150): a clean message gets the one-shot allow with the exact input; a G2 or G3 block stays blocked and never asks", async () => {
+  const dir = tmp();
+  try {
+    const env = hintEnv(dir);
+    writeFileSync(env.MESA_GRANT_HINT, "1");
+    const mate = fakeAgent({ name: "dev-t150-4" }).input;
+    const send = (tool_input, opts) => runGuard({ ...mate, tool_name: "SendMessage", tool_input }, env, opts);
+    const asked = (r) => r.hits.filter((u) => u.includes("/grants/consume")).length;
+    const clean = { to: "tl-t150-2", summary: "READY t150", message: "READY t150 PR https://x/pull/59 at abc1234" };
+    const ok = await send(clean);
+    assert.equal(ok.code, 0);
+    assert.deepEqual(JSON.parse(ok.out), grantAllowOutput("ap_demo"));
+    assert.equal(asked(ok), 1);
+    const body = ok.bodies[ok.hits.findIndex((u) => u.includes("/grants/consume"))];
+    assert.deepEqual(body, { tool: "SendMessage", toolInput: clean, caller: "dev-t150-4", sessionId: "sess-1" });
+    // G3: over 12 non-empty lines.
+    const long = await send({ ...clean, message: Array.from({ length: 13 }, (_, i) => `line ${i + 1}`).join("\n") });
+    assert.equal(long.code, 2);
+    assert.match(long.err, /guardrail G3/);
+    assert.equal(long.out, "");
+    assert.equal(asked(long), 0);
+    // G3: an acknowledgement-only message.
+    const ack = await send({ ...clean, message: "ok, thanks" });
+    assert.equal(ack.code, 2);
+    assert.match(ack.err, /guardrail G3/);
+    assert.equal(asked(ack), 0);
+    // G2: a retired recipient.
+    const gone = await send({ ...clean, to: "reviewer-t12" }, { retired: ["reviewer-t12"] });
+    assert.equal(gone.code, 2);
+    assert.match(gone.err, /guardrail G2/);
+    assert.equal(gone.out, "");
+    assert.equal(asked(gone), 0);
+    // Without the hint nothing is asked and nothing is answered, even for a clean message.
+    rmSync(env.MESA_GRANT_HINT);
+    const plain = await send(clean);
+    assert.deepEqual([plain.code, plain.out, asked(plain)], [0, "", 0]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the hook marks the grant hint after an allowed SendMessage card, like a command", async () => {
+  const dir = tmp();
+  try {
+    const { input } = fakeAgent({ name: "dev-t150-4" });
+    const env = hintEnv(dir);
+    const mesa = decision("allow");
+    const msg = { ...input, hook_event_name: "PermissionDenied", tool_name: "SendMessage", tool_input: { to: "tl-t150-2", message: "READY t150" }, reason: "Classifier unavailable", cwd: "G:/WorkSpace/designli" };
+    assert.deepEqual(await denied(msg, { ...fast, env, fetchImpl: mesa.fetchImpl }), RETRY);
+    assert.equal(grantHintFresh(env), true);
+    assert.equal(mesa.calls[0].body.tool, "SendMessage");
+    assert.deepEqual(mesa.calls[0].body.toolInput, msg.tool_input);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

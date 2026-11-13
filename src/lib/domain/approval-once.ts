@@ -1,12 +1,22 @@
 // What "Permitir esta vez" covers and what its card shows (t143 PR5), pure and free of node modules so the card can use it.
 //
-// A once-card is for a command or an MCP tool: Bash, PowerShell, mcp__*. Every other tool keeps today's card (a file edit
-// has its derived rule; the rest can only be denied). The text the card shows for one is built HERE, on the server, from
-// the stored tool_input, never taken from the client: the call Andres reads is the call the grant is hashed from, and
-// `decide()` refuses a grant when the stored text is not exactly this, or is too long to be read whole.
+// A once-card is for every tool the guardrails' PreToolUse hook covers (scripts/install-team.mjs rails matcher: SendMessage,
+// Bash, PowerShell, mcp__*), because that hook is what consumes the grant on the retry. A file edit (Edit, Write,
+// MultiEdit, NotebookEdit) keeps its derived rule and never gets a grant; any other tool the hook does not see could
+// never consume one, so its card can only be denied and says why. The text the card shows is built HERE, on the server,
+// from the stored tool_input, never taken from the client: the call Andres reads is the call the grant is hashed from,
+// and `decide()` refuses a grant when the stored text is not exactly this, or is too long to be read whole.
+
+import { EDIT_TOOLS } from "./denied-rule";
 
 /** One predicate for decide(), the denied hook (through the card's `once` flag) and the card. */
-export const onceEligible = (tool: string): boolean => tool === "Bash" || tool === "PowerShell" || tool.startsWith("mcp__");
+export const onceEligible = (tool: string): boolean => tool === "Bash" || tool === "PowerShell" || tool === "SendMessage" || tool.startsWith("mcp__");
+
+/** The one line a card that cannot be allowed once shows, by tool. Edit tools get their rule path elsewhere. */
+export const onceUnavailableWhy = (tool: string): string =>
+  EDIT_TOOLS.has(tool)
+    ? "una edición de archivo no se permite una vez: solo lleva una regla, y solo dentro de un worktree, fuera de .claude y de settings"
+    : `no se puede permitir ${tool} una vez: el guardia que consume el permiso solo ve SendMessage, Bash, PowerShell y herramientas MCP`;
 
 /** A call longer than this is not shown whole on the card, so it cannot be allowed once. */
 export const MAX_SHOWN_CHARS = 20_000;

@@ -1,11 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { grantHash } from "./approval-grant";
-import { MAX_SHOWN_CHARS, onceEligible, shownCall, visible } from "./approval-once";
+import { MAX_SHOWN_CHARS, onceEligible, onceUnavailableWhy, shownCall, visible } from "./approval-once";
 
 describe("onceEligible", () => {
-  it("is Bash, PowerShell and mcp__* only", () => {
-    for (const t of ["Bash", "PowerShell", "mcp__engram__mem_save", "mcp__x"]) expect(onceEligible(t)).toBe(true);
-    for (const t of ["Edit", "Write", "Read", "Glob", "Agent", "WebFetch", "bash", "mcp_x", ""]) expect(onceEligible(t)).toBe(false);
+  it("is every tool the rails PreToolUse hook covers: SendMessage, Bash, PowerShell and mcp__*", () => {
+    for (const t of ["Bash", "PowerShell", "SendMessage", "mcp__engram__mem_save", "mcp__x"]) expect(onceEligible(t)).toBe(true);
+  });
+  it("never the Edit family (they keep the derived rule) nor a tool the hook does not see", () => {
+    for (const t of ["Edit", "Write", "MultiEdit", "NotebookEdit", "Read", "Glob", "Agent", "WebFetch", "bash", "sendmessage", "mcp_x", ""]) expect(onceEligible(t)).toBe(false);
+  });
+  it("says why in one line, for a file edit and for any other tool", () => {
+    expect(onceUnavailableWhy("Edit")).toMatch(/^una edición de archivo/);
+    expect(onceUnavailableWhy("Read")).toContain("no se puede permitir Read una vez");
+    for (const t of ["Edit", "Read"]) expect(onceUnavailableWhy(t)).not.toContain("\n");
+  });
+});
+
+describe("shownCall for a SendMessage", () => {
+  it("is the tool name and the canonical JSON of the stored input, whole", () => {
+    const s = shownCall("SendMessage", { to: "tl-t150-2", message: "READY\nline two", summary: "s" });
+    expect(s.summary).toBe("SendMessage");
+    expect(s.detail).toBe('{\n  "message": "READY\\nline two",\n  "summary": "s",\n  "to": "tl-t150-2"\n}');
+  });
+  it("shows invisible characters in the message as escapes", () => {
+    expect(shownCall("SendMessage", { to: "x", message: "a‮b" }).detail).toContain("\\u{202E}");
   });
 });
 

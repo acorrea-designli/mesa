@@ -15,6 +15,7 @@ const base: Approval = {
   rule: "Edit(//g/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/**)",
   sessionId: "",
   once: false,
+  onceWhy: "",
   agent: "dev-t128-2",
   tool: "Edit",
   summary: "Edit G:/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/calendar-body.mjs",
@@ -47,24 +48,29 @@ describe("ApprovalCard, a denied call", () => {
     expect(h).not.toContain("Lee tus configuraciones");
   });
   it("offers only Denegar, and says why, when a file edit has no rule to propose", () => {
-    const h = html({ rule: "", tool: "Write", summary: "Write C:/x/y.txt", detail: "hi" });
+    const why = "una edición de archivo no se permite una vez: solo lleva una regla";
+    const h = html({ rule: "", tool: "Write", summary: "Write C:/x/y.txt", detail: "hi", onceWhy: why });
     expect(h).not.toContain("Permitir esta regla");
     expect(h).not.toContain("Permitir esta vez");
-    expect(h).toContain("Sin regla que proponer");
+    expect(h).toContain(`Sin botón de permiso: ${why}`);
     expect(h).toContain("Denegar");
   });
   it("offers Permitir esta vez only when the server says once, with the exact call shown", () => {
-    const notOnce = html({ rule: "", tool: "Read", summary: "Read x", detail: "x", once: false });
+    const notOnce = html({ rule: "", tool: "Read", summary: "Read x", detail: "x", once: false, onceWhy: "no se puede permitir Read una vez: el guardia solo ve SendMessage" });
     expect(notOnce).not.toContain("Permitir esta vez");
-    expect(notOnce).toContain("Sin regla que proponer");
-    expect(html({ rule: "", tool: "Bash", summary: "s", detail: "$ x", once: false })).not.toContain("Permitir esta vez"); // the server refused it
-    for (const tool of ["Bash", "PowerShell", "mcp__engram__mem_save"]) {
+    expect(notOnce).toContain("Sin botón de permiso: no se puede permitir Read una vez");
+    const refused = html({ rule: "", tool: "Bash", summary: "s", detail: "$ x", once: false, onceWhy: "la llamada es demasiado larga" }); // the server refused it
+    expect(refused).not.toContain("Permitir esta vez");
+    expect(refused).toContain("Sin botón de permiso: la llamada es demasiado larga");
+    for (const tool of ["Bash", "PowerShell", "SendMessage", "mcp__engram__mem_save"]) {
       const h = html({ rule: "", tool, summary: "git push --dry-run", detail: "$ git push --dry-run origin x", once: true });
       expect(h).toContain("Permitir esta vez");
       expect(h).toContain("git push --dry-run origin x");
       expect(h).toContain("Denegar");
       expect(h).not.toContain("Permitir esta regla");
       expect(h).toContain("una sola vez");
+      expect(h).toContain("esta llamada exacta");
+      expect(h).not.toContain("Sin botón de permiso");
     }
   });
   it("an Edit card keeps Permitir esta regla and never offers Permitir esta vez", () => {
