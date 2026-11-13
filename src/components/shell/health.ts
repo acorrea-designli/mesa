@@ -9,7 +9,7 @@ import { clock } from "@/features/hoy/format";
 export type HealthLevel = "ok" | "degraded" | "down";
 
 export interface SourceHealth {
-  source: Source | "github_project" | "calendar";
+  source: Source | "github_project" | "github_projects" | "calendar";
   state: HealthLevel;
   /** Short rail note: "al día", "sin conexión", "pausa 11:05". */
   note: string;
@@ -24,6 +24,7 @@ export interface SourceHealth {
 const NAME: Record<HealthSource | "claude", string> = {
   github: "GitHub",
   github_project: "GitHub Project",
+  github_projects: "Proyectos",
   slack: "Slack",
   basecamp: "Basecamp",
   engram: "engram",
@@ -108,7 +109,7 @@ export function mapHealth(s: SourceState, ctx: HealthContext): SourceHealth {
 
 /**
  * The rail block: only when some source is not ok (the calm rail stays quiet).
- * Lists GitHub, Slack, Basecamp, GitHub Project when it is the one failing, Calendario
+ * Lists GitHub, Slack, Basecamp, GitHub Project and Proyectos (the client boards of /proyectos) when they are the ones failing, Calendario
  * once it has reported (a board without the feed never lists it), and Claude (listening or not).
  */
 export function railHealth(states: SourceState[], claudeListening: boolean, ctx: HealthContext): (SourceHealth & { name: string })[] {
@@ -123,7 +124,11 @@ export function railHealth(states: SourceState[], claudeListening: boolean, ctx:
     rows.push({ ...h, name: NAME[src] });
   }
   const gp = mapped.get("github_project");
-  if (gp && by.get("github_project") && gp.state !== "ok") rows.splice(1, 0, { ...gp, name: NAME.github_project });
+  const gpShown = Boolean(gp && by.get("github_project") && gp.state !== "ok");
+  if (gpShown) rows.splice(1, 0, { ...gp!, name: NAME.github_project });
+  // The /proyectos reader (t152): its rate limit or outage shows under GitHub, after GitHub Project.
+  const gps = mapped.get("github_projects");
+  if (gps && by.get("github_projects") && gps.state !== "ok") rows.splice(gpShown ? 2 : 1, 0, { ...gps, name: NAME.github_projects });
   const cal = mapped.get("calendar");
   if (cal) rows.push({ ...cal, name: NAME.calendar });
   rows.push({

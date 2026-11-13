@@ -1,0 +1,21 @@
+{
+  "$comment": "The /proyectos screen (t152): one entry per client project, read-only. `board` is the GitHub Project v2 (owner + number) whose Status columns are the stations, `statusOrder` their order on the band (Status names the board has and this list lacks follow at the end), `repos` the repos whose open PRs are listed, `issueRepo` the repo the board's issues live in and `issueKeys` the patterns (one capture group: the issue number in issueRepo) that tie a PR title, branch or body to one of them. Read by src/lib/integrations/projects-config.ts; an untracked config/projects.local.json merged over this file (objects merge by key, arrays and values replace, as config/sweep.local.json does) changes it for one machine. Mesa never writes to these repos or boards.",
+  "projects": {
+    "dre": {
+      "name": "DRE-RMS-backlog",
+      "board": { "owner": "7-Arrow", "number": 2 },
+      "statusOrder": ["Blocked", "To-do", "Copied to Dev Jira", "In Development", "In QA", "Approved by QA", "Ready for UAT", "Approved", "Done"],
+      "repos": ["7-Arrow/dre-backend", "7-Arrow/dre-frontend", "7-Arrow/dre-infra", "7-Arrow/dre-connect-intake"],
+      "issueRepo": "7-Arrow/dre-backlog",
+      "issueKeys": ["\\bGHI-(\\d+)\\b"]
+    },
+    "prospec": {
+      "name": "Prospec",
+      "board": { "owner": "designli", "number": 45 },
+      "statusOrder": ["Backlog", "Todo", "Blocked", "In Development", "Pending PR approval", "Ready for QA", "In QA", "Ready for UAT", "Done"],
+      "repos": ["designli/prospec-backend", "designli/prospec-frontend", "designli/prospec-admin"],
+      "issueRepo": "designli/prospec-backlog",
+      "issueKeys": ["^(\\d+)-", "\\(#(\\d+)\\)"]
+    }
+  }
+}

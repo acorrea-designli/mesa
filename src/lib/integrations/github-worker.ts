@@ -1,7 +1,8 @@
 // The server-side GitHub loop, started from src/instrumentation.ts.
 //  - notifications + review requests (github-ingest), at X-Poll-Interval;
-//  - Project push of pending tasks every few seconds, pull every 2 min (github-project).
-// Health goes to source_state rows "github" and "github_project" (rail notice, Estados B).
+//  - Project push of pending tasks every few seconds, pull every 2 min (github-project);
+//  - the read-only /proyectos reader of the client repos and boards (projects-reader), on its own cadence and budget.
+// Health goes to source_state rows "github", "github_project" and "github_projects" (rail notice, Estados B).
 //
 // Enabled when MESA_GITHUB=on, or when MESA_GITHUB is unset and MESA_DB is unset (the real
 // board on data/mesa.db). Dev servers on scratch databases (MESA_DB=…) do not touch GitHub
@@ -13,6 +14,7 @@ import { GH_USER, GhError, ghTokenState, runGh, type GhRunner, type GhTokenState
 import { ingestTick, initialIngestState, healthNote, type IngestState, type TickResult } from "./github-ingest";
 import { ensureProject, pullProject, pushPending, readProjectSettings, type ProjectSettings, type PullResult, type PushResult } from "./github-project";
 import { publishChange } from "../live/bus";
+import { projectsReader } from "./projects-reader";
 
 // Set by startGithubWorker when gh has no token for the configured login. On globalThis because the instrumentation hook
 // and the route handlers are separate bundles; githubEnabled() then answers false everywhere (sync, status, deck).
@@ -151,9 +153,14 @@ export async function startGithubWorker(tokenState?: (login: string) => Promise<
   const worker = githubWorker();
   const state = g.__mesaGithub!;
   if (state.timer) return;
-  const tick = () => void worker.run().catch((err) => console.error("[mesa] github sync failed", err));
+  // The /proyectos reader runs beside the worker's pass, not inside it: its reads never hold up POST /api/github/sync.
+  const projects = projectsReader(repos());
+  const tick = () => {
+    void worker.run().catch((err) => console.error("[mesa] github sync failed", err));
+    void projects.run().catch((err) => console.error("[mesa] proyectos read failed", err));
+  };
   state.timer = setInterval(tick, TICK_MS);
   state.timer.unref();
-  console.info(`[mesa] github worker on (${GH_USER}); notifications every X-Poll-Interval, Project sync every ${TICK_MS / 1000} s`);
+  console.info(`[mesa] github worker on (${GH_USER}); notifications every X-Poll-Interval, Project sync every ${TICK_MS / 1000} s, proyectos read every 2 min (boards 10 min)`);
   tick();
 }
