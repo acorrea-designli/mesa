@@ -91,7 +91,8 @@ export function allowRules(repo = CANONICAL.repo) {
     `Bash(node ${r}/.claude/skills/mesa-write/assets/render.mjs *)`,
     `Bash(node ${r}/scripts/sweep-tick.mjs *)`,
     ...ALLOW_COMMON,
-    // t143: the vendored GitHub writer the lead runs after a click (hook G5 still needs a released github salida).
+    // t143: the vendored GitHub writer the lead runs after a click, from either shell (hook G5 still needs a released github salida).
+    `Bash(node ${r}/vendor/pr-gh.mjs *)`,
     `PowerShell(node ${r}/vendor/pr-gh.mjs *)`,
   ];
 }

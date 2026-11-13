@@ -55,7 +55,7 @@ const TODAY_ALLOW = [
   "mcp__claude_ai_Slack__slack_search_public_and_private",
   "mcp__claude_ai_Slack__slack_read_user_profile",
 ];
-const NEW_ALLOW = ["PowerShell(node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs *)"];
+const NEW_ALLOW = ["Bash(node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs *)", "PowerShell(node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs *)"];
 const NEW_ENV = ["env.MESA_GH_USER", "env.MESA_GIT_NAME", "env.MESA_GIT_EMAIL", "env.MESA_SLACK_USER_ID"];
 
 const ana = (extra = {}) => ({ "--gh-user": "ana-dev", "--git-name": "Ana Dev", "--git-email": "ana@example.com", "--slack-id": "U0ANA1234", ...extra });
@@ -211,9 +211,10 @@ test("renderText replaces every spelling of his paths, his identity, and nothing
 // The shipped skills, agents and preamble must render clean. `z4yross` is exempt until vendor/ (PR3) replaces the
 // references to the owner's profile folder.
 const skip = existsSync(join(REPO, "vendor")) ? [] : ["z4yross"];
-// This checkout may itself live under G:/WorkSpace/designli-wt: its own path (any spelling) is not a leftover.
-const own = (t) => t.split(fwd(REPO)).join("<repo>").split(posixForm(REPO)).join("<repo>");
-const left = (t) => leftovers(own(t), skip);
+// The configured paths (this checkout, the sessions folder, the worktrees root) may sit under a folder named like the
+// owner's (a worktree under G:/WorkSpace/designli-wt, a temp folder under his profile): they are not leftovers.
+const own = (t, render) => [fwd(REPO), ...(render ? [render.repo, render.sessions, render.worktrees] : [])].reduce((s, p) => s.split(fwd(p)).join("<own>").split(posixForm(p)).join("<own>"), t);
+const left = (t, render) => leftovers(own(t, render), skip);
 
 function renderedInstall(extra = {}) {
   const root = tmp();
@@ -238,7 +239,7 @@ test("a teammate install renders real copies of every skill, agent and the pream
   const files = allFiles(claude).filter((f) => !/settings\.json|rendered\.json/.test(f));
   assert.ok(files.length >= 15);
   const texts = files.map((f) => [f, readFileSync(f, "utf8")]);
-  for (const [f, t] of texts) assert.deepEqual(left(t), [], f);
+  for (const [f, t] of texts) assert.deepEqual(left(t, cfg.render), [], f);
   const read = (rel) => readFileSync(join(claude, rel), "utf8");
   const mine = fwd(REPO);
   assert.match(read("agents/dev.md"), /user\.name="Ana Dev" -c user\.email="ana@example\.com" commit/);
@@ -253,13 +254,13 @@ test("a teammate install renders real copies of every skill, agent and the pream
 });
 
 test("a teammate install's settings carry his identity env, his hook paths and allow rules, and none of the owner's", () => {
-  const { target } = renderedInstall();
+  const { target, cfg } = renderedInstall();
   const raw = readFileSync(join(target, ".claude", "settings.json"), "utf8");
   const s = JSON.parse(raw);
   assert.deepEqual({ ...s.env }, { ...ENV, MESA_GH_USER: "ana-dev", MESA_GIT_NAME: "Ana Dev", MESA_GIT_EMAIL: "ana@example.com", MESA_SLACK_USER_ID: "U0ANA1234" });
   assert.deepEqual(s.permissions.allow.slice(0, 4), allowRules(fwd(REPO)).slice(0, 4));
-  assert.ok(s.permissions.allow.includes(`PowerShell(node ${fwd(REPO)}/vendor/pr-gh.mjs *)`));
-  assert.deepEqual(left(raw), []);
+  for (const shell of ["Bash", "PowerShell"]) assert.ok(s.permissions.allow.includes(`${shell}(node ${fwd(REPO)}/vendor/pr-gh.mjs *)`));
+  assert.deepEqual(left(raw, cfg.render), []);
 });
 
 test("rendering twice changes nothing; a refresh after the repo changes rewrites only what it rendered", () => {
@@ -305,7 +306,18 @@ test("rendering never writes through a link-mode junction into the repo, unless 
   install({ ...rest, force: true, node: NODE, identity, log: () => {} });
   assert.equal(lstatSync(join(target, ".claude", "skills", "mesa-start")).isSymbolicLink(), false);
   assert.equal(readFileSync(join(repoSkill, "SKILL.md"), "utf8"), before);
-  assert.deepEqual(left(readFileSync(join(target, ".claude", "skills", "mesa-start", "SKILL.md"), "utf8")), []);
+  assert.deepEqual(left(readFileSync(join(target, ".claude", "skills", "mesa-start", "SKILL.md"), "utf8"), cfg.render), []);
+});
+
+test("a dry run with --allow prints every allow rule it would add, so the older ones can be reviewed first", () => {
+  const target = tmp();
+  const log = [];
+  install({ target, node: NODE, allow: true, dryRun: true, log: (l) => log.push(l) });
+  for (const r of ALLOW) assert.ok(log.includes(`merge   permissions.allow: ${r}`), r);
+  // and the later run that writes them adds nothing the dry run did not list
+  const real = [];
+  install({ target, node: NODE, allow: true, log: (l) => real.push(l) });
+  assert.deepEqual(real.filter((l) => l.startsWith("merge")), log.filter((l) => l.startsWith("merge")));
 });
 
 test("--dry-run of a render writes nothing", () => {
