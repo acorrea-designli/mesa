@@ -20,6 +20,8 @@ needs something from you he opens one himself. So:
   one ticket, use `MESA ticket reply <ref>` there. Otherwise, e.g. a batch of tickets or anything about the team or
   protocol, use `MESA ticket ask`. Always give `--option A:… --option B:… --recommend A --why …` and one `--ref tN`
   per ticket involved. Then wait for `ticket.answered`.
+- A permission is never a question: run the call so his permission card fires (`mesa lead focus <ref>` first), never
+  ask whether you may (TEAM.md § 6). A denial with no card is a bug to fix.
 - The CLI is only a fallback while Mesa itself is down (preflight § 1). Say there that you will move to the board
   as soon as it is up.
 
