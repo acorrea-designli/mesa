@@ -2,6 +2,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
+
+// The checkout these hooks run from (scripts/hooks/lib.mjs -> the repo root), so a command the hooks print or recognise
+// names the right CLI on any machine. MESA_REPO overrides it. For the original owner's checkout this is
+// G:/WorkSpace/designli/ops, the path the installer writes into settings.json.
+export const mesaRepo = (env = process.env) => (env.MESA_REPO?.trim() || fileURLToPath(new URL("../../", import.meta.url))).replace(/\\/g, "/").replace(/\/+$/, "");
+export const mesaCli = (env = process.env) => `node ${mesaRepo(env)}/bin/mesa`;
 
 // Agent names: <role>-<ticketRef>[-k], e.g. reviewer-t12, reviewer-t12-2, tl-t14. Never reused.
 export const ROLES = ["tl", "reviewer", "dev", "devops", "researcher", "writer"];

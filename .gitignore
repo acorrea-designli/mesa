@@ -42,6 +42,7 @@ coverage/
 .env.*
 !.env.example
 data/
+config/sweep.local.json
 *.db
 *.db-*
 .DS_Store
