@@ -532,6 +532,15 @@ const SAL_STATUS: Record<string, string> = {
   draft: "borrador",
 };
 
+// A chip label on one line: cut with an ellipsis, rolled sideways on hover or focus (tickets.css, "source chips").
+function Lbl({ text }: { text: string }) {
+  return (
+    <span className="tk-cl">
+      <span className="tk-cl-i" style={{ animationDuration: `${Math.min(10000, Math.max(1200, text.length * 32))}ms` }}>{text}</span>
+    </span>
+  );
+}
+
 function Sources({ refs, titles, owner, item, related }: { refs: TicketRef[]; titles: Record<string, string>; owner: string | null; item: ThreadData["item"]; related: Related[] }) {
   if (!refs.length && !owner && !item && !related.length) return null;
   return (
@@ -539,26 +548,33 @@ function Sources({ refs, titles, owner, item, related }: { refs: TicketRef[]; ti
       <div className="k">Fuente</div>
       <div className="dest">
         {item?.url ? (
-          <Chip source={item.source} href={item.url}>
-            {item.title} <IcExternal />
+          <Chip source={item.source} href={item.url} className="tk-src" title={item.title}>
+            <Lbl text={item.title} />
+            <IcExternal />
           </Chip>
         ) : null}
         {refs.map((r) =>
           r.refType === "ticket" ? (
-            <Link key={r.id} className="chip ref" href={`/tickets?t=${r.target}`}>
-              <b>@{r.target}</b> {titles[r.target] ?? r.label}
+            <Link key={r.id} className="chip ref tk-src" href={`/tickets?t=${r.target}`} title={`@${r.target} ${titles[r.target] ?? r.label}`}>
+              <b>@{r.target}</b>
+              <Lbl text={titles[r.target] ?? r.label} />
             </Link>
           ) : r.refType === "url" && normalizeUrl(r.target) ? (
-            <Chip key={r.id} source={classify(r.target)?.source} href={normalizeUrl(r.target) ?? undefined}>
-              {r.label || r.target} <IcExternal />
+            <Chip key={r.id} source={classify(r.target)?.source} href={normalizeUrl(r.target) ?? undefined} className="tk-src" title={r.label || r.target}>
+              <Lbl text={r.label || r.target} />
+              <IcExternal />
             </Chip>
           ) : (
-            <Chip key={r.id} variant="plain">
-              {r.label || r.target}
+            <Chip key={r.id} variant="plain" className="tk-src" title={r.label || r.target}>
+              <Lbl text={r.label || r.target} />
             </Chip>
           ),
         )}
-        {owner ? <Chip source="claude">Sesión de Claude · {owner}</Chip> : null}
+        {owner ? (
+          <Chip source="claude" className="tk-src" title={`Sesión de Claude · ${owner}`}>
+            <Lbl text={`Sesión de Claude · ${owner}`} />
+          </Chip>
+        ) : null}
       </div>
       {related.length ? (
         <>
@@ -566,12 +582,14 @@ function Sources({ refs, titles, owner, item, related }: { refs: TicketRef[]; ti
           <div className="dest" aria-label="Relacionado">
             {related.map((x) =>
               x.internal ? (
-                <Link key={x.key} className="chip ref" href={x.href}>
-                  <b>{x.label}</b> {x.detail}
+                <Link key={x.key} className="chip ref tk-src" href={x.href} title={`${x.label} ${x.detail ?? ""}`.trim()}>
+                  <b>{x.label}</b>
+                  {x.detail ? <Lbl text={x.detail} /> : null}
                 </Link>
               ) : (
-                <Chip key={x.key} source={x.source} href={x.href} className="tk-rel">
-                  {x.label} <IcExternal />
+                <Chip key={x.key} source={x.source} href={x.href} className="tk-rel tk-src" title={x.label}>
+                  <Lbl text={x.label} />
+                  <IcExternal />
                 </Chip>
               ),
             )}
