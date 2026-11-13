@@ -350,6 +350,8 @@ Only the lead acts outward, and only after Andrés's approval:
 
 ## 9. Install
 
+Step by step for a new machine (prerequisites, `.env.local`, the identity flags, first run, post-pull steps): `README.md`. This section is the reference for what `install-team` does.
+
 ```
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs --dry-run   # the plan
 node G:/WorkSpace/designli/ops/scripts/install-team.mjs             # links + hooks + env

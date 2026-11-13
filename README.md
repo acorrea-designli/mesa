@@ -16,7 +16,7 @@ Mesa targets Windows with Git Bash (junctions, `bin/mesa.cmd`). Paths below use 
 | `gh` (GitHub CLI), logged in as **your** account | GitHub sync and review writes use that account's token. Give it the `project` scope so Mesa can create and update its Project |
 | `engram` binary on PATH (or `MESA_ENGRAM_BIN`) and its MCP server in Claude Code | the team's memory (`mcp__engram__*`) |
 | Basecamp MCP server in Claude Code | the sweeper reads Basecamp through it (`mcp__basecamp__*`) |
-| Slack and Google Calendar connectors in Claude Code | Slack reads and drafts, calendar events (`mcp__claude_ai_Slack__*`, `mcp__claude_ai_Google_Calendar__*`) |
+| Slack and Google Calendar connectors in Claude Code | Slack reads and drafts, and the calendar events you approve (`mcp__claude_ai_Slack__*`, `mcp__claude_ai_Google_Calendar__*`). The Calendario screen itself reads the iCal feed (`MESA_GCAL_ICS_URL`) |
 | Claude Code | the team runs in it |
 | `cloudflared` (optional) | phone access through a Cloudflare Tunnel, `docs/ARCHITECTURE.md` § 11 |
 | A private GitHub **Project** named "Mesa" under your login | the board's kanban. Mesa finds it by title and creates it on the first sync when it is missing |
@@ -49,7 +49,7 @@ Copy `.env.example` to `.env.local` (gitignored) and fill what applies; every va
 | `MESA_WORKTREES_ROOT` | where worktrees go (default: the sessions folder plus `-wt`) |
 | `MESA_GCAL_ICS_URL` | optional: the secret iCal address of your Google Calendar |
 
-Two settings are read from the shell, not from `.env.local`: `MESA_PORT` (default 8790; `serve.mjs` reads it before the file loads) and `MESA_REPO` (the hooks' checkout, normally derived from their location). Left unset, every value falls back to the original owner's, so on another machine none of the identity variables may stay blank.
+Two settings are read from the shell, not from `.env.local`: `MESA_PORT` (default 8790; `serve.mjs` reads it before the file loads) and `MESA_REPO` (the checkout the team hooks name to agents, normally derived from their location). `MESA_APPROVAL_LEAD` is written by `install-team` into the team's `.claude/settings.json`; you do not set it. Left unset, every value falls back to the original owner's, so on another machine none of the identity variables may stay blank.
 
 The GitHub worker (notifications, review requests, the Project) starts only when `gh` holds a token for `MESA_GH_USER`; without one it logs a single line and stays off. `MESA_GITHUB=off` turns it off explicitly. The sweeper's repo list is `githubRepos` in `config/sweep.json`; put your own in an untracked `config/sweep.local.json`:
 
