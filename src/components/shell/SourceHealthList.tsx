@@ -12,7 +12,7 @@ export function SourceHealthList({ health }: { health: (SourceHealth & { name: s
         return (
           <div key={h.source} className={h.state === "ok" ? "rl-src" : "rl-src bad"}>
             {h.state === "ok" ? <LineStub source={line} width={16} /> : <BrokenLine source={line} width={24} title={`${h.name} ${h.note}`} />}
-            {h.name}
+            <span className="rl-src-name">{h.name}</span>
             <small>{h.note}</small>
           </div>
         );
