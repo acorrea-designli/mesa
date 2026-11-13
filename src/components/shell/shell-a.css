@@ -25,23 +25,28 @@
 /*
  * Fuentes rows: stub, name and note share a line while the note fits (right-aligned);
  * a note that does not fit wraps under the name, indented to it, with its full text.
- * --src-ind = stub width + gap, so the wrapped note lines up with the name.
+ * --src-ind = stub width + gap: the row is padded by it and the stub pulled back out, so a
+ * wrapped note starts at the name's left edge; the name grows and keeps the note at the right.
  */
 .rl-health .rl-src {
   --src-ind: 23px;
   flex-wrap: wrap;
   gap: 2px 7px;
+  padding-left: var(--src-ind);
 }
 .rl-health .rl-src.bad {
   --src-ind: 31px;
 }
+.rl-health .rl-src > svg {
+  margin-left: calc(-1 * var(--src-ind));
+}
 .rl-health .rl-src-name {
-  flex: none;
+  flex: 1 0 auto;
   white-space: nowrap;
 }
 .rl-health .rl-src small {
+  margin-left: 0;
   min-width: 0;
-  max-width: calc(100% - var(--src-ind));
   text-align: left;
   overflow-wrap: anywhere;
 }
