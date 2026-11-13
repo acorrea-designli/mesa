@@ -22,7 +22,7 @@ import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
 import { Markdown, MarkdownInline } from "./MarkdownView";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
-import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
+import { hasUnseenStep, isNearBottom, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
 import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
 import { checklistOf } from "@/lib/domain/ticket-checklists";
 import { ChecklistCard } from "./ChecklistCard";
@@ -107,8 +107,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     if (near) setPill(false);
   };
 
-  // The plan pill (follow.ts): the plan sits above the messages and the thread opens at the end, so a plan that
-  // arrives (or still waits when the ticket opens) is usually off screen. "Ver plan nuevo ↑" / "Plan pendiente ↑"
+  // The plan pill (follow.ts): a plan with a waiting step sits at the bottom, above the composer, so one that arrives
+  // while he reads history is off screen. "Ver plan nuevo ↓" / "Plan pendiente ↓"
   // take its place over the composer, win over "nuevo mensaje", never scroll by themselves, and hide when the plan
   // is in view or nothing is planned. The plan's rows arrive (and its stubs grow) when it comes into view.
   const planRef = useRef<HTMLDivElement>(null);
@@ -159,7 +159,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     setPlanPill(null);
     arrivalDue.current = true;
     const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-    nearBottom.current = false; // leaving the end: a resize must not pull him back
+    nearBottom.current = true; // the waiting plan is the end of the thread: he stays pinned there
     planRef.current?.scrollIntoView({ block: "start", behavior });
   };
 
@@ -308,6 +308,24 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     ...verbs.map((v) => ({ key: v.toLowerCase().replace(/\s+/g, "-"), label: v, hint: "pídeselo a Claude", run: () => c.setText(`${c.state.text}${c.state.text && !c.state.text.endsWith(" ") ? " " : ""}${v}: `) })),
   ];
 
+  // The plan card: while a step waits for him it sits at the bottom with the pending permission cards; once nothing
+  // waits it is back under the first message.
+  const planAtBottom = planned.length > 0;
+  const planCard = t.actions.length ? (
+    <div className="tk-planwrap" ref={planRef}>
+      <Plan
+        ticketId={t.id}
+        actions={t.actions}
+        verbs={verbs}
+        busy={busy}
+        onVerb={(v) => c.setText(`${v}: `)}
+        onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")}
+        onApproveStep={(a) => transition(() => ticketApi.approveStep(t.id, a.id), "Paso autoaprobado · Claude lo hace sin volver a preguntar")}
+        onRevokeStep={(a) => revoke(a)}
+      />
+    </div>
+  ) : null;
+
   const known = useMemo(() => new Set(data.knownRefs), [data.knownRefs]);
   return (
     <KnownTickets.Provider value={known}>
@@ -361,25 +379,11 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           {first ? <Files atts={placed.byMessage.get(first.id) ?? []} ticketId={t.id} /> : null}
 
           {t.actions.length ? (
-            <div className="tk-planwrap" ref={planRef}>
-              <Plan
-                ticketId={t.id}
-                actions={t.actions}
-                verbs={verbs}
-                busy={busy}
-                onVerb={(v) => c.setText(`${v}: `)}
-                onApprove={(reject) => transition(() => ticketApi.approvePlan(t.id, reject), reject.length ? `Plan aprobado sin ${reject.length}` : "Plan aprobado · Claude empieza")}
-                onApproveStep={(a) => transition(() => ticketApi.approveStep(t.id, a.id), "Paso autoaprobado · Claude lo hace sin volver a preguntar")}
-                onRevokeStep={(a) => revoke(a)}
-              />
-            </div>
+            planAtBottom ? null : planCard
           ) : t.direction === "andres_asks" && t.status !== "closed" && !rest.length ? (
             <p className="tk-wait">Claude prepara el plan: verás aquí lo que va a hacer antes de que empiece.</p>
           ) : null}
 
-          {pending.map((a) => (
-            <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
-          ))}
           {pastApprovals.map((a) => (
             <ApprovalCard key={a.id} approval={a} />
           ))}
@@ -434,6 +438,15 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
 
           <StatusLine t={t} listening={listening} />
           <Agents data={data} />
+
+          {/* What waits for him sits last, right above the composer, where the thread opens and he is reading (t150).
+              Always rendered, so the resize observer already watches it when a card arrives and keeps him at the end. */}
+          <div className="tk-bottom">
+            {planAtBottom ? planCard : null}
+            {pending.map((a) => (
+              <ApprovalCard key={a.id} approval={a} onDecided={onChanged} />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -452,7 +465,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
               } else goPlan();
             }}
           >
-            {shown === "plan-nuevo" ? "Ver plan nuevo" : shown === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje"} <span aria-hidden="true">{shown === "message" ? "↓" : "↑"}</span>
+            {pillLabel(shown).text} <span aria-hidden="true">{pillLabel(shown).arrow}</span>
           </button>
         ) : null}
         {closed ? (

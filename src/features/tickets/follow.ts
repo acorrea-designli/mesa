@@ -15,8 +15,9 @@ export const distanceFromBottom = (b: ScrollBox): number => Math.max(0, b.scroll
 export const isNearBottom = (b: ScrollBox, threshold = NEAR_BOTTOM_PX): boolean => distanceFromBottom(b) <= threshold;
 
 // ---------- the plan pill ----------
-// The plan sits above the messages and the thread opens at the end, so a plan that arrives, or is still
-// waiting when the ticket opens, is usually off screen: "Ver plan nuevo ↑" / "Plan pendiente ↑" jump to it.
+// A plan with a step waiting sits at the bottom of the thread, right above the composer (t150), so one that arrives
+// while he reads history is off screen: "Ver plan nuevo ↓" / "Plan pendiente ↓" jump to it. Opening a ticket lands
+// at the end, where the plan already is, so "pendiente" only shows when its card is taller than what fits.
 
 export type PlanPillKind = "nuevo" | "pendiente";
 
@@ -54,6 +55,11 @@ export type VisiblePill = "plan-nuevo" | "plan-pendiente" | "message" | null;
 export function visiblePill(s: { plan: PlanPillKind | null; message: boolean }): VisiblePill {
   if (s.plan) return s.plan === "nuevo" ? "plan-nuevo" : "plan-pendiente";
   return s.message ? "message" : null;
+}
+
+/** The pill's words. Every pill points down: what it brings him to (a message, the waiting plan) is at the end. */
+export function pillLabel(p: Exclude<VisiblePill, null>): { text: string; arrow: "↓" } {
+  return { text: p === "plan-nuevo" ? "Ver plan nuevo" : p === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje", arrow: "↓" };
 }
 
 export type OnNewMessage = "scroll" | "pill";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceFromBottom, hasUnseenStep, isNearBottom, NEAR_BOTTOM_PX, nextPlanPill, onNewMessage, planInView, visiblePill } from "./follow";
+import { distanceFromBottom, hasUnseenStep, isNearBottom, NEAR_BOTTOM_PX, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill } from "./follow";
 
 const box = (scrollTop: number, clientHeight = 500, scrollHeight = 2000) => ({ scrollTop, clientHeight, scrollHeight });
 
@@ -93,5 +93,13 @@ describe("visiblePill", () => {
   it("the message pill returns once the plan pill is gone, if still due", () => {
     expect(visiblePill({ plan: null, message: true })).toBe("message");
     expect(visiblePill({ plan: null, message: false })).toBe(null);
+  });
+});
+
+describe("pillLabel", () => {
+  it("every pill points down, never up at a plan that now sits at the bottom", () => {
+    expect(pillLabel("plan-nuevo")).toEqual({ text: "Ver plan nuevo", arrow: "↓" });
+    expect(pillLabel("plan-pendiente")).toEqual({ text: "Plan pendiente", arrow: "↓" });
+    expect(pillLabel("message")).toEqual({ text: "nuevo mensaje", arrow: "↓" });
   });
 });
