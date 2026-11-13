@@ -1,5 +1,6 @@
 // Claude plan usage (t45), pure. The statusLine script (scripts/statusline.mjs) saves the `rate_limits` Claude
-// Code hands it; this file turns that snapshot into what the rail shows: % remaining, reset time and age.
+// Code hands it; this file turns that snapshot into what the rail and /uso show: % used, the share of the window
+// already elapsed (the meter's tick and its time line), reset time and age.
 // `rate_limits` is an undocumented statusLine field: every part of it may be absent, and nothing here assumes it is there.
 import { WEEK_TZ, weekOf } from "./week";
 
@@ -55,11 +56,33 @@ const LENGTH_MS = { five_hour: FIVE_HOUR_MS, seven_day: SEVEN_DAY_MS } as const;
 export const paceShare = (resetsAtSec: number, lengthMs: number, now: Date): number =>
   clamp((now.getTime() - (resetsAtSec * 1000 - lengthMs)) / lengthMs, 0, 1);
 
+/** Minutes as "40 min" (under 1 h), "1 h 16" / "2 h" (under 1 d, minutes in 2 digits: "1 h 05") or "2 d 5 h" / "2 d" (from 1 d). Whole minutes, rounded down. */
+export function durationLabel(ms: number): string {
+  const min = Math.max(0, Math.floor(ms / 60_000));
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) {
+    const m = min % 60;
+    return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, "0")}`;
+  }
+  const d = Math.floor(h / 24);
+  return h % 24 === 0 ? `${d} d` : `${d} d ${h % 24} h`;
+}
+
+/**
+ * The time already elapsed in a window against its length, "1 h 16 de 5 h" (under the meter: "Tiempo 1 h 16 de 5 h").
+ * From the same instant as `paceShare` (reset time, length, `now`), so the tick and the words always agree. "" with no window.
+ */
+export function elapsedLabel(resetsAtSec: number | null, lengthMs: number, now: Date): string {
+  if (resetsAtSec === null) return "";
+  return `${durationLabel(paceShare(resetsAtSec, lengthMs, now) * lengthMs)} de ${durationLabel(lengthMs)}`;
+}
+
 export interface WindowView {
   key: "five_hour" | "seven_day";
   /** "5 h" or "semana". */
   label: string;
-  /** Percent remaining, or null when the window is absent or already reset (the figure is then out of date). */
+  /** Percent remaining (kept for the API; the screens show % used), or null when the window is absent or already reset (the figure is then out of date). */
   remaining: number | null;
   /** "18:30", or "" when there is no figure. */
   resets: string;
@@ -69,6 +92,8 @@ export interface WindowView {
   resetsAt: number | null;
   /** Share (0-1) of the window already elapsed, or null with `remaining`: where the pace tick sits. */
   pace: number | null;
+  /** The elapsed time in words ("1 h 16 de 5 h", same instant as `pace`), or "" with `remaining`. */
+  elapsed: string;
 }
 
 export interface UsageView {
@@ -81,7 +106,7 @@ export interface UsageView {
   model: string;
 }
 
-const noWindow = (key: WindowView["key"], label: string): WindowView => ({ key, label, remaining: null, resets: "", used: null, resetsAt: null, pace: null });
+const noWindow = (key: WindowView["key"], label: string): WindowView => ({ key, label, remaining: null, resets: "", used: null, resetsAt: null, pace: null, elapsed: "" });
 
 const windowView = (key: WindowView["key"], label: string, w: RateWindow | null, now: Date): WindowView => {
   if (!w || !Number.isFinite(w.usedPercentage) || w.resetsAt * 1000 <= now.getTime()) return noWindow(key, label);
@@ -93,6 +118,7 @@ const windowView = (key: WindowView["key"], label: string, w: RateWindow | null,
     used: clamp(w.usedPercentage, 0, 100),
     resetsAt: w.resetsAt,
     pace: paceShare(w.resetsAt, LENGTH_MS[key], now),
+    elapsed: elapsedLabel(w.resetsAt, LENGTH_MS[key], now),
   };
 };
 

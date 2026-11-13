@@ -1,5 +1,5 @@
 /*
- * Uso (t45, redrawn in t60): the rail / Ajustes block and the /uso screen. Marks are ink on rule tracks; the one
+ * Uso (t45, redrawn in t60, meter in % used in t149): the rail / Ajustes block and the /uso screen. Marks are ink on rule tracks; the one
  * coloured mark is the ranked bars and day columns, which are all Claude's tokens, so they take the Claude line ink
  * (lines carry source, never state). The ranked bars have no legend (a single series); the plan chart has a key row of
  * drawn marks whose entries carry the tooltips.
@@ -226,6 +226,15 @@
   letter-spacing: 0;
   color: var(--mute);
 }
+/* The numbers under the bar: "Usado 35% · Tiempo 1 h 16 de 5 h". Text, not a tooltip. */
+.us-line {
+  margin-top: -4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink2);
+  font-variant-numeric: tabular-nums;
+}
 .us-panel-sub {
   display: flex;
   align-items: center;
@@ -249,6 +258,7 @@
   background: var(--ink);
 }
 .us-panel.stale .us-big,
+.us-panel.stale .us-line,
 .us-panel.stale .us-panel-top h3 {
   color: var(--mute);
 }
@@ -494,7 +504,8 @@
   left: 50%;
   z-index: 30;
   width: max-content;
-  max-width: min(264px, calc(100vw - 32px));
+  max-width: var(--maxw, min(264px, calc(100vw - 32px)));
+  margin-top: var(--dy, 0px);
   padding: 8px 0;
   transform: translateX(calc(-50% + var(--dx, 0px)));
   display: none;

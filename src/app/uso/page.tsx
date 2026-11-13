@@ -1,4 +1,4 @@
-// Uso (t60): the Claude plan windows (% remaining, pace, % over time) and the tokens spent (who, which model, which day).
+// Uso (t60): the Claude plan windows (% used, time elapsed, % over time) and the tokens spent (who, which model, which day).
 import type { Metadata } from "next";
 import { UsoView } from "@/features/usage/UsoView";
 import { usageView } from "@/lib/domain/usage";

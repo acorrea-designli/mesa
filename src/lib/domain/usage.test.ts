@@ -3,6 +3,8 @@ import {
   appendPoint,
   ageLabel,
   chartSeries,
+  durationLabel,
+  elapsedLabel,
   FIVE_HOUR_MS,
   HISTORY_GAP_MS,
   HISTORY_KEEP_MS,
@@ -118,6 +120,48 @@ describe("pace", () => {
       [null, null, null],
       [null, null, null],
     ]);
+  });
+});
+
+describe("elapsed time", () => {
+  const MIN = 60_000;
+  // A 5 h window that resets at 23:30Z started at 18:30Z: `at(m)` is `m` minutes into it.
+  const resets = sec("2026-11-09T23:30:00Z");
+  const at = (m: number) => new Date(Date.parse("2026-11-09T18:30:00Z") + m * MIN);
+
+  it("reads the time elapsed against the window length", () => {
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(0))).toBe("0 min de 5 h");
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(40))).toBe("40 min de 5 h");
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(65))).toBe("1 h 05 de 5 h");
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(76))).toBe("1 h 16 de 5 h");
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(120))).toBe("2 h de 5 h");
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(300))).toBe("5 h de 5 h");
+  });
+
+  it("reads days and hours for the week", () => {
+    // 7 d window resetting at 2026-11-16 19:00Z: 2 d 5 h in is 2026-11-12 00:00Z.
+    expect(elapsedLabel(sec("2026-11-16T19:00:00Z"), SEVEN_DAY_MS, new Date("2026-11-12T00:00:00Z"))).toBe("2 d 5 h de 7 d");
+    expect(elapsedLabel(sec("2026-11-16T19:00:00Z"), SEVEN_DAY_MS, new Date("2026-11-12T19:00:00Z"))).toBe("3 d de 7 d");
+  });
+
+  it("clamps to the window and is empty with no window", () => {
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(-30))).toBe("0 min de 5 h");
+    expect(elapsedLabel(resets, FIVE_HOUR_MS, at(400))).toBe("5 h de 5 h");
+    expect(elapsedLabel(null, FIVE_HOUR_MS, NOW)).toBe("");
+  });
+
+  it("shares its instant with the pace of the view", () => {
+    const v = usageView(snap(), NOW);
+    // 5 h window resetting 23:30Z at 20:00Z: 1 h 30 elapsed, pace 0.3.
+    expect(v.windows[0]?.elapsed).toBe("1 h 30 de 5 h");
+    expect(v.windows[1]?.elapsed).toBe("1 d 20 h de 7 d");
+    expect(usageView(null, NOW).windows.map((w) => w.elapsed)).toEqual(["", ""]);
+  });
+
+  it("durationLabel rounds down to whole minutes", () => {
+    expect(durationLabel(59_999)).toBe("0 min");
+    expect(durationLabel(61 * MIN + 59_000)).toBe("1 h 01");
+    expect(durationLabel(24 * 60 * MIN)).toBe("1 d");
   });
 });
 
