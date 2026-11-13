@@ -91,6 +91,11 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* A call that can be allowed once is shown whole, wrapped: the dangerous part must never sit below a scroll. */
+.ap-detail.full {
+  max-height: none;
+  overflow: visible;
+}
 /* Diff lines: shape, not colour (lines carry source only). */
 .ap-detail .add {
   font-weight: 700;

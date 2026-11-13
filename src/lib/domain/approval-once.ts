@@ -37,17 +37,30 @@ function prettyCanonical(v: unknown, pad = ""): string {
   return JSON.stringify(v) ?? "null";
 }
 
+/**
+ * Makes every character that can hide text visible: bidi controls (U+202A-202E, U+2066-2069), zero-width characters
+ * (U+200B-200D, U+FEFF), the line and paragraph separators and every other control or format character (Cc, Cf) except
+ * the newline and the tab, each as \u{XXXX}. Only the display uses it: the grant still hashes the raw input.
+ */
+export function visible(s: string): string {
+  return s.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, (ch) => (ch === "\n" || ch === "\t" ? ch : `\\u{${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}}`));
+}
+
 /** The summary and the exact call a once-card shows, derived only from the stored input. */
 export function shownCall(tool: string, toolInput: unknown): { summary: string; detail: string } {
   const ti = toolInput && typeof toolInput === "object" && !Array.isArray(toolInput) ? (toolInput as Record<string, unknown>) : {};
   if (tool === "Bash" || tool === "PowerShell") {
     const command = typeof ti.command === "string" ? ti.command : "";
     const unsandboxed = ti.dangerouslyDisableSandbox === true;
-    const first = command.split("\n")[0] ?? "";
+    const lines = command.split("\n");
+    const first = visible(lines[0] ?? "");
+    // A command of several lines says so in the summary, so a dangerous line far below the first cannot hide behind it.
+    const head = lines.length > 1 ? `${tool} (${lines.length} líneas)` : tool;
+    const clipped = first.length > 80 ? `${first.slice(0, 80)}...` : first;
     return {
-      summary: `${tool}: ${first.length > 80 ? `${first.slice(0, 80)}...` : first}${unsandboxed ? " (sin sandbox)" : ""}`,
-      detail: `$ ${command}${unsandboxed ? "\n[sin sandbox: dangerouslyDisableSandbox]" : ""}`,
+      summary: `${head}: ${clipped}${lines.length > 1 ? " …" : ""}${unsandboxed ? " (sin sandbox)" : ""}`,
+      detail: `$ ${visible(command)}${unsandboxed ? "\n[sin sandbox: dangerouslyDisableSandbox]" : ""}`,
     };
   }
-  return { summary: tool, detail: prettyCanonical(ti) };
+  return { summary: visible(tool), detail: visible(prettyCanonical(ti)) };
 }

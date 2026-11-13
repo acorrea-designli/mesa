@@ -117,7 +117,7 @@ export function ApprovalCard({ approval, onDecided, showTicket }: { approval: Ap
           <span>{a.summary}</span>
         </div>
         {a.detail ? (
-          <pre className="ap-detail" aria-label="Llamada bloqueada">
+          <pre className={once ? "ap-detail full" : "ap-detail"} aria-label="Llamada bloqueada">
             {a.detail}
           </pre>
         ) : null}

@@ -253,3 +253,38 @@ describe("a forged card shows the call that would be granted", () => {
     expect(normal).toMatchObject({ kind: "permission", summary: "git status", detail: "$ git status", once: false });
   });
 });
+
+// The dangerous part of a call can hide off screen or behind invisible characters: the shown call must not allow either.
+describe("a card cannot hide the dangerous part of the call", () => {
+  const listedOne = async (id: string) => {
+    const { GET: LIST } = await import("@/app/api/approvals/route");
+    const res = await LIST(new Request("http://local/api/approvals"), ctx());
+    return ((await res.json()) as { approvals: { id: string; summary: string; detail: string; once: boolean }[] }).approvals.find((a) => a.id === id)!;
+  };
+  const fileCall = async (command: string) => {
+    const res = await POST_APPROVALS(post(card({ agent: "dev-t143-9", role: "dev", toolInput: { command }, summary: "git status", detail: "$ git status" })), ctx());
+    return ((await res.json()) as { approval: { id: string } }).approval.id;
+  };
+
+  it("60 newlines of padding: the summary carries the line count and the detail is the whole command", async () => {
+    const command = `git status${"\n".repeat(60)}git push origin HEAD:main`;
+    const id = await fileCall(command);
+    const shown = await listedOne(id);
+    expect(shown.summary).toBe("Bash (61 líneas): git status …");
+    expect(shown.detail).toBe(`$ ${command}`);
+    expect(shown.once).toBe(true);
+  });
+  it("U+202E and U+200B are shown as visible escapes; the grant still matches the raw command only", async () => {
+    for (const [ch, esc] of [["\u202E", "\\u{202E}"], ["\u200B", "\\u{200B}"]] as const) {
+      const command = `git status ${ch}# git push origin HEAD:main`;
+      const id = await fileCall(command);
+      const shown = await listedOne(id);
+      expect(shown.detail).toBe(`$ git status ${esc}# git push origin HEAD:main`);
+      expect(shown.summary).toContain(esc);
+      expect(`${shown.summary}${shown.detail}`).not.toContain(ch);
+      expect((await allow(id)).status).toBe(200);
+      expect((await consume({ tool: "Bash", toolInput: { command: "git status # git push origin HEAD:main" }, caller: "dev-t143-9", sessionId: "sess-A" })).granted).toBe(false);
+      expect((await consume({ tool: "Bash", toolInput: { command }, caller: "dev-t143-9", sessionId: "sess-A" })).granted).toBe(true);
+    }
+  });
+});

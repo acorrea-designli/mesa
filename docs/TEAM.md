@@ -240,11 +240,15 @@ Agents get blocked by trivial things; a block must become a decision, not a dead
    `[0:0:0:0:0:0:0:1]`), `//approve` and `//api` (with `curl -L`), quoted segments, variable splicing (`A=approve`),
    and tool-name disguises (`cu''rl`, `c\url`). G10 and the rule that agents never decide are the only barrier until
    improvement 13 (a credential for Andrés's UI). **The same gaps now reach "Permitir esta vez"** (t143 PR5): a local
-   process that POSTs `approve` on a card stamps `andres` and creates a grant for the call stored on that card. What
-   closes part of it: the card shows only the call the server builds from the stored input (what is shown is what the
-   grant is hashed from, so a forged card cannot display one call and grant another), a session cannot curl-POST a
-   card (`POST /api/approvals`, any host spelling) or touch the grant consume route (G10), and the grant is bound to
-   the caller and session, single use and 5 minutes. What stays open: the approve route itself has no credential. Security hardening is on hold until he asks.
+   process that POSTs `approve` on a card stamps `andres` and creates a grant for the call stored on that card. The real
+   protection is what the card shows: for a command or MCP call the server builds the summary and the call from the
+   stored input (what is shown is what the grant is hashed from, so a forged card cannot display one call and grant
+   another), shows it whole with no height limit, puts the line count in the summary of a multi-line command, and turns
+   bidi controls, zero-width characters and every other control or format character into visible `\u{XXXX}`. G10 also
+   blocks a curl-style `POST /api/approvals` (any host spelling) and any use of the grant consume route, **but that block is
+   partial like the rest of G10**: it misses `curl -d@file`, `-d'...'` with no space, `--data-ascii`, `-L`, a trailing
+   slash, `node -e` with fetch and python. The grant is also bound to the caller and session, single use and 5 minutes.
+   What stays open: the approve route itself has no credential. Security hardening is on hold until he asks.
 7. **"Bloqueado por el modo automático"** (t128, the `PermissionDenied` hook, `scripts/hooks/mesa-denied.mjs`). When
    auto mode denies a call, Claude Code runs this hook (it fires only in auto mode, with `tool_name`, `tool_input`,
    `reason`; it cannot undo the denial, it can only tell the model it may retry). The hook resolves the agent and the
