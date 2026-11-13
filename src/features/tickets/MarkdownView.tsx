@@ -85,7 +85,7 @@ export function Markdown({ text, className, copyable }: { text: string; classNam
             ))}
           </ul>
         ) : b.t === "ol" ? (
-          <ol key={i}>
+          <ol key={i} start={b.start === 1 ? undefined : b.start}>
             {b.items.map((it, j) => (
               <li key={j}>
                 <Spans inline={it} say={say} />

@@ -13,7 +13,8 @@ export type Inline =
 export type Block =
   | { t: "p"; inline: Inline[] }
   | { t: "ul"; items: Inline[][] }
-  | { t: "ol"; items: Inline[][] }
+  /** start: the number the list opens at, so a list split by a fence or a paragraph keeps counting. */
+  | { t: "ol"; items: Inline[][]; start: number }
   | { t: "code"; v: string; lang: string };
 
 // [text](url): the text has no brackets; the address has no spaces and may hold one level of (parens).
@@ -55,16 +56,20 @@ export function parseInline(s: string): Inline[] {
 
 const FENCE = /^\s{0,3}```\s*([\w+-]*)\s*$/;
 const UL = /^\s{0,3}[-*]\s+(.*)$/;
-const OL = /^\s{0,3}\d{1,3}[.)]\s+(.*)$/;
+const OL = /^\s{0,3}(\d{1,3})[.)]\s+(.*)$/;
+const INDENTED = /^\s+\S/;
 
 /** The blocks of a detail: a fence opens at a "```" line and closes at the next one (or at the end of the text). */
 export function parseDetail(text: string): Block[] {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const out: Block[] = [];
   let para: string[] = [];
+  // The list item the last line belongs to: an indented line right under it continues it.
+  let open: { items: Inline[][]; raw: string } | null = null;
   const flush = () => {
     if (para.length) out.push({ t: "p", inline: parseInline(para.join("\n")) });
     para = [];
+    open = null;
   };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
@@ -81,17 +86,30 @@ export function parseDetail(text: string): Block[] {
     const ol = ul ? null : OL.exec(line);
     if (ul || ol) {
       flush();
-      const kind = ul ? "ul" : "ol";
+      const raw = ul ? ul[1]! : ol![2]!;
+      const item = parseInline(raw);
       const last = out.at(-1);
-      const item = parseInline((ul ?? ol)![1]!);
-      if (last && last.t === kind) last.items.push(item);
-      else out.push({ t: kind, items: [item] });
+      let items: Inline[][];
+      if (last && last.t === (ul ? "ul" : "ol")) items = (last as { items: Inline[][] }).items;
+      else {
+        items = [];
+        out.push(ul ? { t: "ul", items } : { t: "ol", items, start: Number(ol![1]) });
+      }
+      items.push(item);
+      open = { items, raw };
       continue;
     }
     if (!line.trim()) {
       flush();
       continue;
     }
+    if (open && INDENTED.test(line)) {
+      const o: { items: Inline[][]; raw: string } = open;
+      o.raw += " " + line.trim();
+      o.items[o.items.length - 1] = parseInline(o.raw);
+      continue;
+    }
+    open = null;
     para.push(line);
   }
   flush();

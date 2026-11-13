@@ -105,7 +105,37 @@ describe("parseDetail", () => {
   it("groups list lines into one list each, bullets and numbers", () => {
     expect(parseDetail("- uno\n- dos con `x`\n\n1. a\n2) b")).toEqual([
       { t: "ul", items: [[{ t: "text", v: "uno" }], [{ t: "text", v: "dos con " }, { t: "code", v: "x" }]] },
-      { t: "ol", items: [[{ t: "text", v: "a" }], [{ t: "text", v: "b" }]] },
+      { t: "ol", items: [[{ t: "text", v: "a" }], [{ t: "text", v: "b" }]], start: 1 },
+    ]);
+  });
+
+  it("keeps the number a list opens at, so a list split by a fence keeps counting", () => {
+    expect(parseDetail("1. uno\n```\ncodigo\n```\n2. dos\n\ntexto\n\n7. siete")).toEqual([
+      { t: "ol", items: [[{ t: "text", v: "uno" }]], start: 1 },
+      { t: "code", v: "codigo", lang: "" },
+      { t: "ol", items: [[{ t: "text", v: "dos" }]], start: 2 },
+      { t: "p", inline: [{ t: "text", v: "texto" }] },
+      { t: "ol", items: [[{ t: "text", v: "siete" }]], start: 7 },
+    ]);
+  });
+
+  it("joins an indented line under a list item to that item, trimmed", () => {
+    expect(parseDetail("- uno\n    sigue **aqui**\n  y mas\n- dos\n1. a\n   b")).toEqual([
+      {
+        t: "ul",
+        items: [
+          [{ t: "text", v: "uno sigue " }, { t: "bold", v: "aqui" }, { t: "text", v: " y mas" }],
+          [{ t: "text", v: "dos" }],
+        ],
+      },
+      { t: "ol", items: [[{ t: "text", v: "a b" }]], start: 1 },
+    ]);
+  });
+
+  it("does not join an indented line after a blank line", () => {
+    expect(parseDetail("- uno\n\n  suelta")).toEqual([
+      { t: "ul", items: [[{ t: "text", v: "uno" }]] },
+      { t: "p", inline: [{ t: "text", v: "  suelta" }] },
     ]);
   });
 
