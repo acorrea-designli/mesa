@@ -1,7 +1,8 @@
 /*
  * Uso (t45, redrawn in t60): the rail / Ajustes block and the /uso screen. Marks are ink on rule tracks; the one
  * coloured mark is the ranked bars and day columns, which are all Claude's tokens, so they take the Claude line ink
- * (lines carry source, never state). No legend: there is a single series.
+ * (lines carry source, never state). The ranked bars have no legend (a single series); the plan chart has a key row of
+ * drawn marks whose entries carry the tooltips.
  */
 
 /* ---------- meter (shared: /uso lg, rail and Ajustes sm) ---------- */
@@ -494,9 +495,7 @@
   max-width: min(264px, calc(100vw - 32px));
   padding: 8px 0;
   transform: translateX(calc(-50% + var(--dx, 0px)));
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  display: none;
 }
 .us-tipbox[data-side="up"] {
   bottom: 100%;
@@ -505,8 +504,13 @@
   top: 100%;
 }
 .us-tipbox.open {
-  visibility: visible;
-  opacity: 1;
+  display: block;
+  animation: us-tip-in 0.12s ease;
+}
+@keyframes us-tip-in {
+  from {
+    opacity: 0;
+  }
 }
 .us-tipbubble {
   display: block;
@@ -534,8 +538,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .us-tipbox {
-    transition: none;
+  .us-tipbox.open {
+    animation: none;
   }
 }
 
