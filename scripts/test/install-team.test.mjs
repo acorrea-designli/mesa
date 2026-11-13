@@ -181,3 +181,23 @@ test("an older install gets the Google Calendar tools added to its rails matcher
   assert.ok(added.some((a) => a.includes("matcher +")));
   assert.deepEqual(mergeSettings(settings, { hooks, env: ENV, allow: [] }).added.filter((a) => a.includes("matcher")), []);
 });
+
+// t143 PR5: the lead's permission prompts and denied calls reach Mesa (MESA_APPROVAL_LEAD=1), and an MCP tool that auto
+// mode denied can be allowed once because the rails hook also sees every MCP call.
+test("the canonical env adds MESA_APPROVAL_LEAD=1 to today's two keys, and the sandbox env is untouched", () => {
+  assert.deepEqual(ENV, { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead", MESA_APPROVAL_LEAD: "1" });
+  assert.equal("MESA_APPROVAL_LEAD" in SANDBOX_ENV, false);
+  const { settings } = mergeSettings({ env: { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead" } }, { hooks, env: ENV, allow: [] });
+  assert.equal(settings.env.MESA_APPROVAL_LEAD, "1"); // an existing install gets the key on the next run
+  assert.equal(mergeSettings({ env: { MESA_APPROVAL_LEAD: "0" } }, { hooks, env: ENV, allow: [] }).settings.env.MESA_APPROVAL_LEAD, "0"); // never overwritten
+});
+
+test("the rails matcher covers every MCP tool, so a one-shot grant can be consumed for any denied MCP call", () => {
+  const m = hooks.PreToolUse[0].matcher.split("|");
+  assert.ok(m.includes("mcp__.*"));
+  for (const keep of ["SendMessage", "Bash", "PowerShell", "mcp__claude_ai_Slack__.*", "mcp__basecamp__.*"]) assert.ok(m.includes(keep), keep);
+  const cmd = hooks.PreToolUse[0].hooks[0].command;
+  const old = { hooks: { PreToolUse: [{ matcher: "SendMessage|Bash|PowerShell|mcp__basecamp__.*", hooks: [{ type: "command", command: cmd }] }] } };
+  const widened = mergeSettings(old, { hooks, env: ENV, allow: [] }).settings.hooks.PreToolUse[0].matcher.split("|");
+  assert.ok(widened.includes("mcp__.*") && widened.includes("Bash"));
+});

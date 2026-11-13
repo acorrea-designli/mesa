@@ -393,6 +393,16 @@ export const approvalInput = z.object({
   kind: z.enum(["permission", "denied"]).optional(),
   reason: z.string().max(2000).optional(),
   toolInput: z.record(z.string(), z.unknown()).optional(),
+  /** The denied session (hook input session_id): the one-shot grant is bound to it. */
+  sessionId: z.string().max(200).optional(),
+});
+
+/** POST /api/approvals/grants/consume, from the PreToolUse hook: the call it is about to let through. */
+export const grantConsumeInput = z.object({
+  tool: z.string().min(1),
+  toolInput: z.record(z.string(), z.unknown()),
+  caller: z.string().min(1).max(200),
+  sessionId: z.string().max(200).optional(),
 });
 
 // ---------- reviews ----------

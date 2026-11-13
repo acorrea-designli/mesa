@@ -13,6 +13,8 @@ const base: Approval = {
   reason: "[Self-Modification]",
   deniedInput: "{}",
   rule: "Edit(//g/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/**)",
+  sessionId: "",
+  once: false,
   agent: "dev-t128-2",
   tool: "Edit",
   summary: "Edit G:/WorkSpace/designli-wt/dev-t128-2/scripts/hooks/calendar-body.mjs",
@@ -44,17 +46,36 @@ describe("ApprovalCard, a denied call", () => {
     expect(h).not.toContain("Dar permiso");
     expect(h).not.toContain("Lee tus configuraciones");
   });
-  it("offers only Denegar, and says why, when no rule can be proposed", () => {
-    const h = html({ rule: "", tool: "Bash", summary: "rm x", detail: "$ rm x" });
+  it("offers only Denegar, and says why, when a file edit has no rule to propose", () => {
+    const h = html({ rule: "", tool: "Write", summary: "Write C:/x/y.txt", detail: "hi" });
     expect(h).not.toContain("Permitir esta regla");
+    expect(h).not.toContain("Permitir esta vez");
     expect(h).toContain("Sin regla que proponer");
     expect(h).toContain("Denegar");
+  });
+  it("offers Permitir esta vez only when the server says once, with the exact call shown", () => {
+    const notOnce = html({ rule: "", tool: "Read", summary: "Read x", detail: "x", once: false });
+    expect(notOnce).not.toContain("Permitir esta vez");
+    expect(notOnce).toContain("Sin regla que proponer");
+    expect(html({ rule: "", tool: "Bash", summary: "s", detail: "$ x", once: false })).not.toContain("Permitir esta vez"); // the server refused it
+    for (const tool of ["Bash", "PowerShell", "mcp__engram__mem_save"]) {
+      const h = html({ rule: "", tool, summary: "git push --dry-run", detail: "$ git push --dry-run origin x", once: true });
+      expect(h).toContain("Permitir esta vez");
+      expect(h).toContain("git push --dry-run origin x");
+      expect(h).toContain("Denegar");
+      expect(h).not.toContain("Permitir esta regla");
+      expect(h).toContain("una sola vez");
+    }
+  });
+  it("an Edit card keeps Permitir esta regla and never offers Permitir esta vez", () => {
+    expect(html({})).not.toContain("Permitir esta vez");
   });
   it("collapses to one line with the rule once allowed, and to another once denied or expired", () => {
     expect(html({ status: "decided", decision: "allow", decidedBy: "andres", decidedAt: new Date().toISOString() })).toMatch(/Permitiste la regla.*Edit\(\/\/g\//);
     const denied = html({ status: "decided", decision: "deny", decidedBy: "andres", decidedAt: new Date().toISOString(), note: "no" });
     expect(denied).toContain("Denegaste el bloqueo");
     expect(denied).not.toContain("Permitir esta regla");
+    expect(html({ rule: "", tool: "Bash", once: true, status: "decided", decision: "allow", decidedBy: "andres", decidedAt: new Date().toISOString() })).toContain("Permitiste esta vez");
     expect(html({ status: "expired" })).toContain("el bloqueo sigue");
   });
   it("leaves the ordinary permission card as it was", () => {

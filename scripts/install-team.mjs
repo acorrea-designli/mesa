@@ -52,7 +52,7 @@ export function hookEntries(repo, node, env = "live") {
   return {
     PreToolUse: [
       {
-        matcher: "SendMessage|Bash|PowerShell|mcp__claude-in-chrome__navigate|mcp__claude_ai_Slack__.*|mcp__basecamp__.*|mcp__claude_ai_Google_Calendar__.*|mcp__google-calendar__.*",
+        matcher: "SendMessage|Bash|PowerShell|mcp__claude-in-chrome__navigate|mcp__claude_ai_Slack__.*|mcp__basecamp__.*|mcp__claude_ai_Google_Calendar__.*|mcp__google-calendar__.*|mcp__.*",
         hooks: [{ type: "command", command: cmd(HOOK_SCRIPTS.rails), timeout: 15 }],
       },
     ],
@@ -78,7 +78,8 @@ export function statusLineEntry(repo, node, env = "live") {
   return { type: "command", command: `"${fwd(node)}" "${fwd(join(repo, "scripts/statusline.mjs"))}" --url ${url}` };
 }
 
-export const ENV = { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead" };
+// MESA_APPROVAL_LEAD=1 (t143 PR5): the lead's permission prompts and denied calls reach Mesa too (the focus ticket, or Hoy).
+export const ENV = { MESA_URL: "http://127.0.0.1:8790", MESA_SESSION: "lead", MESA_APPROVAL_LEAD: "1" };
 export const SANDBOX_ENV = { MESA_URL: "http://127.0.0.1:8796", MESA_ENV: "sandbox", MESA_SESSION: "lead" };
 export const LIVE_FOLDER = "G:/WorkSpace/designli";
 

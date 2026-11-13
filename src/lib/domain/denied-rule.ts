@@ -20,7 +20,7 @@ import { CANONICAL } from "../config/identity";
 /** Where the team's worktrees live by default. MESA_WORKTREES_ROOT overrides it (src/lib/config/identity.ts). */
 export const DEFAULT_WORKTREES_ROOT: string = CANONICAL.worktreesRoot;
 
-const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+export const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 /** A path segment that can be written into a rule as is: no glob, bracket, comma, quote or space. */
 const SAFE_SEGMENT = /^[A-Za-z0-9._@+-]+$/;
 /** The folders the docs list as protected paths (writes there go to the classifier whatever the allow rules say). */

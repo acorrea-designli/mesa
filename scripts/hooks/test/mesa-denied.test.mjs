@@ -120,12 +120,14 @@ test("bad input leaves the denial standing and files nothing", async () => {
   assert.equal(mesa.calls.length, 0);
 });
 
-test("a Bash denial is filed too (the server then offers only Denegar)", async () => {
+test("a Bash denial is filed too, with the denied session, and now waits for Permitir esta vez", async () => {
   const { input } = fakeAgent({ name: "dev-t128-2" });
   const mesa = decided("deny");
   await denied({ ...input, tool_name: "Bash", tool_input: { command: "rm -rf build", description: "Clean" }, reason: "[Irreversible Local Destruction]" }, { ...fast, fetchImpl: mesa.fetchImpl });
   assert.equal(mesa.calls[0].body.tool, "Bash");
+  assert.equal(mesa.calls[0].body.sessionId, "sess-1");
   assert.match(mesa.calls[0].body.detail, /\$ rm -rf build/);
+  assert.ok(mesa.calls.some((c) => c.key.startsWith("GET /api/approvals/ap1"))); // it polls: the card can be allowed
 });
 
 test("a separately launched session is identified by MESA_AGENT and MESA_TICKET", async () => {
@@ -151,7 +153,7 @@ test("the lead passes through untouched unless MESA_APPROVAL_LEAD=1, then it is 
   assert.deepEqual([filed.ticketRef, filed.agent, filed.role], ["t128", "lead", "lead"]);
 });
 
-test("a card with no rule can only be denied: the hook returns at once, without polling", async () => {
+test("a file edit with no rule can only be denied: the hook returns at once, without polling", async () => {
   const { input } = fakeAgent({ name: "dev-t128-2" });
   for (const approval of [{ id: "ap7", rule: "" }, { id: "ap7" }, { id: "ap7", rule: null }]) {
     const mesa = fakeMesa({
@@ -159,7 +161,7 @@ test("a card with no rule can only be denied: the hook returns at once, without 
       "GET /api/approvals/ap7": { approval: { id: "ap7", status: "decided", decision: "allow", decidedBy: "andres" } },
     });
     const t0 = Date.now();
-    assert.equal(await denied({ ...input, tool_name: "Bash", tool_input: { command: "rm x" }, reason: "[Irreversible Local Destruction]" }, { ...fast, timeoutMs: 5000, fetchImpl: mesa.fetchImpl }), null);
+    assert.equal(await denied({ ...input, tool_name: "Write", tool_input: { file_path: "C:/x/y.txt", content: "z" }, reason: "[Self-Modification]" }, { ...fast, timeoutMs: 5000, fetchImpl: mesa.fetchImpl }), null);
     assert.ok(Date.now() - t0 < 1000);
     assert.equal(mesa.calls.length, 1); // only the POST: the card stays visible and expires on its own
   }
