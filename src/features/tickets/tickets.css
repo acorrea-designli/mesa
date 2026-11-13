@@ -896,7 +896,8 @@
   cursor: default;
 }
 /* Where the plan pill lands: the top of the plan in view, clear of the sticky phone header. */
-.tk-planwrap {
+.tk-planwrap,
+.tk-appwrap {
   scroll-margin-top: 12px;
 }
 .tk-astate {
@@ -1433,7 +1434,8 @@
     bottom: calc(100% + 14px);
   }
   /* The plan pill lands the plan under the sticky header (52 px) and the safe-area inset. */
-  .tk-planwrap {
+  .tk-planwrap,
+  .tk-appwrap {
     scroll-margin-top: calc(52px + env(safe-area-inset-top, 0px) + 12px);
   }
   /* A 44 px tap target for the chip toggle without growing the row. */

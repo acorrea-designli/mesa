@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceFromBottom, hasUnseenStep, isNearBottom, NEAR_BOTTOM_PX, nextPlanPill, onNewMessage, planInView, visiblePill } from "./follow";
+import { arrowToward, distanceFromBottom, hasUnseenStep, isNearBottom, NEAR_BOTTOM_PX, nextApprovalPill, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill } from "./follow";
 
 const box = (scrollTop: number, clientHeight = 500, scrollHeight = 2000) => ({ scrollTop, clientHeight, scrollHeight });
 
@@ -77,6 +77,30 @@ describe("nextPlanPill", () => {
   });
 });
 
+describe("nextApprovalPill", () => {
+  const base = { current: false, pending: ["p1"], seen: ["p1"], inView: false, opening: false };
+  it("a card that arrives while he is scrolled up shows the pill (its block is off screen)", () => {
+    expect(nextApprovalPill({ ...base, seen: [] })).toBe(true);
+    expect(nextApprovalPill({ ...base, pending: ["p1", "p2"] })).toBe(true); // a second card
+  });
+  it("a card that arrives while he reads at the bottom is in view: no pill", () => {
+    expect(nextApprovalPill({ ...base, seen: [], inView: true })).toBe(false);
+  });
+  it("opening with a card too tall to fit shows the pill; one already in view does not", () => {
+    expect(nextApprovalPill({ ...base, opening: true, seen: [] })).toBe(true);
+    expect(nextApprovalPill({ ...base, opening: true, seen: [], inView: true })).toBe(false);
+  });
+  it("a seen card keeps the pill that was up and does not bring it back after a tap", () => {
+    expect(nextApprovalPill({ ...base, current: true })).toBe(true); // persists while he scrolls elsewhere
+    expect(nextApprovalPill(base)).toBe(false); // tapped (current cleared), card seen: stays hidden
+  });
+  it("scrolling the card into view, or deciding the last one, hides it", () => {
+    expect(nextApprovalPill({ ...base, current: true, inView: true })).toBe(false);
+    expect(nextApprovalPill({ ...base, current: true, pending: [] })).toBe(false);
+    expect(nextApprovalPill({ ...base, pending: [], seen: [], opening: true })).toBe(false);
+  });
+});
+
 describe("hasUnseenStep", () => {
   it("is true only for a planned id outside the seen ones", () => {
     expect(hasUnseenStep(["a"], [])).toBe(true);
@@ -93,5 +117,31 @@ describe("visiblePill", () => {
   it("the message pill returns once the plan pill is gone, if still due", () => {
     expect(visiblePill({ plan: null, message: true })).toBe("message");
     expect(visiblePill({ plan: null, message: false })).toBe(null);
+  });
+  it("a pending permission wins over the plan and the message pill, and they return once it is gone", () => {
+    expect(visiblePill({ approval: true, plan: "nuevo", message: true })).toBe("approval");
+    expect(visiblePill({ approval: true, plan: null, message: false })).toBe("approval");
+    expect(visiblePill({ approval: false, plan: "pendiente", message: true })).toBe("plan-pendiente");
+    expect(visiblePill({ approval: false, plan: null, message: true })).toBe("message");
+  });
+});
+
+describe("pillLabel", () => {
+  it("points up at a block that lies above the view, down at one below, and a message always down", () => {
+    const view = { top: 100, bottom: 600 };
+    expect(arrowToward({ top: -300, bottom: 100 }, view)).toBe("↑"); // ends at the top edge
+    expect(arrowToward({ top: -1800, bottom: -1400 }, view)).toBe("↑");
+    expect(arrowToward({ top: -300, bottom: 101 }, view)).toBe("↓"); // still overlaps the edge
+    expect(arrowToward({ top: 700, bottom: 900 }, view)).toBe("↓");
+    expect(pillLabel("plan-pendiente", "↑")).toEqual({ text: "Plan pendiente", arrow: "↑" });
+    expect(pillLabel("plan-nuevo", "↑")).toEqual({ text: "Ver plan nuevo", arrow: "↑" });
+    expect(pillLabel("approval", "↑")).toEqual({ text: "Permiso pendiente", arrow: "↑" });
+    expect(pillLabel("message", "↑")).toEqual({ text: "nuevo mensaje", arrow: "↓" });
+  });
+  it("by default every pill points down, where the plan and the cards usually sit", () => {
+    expect(pillLabel("plan-nuevo")).toEqual({ text: "Ver plan nuevo", arrow: "↓" });
+    expect(pillLabel("plan-pendiente")).toEqual({ text: "Plan pendiente", arrow: "↓" });
+    expect(pillLabel("message")).toEqual({ text: "nuevo mensaje", arrow: "↓" });
+    expect(pillLabel("approval")).toEqual({ text: "Permiso pendiente", arrow: "↓" });
   });
 });

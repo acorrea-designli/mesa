@@ -15,8 +15,9 @@ export const distanceFromBottom = (b: ScrollBox): number => Math.max(0, b.scroll
 export const isNearBottom = (b: ScrollBox, threshold = NEAR_BOTTOM_PX): boolean => distanceFromBottom(b) <= threshold;
 
 // ---------- the plan pill ----------
-// The plan sits above the messages and the thread opens at the end, so a plan that arrives, or is still
-// waiting when the ticket opens, is usually off screen: "Ver plan nuevo ↑" / "Plan pendiente ↑" jump to it.
+// A plan with a step waiting sits at the bottom of the thread, right above the composer (t150), so one that arrives
+// while he reads history is off screen: "Ver plan nuevo ↓" / "Plan pendiente ↓" jump to it. Opening a ticket lands
+// at the end, where the plan already is, so "pendiente" only shows when its card is taller than what fits.
 
 export type PlanPillKind = "nuevo" | "pendiente";
 
@@ -48,12 +49,45 @@ export function nextPlanPill(s: { current: PlanPillKind | null; planned: readonl
   return hasUnseenStep(s.planned, s.seen) ? "nuevo" : s.current;
 }
 
-export type VisiblePill = "plan-nuevo" | "plan-pendiente" | "message" | null;
+// ---------- the permission pill ----------
+// A pending permission card (a denied call waiting for his decision) also sits at the bottom, above the composer. One
+// that arrives while he reads history is off screen: "Permiso pendiente ↓" jumps to it. Same rule as the plan pill.
 
-/** One pill at a time: the plan wins over "nuevo mensaje", which comes back once the plan pill is gone if still due. */
-export function visiblePill(s: { plan: PlanPillKind | null; message: boolean }): VisiblePill {
+/**
+ * Whether the permission pill shows after the thread opens, a card arrives or the thread scrolls. No pending card, or
+ * the cards in view, hides it. On opening it shows (the cards are taller than what fits); later a pending card the
+ * thread had not seen shows it; otherwise it stays as it was, until he taps it, sees the cards or none is left.
+ */
+export function nextApprovalPill(s: { current: boolean; pending: readonly string[]; seen: readonly string[]; inView: boolean; opening: boolean }): boolean {
+  if (!s.pending.length || s.inView) return false;
+  if (s.opening) return true;
+  return hasUnseenStep(s.pending, s.seen) ? true : s.current;
+}
+
+export type VisiblePill = "approval" | "plan-nuevo" | "plan-pendiente" | "message" | null;
+
+/**
+ * One pill at a time: a pending permission wins (it blocks Claude), then the plan, then "nuevo mensaje"; each comes
+ * back once the one above it is gone if still due.
+ */
+export function visiblePill(s: { approval?: boolean; plan: PlanPillKind | null; message: boolean }): VisiblePill {
+  if (s.approval) return "approval";
   if (s.plan) return s.plan === "nuevo" ? "plan-nuevo" : "plan-pendiente";
   return s.message ? "message" : null;
+}
+
+export type PillArrow = "↑" | "↓";
+
+/**
+ * Which way a block that is off screen lies. A message, a plan or a permission usually sits at the end (↓), but a
+ * plan with permission cards below it can be above the view, and the pill must not point away from it.
+ */
+export const arrowToward = (block: Span, view: Span): PillArrow => (block.bottom <= view.top ? "↑" : "↓");
+
+/** The pill's words and the way it points (↓ unless told the block is above, see arrowToward). */
+export function pillLabel(p: Exclude<VisiblePill, null>, arrow: PillArrow = "↓"): { text: string; arrow: PillArrow } {
+  const text = p === "approval" ? "Permiso pendiente" : p === "plan-nuevo" ? "Ver plan nuevo" : p === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje";
+  return { text, arrow: p === "message" ? "↓" : arrow };
 }
 
 export type OnNewMessage = "scroll" | "pill";
