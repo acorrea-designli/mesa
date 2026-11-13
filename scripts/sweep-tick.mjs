@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseEnv } from "node:util";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
@@ -46,6 +47,19 @@ export function loadConfig(path = join(REPO, "config", "sweep.json"), env = proc
   const slackId = env.MESA_SLACK_USER_ID?.trim();
   if (slackId && config.sources?.slack) config.sources.slack.userId = slackId;
   return config;
+}
+// The Mesa session the sweeper runs as (the server wakes it on "Barrer ahora"). The server reads MESA_SWEEPER_SESSION from
+// .env.local; the sweeper runs in a Claude Code session whose environment does not carry that file, so the clock reads the
+// variable from the environment first (the team's settings.json env, the shell) and then from the repo's .env.local, and
+// both sides agree on one value. Blank counts as unset; default "sweeper".
+export function sweeperSessionName(env = process.env, repo = REPO) {
+  const set = env.MESA_SWEEPER_SESSION?.trim();
+  if (set) return set;
+  try {
+    return parseEnv(readFileSync(join(repo, ".env.local"), "utf8")).MESA_SWEEPER_SESSION?.trim() || "sweeper";
+  } catch {
+    return "sweeper"; // no .env.local
+  }
 }
 const FORCE_FLAG = join(tmpdir(), "mesa-team", "sweep-force.json");
 const ms = (iso) => (iso ? Date.parse(iso) : NaN);
@@ -207,7 +221,7 @@ export function makeStore({
   fetchImpl = fetch,
   base = (process.env.MESA_URL ?? "http://127.0.0.1:8790").replace(/\/$/, ""),
   forcePath = FORCE_FLAG,
-  session = process.env.MESA_SWEEPER_SESSION ?? "sweeper",
+  session = sweeperSessionName(),
 } = {}) {
   let registered = false;
   return {

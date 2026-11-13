@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -15,6 +15,7 @@ import {
   makeStore,
   report,
   splitMark,
+  sweeperSessionName,
   tickSources,
   wait,
   writeForce,
@@ -325,4 +326,17 @@ test("MESA_SLACK_USER_ID overrides the Slack user id of the file; blank keeps it
   assert.equal(file, "U06E2UBDC73");
   assert.equal(loadConfig(undefined, { MESA_SLACK_USER_ID: "U0ANA" }).sources.slack.userId, "U0ANA");
   assert.equal(loadConfig(undefined, { MESA_SLACK_USER_ID: "  " }).sources.slack.userId, file);
+});
+
+// ---------- the sweeper's session name ----------
+
+test("the sweeper session comes from the environment, then from the repo's .env.local, then \"sweeper\"", () => {
+  const repo = mkdtempSync(join(tmpdir(), "mesa-sweeper-session-"));
+  assert.equal(sweeperSessionName({}, repo), "sweeper"); // no .env.local at all
+  writeFileSync(join(repo, ".env.local"), "MESA_GH_USER=ana-dev\nMESA_SWEEPER_SESSION=sweeper-ana\n");
+  assert.equal(sweeperSessionName({}, repo), "sweeper-ana");
+  assert.equal(sweeperSessionName({ MESA_SWEEPER_SESSION: "from-env" }, repo), "from-env"); // the environment wins
+  assert.equal(sweeperSessionName({ MESA_SWEEPER_SESSION: "  " }, repo), "sweeper-ana"); // blank is unset
+  writeFileSync(join(repo, ".env.local"), "MESA_SWEEPER_SESSION=\n"); // the line copied from .env.example, left blank
+  assert.equal(sweeperSessionName({}, repo), "sweeper");
 });

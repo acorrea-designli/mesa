@@ -7,7 +7,7 @@ import { publishChange } from "../live/bus";
 export const LISTENING_GRACE_MS = 90_000;
 
 /** The session that runs the Slack/Basecamp sweep tick (scripts/sweep-tick.mjs). */
-export const sweeperSession = () => process.env.MESA_SWEEPER_SESSION ?? "sweeper";
+export const sweeperSession = () => process.env.MESA_SWEEPER_SESSION?.trim() || "sweeper"; // a blank line of .env.local is unset
 
 export interface SessionInput {
   id: string;
