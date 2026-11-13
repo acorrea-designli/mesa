@@ -1,10 +1,11 @@
 // The gh CLI, run server side with Andrés's own login. Mesa never stores a token: when
-// MESA_GH_USER is set (default acorrea-designli) the token is read from gh's keyring for
+// MESA_GH_USER is set (default acorrea-designli, src/lib/config/identity.ts) the token is read from gh's keyring for
 // that account at runtime and passed only to the child process, so a different active
 // gh account on this PC does not change who Mesa reads as.
 import { execFile } from "node:child_process";
+import { identity } from "../config/identity";
 
-export const GH_USER = process.env.MESA_GH_USER ?? "acorrea-designli";
+export const GH_USER = identity().ghUser;
 
 export interface GhResult {
   code: number;
@@ -37,6 +38,22 @@ function exec(file: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: n
     });
     if (input !== undefined) child.stdin?.end(input);
   });
+}
+
+export type GhTokenState = "present" | "missing" | "unknown";
+
+/**
+ * Whether gh can act as `login`. "missing" only when gh answers clearly that it holds no token for that account (exit
+ * 1 with its "no oauth token found" / "not logged in" message); a missing gh, a timeout or any other failure is
+ * "unknown", which callers treat like "present" (the normal error handling then reports it, as before).
+ */
+export async function ghTokenState(login: string = GH_USER, env: NodeJS.ProcessEnv = process.env, run: typeof exec = exec): Promise<GhTokenState> {
+  if (env.GH_TOKEN) return "present";
+  if (!login) return "unknown";
+  const t = await run("gh", ["auth", "token", "-u", login], { ...env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" }, 10_000);
+  if (t.code === 0 && t.stdout.trim()) return "present";
+  if (t.code === 1 && /no (oauth )?tokens? found|not logged in/i.test(t.stderr)) return "missing";
+  return "unknown";
 }
 
 const g = globalThis as unknown as { __mesaGhToken?: { value: string; at: number } };

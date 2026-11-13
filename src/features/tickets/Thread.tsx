@@ -7,6 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { Attachment, Checklist, PlannedAction, QuestionAnswer, TicketMessage, TicketQuestion, TicketRef, TicketStep } from "@/lib/domain/types";
 import { Alert, Chip, FilesBadge, srcClass } from "@/components/ui/primitives";
 import { chipOfMeta } from "@/lib/domain/files";
+import { useIdentity } from "@/components/identity";
 import { useToast } from "@/components/ui/interactive";
 import { arrive, arrivePlan, confirmPick, usePress } from "@/lib/motion";
 import { ApprovalCard } from "@/features/approvals/ApprovalCard";
@@ -47,6 +48,7 @@ interface Props {
 export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onToggleFocus }: Props) {
   const { ticket: t } = data;
   const toast = useToast();
+  const { sessionsDir } = useIdentity();
   const c = useComposer();
   // The unsent reply lives in the browser per ticket: a remount (tab or screen change, reload, a
   // board restart under the open tab) brings it back.
@@ -463,7 +465,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           <>
             {!listening ? (
               <Alert>
-                <b>Nadie te va a leer todavía.</b> Ninguna sesión de Claude escucha este ticket. Tu respuesta se guarda y la lee la próxima sesión que abras en G:/WorkSpace/designli.
+                <b>Nadie te va a leer todavía.</b> Ninguna sesión de Claude escucha este ticket. Tu respuesta se guarda y la lee la próxima sesión que abras en {sessionsDir}.
               </Alert>
             ) : null}
             <input

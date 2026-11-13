@@ -80,12 +80,12 @@ done with waitOn none and only its content refreshes. A new `externalId` (a new 
 ## 1. GitHub: review requests (gate from pr-monitor step 2)
 
 Source of truth for the rules: `G:/WorkSpace/designli/ops/vendor/pr-monitor.md` § "Step 2" and § "The gate"
-(read those two sections, nothing else; never edit that file). Repos: `7-Arrow/dre-backend`, `7-Arrow/dre-frontend`,
-`7-Arrow/dre-infra`, `7-Arrow/dre-connect-intake`, `designli/prospec-backend`, `designli/prospec-frontend`,
-`designli/prospec-admin`.
+(read those two sections, nothing else; never edit that file). Repos: the `githubRepos` of
+`node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs config` (config/sweep.json, which an untracked
+config/sweep.local.json overrides per machine; never a list from memory).
 
 ```
-gh search prs --review-requested=@me --state=open --limit 50 --json repository,number,title,url,updatedAt --repo 7-Arrow/dre-backend --repo 7-Arrow/dre-frontend --repo 7-Arrow/dre-infra --repo 7-Arrow/dre-connect-intake --repo designli/prospec-backend --repo designli/prospec-frontend --repo designli/prospec-admin
+gh search prs --review-requested=@me --state=open --limit 50 --json repository,number,title,url,updatedAt --repo <githubRepos[0]> --repo <githubRepos[1]> ...   # one --repo per entry
 gh api repos/<repo>/pulls/<n> -q '[.head.sha, .draft, .user.login, .base.ref, .head.ref, .title] | @tsv'
 gh api repos/<repo>/pulls/<n>/reviews --paginate -q '[.[] | select(.user.login=="acorrea-designli")] | last | [.state, .commit_id] | @tsv'
 ```

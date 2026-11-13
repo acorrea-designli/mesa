@@ -4,7 +4,7 @@
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, ForbiddenError, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
-import { boundsOf, byPosition, MAX_BODY, MAX_QUOTE, parseGeometry } from "../domain/annotations";
+import { boundsOf, byPosition, MAX_BODY, MAX_QUOTE, parseGeometry, WHOLE_DOCUMENT } from "../domain/annotations";
 import type { Annotation, AnnotationKind, AnnotationReply, AnnotationState, AnnotationSummary, Attachment, Author, PdfDocument } from "../domain/types";
 import { emitWake } from "../wake/wake";
 import { touchInteraction } from "./interaction";
@@ -16,7 +16,7 @@ export interface AnnotationInput {
   attachmentId: string;
   page: number;
   kind: AnnotationKind;
-  geometry: unknown;
+  geometry?: unknown; // none for a general comment
   quote?: string;
   body?: string;
   author: Author;
@@ -79,7 +79,7 @@ export function annotationsRepo(db: Db) {
   };
 
   return {
-    /** The ticket's marks in reading order (page, top to bottom, left to right), with their replies. */
+    /** The ticket's marks in reading order (whole-document comments, then page by page: its comments, then top to bottom, left to right), with their replies. */
     list(id: string, f: AnnotationListFilter = {}): Annotation[] {
       const t = tickets.get(id);
       if (f.attachmentId) pdfOf(t.id, f.attachmentId);
@@ -95,11 +95,16 @@ export function annotationsRepo(db: Db) {
       return tx(db, () => {
         const t = tickets.get(id);
         pdfOf(t.id, input.attachmentId);
-        if (!Number.isInteger(input.page) || input.page < 1 || input.page > 100_000) throw new ValidationError("page must be a whole number from 1");
+        // A general comment (t147) may be on page 0, the whole document; every other mark is on a page from 1.
+        const first = input.kind === "comment" ? WHOLE_DOCUMENT : 1;
+        if (!Number.isInteger(input.page) || input.page < first || input.page > 100_000) {
+          throw new ValidationError(input.kind === "comment" ? "page must be 0 (the whole document) or a page number from 1" : "page must be a whole number from 1");
+        }
         const g = parseGeometry(input.kind, input.geometry);
         if (!g.ok) throw new ValidationError(g.problem);
         const quote = text(input.quote, MAX_QUOTE, "quote");
         if (input.kind === "highlight" && !quote) throw new ValidationError("a highlight needs the quoted text");
+        if (input.kind === "comment" && !text(input.body, MAX_BODY, "body")) throw new ValidationError("a general comment needs a body");
         const ts = nowIso(now);
         const annId = newId("an");
         db.prepare(
@@ -122,6 +127,7 @@ export function annotationsRepo(db: Db) {
         if (patch.body === undefined && patch.state === undefined) throw new ValidationError("nothing to change: send body or state");
         if (patch.body !== undefined && a.author !== by) throw new ForbiddenError("only the author can edit the comment of a mark");
         const body = patch.body === undefined ? a.body : text(patch.body, MAX_BODY, "body");
+        if (a.kind === "comment" && !body) throw new ValidationError("a general comment needs a body");
         const state = patch.state ?? a.state;
         const changed = body !== a.body || state !== a.state;
         const resend = by === "andres" && a.author === "andres" && (body !== a.body || (state === "open" && a.state === "resolved"));

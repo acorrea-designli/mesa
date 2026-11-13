@@ -58,7 +58,7 @@ export function distToSegment(p: Pt, a: Pt, b: Pt): number {
   return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
 }
 
-const PRIORITY: Record<AnnotationKind, number> = { note: 4, arrow: 3, rect: 2, ellipse: 2, highlight: 1 };
+const PRIORITY: Record<AnnotationKind, number> = { note: 4, arrow: 3, rect: 2, ellipse: 2, highlight: 1, comment: 0 }; // a general comment is never on the canvas
 
 /**
  * The mark under a point on a page (page units), or null. `tol` is the grab distance in page units (a few screen

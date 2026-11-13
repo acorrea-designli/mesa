@@ -18,7 +18,7 @@ export interface EngramSearch {
 
 export type EngramRunner = (args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-export const ENGRAM_BIN = process.env.MESA_ENGRAM_BIN ?? "engram";
+export const ENGRAM_BIN = process.env.MESA_ENGRAM_BIN?.trim() || "engram";
 
 export const runEngram: EngramRunner = (args) =>
   new Promise((resolve) => {

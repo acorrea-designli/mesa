@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Finding, Review, ReviewAction, SalidaDetail } from "@/lib/domain/types";
+import { useIdentity } from "@/components/identity";
 import { useToast } from "@/components/ui/interactive";
 import { usePress } from "@/lib/motion";
 import { call, salidaApi } from "@/features/salidas/api";
@@ -18,6 +19,7 @@ const body = (f: Finding) => (f.explanation ? `${f.summary}\n\n${f.explanation}`
 
 export function ReviewCard({ review, onChange }: { review: Review; onChange?: () => void }) {
   const toast = useToast();
+  const { ghUser } = useIdentity();
   const [r, setR] = useState(review);
   const [picked, setPicked] = useState<number[]>([]);
   const [preview, setPreview] = useState<number[] | null>(null);
@@ -122,8 +124,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
         <div className="rv-preview" role="dialog" aria-label="Lo que se publicará">
           <div className="k">
             {requestsChanges
-              ? `Se publica como una revisión que pide cambios en ${r.repo}#${r.pr} · como acorrea-designli`
-              : `Se publica como una revisión en ${r.repo}#${r.pr} · como acorrea-designli`}
+              ? `Se publica como una revisión que pide cambios en ${r.repo}#${r.pr} · como ${ghUser}`
+              : `Se publica como una revisión en ${r.repo}#${r.pr} · como ${ghUser}`}
           </div>
           {previewList.map((f) => (
             <div key={f.n} className="msg src-github rv-msg">

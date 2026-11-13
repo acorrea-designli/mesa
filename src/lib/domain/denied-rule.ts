@@ -15,8 +15,10 @@
 // "Protected paths", where an allow rule would not pre-approve the write anyway), a settings*.json file, a file in a worktree's root, a name with a
 // glob or rule metacharacter, and every tool that is not a file edit (Bash, PowerShell, MCP, Read...).
 
-/** Where the team's worktrees live. MESA_WORKTREES_ROOT overrides it (tests, another machine). */
-export const DEFAULT_WORKTREES_ROOT = "G:/WorkSpace/designli-wt";
+import { CANONICAL } from "../config/identity";
+
+/** Where the team's worktrees live by default. MESA_WORKTREES_ROOT overrides it (src/lib/config/identity.ts). */
+export const DEFAULT_WORKTREES_ROOT: string = CANONICAL.worktreesRoot;
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 /** A path segment that can be written into a rule as is: no glob, bracket, comma, quote or space. */

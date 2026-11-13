@@ -7,8 +7,10 @@ const A = (ticketId: string) => `/api/tickets/${encodeURIComponent(ticketId)}/an
 
 export interface NewMark {
   attachmentId: string;
+  /** From 1; 0 only for a general comment on the whole document. */
   page: number;
   kind: AnnotationKind;
+  /** {} for a general comment. */
   geometry: AnnotationGeometry;
   quote?: string;
   body?: string;

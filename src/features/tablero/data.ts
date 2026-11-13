@@ -1,6 +1,7 @@
 // Tablero read model (server only).
 import { repos } from "@/lib/repo";
 import type { Item } from "@/lib/domain/types";
+import { identity } from "@/lib/config/identity";
 import { isSandbox } from "@/lib/env";
 import { ago, clock, isToday, when } from "../hoy/format";
 import { syncSummary, toCard, type Card, type SyncSummary } from "./model";
@@ -14,8 +15,6 @@ export interface TableroData {
   /** MESA_ENV=sandbox: GitHub is off; the board shows no sync state. */
   sandbox: boolean;
 }
-
-const OWNER = "acorrea-designli";
 
 function setting(key: string): string | null {
   const row = repos().db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
@@ -35,6 +34,7 @@ export function loadTablero(now: Date = new Date()): TableroData {
     return toCard(t, when(linked[0]?.receivedAt ?? t.createdAt, now), linked);
   });
   const s = syncSummary(tasks);
+  const OWNER = identity().ghUser;
   const number = setting("gh_project.number");
   return {
     cards,

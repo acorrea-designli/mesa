@@ -135,3 +135,69 @@ describe("PUT /api/tickets/:id/attachments/:attId/reviewed", () => {
     expect((await put(pdf, { reviewed: true }, "t999")).status).toBe(404);
   });
 });
+
+// t147: general comments over the API.
+describe("general comments (t147)", () => {
+  const comment = (o: Record<string, unknown> = {}, cli = false) => create({ kind: "comment", page: 0, geometry: {}, body: "en general", ...o }, cli);
+
+  it("POST creates one on the whole document (page 0) or on a page; geometry may be left out", async () => {
+    const doc = await comment();
+    expect(doc.status).toBe(201);
+    expect(await doc.json()).toMatchObject({ kind: "comment", page: 0, geometry: {}, author: "andres", body: "en general", sentAt: null });
+    const page = await CREATE(call("POST", { attachmentId: pdf, kind: "comment", page: 2, body: "página 2" }), ctx({ id: ref }));
+    expect(page.status).toBe(201);
+    expect(await page.json()).toMatchObject({ kind: "comment", page: 2, geometry: {} });
+  });
+
+  it("POST answers 400 for a negative or fractional page, an empty body, and page 0 on any other kind", async () => {
+    expect((await comment({ page: -1 })).status).toBe(400);
+    expect((await comment({ page: 1.5 })).status).toBe(400);
+    expect((await comment({ body: "  " })).status).toBe(400);
+    expect((await comment({ body: undefined })).status).toBe(400);
+    expect((await create({ page: 0 })).status).toBe(400); // a pin on page 0
+    expect(r.annotations.list(ref)).toEqual([]);
+  });
+
+  it("GET lists whole-document comments first, then page comments before that page's marks", async () => {
+    await create({ page: 1, body: "pin 1", geometry: { x: 0, y: 0 } });
+    await comment({ page: 1, body: "p1" });
+    await comment({ page: 0, body: "doc" });
+    const all = (await (await LIST(call("GET", undefined, true, `http://local/x?att=${pdf}&open=1`), ctx({ id: ref }))).json()) as Annotation[];
+    expect(all.map((x) => [x.page, x.kind, x.body])).toEqual([
+      [0, "comment", "doc"],
+      [1, "comment", "p1"],
+      [1, "note", "pin 1"],
+    ]);
+  });
+
+  it("is edited, resolved, replied to and deleted through the same routes; the CLI reply is Claude's", async () => {
+    const c = (await (await comment()).json()) as Annotation;
+    const one = ctx({ id: ref, annId: c.id });
+    expect(((await (await PATCH_ONE(call("PATCH", { body: "editado" }), one)).json()) as Annotation).body).toBe("editado");
+    expect((await PATCH_ONE(call("PATCH", { body: " " }), one)).status).toBe(400);
+    expect((await PATCH_ONE(call("PATCH", { state: "resolved" }, true), one)).status).toBe(200);
+    const rep = await REPLY(call("POST", { body: "hecho" }, true), one);
+    expect(rep.status).toBe(201);
+    expect(((await rep.json()) as Annotation).replies.map((x) => x.author)).toEqual(["claude"]);
+    expect((await REMOVE(call("DELETE", undefined, true), one)).status).toBe(403);
+    expect((await REMOVE(call("DELETE"), one)).status).toBe(204);
+  });
+
+  it("send raises one wake with the unchanged payload, carrying the PDF's other unsent marks", async () => {
+    const pin = (await (await create({ body: "pin" })).json()) as Annotation;
+    const c = (await (await comment()).json()) as Annotation;
+    const res = await SEND(call("POST", { attachmentId: pdf }), ctx({ id: ref }));
+    expect(await res.json()).toEqual({ count: 2, annotationIds: [c.id, pin.id] });
+    const wakes = eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "ticket.annotations");
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0]!.payload).toEqual({ ref, ticketRef: ref, attachmentId: pdf, annotationIds: [c.id, pin.id], count: 2 });
+    expect((await SEND(call("POST", { attachmentId: pdf }), ctx({ id: ref }))).status).toBe(409);
+  });
+
+  it("counts in the context summary", async () => {
+    await comment();
+    await create();
+    const c = (await (await CONTEXT(call("GET", undefined, true), ctx({ id: ref }))).json()) as TicketContext;
+    expect(c.annotations).toEqual([{ attachmentId: pdf, filename: "informe.pdf", open: 2, total: 2 }]);
+  });
+});

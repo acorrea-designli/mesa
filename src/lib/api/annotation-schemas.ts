@@ -5,9 +5,9 @@ import type { Author } from "../domain/types";
 
 export const annotationCreate = z.object({
   attachmentId: z.string().min(1),
-  page: z.number().int().min(1),
+  page: z.number().int().min(0), // 0 is only for a general comment on the whole document (the repo checks it)
   kind: z.enum(ANNOTATION_KINDS as [string, ...string[]]),
-  geometry: z.unknown(),
+  geometry: z.unknown().optional(), // a general comment has none
   quote: z.string().optional(),
   body: z.string().optional(),
 });

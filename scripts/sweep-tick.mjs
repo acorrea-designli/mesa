@@ -24,13 +24,29 @@
 // interaction. A source that errors waits baseSec * factor^(errors-1), capped at maxSec, and is marked degraded.
 // Outside work hours nothing is due except a forced sweep. One tick probes every source due within half the
 // current interval (tickSources), so Slack and Basecamp share one `wait` return. One JSON line on stdout per call.
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-export const loadConfig = (path = join(REPO, "config", "sweep.json")) => JSON.parse(readFileSync(path, "utf8"));
+const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+const deepMerge = (base, over) => {
+  for (const [k, v] of Object.entries(over)) base[k] = isObj(v) && isObj(base[k]) ? deepMerge(base[k], v) : v;
+  return base;
+};
+
+// config/sweep.json, then the optional untracked config/sweep.local.json merged over it (objects merge, arrays and
+// values replace: a teammate sets his own githubRepos, Slack workspace or work hours there without editing a tracked file).
+// MESA_SLACK_USER_ID (the board owner's Slack member id) overrides sources.slack.userId of the result; blank = unchanged.
+export function loadConfig(path = join(REPO, "config", "sweep.json"), env = process.env) {
+  const config = JSON.parse(readFileSync(path, "utf8"));
+  const local = path.replace(/\.json$/, ".local.json");
+  if (local !== path && existsSync(local)) deepMerge(config, JSON.parse(readFileSync(local, "utf8")));
+  const slackId = env.MESA_SLACK_USER_ID?.trim();
+  if (slackId && config.sources?.slack) config.sources.slack.userId = slackId;
+  return config;
+}
 const FORCE_FLAG = join(tmpdir(), "mesa-team", "sweep-force.json");
 const ms = (iso) => (iso ? Date.parse(iso) : NaN);
 const max = (...xs) => Math.max(...xs.filter((x) => Number.isFinite(x)), -Infinity);
@@ -303,12 +319,15 @@ async function main() {
   if (pos[0] === "wait") out = await wait(config, store);
   else if (pos[0] === "report") {
     out = await report(config, store, pos[1], { new: opt.new, watermark: opt.watermark, scanSince: opt["scan-since"], error: opt.error === true ? "error" : opt.error, rateLimited: !!opt["rate-limited"] });
+  } else if (pos[0] === "config") {
+    // What the sweeper skill reads instead of a list in its text (an allowed command: this script).
+    out = { ok: true, githubRepos: config.githubRepos ?? [], slackUserId: config.sources?.slack?.userId ?? null, slackWorkspace: config.sources?.slack?.workspace ?? null };
   } else if (pos[0] === "force") {
     out = writeForce([].concat(opt.source ?? []).filter((x) => x !== true));
   } else if (pos[0] === "status") {
     const state = await store.load();
     out = { state, intervalSec: intervalSec(config, state, Date.now()), due: dueTimes(config, state, Date.now()), inWorkHours: inWorkHours(config, Date.now()), store: store.kind, ...scanInfo(config, state, ["basecamp"]) };
-  } else throw new Error("usage: sweep-tick.mjs wait | report <source> --new N [--watermark W] [--scan-since S] | report <source> --error MSG [--rate-limited] | status | force [--source S]");
+  } else throw new Error("usage: sweep-tick.mjs wait | report <source> --new N [--watermark W] [--scan-since S] | report <source> --error MSG [--rate-limited] | status | config | force [--source S]");
   process.stdout.write(`${JSON.stringify(out)}\n`);
 }
 

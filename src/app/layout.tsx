@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+import { IdentityProvider } from "@/components/identity";
 import { AppShell } from "@/components/shell/AppShell";
 import { THEME_BOOT, ToastProvider } from "@/components/ui/interactive";
+import { identity } from "@/lib/config/identity";
 import { isSandbox } from "@/lib/env";
 import { repos } from "@/lib/repo";
 import { readSandboxCopy } from "@/lib/sandbox/copy";
@@ -50,6 +52,7 @@ export const dynamic = "force-dynamic";
 export default function RootLayout({ children }: { children: ReactNode }) {
   const r = repos();
   const counts = r.counts();
+  const { ghUser, sessionsDir } = identity();
   const sandbox = isSandbox() ? { copy: readSandboxCopy(r.db) } : undefined;
   return (
     <html lang="es" className={hanken.variable} data-env={sandbox ? "sandbox" : undefined} suppressHydrationWarning>
@@ -60,7 +63,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <ToastProvider>
-          <AppShell counts={counts} sandbox={sandbox}>{children}</AppShell>
+          <IdentityProvider value={{ ghUser, sessionsDir }}>
+            <AppShell counts={counts} sandbox={sandbox}>{children}</AppShell>
+          </IdentityProvider>
         </ToastProvider>
       </body>
     </html>

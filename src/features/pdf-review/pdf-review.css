@@ -503,6 +503,59 @@
   line-height: 1.4;
 }
 
+/* General section (t147): comments that are not on the canvas, above the marks. */
+.pr-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.pr-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.pr-ghead {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.pr-ghead span {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.pr-general .pr-gfoot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pr-pagesel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.pr-pagesel select {
+  min-width: 0;
+  max-width: 170px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  background: var(--raise);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
 /* ---------- phone: read only, stacked ---------- */
 @media (max-width: 720px) {
   .pr {
