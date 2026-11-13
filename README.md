@@ -34,7 +34,7 @@ pnpm check                               # optional: typecheck, lint, tests
 pnpm build
 ```
 
-Keep the checkout inside the folder where your Claude Code sessions will run, as its `ops/` subfolder (for example `D:/work/ops` for a sessions folder `D:/work`). The sessions folder is the one you open Claude Code in; the team's skills, agents and hooks are installed into its `.claude/`.
+Keep the checkout inside the folder where your Claude Code sessions will run, as its `ops/` subfolder (for example `~/work/ops` for a sessions folder `~/work` on macOS or Linux, `C:/Users/you/work/ops` for `C:/Users/you/work` on Windows). The sessions folder is the one you open Claude Code in; the team's skills, agents and hooks are installed into its `.claude/`.
 
 ## `.env.local`
 
@@ -46,7 +46,7 @@ Copy `.env.example` to `.env.local` (gitignored) and fill what applies; every va
 | `MESA_GIT_NAME`, `MESA_GIT_EMAIL` | the identity the team's agents commit with |
 | `MESA_SLACK_USER_ID` | your Slack member id (`U0...`) |
 | `MESA_OWNER_NAME` | the name the board, the hooks and the team call you by (the rail shows `Designli · <name>`); `MESA_OWNER_FULL_NAME` is the name a calendar event is posted as (default: the same) |
-| `MESA_PROJECT` | the project the lead registers its session under (default `designli`) |
+| `MESA_PROJECT` | the engram project the lead registers its session under (default: the name of your sessions folder; `designli` only on the original owner's layout) |
 | `MESA_SESSIONS_DIR` | the folder your Claude Code sessions run in |
 | `MESA_WORKTREES_ROOT` | where worktrees go (default: the sessions folder plus `-wt`) |
 | `MESA_GCAL_ICS_URL` | optional: the secret iCal address of your Google Calendar |
@@ -64,7 +64,7 @@ The GitHub worker (notifications, review requests, the Project) starts only when
 The team (skills, agents, spawn preamble, hooks, permission rules) is installed into your sessions folder with `scripts/install-team.mjs`. On any layout other than the original owner's it renders real copies of the skills, agents and preamble with your paths and identity, and it refuses to run without the whole identity. Dry run first:
 
 ```
-node scripts/install-team.mjs --target D:/work --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --owner-name "<Your Name>" --dry-run --allow
+node scripts/install-team.mjs --target <sessions folder> --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --owner-name "<Your Name>" --dry-run --allow
 ```
 
 Read the plan, then run it again without `--dry-run`. `--allow` adds the read-only allow rules, each printed as `merge   permissions.allow: ...`. `--sessions` and `--worktrees` are needed only when they are not `<target>` and `<target>-wt`. `--commit-guard` registers `vendor/commit-guard.mjs` (one-line conventional commits, no AI attribution) as a PreToolUse hook; leave it out when you already run your own. The same identity can come from `MESA_GH_USER`, `MESA_GIT_NAME`, `MESA_GIT_EMAIL`, `MESA_SLACK_USER_ID`, `MESA_OWNER_NAME` set in the shell (`--owner-full-name` and `--project` are optional): `install-team` does not read `.env.local`, so pass the flags or export them.
@@ -84,15 +84,15 @@ For a Designli developer who installs Mesa on their own machine. Do the sections
 | Basecamp | the Basecamp MCP server in Claude Code, signed in as you | Claude Code |
 | Calendar | the Google Calendar connector in Claude Code (creating and moving events, always as a salida you approve) and the secret iCal address of your calendar as `MESA_GCAL_ICS_URL` (reading) | `.env.local`, Claude Code |
 
-To turn one source off, set `"enabled": false` for it under `sources` in `config/sweep.local.json`; the rest keeps working.
+To turn a source off: `"enabled": false` for Slack or Basecamp under `sources` in `config/sweep.local.json` (that switch covers only those two); GitHub is `MESA_GITHUB=off` and the calendar poller is `MESA_CALENDAR=off`, both in `.env.local`. The rest keeps working.
 
 **Your repos.** `config/sweep.json` lists the repos the sweeper searches for review requests and the Slack workspace of the original owner. Do not edit it: copy what you need into the untracked `config/sweep.local.json`, which is merged over it (objects merge, arrays and values replace). `node scripts/sweep-tick.mjs config` prints the merged result. `config/projects.local.json` does the same for the Proyectos screen (`config/projects.json`).
 
-**Your name.** `MESA_OWNER_NAME` and `--owner-name` are how the board, the hooks and the team call you; `MESA_OWNER_FULL_NAME` is the name a calendar event is posted as. Without them the team calls you by the original owner's name.
+**Your name.** `MESA_OWNER_NAME` and `--owner-name` are how the board, the hooks and the team call you; `MESA_OWNER_FULL_NAME` is the name a calendar event is posted as. `install-team` refuses to run without `--owner-name` (or `MESA_OWNER_NAME`).
 
 **What does not travel.** A new install starts with nothing of the original owner's: no database (the board starts empty, `pnpm seed` loads sample data on request), no engram memory (the team builds its own as it works), no `.env.local`, no `.claude/settings.json` and no `config/*.local.json`. Everything you set lives in those files on your machine, and none of them is committed.
 
-**Check it before you trust it.** Start the sandbox (below) first: nothing written there leaves your machine. Then run `/mesa-start` on the live board; it checks the board, `gh`, engram and the hooks, and tells you what is missing.
+**Check it before you trust it.** Start the sandbox (below; on a fresh install seed it with `pnpm sandbox:reset --from seed`) first: nothing written there leaves your machine. Then run `/mesa-start` on the live board; it checks the board, `gh`, engram and the hooks, and tells you what is missing.
 
 ## First run
 
@@ -106,10 +106,10 @@ When a teammate agent or the lead is blocked on a permission, Mesa shows a card 
 
 ## Sandbox
 
-A dummy copy of the board where nothing leaves, for trying things: `pnpm sandbox:reset`, then `pnpm sandbox` serves http://127.0.0.1:8796 over `data/sandbox.db`. Install its Claude folder once (the sandbox folder must be named `<sessions folder>-sandbox`, or pass `--sessions`):
+A dummy copy of the board where nothing leaves, for trying things: `pnpm sandbox:reset --from seed` (`--from live` copies your own board once it has data), then `pnpm sandbox` serves http://127.0.0.1:8796 over `data/sandbox.db`. Install its Claude folder once (the sandbox folder must be named `<sessions folder>-sandbox`, or pass `--sessions`):
 
 ```
-node scripts/install-team.mjs --target D:/work-sandbox --env sandbox --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --dry-run
+node scripts/install-team.mjs --target <sessions folder>-sandbox --env sandbox --gh-user <login> --git-name "<Your Name>" --git-email <you@example.com> --slack-id <U0...> --owner-name "<Your Name>" --dry-run
 ```
 
 Read the plan, then run it again without `--dry-run`. Open Claude Code in that folder and run `/mesa-start`. Details in `docs/SANDBOX.md`.
@@ -127,10 +127,10 @@ On a second checkout or a test run, never share the real database: set `MESA_DB=
 
 ```
 # bash / zsh
-MESA_DB="$TMPDIR/mesa-test.db" MESA_GITHUB=off MESA_PORT=8801 pnpm start
+MESA_DB=data/mesa-test.db MESA_GITHUB=off MESA_PORT=8801 pnpm start
 
 # PowerShell
-$env:MESA_DB = "$env:TEMP/mesa-test.db"; $env:MESA_GITHUB = "off"; $env:MESA_PORT = 8801; pnpm start
+$env:MESA_DB = "data/mesa-test.db"; $env:MESA_GITHUB = "off"; $env:MESA_PORT = 8801; pnpm start
 ```
 
 ## Where things are

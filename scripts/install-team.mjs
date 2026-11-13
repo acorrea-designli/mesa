@@ -14,7 +14,7 @@
 // it refuses to run without --gh-user, --git-name, --git-email, --slack-id and --owner-name (or MESA_GH_USER, MESA_GIT_NAME,
 // MESA_GIT_EMAIL, MESA_SLACK_USER_ID, MESA_OWNER_NAME), so nobody commits or reviews as somebody else by accident and the
 // team calls you by your name, not the original owner's. --owner-full-name (MESA_OWNER_FULL_NAME, default: the owner name)
-// is the name a calendar event is posted as; --project (MESA_PROJECT, default designli) is the engram project of the lead.
+// is the name a calendar event is posted as; --project (MESA_PROJECT; default: the sessions folder's name, designli only on the original owner's layout) is the engram project of the lead.
 // Re-run after every pull. In both modes the live install writes those identity values into settings.json env (what
 // vendor/pr-gh.mjs, the sweeper, the hooks and the mesa CLI read). --commit-guard also registers vendor/commit-guard.mjs as a PreToolUse hook (never by default).
 //
