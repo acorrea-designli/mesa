@@ -692,7 +692,7 @@ export type ReviewAction = "approve" | "approve_anyway" | "post" | "dismiss" | "
 
 // ---------- sources: sweep state and health ----------
 
-export type HealthSource = "github" | "github_project" | "slack" | "basecamp" | "engram" | "calendar";
+export type HealthSource = "github" | "github_project" | "github_projects" | "slack" | "basecamp" | "engram" | "calendar";
 /** Per-source sweep state and health (one row per source). */
 export interface SourceState {
   source: HealthSource;

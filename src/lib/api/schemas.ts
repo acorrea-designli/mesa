@@ -433,7 +433,7 @@ export const reviewActionInput = z.object({
 });
 
 // ---------- sources and sweep ----------
-export const healthSource = z.enum(["github", "github_project", "slack", "basecamp", "engram", "calendar"]);
+export const healthSource = z.enum(["github", "github_project", "github_projects", "slack", "basecamp", "engram", "calendar"]);
 const isoOrNull = isoDate.nullable();
 export const sourcePatch = z.object({
   health: z.enum(["ok", "degraded", "down"]).optional(),
