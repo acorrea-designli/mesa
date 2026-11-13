@@ -76,10 +76,18 @@ export function visiblePill(s: { approval?: boolean; plan: PlanPillKind | null; 
   return s.message ? "message" : null;
 }
 
-/** The pill's words. Every pill points down: what it brings him to (a message, the waiting plan or permission) is at the end. */
-export function pillLabel(p: Exclude<VisiblePill, null>): { text: string; arrow: "↓" } {
+export type PillArrow = "↑" | "↓";
+
+/**
+ * Which way a block that is off screen lies. A message, a plan or a permission usually sits at the end (↓), but a
+ * plan with permission cards below it can be above the view, and the pill must not point away from it.
+ */
+export const arrowToward = (block: Span, view: Span): PillArrow => (block.bottom <= view.top ? "↑" : "↓");
+
+/** The pill's words and the way it points (↓ unless told the block is above, see arrowToward). */
+export function pillLabel(p: Exclude<VisiblePill, null>, arrow: PillArrow = "↓"): { text: string; arrow: PillArrow } {
   const text = p === "approval" ? "Permiso pendiente" : p === "plan-nuevo" ? "Ver plan nuevo" : p === "plan-pendiente" ? "Plan pendiente" : "nuevo mensaje";
-  return { text, arrow: "↓" };
+  return { text, arrow: p === "message" ? "↓" : arrow };
 }
 
 export type OnNewMessage = "scroll" | "pill";

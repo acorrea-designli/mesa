@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceFromBottom, hasUnseenStep, isNearBottom, NEAR_BOTTOM_PX, nextApprovalPill, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill } from "./follow";
+import { arrowToward, distanceFromBottom, hasUnseenStep, isNearBottom, NEAR_BOTTOM_PX, nextApprovalPill, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill } from "./follow";
 
 const box = (scrollTop: number, clientHeight = 500, scrollHeight = 2000) => ({ scrollTop, clientHeight, scrollHeight });
 
@@ -127,7 +127,18 @@ describe("visiblePill", () => {
 });
 
 describe("pillLabel", () => {
-  it("every pill points down, never up at a plan that now sits at the bottom", () => {
+  it("points up at a block that lies above the view, down at one below, and a message always down", () => {
+    const view = { top: 100, bottom: 600 };
+    expect(arrowToward({ top: -300, bottom: 100 }, view)).toBe("↑"); // ends at the top edge
+    expect(arrowToward({ top: -1800, bottom: -1400 }, view)).toBe("↑");
+    expect(arrowToward({ top: -300, bottom: 101 }, view)).toBe("↓"); // still overlaps the edge
+    expect(arrowToward({ top: 700, bottom: 900 }, view)).toBe("↓");
+    expect(pillLabel("plan-pendiente", "↑")).toEqual({ text: "Plan pendiente", arrow: "↑" });
+    expect(pillLabel("plan-nuevo", "↑")).toEqual({ text: "Ver plan nuevo", arrow: "↑" });
+    expect(pillLabel("approval", "↑")).toEqual({ text: "Permiso pendiente", arrow: "↑" });
+    expect(pillLabel("message", "↑")).toEqual({ text: "nuevo mensaje", arrow: "↓" });
+  });
+  it("by default every pill points down, where the plan and the cards usually sit", () => {
     expect(pillLabel("plan-nuevo")).toEqual({ text: "Ver plan nuevo", arrow: "↓" });
     expect(pillLabel("plan-pendiente")).toEqual({ text: "Plan pendiente", arrow: "↓" });
     expect(pillLabel("message")).toEqual({ text: "nuevo mensaje", arrow: "↓" });

@@ -22,7 +22,7 @@ import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
 import { Markdown, MarkdownInline } from "./MarkdownView";
 import { ComposerBox, fmtSize, useComposer, type SlashAction } from "./Composer";
-import { hasUnseenStep, isNearBottom, nextApprovalPill, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill, type PlanPillKind, type ScrollBox } from "./follow";
+import { arrowToward, hasUnseenStep, isNearBottom, nextApprovalPill, nextPlanPill, onNewMessage, pillLabel, planInView, visiblePill, type PillArrow, type PlanPillKind, type ScrollBox } from "./follow";
 import { cardOf, keysLine, multiStep } from "@/lib/domain/ticket-questions";
 import { checklistOf } from "@/lib/domain/ticket-checklists";
 import { ChecklistCard } from "./ChecklistCard";
@@ -128,6 +128,10 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   const [approvalPill, setApprovalPill] = useState(false);
   const approvalPillNow = useRef(false);
   const seenApprovals = useRef<string[]>([]);
+  // Which way each block lies from the view: the plan can sit above the view with permission cards below it, and a
+  // pill must never point away from what it takes him to.
+  const [planArrow, setPlanArrow] = useState<PillArrow>("↓");
+  const [approvalArrow, setApprovalArrow] = useState<PillArrow>("↓");
   const opened = useRef(false);
   const arrivalDue = useRef(false);
   const checkPlan = () => {
@@ -147,6 +151,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
       ? s.el.getBoundingClientRect()
       : { top: edge("header.tk-phead", "bottom", 0), bottom: edge(".tk-foot", "top", window.innerHeight) };
     const inView = el ? planInView(el.getBoundingClientRect(), view) : false;
+    if (el) setPlanArrow(arrowToward(el.getBoundingClientRect(), view));
     const grew = !opening && hasUnseenStep(waiting, seenSteps.current);
     const next = nextPlanPill({ current: planPillNow.current, planned: waiting, seen: seenSteps.current, inView, opening });
     seenSteps.current = all;
@@ -162,6 +167,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     }
     const appEl = approvalRef.current;
     const appInView = appEl ? planInView(appEl.getBoundingClientRect(), view) : false;
+    if (appEl) setApprovalArrow(arrowToward(appEl.getBoundingClientRect(), view));
     const appNext = nextApprovalPill({ current: approvalPillNow.current, pending: pendingNow, seen: seenApprovals.current, inView: appInView, opening });
     seenApprovals.current = pendingNow;
     if (appNext !== approvalPillNow.current) {
@@ -173,7 +179,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     approvalPillNow.current = false;
     setApprovalPill(false);
     const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-    nearBottom.current = true; // a pending permission is the end of the thread: he stays pinned there
+    // The cards are the end of the thread (nothing sits below them): going to them pins him there, going up does not.
+    nearBottom.current = approvalArrow === "↓";
     approvalRef.current?.scrollIntoView({ block: "start", behavior });
   };
   const goPlan = () => {
@@ -181,7 +188,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
     setPlanPill(null);
     arrivalDue.current = true;
     const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-    nearBottom.current = true; // the waiting plan is the end of the thread: he stays pinned there
+    // The plan is the end of the thread only when no permission card sits below it: then he stays pinned there. With
+    // cards below it the plan can lie above the view (↑), and he is leaving the end, so the pin is released.
+    nearBottom.current = planArrow === "↓" && pendingIds.length === 0;
     planRef.current?.scrollIntoView({ block: "start", behavior });
   };
 
@@ -493,7 +502,8 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
               else goPlan();
             }}
           >
-            {pillLabel(shown).text} <span aria-hidden="true">{pillLabel(shown).arrow}</span>
+            {pillLabel(shown, shown === "approval" ? approvalArrow : planArrow).text}{" "}
+            <span aria-hidden="true">{pillLabel(shown, shown === "approval" ? approvalArrow : planArrow).arrow}</span>
           </button>
         ) : null}
         {closed ? (
