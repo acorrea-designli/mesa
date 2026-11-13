@@ -2,6 +2,7 @@
 import { mapHealth } from "@/components/shell/health";
 import { nextMeeting } from "@/lib/domain/calendar";
 import type { Source } from "@/lib/domain/types";
+import { identity } from "@/lib/config/identity";
 import { calendarConfigState } from "@/lib/integrations/calendar-env";
 import { healthContext } from "@/lib/integrations/health";
 import { repos } from "@/lib/repo";
@@ -107,13 +108,14 @@ export function loadHoy(now: Date = new Date()): HoyData {
     const st = states.find((x) => x.source === s);
     return Boolean(st?.lastChecked) || all.some((i) => i.source === s);
   };
+  const ghUser = identity().ghUser;
   const setup: SetupRow[] = [
-    { key: "github", line: "github" as Source, name: "GitHub", detail: "acorrea-designli · PRs donde te piden review", connected: seen("github") },
+    { key: "github", line: "github" as Source, name: "GitHub", detail: `${ghUser} · PRs donde te piden review`, connected: seen("github") },
     {
       key: "github_project",
       line: "github",
       name: "GitHub Project",
-      detail: "Privado, de acorrea-designli. Aquí vive el tablero.",
+      detail: `Privado, de ${ghUser}. Aquí vive el tablero.`,
       connected: Boolean(setting("gh_project.id")),
     },
     { key: "basecamp", line: "basecamp", name: "Basecamp", detail: "Cuenta Designli, a través de Claude", connected: seen("basecamp") },

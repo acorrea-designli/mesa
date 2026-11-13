@@ -319,3 +319,10 @@ test("a quiet hour costs at most 12 wait() returns for a sweeper, even with the 
   }
   assert.ok(returns <= 12, `${returns} wait returns in a quiet hour`);
 });
+
+test("MESA_SLACK_USER_ID overrides the Slack user id of the file; blank keeps it", () => {
+  const file = loadConfig(undefined, {}).sources.slack.userId;
+  assert.equal(file, "U06E2UBDC73");
+  assert.equal(loadConfig(undefined, { MESA_SLACK_USER_ID: "U0ANA" }).sources.slack.userId, "U0ANA");
+  assert.equal(loadConfig(undefined, { MESA_SLACK_USER_ID: "  " }).sources.slack.userId, file);
+});

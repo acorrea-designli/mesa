@@ -3,6 +3,7 @@
 // review actions. Every GitHub write becomes a github salida that the button press
 // approves with the usual 20 s undo window, and the lead executes it with gh.
 import { randomBytes } from "node:crypto";
+import { identity } from "../config/identity";
 import type { Db } from "../db/sqlite";
 import { tx } from "../db/sqlite";
 import { fromRow, fromRows, newId, NotFoundError, nowIso, TransitionError, ValidationError } from "../db/util";
@@ -13,7 +14,8 @@ import { salidasRepo } from "./salidas";
 import { ticketsRepo } from "./tickets";
 import { touchInteraction } from "./interaction";
 
-export const GITHUB_LOGIN = "acorrea-designli";
+/** The login reviews are posted as: MESA_GH_USER (default acorrea-designli). */
+export const GITHUB_LOGIN = identity().ghUser;
 
 export interface FindingInput {
   repo: string;
