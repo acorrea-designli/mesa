@@ -5,11 +5,11 @@ description: Per-PR review in Mesa - one reviewer agent per pull request runs th
 
 # Mesa review (one reviewer per PR)
 
-`pr-review` (`C:/Users/z4yross/.claude-work/skills/pr-review/SKILL.md`) is the quality bar and is used unchanged:
+`pr-review` (`G:/WorkSpace/designli/ops/vendor/pr-review/SKILL.md`, vendored in this repo) is the quality bar and is used unchanged:
 read the conversation before the code, only real issues, terse, English, no attribution, the Copilot report on the
 `designli/prospec-*` repos. This skill replaces only its delivery: where pr-review shows findings in chat and posts
 after the user decides, Mesa shows them on the ticket's review card and posts through github salidas. pr-monitor's rules for state and
-incremental review (`C:/Users/z4yross/.claude-work/commands/pr-monitor.md` steps 2, 3 and "When a click arrives")
+incremental review (`G:/WorkSpace/designli/ops/vendor/pr-monitor.md` steps 2, 3 and "When a click arrives")
 apply as written. Never edit or disable pr-monitor or pr-review.
 
 `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`. The reviewer's command sheet is in `.claude/agents/reviewer.md`.
@@ -51,7 +51,7 @@ apply as written. Never edit or disable pr-monitor or pr-review.
 
 1. **Boot.** `MESA ticket context <ref>` (its `findings` are the stored findings with their state; `reviews[]` has the
    reviewed `headSha` and, when the ticket was reopened by a new push, `seenHead`: review `headSha..seenHead`; the latest
-   reviewer handoff's `review-state` block has `head` and `approvedHead`, § State). None in Mesa: read (never write) the PR's entry in `C:/Users/z4yross/.claude-work/pr-monitor-state.json`,
+   reviewer handoff's `review-state` block has `head` and `approvedHead`, § State). None in Mesa: read (never write) the PR's entry in `~/.claude-work/pr-monitor-state.json` (when it exists),
    which has the same shape, so a PR pr-monitor already reviewed is not re-reviewed. Neither: the PR is new
    (pr-monitor box A).
 2. **Fast exit.** Andrés already APPROVED at the current head (the reviews GET): every `open` finding → `waived`,
@@ -136,16 +136,16 @@ Timestamps in UTC with `Z`. When Mesa has no state for a PR, seed it from pr-mon
 
 One click is one GitHub write, as in pr-monitor. The salidas of one `review.action` (its `salidaIds`) are released
 together; send them as a batch through pr-gh.mjs (PowerShell tool, bare; hook G5 checks each write has a released
-github salida for that repo and PR):
+github salida for that repo and PR; it writes under the token of `MESA_GH_USER`, from the environment or the checkout's `.env.local`):
 
-- **approve / approve_anyway** (`github_review`, event APPROVE): `node C:/Users/z4yross/.claude-work/pr-gh.mjs approve
+- **approve / approve_anyway** (`github_review`, event APPROVE): `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs approve
   <repo> <pr> <commitId>`, always with an empty body.
 - **post**: ONE review per decision. Every new finding (`github_comment` with `path`/`line`) goes into a single
   payload, `{"body":"","commit_id":"<commitId>","comments":[{"path","line","body"}, …]}` written with the Write tool
   to `<scratchpad>/lead/review-<ref>-<n>.json`, sent with
-  `node C:/Users/z4yross/.claude-work/pr-gh.mjs review <repo> <pr> <REQUEST_CHANGES if any is a blocker, else COMMENT> <payload>`.
+  `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs review <repo> <pr> <REQUEST_CHANGES if any is a blocker, else COMMENT> <payload>`.
   A finding that already has a thread (`inReplyTo` on the destination, or its `ghCommentId`) continues there:
-  `node C:/Users/z4yross/.claude-work/pr-gh.mjs reply <repo> <pr> <inReplyTo> <scratchpad>/lead/reply-<salida>.txt`.
+  `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs reply <repo> <pr> <inReplyTo> <scratchpad>/lead/reply-<salida>.txt`.
   A finding whose file is not in the diff has no `path`: its text goes in the review body.
 - Then for each salida `MESA salida sent <id> --permalink <url>` (or `failed --error`), `MESA finding upsert` with the
   returned `ghCommentId`, and one `SENT <ref> <salidaIds> <commentIds>` to the reviewer.

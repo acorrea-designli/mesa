@@ -36,8 +36,11 @@ conversation.
 
 - § 0: `pwd` is `/g/WorkSpace/designli-sandbox`. § 1: Mesa is `curl -s -m 3 http://127.0.0.1:8796/api/health` and
   must answer `"env":"sandbox"`. If it is down, start it yourself; never ask Andrés:
-  `rm -rf G:/WorkSpace/designli/ops/.next-sandbox`, then run `"C:/Users/z4yross/AppData/Local/pnpm/nodejs/22.23.2/node.exe"
+  `rm -rf G:/WorkSpace/designli/ops/.next-sandbox`, then run `<node>
   scripts/sandbox.mjs` from `G:/WorkSpace/designli/ops` with `run_in_background`. Node 22.0.0 lacks node:sqlite.
+  `<node>` is a Node of 22.13 or newer: plain `node` when `node -v` shows one, else the pinned 22.23.2 that
+  `.npmrc` (`use-node-version`) and `mise.toml` name: `pnpm -C G:/WorkSpace/designli/ops exec node -p process.execPath`
+  prints its absolute path (use that path as `<node>`); `mise where node@22.23.2` prints its folder.
   Poll health until it answers. Never start two copies: a second instance corrupts the Turbopack cache and makes
   every page reload in a loop. After a merge, restart it the same way (TaskStop the background task, clear the
   cache, start it), warn the live agents first, then re-register and re-arm the watcher. Never start or call the
@@ -90,7 +93,7 @@ Confirm the hooks see teammates the way they were built for (`docs/TEAM.md` § 1
 1. `MESA session --label lead --project designli`
 2. Load `Monitor` (ToolSearch `select:Monitor`) and start the watcher, `persistent: true`, description
    `mesa wait (lead)`, command:
-   `"C:/Users/z4yross/AppData/Local/mise/installs/node/22.23.2/node.exe" G:/WorkSpace/designli/ops/bin/mesa wait --loop --session lead --timeout 25`
+   `<node> G:/WorkSpace/designli/ops/bin/mesa wait --loop --session lead --timeout 25` (`<node>` is defined under "Sandbox check first")
    Each stdout line is one wake event. If Monitor is unavailable, run `MESA wait --session lead --timeout 25` with
    `run_in_background` and restart it every time it returns.
 

@@ -59,7 +59,7 @@ as `review/<owner>/<repo>/<slug>`.
 
 ## Never
 
-Edit and Write are for `C:/Users/z4yross/.claude-work/copilot-report.md` (pr-review § Copilot report) and your
+Edit and Write are for `~/.claude-work/copilot-report.md` (pr-review § Copilot report) and your
 scratch folder only.
 
 Post, approve, comment or reply on GitHub (hook G4); run pr-gh.mjs; propose a github salida (the card's buttons do); re-review a range already reviewed; mark a

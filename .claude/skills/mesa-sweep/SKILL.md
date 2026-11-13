@@ -79,7 +79,7 @@ done with waitOn none and only its content refreshes. A new `externalId` (a new 
 
 ## 1. GitHub: review requests (gate from pr-monitor step 2)
 
-Source of truth for the rules: `C:/Users/z4yross/.claude-work/commands/pr-monitor.md` § "Step 2" and § "The gate"
+Source of truth for the rules: `G:/WorkSpace/designli/ops/vendor/pr-monitor.md` § "Step 2" and § "The gate"
 (read those two sections, nothing else; never edit that file). Repos: the `githubRepos` of
 `node G:/WorkSpace/designli/ops/scripts/sweep-tick.mjs config` (config/sweep.json, which an untracked
 config/sweep.local.json overrides per machine; never a list from memory).
@@ -134,7 +134,7 @@ image with no `content_type` in the tag: judge by the filename extension (png, j
 
 ## 3. Slack: who is waiting on him (slack-triage logic)
 
-Source of truth: `C:/Users/z4yross/.claude-work/commands/slack-triage.md` (read it; never edit it). His user id is
+Source of truth: `G:/WorkSpace/designli/ops/vendor/slack-triage.md` (read it; never edit it). His user id is
 `U06E2UBDC73`, workspace `designli.slack.com`. Three searches with `response_format: "detailed"`, `sort: "timestamp"`,
 `sort_dir: "desc"`, `include_context: false`, up to 3 pages each:
 

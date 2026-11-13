@@ -278,7 +278,7 @@ adds an `allow` rule on their own.
 ## 7. Hooks
 
 Installed by `scripts/install-team.mjs` into `G:/WorkSpace/designli/.claude/settings.json`. Self-test any hook by
-piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
+piping hook JSON into it; tests: `pnpm test:team` (node:test, Node 22.13 or newer; `.npmrc` makes pnpm use 22.23.2).
 
 | Event | Script | Rules |
 |---|---|---|
@@ -287,8 +287,8 @@ piping hook JSON into it; tests: `pnpm test:team` (node:test, mise node 22).
 | PermissionDenied (all tools; auto mode only) | `mesa-denied.mjs` | § 6.7 |
 | Stop, SubagentStop | `mesa-handoff-guard.mjs` | **H1** no handoff for the ticket · **H2** `DONE` with a stale or non-final handoff · **H3** Mesa down: handoff to engram and to the lead · refused once (`stop_hook_active`) |
 
-**Global guard (outside this repo).** `C:/Users/z4yross/.claude/hooks/commit-guard.mjs` runs for every session on
-this PC: a `git commit` must be one `-m "type(scope): subject"` (lowercase, no trailing period, at most 72
+**Commit guard.** `vendor/commit-guard.mjs` (a copy lives in this repo; `install-team --commit-guard` registers it as a PreToolUse hook for Bash and
+PowerShell, see `vendor/README.md`; a guard with the same rules in the user's own profile counts too) runs for every session on the PC it is registered on: a `git commit` must be one `-m "type(scope): subject"` (lowercase, no trailing period, at most 72
 characters) with no attribution, and `gh pr` / `gh issue` bodies carry no AI attribution. The Mesa hooks do not
 duplicate it (G9 was retired for that reason).
 
@@ -340,7 +340,8 @@ settings have none; an existing one is never replaced. No agent runs this agains
 The sandbox folder (`docs/SANDBOX.md`) installs the same way with
 `--target G:/WorkSpace/designli-sandbox --env sandbox`.
 
-Run it with the mise node (`C:/Users/z4yross/AppData/Local/mise/installs/node/22.23.2/node.exe`); the hooks are
+Run it with a Node of 22.13 or newer: `node` when `node -v` shows one, else the pinned 22.23.2 that `.npmrc` names
+(`pnpm exec node scripts/install-team.mjs`, or the path `pnpm exec node -p process.execPath` prints); the hooks are
 registered with the node that ran the installer. Re-run after every pull. Restart Claude Code in
 `G:/WorkSpace/designli` afterwards.
 
