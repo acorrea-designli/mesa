@@ -792,7 +792,8 @@ export interface CalendarPayload {
 
 // ---------- PDF review (t125) ----------
 
-export type AnnotationKind = "highlight" | "note" | "rect" | "ellipse" | "arrow";
+/** `comment` is the pageless kind (t147): a general comment on the whole document (page 0) or on a page, with no geometry. */
+export type AnnotationKind = "highlight" | "note" | "rect" | "ellipse" | "arrow" | "comment";
 export type AnnotationState = "open" | "resolved";
 
 /** Page units: the page's viewport at scale 1 (PDF points), origin top left, y down. Scale independent. */
@@ -806,7 +807,8 @@ export type AnnotationGeometry =
   | { rects: PageRect[] } // highlight
   | { x: number; y: number } // note
   | PageRect // rect, ellipse
-  | { x1: number; y1: number; x2: number; y2: number }; // arrow
+  | { x1: number; y1: number; x2: number; y2: number } // arrow
+  | Record<string, never>; // comment
 
 export interface AnnotationReply {
   id: string;
@@ -820,6 +822,7 @@ export interface Annotation {
   id: string;
   ticketId: string;
   attachmentId: string;
+  /** From 1; 0 only for a general comment on the whole document. */
   page: number;
   kind: AnnotationKind;
   geometry: AnnotationGeometry;

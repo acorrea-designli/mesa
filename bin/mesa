@@ -66,8 +66,10 @@ Tickets
   mesa ticket attach <ref> <file> [--message <id>]   upload a file to the ticket (25 MB max) and print the attachment JSON; a PDF
                   gets a "Revisar" button in the thread that opens the PDF review view (/tickets/<ref>/pdf/<attId>)
   mesa ticket annotations <ref> [--att <attId>] [--open]   Andrés's marks on the ticket's PDFs, in reading order, as JSON:
-                  [{id, attachmentId, page, kind highlight|note|rect|ellipse|arrow, rect {x,y,w,h} in page units (PDF points,
+                  [{id, attachmentId, page, kind highlight|note|rect|ellipse|arrow|comment, rect {x,y,w,h} in page units (PDF points,
                   top left origin), geometry, quote, body, author, state open|resolved, replies [{author, body, createdAt}]}]
+                  kind comment is a general comment: no geometry, page 0 = the whole document, page N = that page. Order: the
+                  whole-document comments first, then page by page (a page's comments before its anchored marks).
                   A ticket.annotations wake says which ones he just sent (annotationIds)
   mesa ticket annotation-reply <ref> <annId> --body -   Claude's reply on one mark (he sees it live in the panel)
 

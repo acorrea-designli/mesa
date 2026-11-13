@@ -4,7 +4,7 @@
 // On the phone (<= 720px) the view is read only: PDF, marks and replies stacked, no tools, no actions.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { byPosition } from "@/lib/domain/annotations";
+import { byPosition, isGeneral } from "@/lib/domain/annotations";
 import type { Annotation } from "@/lib/domain/types";
 import { useToast } from "@/components/ui/interactive";
 import { ApiError } from "@/features/salidas/api";
@@ -66,7 +66,8 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => void (flashTimer.current && clearTimeout(flashTimer.current)), []);
 
-  const order = useMemo(() => new Map(marks.map((m, i) => [m.id, i + 1])), [marks]);
+  // The numbers on the pins and in the cards count the marks on the canvas; a general comment has none.
+  const order = useMemo(() => new Map(marks.filter((m) => !isGeneral(m)).map((m, i) => [m.id, i + 1])), [marks]);
   const pending = marks.filter((m) => m.author === "andres" && m.state === "open" && m.sentAt === null).length;
 
   const refetch = useCallback(() => {
@@ -144,6 +145,30 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
     }
   };
   const send = async () => {
+    setSending(true);
+    try {
+      const r = await reviewApi.send(ticket.id, attachment.id);
+      toast({ text: `Enviado a Claude (${r.count})` });
+      refetch();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // A general comment (t147) goes to Claude as soon as it is written: it is created, then the PDF's unsent marks
+  // (this one among them) are sent as ONE wake, exactly like "Enviar a Claude (n)". If only the send fails the
+  // comment stays saved and unsent (the button still carries it), so the text is not lost.
+  const addGeneral = async (page: number, body: string) => {
+    let made: Annotation;
+    try {
+      made = await reviewApi.create(ticket.id, { attachmentId: attachment.id, page, kind: "comment", geometry: {}, body });
+    } catch (e) {
+      fail(e);
+      throw e;
+    }
+    setMarks((cur) => put(cur, made));
     setSending(true);
     try {
       const r = await reviewApi.send(ticket.id, attachment.id);
@@ -240,6 +265,8 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
           readOnly={readOnly}
           pending={pending}
           sending={sending}
+          pageCount={pageCount}
+          onAddGeneral={addGeneral}
           onPick={pick}
           onEditing={setEditingId}
           onSave={save}

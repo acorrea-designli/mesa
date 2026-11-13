@@ -176,3 +176,100 @@ describe("summary (the context)", () => {
     expect(r.agents.context(ref).annotations).toEqual(r.annotations.summary(ref));
   });
 });
+
+// t147: general comments, the pageless kind (page 0 = the whole document, N = that page).
+const general = (o: Partial<{ page: number; body: string; author: "andres" | "claude" }> = {}, ms = 1) =>
+  r.annotations.create(ref, { attachmentId: pdf, page: o.page ?? 0, kind: "comment", geometry: {}, body: o.body ?? "en general", author: o.author ?? "andres" }, at(ms));
+
+describe("general comments", () => {
+  it("stores a comment with no geometry on the whole document or on a page", () => {
+    const doc = general({ body: "  todo el informe  " });
+    expect(doc).toMatchObject({ page: 0, kind: "comment", geometry: {}, rect: { x: 0, y: 0, w: 0, h: 0 }, quote: "", body: "todo el informe", author: "andres", state: "open", sentAt: null, replies: [] });
+    expect(general({ page: 3 }, 2)).toMatchObject({ page: 3, kind: "comment", geometry: {} });
+    // geometry is ignored, not required
+    const g = r.annotations.create(ref, { attachmentId: pdf, page: 1, kind: "comment", geometry: { x: 9, y: 9 }, body: "x", author: "andres" }, at(3));
+    expect(g.geometry).toEqual({});
+  });
+
+  it("validates the page: 0 only for a comment, never negative, whole numbers, and a body is required", () => {
+    const bad = (o: Partial<Parameters<Repos["annotations"]["create"]>[1]>) => () =>
+      r.annotations.create(ref, { attachmentId: pdf, page: 0, kind: "comment", geometry: {}, body: "x", author: "andres", ...o }, at(1));
+    expect(bad({ page: -1 })).toThrow(ValidationError);
+    expect(bad({ page: 1.5 })).toThrow(ValidationError);
+    expect(bad({ page: 100_001 })).toThrow(ValidationError);
+    expect(bad({ body: "   " })).toThrow(/needs a body/);
+    expect(bad({ body: undefined })).toThrow(/needs a body/);
+    expect(bad({ kind: "note", geometry: { x: 1, y: 1 }, page: 0 })).toThrow(ValidationError); // a pin still needs a page
+    expect(bad({ kind: "rect", geometry: { x: 1, y: 1, w: 2, h: 2 }, page: 0 })).toThrow(ValidationError);
+    expect(r.annotations.list(ref)).toEqual([]);
+  });
+
+  it("lists whole-document comments first, then page by page: its comments before its anchored marks", () => {
+    const pin1 = note({ page: 1, x: 0, y: 0, body: "pin 1" }, 1);
+    const p2 = general({ page: 2, body: "página 2" }, 2);
+    const pin2 = note({ page: 2, x: 0, y: 0, body: "pin 2" }, 3);
+    const p1 = general({ page: 1, body: "página 1" }, 4);
+    const lateDoc = general({ body: "doc tarde" }, 6);
+    const doc = general({ body: "doc" }, 5);
+    expect(r.annotations.list(ref, { attachmentId: pdf }).map((x) => x.id)).toEqual([doc.id, lateDoc.id, p1.id, pin1.id, p2.id, pin2.id]);
+    expect(r.annotations.list(ref, { open: true }).map((x) => x.page)).toEqual([0, 0, 1, 1, 2, 2]);
+  });
+
+  it("is editable (never emptied), resolvable, reopenable, repliable and deletable like any mark", () => {
+    const c = general({ body: "uno" });
+    expect(() => r.annotations.update(ref, c.id, { body: "  " }, "andres", at(2))).toThrow(/needs a body/);
+    expect(r.annotations.update(ref, c.id, { body: "dos" }, "andres", at(3)).body).toBe("dos");
+    expect(() => r.annotations.update(ref, c.id, { body: "mío" }, "claude", at(4))).toThrow(ForbiddenError);
+    expect(r.annotations.update(ref, c.id, { state: "resolved" }, "claude", at(5)).state).toBe("resolved");
+    expect(r.annotations.update(ref, c.id, { state: "open" }, "andres", at(6)).state).toBe("open");
+    const replied = r.annotations.reply(ref, c.id, { author: "claude", body: "hecho" }, at(7));
+    expect(replied.replies.map((x) => [x.author, x.body])).toEqual([["claude", "hecho"]]);
+    expect(() => r.annotations.remove(ref, c.id, "claude", at(8))).toThrow(ForbiddenError);
+    r.annotations.remove(ref, c.id, "andres", at(9));
+    expect(r.annotations.list(ref)).toEqual([]);
+    expect(r.db.prepare("SELECT COUNT(*) AS n FROM annotation_replies").get()).toMatchObject({ n: 0 });
+  });
+
+  it("send: ONE wake with the unchanged payload, carrying the PDF's other unsent marks; (n) drops to 0", () => {
+    const pin = note({ body: "pin" }, 1);
+    const c = general({ body: "general" }, 2);
+    expect(r.annotations.pending(ref, pdf).map((x) => x.id)).toEqual([c.id, pin.id]);
+    const sent = r.annotations.send(ref, pdf, at(10));
+    expect(sent).toEqual({ count: 2, annotationIds: [c.id, pin.id] });
+    const ws = wakes();
+    expect(ws).toHaveLength(1);
+    expect(ws[0]!.payload).toEqual({ ref, ticketRef: ref, attachmentId: pdf, annotationIds: [c.id, pin.id], count: 2 });
+    expect(r.annotations.pending(ref, pdf)).toEqual([]);
+    expect(r.annotations.get(ref, c.id).sentAt).toBe(at(10).toISOString());
+    expect(() => r.annotations.send(ref, pdf, at(11))).toThrow(TransitionError);
+    expect(wakes()).toHaveLength(1);
+  });
+
+  it("an edit, a reopen or a reply by Andrés makes it unsent again; resolved and Claude's own are never sent", () => {
+    const c = general({ body: "uno" }, 1);
+    const done = general({ body: "cerrado", page: 2 }, 2);
+    general({ body: "de claude", author: "claude" }, 3);
+    r.annotations.update(ref, done.id, { state: "resolved" }, "andres", at(4));
+    r.annotations.send(ref, pdf, at(5));
+    expect(wakes()[0]!.payload).toMatchObject({ annotationIds: [c.id], count: 1 });
+    r.annotations.update(ref, c.id, { body: "uno, editado" }, "andres", at(6));
+    expect(r.annotations.pending(ref, pdf).map((x) => x.id)).toEqual([c.id]);
+    r.annotations.send(ref, pdf, at(7));
+    r.annotations.reply(ref, c.id, { author: "andres", body: "ojo" }, at(8));
+    expect(r.annotations.pending(ref, pdf).map((x) => x.id)).toEqual([c.id]);
+    r.annotations.send(ref, pdf, at(9));
+    r.annotations.update(ref, done.id, { state: "open" }, "andres", at(10));
+    expect(r.annotations.pending(ref, pdf).map((x) => x.id)).toEqual([done.id]);
+  });
+
+  it("counts like any mark: the context summary and Documentos (Andrés's own, open / total)", () => {
+    const c = general({ body: "uno" }, 1);
+    general({ page: 2, body: "dos" }, 2);
+    general({ body: "de claude", author: "claude" }, 3);
+    note();
+    r.annotations.update(ref, c.id, { state: "resolved" }, "andres", at(5));
+    expect(r.annotations.summary(ref)).toEqual([{ attachmentId: pdf, filename: "informe.pdf", open: 3, total: 4 }]);
+    expect(r.agents.context(ref).annotations).toEqual(r.annotations.summary(ref));
+    expect(r.annotations.documents().find((d) => d.attachmentId === pdf)).toMatchObject({ open: 2, total: 3 });
+  });
+});
