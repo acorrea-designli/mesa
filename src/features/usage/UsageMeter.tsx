@@ -8,6 +8,9 @@ import "./usage.css";
 
 const pct = (n: number) => `${n}%`;
 
+/** Where the pace tick sits along the track, in % from the left (null with no pace): 100 minus the share of the window elapsed. */
+export const tickPct = (w: WindowView): number | null => (w.pace === null ? null : Math.round((1 - w.pace) * 1000) / 10);
+
 /** "5 h: 68% restante, reinicia 18:30, ritmo parejo 70%", or "5 h: sin dato". Also the meter's accessible name. */
 export function meterLabel(w: WindowView): string {
   if (w.remaining === null) return `${w.label}: sin dato`;
@@ -24,7 +27,7 @@ export function UsageMeter({ w, size = "sm", label = true }: { w: WindowView; si
           <span className="us-track">
             <i className="us-fill" style={{ width: pct(w.remaining ?? 0) }} />
           </span>
-          {w.pace === null ? null : <b className="us-tick" style={{ left: pct(Math.round((1 - w.pace) * 1000) / 10) }} />}
+          {w.pace === null ? null : <b className="us-tick" style={{ left: pct(tickPct(w) ?? 0) }} />}
         </>
       )}
     </div>

@@ -384,6 +384,161 @@
   color: var(--mute);
 }
 
+.us-chart-head h3 small {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.us-ckeys {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+}
+/* The chart key: the same marks as the plot (2 px ink line, dashed dim pace line, ink dot with a halo), drawn, not typed. */
+.us-g-line,
+.us-g-even,
+.us-g-dot {
+  display: block;
+  flex: none;
+}
+.us-g-line {
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+.us-g-even {
+  width: 18px;
+  height: 1.5px;
+  background: repeating-linear-gradient(90deg, var(--dim) 0 5px, transparent 5px 10px);
+}
+.us-g-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--raise);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+/* ---------- tooltips on the marks (Tip.tsx; root class us-tp, the day-column value bubble already owns us-tip) ---------- */
+.us-bar {
+  position: relative;
+}
+.us-tp {
+  position: relative;
+  display: inline-flex;
+}
+.us-tipbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.us-tipbtn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+/* Words that explain themselves on demand: a solid hairline underline (the dotted idiom is for out-of-service). */
+.us-tip-txt {
+  text-decoration: underline solid var(--dim) 1px;
+  text-underline-offset: 4px;
+}
+.us-tip-txt:hover {
+  color: var(--ink);
+}
+.us-tip-txt::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.us-tip-big {
+  display: block;
+  line-height: 1;
+}
+/* The pace tick is 3 px wide: a transparent hit box centred on it, 28 px (44 px on touch), without moving the mark. */
+.us-tip-tick {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+}
+.us-tip-hit {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.us-tipbox {
+  position: absolute;
+  left: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: min(264px, calc(100vw - 32px));
+  padding: 8px 0;
+  transform: translateX(calc(-50% + var(--dx, 0px)));
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.us-tipbox[data-side="up"] {
+  bottom: 100%;
+}
+.us-tipbox[data-side="down"] {
+  top: 100%;
+}
+.us-tipbox.open {
+  visibility: visible;
+  opacity: 1;
+}
+.us-tipbubble {
+  display: block;
+  padding: 9px 11px;
+  background: var(--raise);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  box-shadow: var(--float-low);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+  color: var(--ink2);
+}
+@media (pointer: coarse) {
+  .us-tip-tick {
+    width: 44px;
+    height: 44px;
+  }
+  .us-tip-txt::after {
+    inset: -13px -6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .us-tipbox {
+    transition: none;
+  }
+}
+
 /* ---------- tokens ---------- */
 .us-period {
   display: flex;

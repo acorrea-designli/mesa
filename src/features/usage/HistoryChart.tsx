@@ -7,6 +7,7 @@
 // circles never distort.
 import { useState, type KeyboardEvent, type PointerEvent } from "react";
 import { stampLabel, type ChartSeries } from "@/lib/domain/usage";
+import { Tip } from "./Tip";
 import "./usage.css";
 
 /** The window's start or end as "jue 12 · 13:30"; a window inside one day (5 h) drops the repeated day: "13:30". */
@@ -15,6 +16,11 @@ function edge(start: number, end: number, which: 0 | 1): string {
   const [b = "", bt = ""] = stampLabel(end).split(" · ");
   return a === b ? (which === 0 ? at : bt) : stampLabel(which === 0 ? start : end);
 }
+
+// What each mark means. The chart is % USED (the plan bar above is % restante), so the line climbs as the plan is spent.
+const TIP_LINE = "Lo que has usado de verdad, medición a medición. La gráfica muestra % usado: sube, al revés que la barra.";
+const TIP_EVEN = "Gastar parejo: 0% al empezar la ventana y 100% al reiniciar. Por encima de esta línea gastas más rápido que el reloj.";
+const TIP_DOT = "Última medición. Con el cursor, el dedo o las flechas sobre la gráfica se mueve a la que elijas; el texto de arriba la lee.";
 
 const fmtPct = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1).replace(".", ",")}%`;
 
@@ -49,7 +55,9 @@ export function HistoryChart({ title, series }: { title: string; series: ChartSe
   return (
     <figure className="us-chart">
       <figcaption className="us-chart-head">
-        <h3 className="us-h">{title}</h3>
+        <h3 className="us-h">
+          {title} <small>% usado</small>
+        </h3>
         <span className="us-read" aria-live="off">
           {readout}
         </span>
@@ -98,6 +106,21 @@ export function HistoryChart({ title, series }: { title: string; series: ChartSe
           </>
         ) : null}
       </div>
+      {pts.length === 0 ? null : (
+        <div className="us-ckeys">
+          {pts.length > 1 ? (
+            <Tip tip={TIP_LINE} btnClass="us-tip-txt">
+              <i className="us-g-line" aria-hidden="true" /> uso
+            </Tip>
+          ) : null}
+          <Tip tip={TIP_EVEN} btnClass="us-tip-txt">
+            <i className="us-g-even" aria-hidden="true" /> ritmo parejo
+          </Tip>
+          <Tip tip={TIP_DOT} btnClass="us-tip-txt">
+            <i className="us-g-dot" aria-hidden="true" /> medición
+          </Tip>
+        </div>
+      )}
       {pts.length === 0 ? <p className="us-chart-empty">Sin historial todavía: la curva se dibuja con cada medición.</p> : null}
     </figure>
   );
