@@ -138,6 +138,8 @@
   flex-direction: column;
   min-width: 0;
   padding-bottom: 40px;
+  /* An open tooltip is measured at its centred position before it slides inside; clip so that pass never widens the page. */
+  overflow-x: clip;
 }
 .us-head {
   padding: 20px var(--s-gutter) 0;
