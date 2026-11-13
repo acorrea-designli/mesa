@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ALLOW, ENV, UsageError, allowRules, commitGuardEntry, hookEntries, identityEnv, install, mergeSettings, resolveConfig } from "../install-team.mjs";
-import { CANONICAL, fwd, leftovers, posixForm, renderText } from "../lib/render-team.mjs";
+import { CANONICAL, fwd, leftovers, maskPath, renderText } from "../lib/render-team.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CANON_REPO = "G:/WorkSpace/designli/ops";
@@ -213,7 +213,7 @@ test("renderText replaces every spelling of his paths, his identity, and nothing
 const skip = existsSync(join(REPO, "vendor")) ? [] : ["z4yross"];
 // The configured paths (this checkout, the sessions folder, the worktrees root) may sit under a folder named like the
 // owner's (a worktree under G:/WorkSpace/designli-wt, a temp folder under his profile): they are not leftovers.
-const own = (t, render) => [fwd(REPO), ...(render ? [render.repo, render.sessions, render.worktrees] : [])].reduce((s, p) => s.split(fwd(p)).join("<own>").split(posixForm(p)).join("<own>"), t);
+const own = (t, render) => [fwd(REPO), ...(render ? [render.repo, render.sessions, render.worktrees] : [])].reduce((s, p) => maskPath(s, p), t);
 const left = (t, render) => leftovers(own(t, render), skip);
 
 function renderedInstall(extra = {}) {
@@ -337,4 +337,9 @@ test("a render with --commit-guard registers the guard at his repo path", () => 
   const { target } = renderedInstall({ args: ["--commit-guard"] });
   const s = JSON.parse(readFileSync(join(target, ".claude", "settings.json"), "utf8"));
   assert.ok(s.hooks.PreToolUse.some((e) => e.hooks[0].command.includes(`${fwd(REPO)}/vendor/commit-guard.mjs`)));
+});
+
+test("maskPath hides a configured path in the forward-slash, backslash and /d/ spellings", () => {
+  const t = "a D:/work/z4yross/ana b D:\\work\\z4yross\\ana c /d/work/z4yross/ana";
+  assert.equal(maskPath(t, "D:/work/z4yross/ana"), "a <own> b <own> c <own>");
 });

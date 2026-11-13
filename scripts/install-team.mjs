@@ -35,7 +35,7 @@
 import { copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { CANONICAL, IDENTITY_FIELDS, fwd, isTextFile, leftovers, posixForm, renderText } from "./lib/render-team.mjs";
+import { CANONICAL, IDENTITY_FIELDS, fwd, isTextFile, leftovers, maskPath, renderText } from "./lib/render-team.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -301,7 +301,7 @@ function renderFile(dest, key, content, ctx) {
 /** The configured paths may themselves sit under a folder named like the owner's (a worktree): they are not leftovers. */
 function withoutOwnPaths(text, cfg) {
   let t = text;
-  for (const p of [cfg.repo, cfg.worktrees, cfg.sessions]) t = t.split(fwd(p)).join("<own>").split(posixForm(p)).join("<own>");
+  for (const p of [cfg.repo, cfg.worktrees, cfg.sessions]) t = maskPath(t, p);
   return t;
 }
 

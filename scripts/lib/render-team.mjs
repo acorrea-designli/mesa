@@ -29,7 +29,11 @@ export const posixForm = (p) => {
   return m ? `/${m[1].toLowerCase()}/${m[2]}` : fwd(p);
 };
 
-const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Replaces a configured path in all three spellings (D:/x, D:\x, /d/x) by a placeholder. */
+export const maskPath = (text, p, mask = "<own>") =>
+  text.split(fwd(p)).join(mask).split(fwd(p).replace(/\//g, "\\")).join(mask).split(posixForm(p)).join(mask);
+
+const escapeRe =(s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * The ordered pairs [canonical text, replacement]. Paths come in three spellings (G:/x, G:\x, /g/x); longer
