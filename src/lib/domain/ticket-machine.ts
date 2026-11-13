@@ -18,6 +18,7 @@ export type TicketEvent =
   | { type: "claude_reply"; asks?: boolean } // Claude answers back; asks = it has options or is flagged as a question
   | { type: "claude_plan"; needsOk: boolean } // Claude posts "Claude va a hacer"
   | { type: "approve_plan"; planned: boolean } // Andrés OKs the plan (wakes the owner); planned = some action is still "planned"
+  | { type: "plan_skipped" } // Claude skipped the last step that waited for an OK and nothing else waits for Andrés: Te espera becomes Claude trabaja (no wake)
   | { type: "permission_request" } // "Pídeme permiso": the agent must file an approval card (wakes the owner)
   | { type: "andres_acted" } // Andrés pressed a button on the ticket (review action, salida, permission): his turn is taken
   | { type: "claim" } // a session takes the ticket and starts work
@@ -68,6 +69,10 @@ export function transitionTicket(status: TicketStatus, ev: TicketEvent): TicketT
       // waiting_andres while the needs_ok steps stay planned (src/lib/domain/ticket-needs.ts).
       if (!ev.planned) return fail("there is no plan waiting for approval");
       return { ok: true, status: "working", wake: "ticket.plan_approved" };
+
+    case "plan_skipped":
+      // Only the status the plan caused moves; any other stays as it is (never an error, never a wake).
+      return { ok: true, status: status === "waiting_andres" ? "working" : status };
 
     case "permission_request":
       // Andrés asked for a card, not for an answer: it hands the turn to Claude and never changes anything else.

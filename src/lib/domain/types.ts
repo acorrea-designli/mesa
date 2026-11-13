@@ -137,6 +137,8 @@ export interface TicketMessage {
   kind: "permission_request" | null;
   /** For a permission request: the latest Claude message when he pressed the button. */
   aboutMessageId: string | null;
+  /** A plain question from Claude without a card (`reply --ask`): open until a later message of Andrés. */
+  asks: boolean;
   createdAt: string;
 }
 
@@ -237,7 +239,8 @@ export interface TicketRef {
 }
 
 export type ActionMode = "direct" | "needs_ok";
-export type ActionState = "planned" | "approved" | "rejected" | "running" | "done" | "failed";
+/** `skipped` (t169): Claude decided not to do the step (no longer applies, done by someone else). Final, and never blocks closing the ticket. */
+export type ActionState = "planned" | "approved" | "rejected" | "running" | "done" | "failed" | "skipped";
 export interface PlannedAction {
   id: string;
   ticketId: string;

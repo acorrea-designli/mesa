@@ -117,6 +117,13 @@ describe("ticket machine", () => {
       }
     });
 
+    it("plan_skipped moves only Te espera to Claude trabaja, never wakes and never fails", () => {
+      expect(transitionTicket("waiting_andres", { type: "plan_skipped" })).toEqual({ ok: true, status: "working" });
+      for (const s of ["waiting_claude", "working", "paused", "ongoing", "closed"] as const) {
+        expect(transitionTicket(s, { type: "plan_skipped" })).toMatchObject({ ok: s !== "closed", ...(s === "closed" ? {} : { status: s }) });
+      }
+    });
+
     it("has labels for both", () => {
       expect(TICKET_STATUS_LABEL.paused).toBe("En pausa");
       expect(TICKET_STATUS_LABEL.ongoing).toBe("En proceso");

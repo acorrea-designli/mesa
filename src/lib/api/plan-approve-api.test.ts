@@ -152,6 +152,42 @@ describe("PATCH /api/actions/:id (sessions)", () => {
     expect((await PATCH_ACTION(req("PATCH", "/x", { state: "running" }), ctx({ id: "pa_nope" }))).status).toBe(404);
   });
 
+  it("skipped marks a step the session will not do: from planned or approved, final, and it never blocks closing", async () => {
+    // a planned needs_ok step can be skipped without ever being approved
+    expect((await patch("skipped")).status).toBe(200);
+    await approve({ only: [ids[1]] });
+    expect((await PATCH_ACTION(req("PATCH", "/x", { state: "skipped" }), ctx({ id: ids[1]! }))).status).toBe(200);
+    expect(states()).toEqual(["skipped", "skipped"]);
+    // repeating it is a no-op; any other state afterwards is a 409
+    expect((await patch("skipped")).status).toBe(200);
+    for (const state of ["running", "done", "failed"]) {
+      const res = await patch(state);
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/skipped/);
+    }
+    expect(states()).toEqual(["skipped", "skipped"]);
+    // no step waits for an OK any more, and the ticket closes
+    expect(r.tickets.detail(ref).actions.some((a) => a.state === "planned")).toBe(false);
+    expect(() => r.tickets.transition(ref, { type: "close", by: "claude" })).not.toThrow();
+    expect(r.tickets.get(ref).status).toBe("closed");
+  });
+
+  it("a step that is done or rejected cannot be skipped (409); a failed one can", async () => {
+    await approve({ only: [ids[0]] });
+    await patch("done");
+    const res = await patch("skipped");
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toMatch(/only a step that is still open/);
+    await approve({ only: [ids[1]] });
+    await PATCH_ACTION(req("PATCH", "/x", { state: "failed" }), ctx({ id: ids[1]! }));
+    expect((await PATCH_ACTION(req("PATCH", "/x", { state: "skipped" }), ctx({ id: ids[1]! }))).status).toBe(200);
+    expect(states()).toEqual(["done", "skipped"]);
+    const t = r.tickets.create({ direction: "andres_asks", title: "otro", ownerSession: "lead" });
+    const [only] = r.tickets.plan(t.id, [{ kind: "merge_pr", source: "github", label: "Mergear", mode: "needs_ok" }]).actions;
+    r.tickets.approvePlan(t.id, [only!.id]); // rejected by Andrés
+    expect((await PATCH_ACTION(req("PATCH", "/x", { state: "skipped" }), ctx({ id: only!.id }))).status).toBe(409);
+  });
+
   it("refuses approved, rejected and planned with 400: a session cannot approve its own step", async () => {
     for (const state of ["approved", "rejected", "planned", "bogus"]) {
       expect((await patch(state)).status).toBe(400);
