@@ -79,9 +79,14 @@ export function Tip({ tip, children, className, btnClass, tabbable = true, style
       box.dataset.side = "down";
       r = box.getBoundingClientRect();
     }
+    // Bounds: the viewport, narrowed to the /uso column (.us clips its x overflow, so the rail side must stay clear).
     const vw = document.documentElement.clientWidth;
-    const dx = r.left < 8 ? 8 - r.left : r.right > vw - 8 ? vw - 8 - r.right : 0;
-    box.style.setProperty("--dx", `${Math.round(dx)}px`);
+    const col = box.closest(".us")?.getBoundingClientRect();
+    const min = Math.max(0, col?.left ?? 0) + 8;
+    const max = Math.min(vw, col?.right ?? vw) - 8;
+    const dx = r.right > max ? max - r.right : 0;
+    const shift = r.left + dx < min ? min - r.left : dx;
+    box.style.setProperty("--dx", `${Math.round(shift)}px`);
   }, [open]);
 
   return (
