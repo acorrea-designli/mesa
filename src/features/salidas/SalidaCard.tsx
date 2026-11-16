@@ -19,6 +19,7 @@ import {
   DiffLine,
   DraftBlock,
   Facts,
+  SalidaFiles,
   PhoneRoute,
   Route,
   ScheduledBanner,
@@ -120,6 +121,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
       <div className="sa-phone-only">
         <PhoneRoute d={s.destination} source={s.source} />
       </div>
+      <SalidaFiles s={s} />
       {s.context ? <blockquote className="ctx">{s.context}</blockquote> : null}
 
       {c.mode === "edit" ? (

@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { identity } from "../config/identity";
 import { SOURCES, STATIONS } from "../domain/types";
+import { MAX_SALIDA_FILES } from "../domain/salida-files";
 import { checklistProblem, MAX_STEP_NOTE, MAX_STEPS } from "../domain/ticket-checklists";
 import { cardProblem, MAX_OPTIONS, MAX_QUESTIONS, MIN_OPTIONS } from "../domain/ticket-questions";
 
@@ -220,6 +221,11 @@ const basecampDest = z.object({
   recordingTitle: z.string().optional(),
   /** basecamp_comment only (refined on salidaInput): Basecamp person ids, with the name shown on the card. */
   mentions: z.array(z.object({ id: z.string().trim().min(1), name: z.string().trim().min(1) })).max(20).optional(),
+  /**
+   * Local files this salida uploads to Basecamp (t196), any of the three kinds: absolute paths, or {path}. The route
+   * replaces each with the stored form (name, size, SHA-256 measured now) after checking it exists and fits.
+   */
+  files: z.array(z.union([z.string().trim().min(1), z.object({ path: z.string().trim().min(1) })])).max(MAX_SALIDA_FILES).optional(),
   postAs: z.string().min(1),
 });
 const githubDest = z.object({
@@ -275,9 +281,9 @@ export const salidaInput = z
   .refine(
     (s) => {
       const d = s.destination;
-      return !("mentions" in d && d.mentions?.length) || d.kind === "basecamp_comment";
+      return !("mentions" in d && d.mentions?.length) || d.kind === "basecamp_comment" || d.kind === "basecamp_message";
     },
-    "mentions are only for a basecamp_comment: a Campfire line is plain text (nobody is pinged) and a message-board post has no mentions param; drop mentions or send a comment",
+    "mentions are only for a basecamp_comment (pinged through create_comment) or a basecamp_message (the people the post notifies, as subscriptions); a Campfire line is plain text and notifies nobody in particular: drop mentions or send a comment",
   )
   .refine(
     (s) =>
@@ -285,6 +291,9 @@ export const salidaInput = z
       (s.destination.kind === "github_review" && (s.destination.event === "APPROVE" || Boolean(s.destination.comments?.length))),
     "body is required (only a GitHub APPROVE or a batched review with comments may be empty)",
   );
+
+/** t196: the attachable_sgid Basecamp returned for file `file` (0-based index into destination.files). */
+export const salidaUpload = z.object({ file: z.number().int().min(0), sgid: z.string().trim().min(16) });
 
 export const salidaVersion = z.object({
   body: z.string().min(1),

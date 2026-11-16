@@ -85,6 +85,9 @@ Tickets
 Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida propose --source slack|basecamp|github|calendar --dest JSON --body B [--title T] [--context C] [--ticket ID] [--link "source:label[:url]"]... [--expires ISO]
                   [--wait-release [--timeout S]]  blocks until salida.released (exit 0) or denied/expired/withdrawn (exit 3)
+                  Basecamp --dest may carry "files": ["<absolute path>", ...] (post, comment or Campfire; at most 10, 25 MB each, each must exist):
+                  Mesa stores name, size and SHA-256, the card lists them and G5 lets only those exact files upload. A basecamp_message
+                  "mentions" [{"id","name"}] are the people the post notifies (create_message subscriptions); a Campfire cannot carry them
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
   mesa salida sent <id> [--permalink URL]          only after salida.released, for a Slack salida in mode send ("Claude lo envía"),
                                                    Basecamp and GitHub
@@ -99,6 +102,8 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
   mesa salida deleted <id> | restored <id>
   mesa salida withdraw <id> --reason R           (lead) take a stale draft/pending salida back: final status "withdrawn", never sent,
                   the reason shows on its card ("Retirada · R"); not a deny (no wake, no Andrés turn). Any other status: 409
+  mesa salida upload <id> --file N --sgid S      (lead) Basecamp salida with files: record the attachable_sgid create_attachment returned for file N
+                  (0-based, destination.files): hook G5 lets create_message / create_comment through only with exactly these sgids embedded
   mesa salida show <id>
   mesa salida list [--status pending,scheduled]
 
@@ -628,6 +633,8 @@ async function main() {
         case "deleted":
         case "restored":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd }));
+        case "upload":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/uploads`, { file: Number(need(opt.file, "--file")), sgid: String(need(opt.sgid, "--sgid")) }));
         case "show":
           return out(await call("GET", `/api/salidas/${enc(need(id, "<id>"))}`));
         case "list":

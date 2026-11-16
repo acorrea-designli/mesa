@@ -28,6 +28,7 @@ import type {
   SalidaLink,
   SalidaSource,
   SalidaStatus,
+  SalidaUpload,
   SalidaTurn,
   SalidaVersion,
 } from "../domain/types";
@@ -171,7 +172,28 @@ export function salidasRepo(db: Db) {
         engram: fromRows<EngramLink>(
           db.prepare("SELECT * FROM engram_links WHERE entity_type = 'salida' AND entity_id = ? ORDER BY created_at").all(id),
         ),
+        uploads: fromRows<SalidaUpload>(
+          db.prepare("SELECT * FROM salida_uploads WHERE salida_id = ? ORDER BY file_index").all(id),
+        ),
       };
+    },
+
+    /**
+     * t196: the lead records the sgid create_attachment returned for file `fileIndex` of a Basecamp salida. The sha256 is
+     * the one measured when the salida was proposed (never taken from the caller), so a row always names the approved bytes.
+     * A retried upload replaces its row. Only a salida that is still open for a send takes it.
+     */
+    recordUpload(id: string, fileIndex: number, sgid: string, now = new Date()): SalidaDetail {
+      const s = get(id);
+      const files = "files" in s.destination ? (s.destination.files ?? []) : [];
+      const f = files[fileIndex];
+      if (!f) throw new ValidationError(`salida ${id} has no file ${fileIndex} (it has ${files.length})`);
+      if (!/^[A-Za-z0-9_=+/.-]{16,}$/.test(sgid)) throw new ValidationError("sgid does not look like a Basecamp attachable_sgid");
+      if (s.status !== "sending" || !s.releasedAt) throw new TransitionError(`salida ${id} is ${s.status}: record an upload only after salida.released`);
+      db.prepare(
+        "INSERT INTO salida_uploads (salida_id, file_index, sha256, sgid, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(salida_id, file_index) DO UPDATE SET sha256 = excluded.sha256, sgid = excluded.sgid, created_at = excluded.created_at",
+      ).run(id, fileIndex, f.sha256, sgid, nowIso(now));
+      return repo.detail(id);
     },
 
     list(f: { status?: SalidaStatus[] } = {}): Salida[] {

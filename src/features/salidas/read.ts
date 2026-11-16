@@ -1,6 +1,8 @@
 // Server read model for Salidas B: the queue with every detail the card needs,
 // the ticket it came from and that ticket's history as a line of stations.
 import type { Repos } from "@/lib/repo";
+import { fileState } from "@/lib/repo/salida-files";
+import type { FileState } from "@/lib/domain/salida-files";
 import type { ConversationLinks, SalidaDetail, SalidaStatus } from "@/lib/domain/types";
 import { conversationLinks, destinationUrl, type DestinationConfig } from "./model";
 import type { HistoryEvent, SalidaView, SalidasData, TicketBrief } from "./types";
@@ -75,9 +77,18 @@ export function destinationConfig(env: Record<string, string | undefined> = proc
   return { slackDomain: env.MESA_SLACK_DOMAIN, basecampAccount: env.MESA_BASECAMP_ACCOUNT, slackTeamId: env.MESA_SLACK_TEAM_ID };
 }
 
-/** A salida detail with its destinationUrl and Slack conversation links: every route under /api/salidas that answers with a SalidaDetail returns it through here. */
-export function withDestinationUrl<T extends SalidaDetail>(s: T, cfg: DestinationConfig = destinationConfig()): T & { destinationUrl: string | null; conversation: ConversationLinks | null } {
-  return { ...s, destinationUrl: destinationUrl(s, cfg), conversation: conversationLinks(s, cfg) };
+const FINAL: SalidaStatus[] = ["sent", "denied", "expired", "deleted", "withdrawn"];
+
+/** t196: for each file the destination carries, whether it is still exactly the proposed one. Final salidas are not re-read (the file may be gone by then). */
+function fileStates(s: SalidaDetail): FileState[] {
+  const files = "files" in s.destination ? (s.destination.files ?? []) : [];
+  if (!files.length || FINAL.includes(s.status)) return [];
+  return files.map(fileState);
+}
+
+/** A salida detail with its destinationUrl, Slack conversation links and file states: every route under /api/salidas that answers with a SalidaDetail returns it through here. */
+export function withDestinationUrl<T extends SalidaDetail>(s: T, cfg: DestinationConfig = destinationConfig()): T & { destinationUrl: string | null; conversation: ConversationLinks | null; fileStates: FileState[] } {
+  return { ...s, destinationUrl: destinationUrl(s, cfg), conversation: conversationLinks(s, cfg), fileStates: fileStates(s) };
 }
 
 export function salidaView(r: Repos, id: string, cfg: DestinationConfig = destinationConfig()): SalidaView {

@@ -14,7 +14,7 @@ import { useSalidaController } from "./controller";
 import { IcPencil } from "./icons";
 import { useLive, useNow } from "./live";
 import { hhmm, SLACK_QUICK_STATUSES, sourceLabel } from "./model";
-import { DestChips, DestLink, Route, SlackModes, SlackQuick } from "./parts";
+import { DestChips, DestLink, Route, SalidaFiles, SlackModes, SlackQuick } from "./parts";
 import { ExactBlock, StateBlocks } from "./SalidaCard";
 import "./salidas.css";
 
@@ -68,6 +68,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
         <DestLink d={s.destination} url={s.destinationUrl} />
       </div>
       {compact ? <DestChips d={s.destination} source={s.source} /> : <Route d={s.destination} source={s.source} />}
+      <SalidaFiles s={s} />
       {s.context ? <blockquote className="ctx">{s.context}</blockquote> : null}
       {c.mode === "edit" && draft !== null ? (
         <>

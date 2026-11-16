@@ -10,7 +10,8 @@ import { useToast } from "@/components/ui/interactive";
 import { confirmPick, rise, travel } from "@/lib/motion";
 import { COPY_TOAST, copyExactText } from "./copy";
 import { IcCheck, IcClock, IcCopy, IcExternal, IcStar, IcUndo } from "./icons";
-import { age, comparedWith, conversationHref, destinationLinkLabel, destShort, hhmm, mentionCount, routeStops, scheduleChoices, secondsElapsed, secondsLeft, shownText, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
+import { fileOpenHref, fileSizeLabel, fileStateNote, type FileState } from "@/lib/domain/salida-files";
+import { age, comparedWith, destinationFiles, conversationHref, destinationLinkLabel, destShort, hhmm, mentionCount, routeStops, scheduleChoices, secondsElapsed, secondsLeft, shownText, stepperItems, UNDO_SECONDS, whenLabel, wordDiff } from "./model";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -30,6 +31,38 @@ export function Route({ d, source }: { d: Destination; source: SalidaDetail["sou
           </b>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** t196: the files this salida uploads, each openable. A file that changed or vanished since it was proposed is flagged and cannot be opened. */
+export function SalidaFiles({ s }: { s: Pick<SalidaDetail, "id" | "destination"> & { fileStates?: FileState[] } }) {
+  const files = destinationFiles(s.destination);
+  if (!files.length) return null;
+  return (
+    <div className="sa-files" aria-label="Archivos que se suben">
+      <div className="k">{files.length === 1 ? "Archivo adjunto" : "Archivos adjuntos"}</div>
+      <ul>
+        {files.map((f, i) => {
+          const state = s.fileStates?.[i] ?? "ok";
+          const note = fileStateNote(state);
+          return (
+            <li key={f.sha256 + i} className={cx(state !== "ok" && "bad")}>
+              {state === "ok" ? (
+                <a href={fileOpenHref(s.id, i)} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${f.name}`}>
+                  {f.name}
+                  <IcExternal />
+                </a>
+              ) : (
+                <span>{f.name}</span>
+              )}
+              <small>{fileSizeLabel(f.size)}</small>
+              <code title="SHA-256 del archivo propuesto: es el único que sale">{f.sha256.slice(0, 10)}</code>
+              {note ? <em role="alert">{note}</em> : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

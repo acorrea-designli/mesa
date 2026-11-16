@@ -53,12 +53,15 @@ describe("salidaInput mentions", () => {
     expect(salidaInput.safeParse(input({ kind: "basecamp_comment", ...base })).success).toBe(true);
   });
 
-  it("a campfire line and a message-board post with mentions are rejected with a clear message", () => {
-    for (const kind of ["basecamp_campfire", "basecamp_message"]) {
-      const r = salidaInput.safeParse(input({ kind, ...base, mentions }));
-      expect(r.success).toBe(false);
-      expect(JSON.stringify(r.error?.issues)).toMatch(/mentions are only for a basecamp_comment/);
-    }
+  it("a message-board post keeps its mentions: they are the people it notifies (t196)", () => {
+    const r = salidaInput.parse(input({ kind: "basecamp_message", ...base, mentions }));
+    expect(r.destination).toMatchObject({ kind: "basecamp_message", mentions });
+  });
+
+  it("a campfire line with mentions is rejected with a clear message", () => {
+    const r = salidaInput.safeParse(input({ kind: "basecamp_campfire", ...base, mentions }));
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r.error?.issues)).toMatch(/mentions are only for a basecamp_comment/);
   });
 
   it("a campfire line without mentions is fine", () => {

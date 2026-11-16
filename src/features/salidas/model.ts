@@ -2,6 +2,7 @@
 // schedule choices, destination route stops and short labels. Unit tested.
 import { eventWhen, eventWhenLine, parseEventBody } from "@/lib/domain/calendar-event";
 import { parseMoveBody } from "@/lib/domain/calendar-move";
+import type { SalidaFile } from "@/lib/domain/salida-files";
 import type { ConversationLinks, Destination, Salida, SalidaDetail, SalidaVersion } from "@/lib/domain/types";
 
 // ---------- version stepper ----------
@@ -169,9 +170,14 @@ const isSlack = (d: Destination): d is Extract<Destination, { workspace: string 
 const isBasecamp = (d: Destination): d is Extract<Destination, { project: string }> =>
   d.kind === "basecamp_comment" || d.kind === "basecamp_campfire" || d.kind === "basecamp_message";
 
-/** Who a Basecamp comment pings (destination.mentions); empty for every other destination. */
+/** Who a Basecamp comment pings or a post notifies (destination.mentions); empty for every other destination. */
 export function mentionNames(d: Destination): string[] {
-  return d.kind === "basecamp_comment" ? (d.mentions ?? []).map((m) => m.name) : [];
+  return d.kind === "basecamp_comment" || d.kind === "basecamp_message" ? (d.mentions ?? []).map((m) => m.name) : [];
+}
+
+/** The files a Basecamp salida uploads (t196); empty for every other destination. */
+export function destinationFiles(d: Destination): SalidaFile[] {
+  return isBasecamp(d) ? (d.files ?? []) : [];
 }
 
 /** The mention count the Facts line shows: Basecamp counts the destination's person ids (a typed "@x" pings nobody), the rest count "@x" in the text. */
@@ -192,11 +198,16 @@ export function routeStops(d: Destination): RouteStop[] {
     return stops;
   }
   if (isBasecamp(d)) {
+    const files = destinationFiles(d);
+    const filesStop: RouteStop[] = files.length
+      ? [{ label: "Adjunta", value: files.length === 1 ? files[0]!.name : `${files.length} archivos`, ...(files.length > 1 ? { note: files.map((f) => f.name).join(", ") } : {}) }]
+      : [];
     if (d.kind === "basecamp_campfire")
       return [
         { label: "Proyecto", value: d.project },
         { label: "Campfire", value: d.recordingTitle ?? `Campfire · ${d.project}` },
         { label: "Como", value: "Línea de chat, sin hilo", note: d.postAs },
+        ...filesStop,
       ];
     const stops: RouteStop[] = [
       { label: "Proyecto", value: d.project },
@@ -204,7 +215,9 @@ export function routeStops(d: Destination): RouteStop[] {
       { label: "Como", value: d.kind === "basecamp_message" ? "Mensaje nuevo" : "Comentario", note: d.postAs },
     ];
     const names = mentionNames(d);
-    if (names.length) stops.push({ label: "Menciona a", value: names.join(", ") });
+    if (names.length) stops.push({ label: d.kind === "basecamp_message" ? "Avisa a" : "Menciona a", value: names.join(", ") });
+    else if (d.kind === "basecamp_message") stops.push({ label: "Avisa a", value: "Los de siempre del tablero", note: "Sin personas elegidas" });
+    stops.push(...filesStop);
     return stops;
   }
   if (d.kind === "calendar_event") {

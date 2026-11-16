@@ -1886,3 +1886,62 @@
     justify-content: center;
   }
 }
+
+/* t196: the files a Basecamp salida uploads, each openable */
+.sa-files {
+  margin-top: 12px;
+}
+.sa-files ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.sa-files li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 13.5px;
+}
+.sa-files a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.sa-files a:hover {
+  border-bottom-color: currentColor;
+}
+.sa-files a:focus-visible {
+  outline: 2px solid var(--bc, currentColor);
+  outline-offset: 2px;
+}
+.sa-files small,
+.sa-files code {
+  color: var(--mute);
+  font-size: 12px;
+}
+.sa-files em {
+  flex-basis: 100%;
+  font-style: normal;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sa-files li.bad > span {
+  text-decoration: line-through;
+  color: var(--mute);
+}
+@media (max-width: 720px) {
+  .sa-files a {
+    min-height: 44px;
+  }
+}

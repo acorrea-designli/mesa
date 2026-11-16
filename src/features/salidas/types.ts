@@ -1,4 +1,5 @@
 // View types shared by the Salidas server read model and its client components.
+import type { FileState } from "@/lib/domain/salida-files";
 import type { HealthSource, LearnedChip, SalidaDetail, Source } from "@/lib/domain/types";
 
 export interface HistoryEvent {
@@ -27,6 +28,8 @@ export interface SalidaView extends SalidaDetail {
   history: HistoryEvent[];
   /** Web URL of where this salida is published (the permalink after the send); null when it cannot be known. */
   destinationUrl: string | null;
+  /** t196: per file of the destination, still the proposed one ("ok"), "changed" or "missing"; empty without files or once final. */
+  fileStates?: FileState[];
 }
 
 export interface SalidasData {
