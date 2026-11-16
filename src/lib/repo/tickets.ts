@@ -1048,7 +1048,9 @@ export function ticketsRepo(db: Db) {
 
     /**
      * Stores an attachment. With `versionOf` (t190) it becomes the next version of that attachment's document
-     * (v2, v3...): the id may be any version of it, a version of another ticket is 404.
+     * (v2, v3...): the id may be any version of it, a version of another ticket is 404. Without it (t205), a PDF whose
+     * filename matches a PDF already on the ticket is stored as the next version of that document too; an explicit
+     * `versionOf` always wins.
      */
     addAttachment(
       id: string,
@@ -1061,11 +1063,19 @@ export function ticketsRepo(db: Db) {
         const { versionOf: target, ...fields } = a;
         let versionOf: string | null = null;
         let version = 1;
-        if (target) {
-          const row = db.prepare("SELECT id, version_of AS versionOf FROM attachments WHERE id = ? AND ticket_id = ?").get(target, t.id) as
+        let docTarget = target;
+        if (!docTarget && isPdfMime(fields.mime)) {
+          // t205: a PDF with the filename of one already on this ticket is the next version of that document.
+          const same = db
+            .prepare("SELECT id FROM attachments WHERE ticket_id = ? AND filename = ? AND mime = 'application/pdf' ORDER BY created_at DESC, rowid DESC LIMIT 1")
+            .get(t.id, fields.filename) as { id: string } | undefined;
+          docTarget = same?.id ?? null;
+        }
+        if (docTarget) {
+          const row = db.prepare("SELECT id, version_of AS versionOf FROM attachments WHERE id = ? AND ticket_id = ?").get(docTarget, t.id) as
             | { id: string; versionOf: string | null }
             | undefined;
-          if (!row) throw new NotFoundError("attachment", target);
+          if (!row) throw new NotFoundError("attachment", docTarget);
           versionOf = row.versionOf ?? row.id;
           const root = db.prepare("SELECT mime FROM attachments WHERE id = ?").get(versionOf) as { mime: string };
           if (!sameKind(root.mime, fields.mime)) throw new ValidationError(`a version of ${versionOf} must ${isPdfMime(root.mime) ? "be" : "not be"} a PDF`);
