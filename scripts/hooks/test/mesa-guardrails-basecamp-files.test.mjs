@@ -265,3 +265,46 @@ test("G10: nobody records an upload through the raw API either", async () => {
   }
   assert.equal(await rule(run(lead, "Bash", { command: "curl -s http://127.0.0.1:8790/api/salidas/sa_1" })), null);
 });
+
+test("G5 edit: update_comment and update_message are refused for every salida, files or not", async () => {
+  const withFiles = mesaWith(salida({ kind: "basecamp_comment", uploads: [SG1] }), salida({ id: "s2", uploads: [SG1] }));
+  const content = `<p>${TEXT}</p>${tag(SG1)}`;
+  for (const [tool, input] of [
+    ["update_comment", { comment_id: 31337, content }],
+    ["update_comment", { comment_id: 55, content }],
+    ["update_message", { message_id: 31337, subject: "anything", content }],
+    ["update_message", { message_id: 55, subject: "Cost report", status: "active", content }],
+  ]) {
+    const r = await run(lead, `mcp__basecamp__${tool}`, input, withFiles.fetchImpl);
+    assert.equal(r?.rule, "G5", tool);
+    assert.match(r.reason, /never edits a Basecamp comment or post/);
+  }
+  assert.equal(await rule(run(fakeAgent({ name: "dev-t196" }).input, "mcp__basecamp__update_comment", { comment_id: 1, content: "x" })), "G4");
+});
+
+test("G5 kind: each text tool serves only a salida of its own kind", async () => {
+  const content = `<p>${TEXT}</p>`;
+  const comment_ = mesaWith(salida({ kind: "basecamp_comment", files: null }));
+  const message = mesaWith(salida({ files: null }));
+  const campfire = mesaWith(salida({ kind: "basecamp_campfire", files: null }));
+  // a post's board id as a comment target, a comment as a post, a Campfire as either
+  const asComment = await run(lead, "mcp__basecamp__create_comment", { recording_id: 55, content }, message.fetchImpl);
+  assert.equal(asComment.rule, "G5");
+  assert.match(asComment.reason, /is a basecamp_message, not a basecamp_comment/);
+  const asPost = await run(lead, "mcp__basecamp__create_message", { board_id: 55, subject: "Cost report", status: "active", content }, comment_.fetchImpl);
+  assert.equal(asPost.rule, "G5");
+  assert.match(asPost.reason, /is a basecamp_comment, not a basecamp_message/);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 55, content: TEXT }, message.fetchImpl)), "G5");
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { recording_id: 55, content }, campfire.fetchImpl)), "G5");
+  // each one still passes with its own tool
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { recording_id: 55, content }, comment_.fetchImpl)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_message", { board_id: 55, subject: "Cost report", status: "active", content }, message.fetchImpl)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 55, content: TEXT }, campfire.fetchImpl)), null);
+});
+
+test("G5 kind: an upload is for the tool of the salida's kind and only for kinds with files", async () => {
+  assert.equal(await rule(upload(mesaWith(salida({ kind: "basecamp_comment" })))), null);
+  assert.equal(await rule(upload(mesaWith(salida({ kind: "basecamp_campfire" })))), "G5");
+  assert.equal(await rule(campfireUpload(mesaWith(salida({ kind: "basecamp_comment" })))), "G5");
+  assert.equal(await rule(upload(mesaWith(salida({ files: null })))), "G5");
+});

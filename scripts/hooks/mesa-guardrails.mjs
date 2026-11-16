@@ -69,6 +69,7 @@ const BASECAMP_WRITE =
 // Sends whose text the lead may only post from a released salida. (The two Slack message tools have their own check below.)
 // File uploads (t196): checked against the released salida's files, name and SHA-256.
 const BASECAMP_UPLOAD = /^mcp__basecamp__(create_attachment|create_campfire_upload)$/;
+const BASECAMP_EDIT = /^mcp__basecamp__update_(comment|message)$/;
 const LEAD_TEXT_SENDS = /^(mcp__basecamp__create_(comment|campfire_line|message|ping)|mcp__basecamp__update_(comment|message))$/;
 // Google Calendar through the claude.ai connector (mcp__claude_ai_Google_Calendar__<action>) or a self-hosted one
 // (mcp__google-calendar__<action>). Reads (list, get, find free time) are open; every other action writes.
@@ -288,6 +289,8 @@ function filesProblem(tool, ti, s) {
 
 // Where a Basecamp send goes: the call's id must be the destination's recordingId (comment: the recording, post: the
 // message board, Campfire: the chat), so approved text and files cannot land on another project's board.
+// Each text tool serves one destination kind: a comment never goes out as a post or the other way round.
+const TOOL_KIND = { create_message: "basecamp_message", create_comment: "basecamp_comment", create_campfire_line: "basecamp_campfire" };
 const TARGET_PARAM = { create_message: "board_id", create_comment: "recording_id", create_campfire_line: "campfire_id", create_campfire_upload: "campfire_id" };
 function targetProblem(tool, ti, s) {
   const param = TARGET_PARAM[tool.replace("mcp__basecamp__", "")];
@@ -350,6 +353,12 @@ async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
         mismatch = { expected, got };
         continue;
       }
+    }
+    const wantKind = TOOL_KIND[tool.replace("mcp__basecamp__", "")];
+    const kind = destinationOf(s).kind;
+    if (wantKind && kind !== wantKind) {
+      mismatch = { reason: `this salida is a ${kind ?? "destination without a kind"}, not a ${wantKind}: send it with the tool of its own kind (basecamp_message: create_message, basecamp_comment: create_comment, basecamp_campfire: create_campfire_line).` };
+      continue;
     }
     const problem = targetProblem(tool.replace("mcp__basecamp__", ""), ti, s) ?? (isMessage ? messageProblem(ti, s) : null) ?? filesProblem(tool, ti, s);
     if (problem) {
@@ -637,6 +646,12 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this Slack call cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and act on salida.released.`);
     }
     if (!found.match) return block("G5", slackRefusal(tool, found));
+  }
+
+  // t196: no Mesa flow edits a Basecamp comment or post that is already out, and an edit carries no board or recording id
+  // to bind to the salida's destination (an approved file or text could be written over any comment of any project).
+  if (!teammate && BASECAMP_EDIT.test(tool)) {
+    return block("G5", `rule 3: Mesa never edits a Basecamp comment or post that is already sent (${tool.replace("mcp__basecamp__", "")}). Send the approved text as a new comment or post with create_comment / create_message, or hold the salida and tell ${OWNER}.`);
   }
 
   if (!teammate && LEAD_TEXT_SENDS.test(tool)) {

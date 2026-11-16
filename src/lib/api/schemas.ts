@@ -297,8 +297,12 @@ export const salidaInput = z
     "a basecamp_message needs a subject (destination.subject): it is what the post is titled and what the client's notification shows, and hook G5 compares it exactly",
   )
   .refine(
-    (s) => !("files" in s.destination && s.destination.files?.length) || Boolean("recordingId" in s.destination && s.destination.recordingId),
-    "a salida with files needs destination.recordingId (the message board, recording or Campfire it goes to): hook G5 checks every upload and send against it",
+    (s) => !s.destination.kind.startsWith("basecamp") || Boolean("recordingId" in s.destination && s.destination.recordingId),
+    "a Basecamp salida needs destination.recordingId (the message board of a post, the recording of a comment, the Campfire id of a chat line): hook G5 checks every send and upload against it and refuses a salida without one",
+  )
+  .refine(
+    (s) => !("subject" in s.destination && s.destination.subject) || s.destination.kind === "basecamp_message",
+    "subject is only for a basecamp_message (the post's title)",
   )
   .refine(
     (s) =>

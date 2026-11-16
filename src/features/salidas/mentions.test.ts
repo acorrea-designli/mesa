@@ -41,7 +41,7 @@ describe("basecamp mentions on the salida card", () => {
 
 describe("salidaInput mentions", () => {
   const input = (destination: object, source = "basecamp") => ({ source, destination, body: "Hi Matt" });
-  const base = { project: "Scout", postAs: "Andrés Correa" };
+  const base = { project: "Scout", recordingId: "5003", postAs: "Andrés Correa" };
   const mentions = [{ id: "9001", name: "Matt Myers" }];
 
   it("a basecamp_comment keeps its mentions", () => {
@@ -68,6 +68,20 @@ describe("salidaInput mentions", () => {
     const r = salidaInput.safeParse(input({ kind: "basecamp_campfire", ...base, mentions }));
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toMatch(/mentions are only for a basecamp_comment/);
+  });
+
+  it("every Basecamp kind needs a recordingId, and only a post takes a subject (t196)", () => {
+    for (const kind of ["basecamp_comment", "basecamp_campfire"]) {
+      const r = salidaInput.safeParse(input({ kind, project: "Scout", postAs: "A" }));
+      expect(r.success, kind).toBe(false);
+      expect(JSON.stringify(r.error?.issues)).toMatch(/needs destination\.recordingId/);
+    }
+    const post = salidaInput.safeParse(input({ kind: "basecamp_message", project: "Scout", postAs: "A", subject: "Report" }));
+    expect(post.success).toBe(false);
+    expect(JSON.stringify(post.error?.issues)).toMatch(/needs destination\.recordingId/);
+    const sub = salidaInput.safeParse(input({ kind: "basecamp_comment", ...base, subject: "Report" }));
+    expect(sub.success).toBe(false);
+    expect(JSON.stringify(sub.error?.issues)).toMatch(/subject is only for a basecamp_message/);
   });
 
   it("a campfire line without mentions is fine", () => {

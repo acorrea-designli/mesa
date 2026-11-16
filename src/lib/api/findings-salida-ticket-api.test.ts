@@ -78,7 +78,7 @@ describe("POST /api/salidas with a ticket", () => {
 describe("POST /api/salidas with Basecamp mentions", () => {
   const mentions = [{ id: "9001", name: "Matt Myers" }];
   const propose = (kind: string, withMentions = true) =>
-    SALIDA(post("/api/salidas", { source: "basecamp", destination: { kind, project: "Scout", postAs: "Andrés", ...(kind === "basecamp_message" ? { subject: "Report" } : {}), ...(withMentions ? { mentions } : {}) }, body: "hola" }), ctx());
+    SALIDA(post("/api/salidas", { source: "basecamp", destination: { kind, project: "Scout", recordingId: "5003", postAs: "Andrés", ...(kind === "basecamp_message" ? { subject: "Report" } : {}), ...(withMentions ? { mentions } : {}) }, body: "hola" }), ctx());
 
   it("a comment stores its mentions in the destination", async () => {
     const res = await propose("basecamp_comment");
