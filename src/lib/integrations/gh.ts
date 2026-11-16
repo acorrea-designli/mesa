@@ -2,7 +2,7 @@
 // MESA_GH_USER is set (default acorrea-designli, src/lib/config/identity.ts) the token is read from gh's keyring for
 // that account at runtime and passed only to the child process, so a different active
 // gh account on this PC does not change who Mesa reads as.
-import { execFile } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
 import { identity } from "../config/identity";
 
 export const GH_USER = identity().ghUser;
@@ -28,17 +28,92 @@ export class GhError extends Error {
   }
 }
 
-function exec(file: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number, input?: string): Promise<GhResult> {
+/** Exit code of a child Mesa gave up on (same as coreutils `timeout`). */
+export const GH_TIMEOUT_CODE = 124;
+
+/** How long past its timeout a child may take to be reaped before the call resolves without it. */
+const KILL_GRACE_MS = 2_000;
+
+/** The gh children running now, for the event-loop watchdog's log line. */
+export interface GhChild {
+  pid: number | undefined;
+  args: string;
+  startedAt: number;
+}
+// On globalThis: instrumentation and the route handlers are separate bundles, each with its own copy of this module.
+const gActive = globalThis as unknown as { __mesaGhActive?: Set<GhChild> };
+const active = (gActive.__mesaGhActive ??= new Set<GhChild>());
+export const activeGhChildren = (): GhChild[] => [...active];
+
+/**
+ * Kill a child and everything it started: `taskkill /T` on Windows (child.kill reaches gh.exe only), SIGKILL elsewhere.
+ * On Windows the plain kill runs only after taskkill is done: killing gh.exe first leaves taskkill nothing to walk from
+ * and its grandchildren survive. A child that already exited is left alone (its PID may have been reused).
+ */
+function killTree(child: ChildProcess): void {
+  try {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    if (process.platform === "win32" && child.pid) {
+      execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 5_000 }, () => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      });
+      return;
+    }
+    child.kill("SIGKILL");
+  } catch {
+    /* already gone */
+  }
+}
+
+/**
+ * Run one child with a hard deadline. The call always settles by `timeoutMs` plus a short grace: at the deadline the child
+ * and its tree are killed, and if its pipes still do not close (a grandchild holding them) the call resolves anyway with
+ * code 124 instead of waiting for them. stdin is closed when there is no input, so a child that reads it sees EOF.
+ */
+export function execGh(file: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs: number, input?: string): Promise<GhResult> {
   return new Promise((resolve) => {
-    const child = execFile(file, args, { env, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+    let done = false;
+    let timedOut = false;
+    let giveUp: NodeJS.Timeout | undefined;
+    const entry: GhChild = { pid: undefined, args: args.slice(0, 3).join(" "), startedAt: Date.now() };
+    // Partial stdout is dropped on purpose: ghApi would parse a truncated body as a complete 200.
+    const timeoutResult = (): GhResult => ({ code: GH_TIMEOUT_CODE, stdout: "", stderr: `gh timed out after ${Math.round(timeoutMs / 1000)}s` });
+    const finish = (r: GhResult) => {
+      if (done) return;
+      done = true;
+      clearTimeout(deadline);
+      clearTimeout(giveUp);
+      active.delete(entry);
+      resolve(r);
+    };
+    const child = execFile(file, args, { env, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       const e = err as (NodeJS.ErrnoException & { code?: string | number }) | null;
-      if (e && e.code === "ENOENT") return resolve({ code: 127, stdout: "", stderr: "gh: command not found" });
+      if (e && e.code === "ENOENT") return finish({ code: 127, stdout: "", stderr: "gh: command not found" });
+      if (timedOut) return finish(timeoutResult());
       const code = e ? (typeof e.code === "number" ? e.code : 1) : 0;
-      resolve({ code, stdout: String(stdout), stderr: String(stderr) });
+      finish({ code, stdout: String(stdout), stderr: String(stderr) });
     });
+    entry.pid = child.pid;
+    active.add(entry);
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      killTree(child);
+      giveUp = setTimeout(() => {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        finish(timeoutResult());
+      }, KILL_GRACE_MS);
+    }, timeoutMs);
     if (input !== undefined) child.stdin?.end(input);
+    else child.stdin?.end();
   });
 }
+
+const exec = execGh;
 
 export type GhTokenState = "present" | "missing" | "unknown";
 

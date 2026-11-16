@@ -28,7 +28,9 @@ if (!isLoopbackBind(host)) {
   console.warn(`serve: MESA_HOST=${host}. Mesa is reachable beyond this PC; the token guard still applies, but prefer 127.0.0.1 and pnpm tunnel.`);
 }
 const next = join(REPO, "node_modules", "next", "dist", "bin", "next");
-const child = spawn(process.execPath, [next, mode, "--hostname", host, "--port", PORT], { cwd: REPO, env: { ...process.env, ...buildEnv(process.env, REPO) }, stdio: "inherit" });
+// UV_THREADPOOL_SIZE: Node runs fs and dns.lookup on 4 libuv threads by default; a few slow ones would queue every other fs call
+// (including Next serving a route) behind them while the loop looks idle. 16 leaves room (an explicit env value wins).
+const child = spawn(process.execPath, [next, mode, "--hostname", host, "--port", PORT], { cwd: REPO, env: { UV_THREADPOOL_SIZE: "16", ...process.env, ...buildEnv(process.env, REPO) }, stdio: "inherit" });
 
 // The phone tunnel (cloudflared) is a child of this process: it starts once the board listens (pnpm start with
 // MESA_PUBLIC_URL and MESA_CF_TUNNEL set, or MESA_TUNNEL=on) and stops with it. A problem is one log line, never a failed start.
