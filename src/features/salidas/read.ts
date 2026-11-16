@@ -3,12 +3,11 @@
 import type { Repos } from "@/lib/repo";
 import { fileState } from "@/lib/repo/salida-files";
 import type { FileState } from "@/lib/domain/salida-files";
+import { NotFoundError } from "@/lib/db/util";
+import { dayStart, decodeCursor, encodeCursor } from "@/lib/domain/salida-queue";
 import type { ConversationLinks, SalidaDetail, SalidaStatus } from "@/lib/domain/types";
 import { conversationLinks, destinationUrl, type DestinationConfig } from "./model";
-import type { HistoryEvent, SalidaView, SalidasData, TicketBrief } from "./types";
-
-const OPEN: SalidaStatus[] = ["pending", "scheduled", "queued_until_back", "sending", "draft_created", "failed"];
-const DECIDED: SalidaStatus[] = ["sent", "denied", "expired", "deleted", "withdrawn"];
+import type { HistoryEvent, HistoryPage, SalidaView, SalidasData, TicketBrief } from "./types";
 
 const clip = (s: string, n = 120) => {
   const one = s.replace(/\s+/g, " ").trim();
@@ -96,13 +95,31 @@ export function salidaView(r: Repos, id: string, cfg: DestinationConfig = destin
   return { ...s, ticket: ticketBrief(r, s.ticketId), history: s.ticketId ? ticketHistory(r, s.ticketId, s.id) : [] };
 }
 
-/** Open salidas plus today's decided ones (they stay in the strip, dashed). */
-export function loadSalidas(r: Repos, now = new Date()): SalidasData {
-  const day = new Date(now);
-  day.setHours(0, 0, 0, 0);
-  const open = r.salidas.list({ status: OPEN });
-  const decided = r.salidas.list({ status: DECIDED }).filter((s) => s.updatedAt >= day.toISOString());
-  const items = [...open, ...decided].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((s) => salidaView(r, s.id));
+/**
+ * The queue strip, newest first (t204): every salida awaiting signature or in progress whatever its date, plus every
+ * salida created or updated today (`inQueue`, src/lib/domain/salida-queue.ts); the rest is the Historial.
+ * `focusId` is the `?s=` of the URL: when it is not in the strip its view comes back as `focus` (opened through the
+ * Historial), or as `missing` when no such salida exists, so a link never falls back silently.
+ */
+export function loadSalidas(r: Repos, now = new Date(), focusId?: string): SalidasData {
+  const items = r.salidas.queue(dayStart(now)).map((s) => salidaView(r, s.id));
   const down = r.sources.list().filter((x) => x.health === "down").map((x) => x.source);
-  return { items, chips: r.chips.top(), sourcesDown: down, now: now.toISOString() };
+  let focus: SalidaView | null = null;
+  let missing: string | null = null;
+  if (focusId && !items.some((s) => s.id === focusId)) {
+    try {
+      focus = salidaView(r, focusId);
+    } catch (e) {
+      // by name too: the page and the repo can be bundled as separate module instances, which defeats instanceof
+      if (!(e instanceof NotFoundError || (e instanceof Error && e.name === "NotFoundError"))) throw e;
+      missing = focusId;
+    }
+  }
+  return { items, chips: r.chips.top(), sourcesDown: down, now: now.toISOString(), focus, missing };
+}
+
+/** One page of the Historial: row data only, no ticket history for rows nobody opens (`before`: the cursor of the previous page). */
+export function loadHistory(r: Repos, f: { cursor?: string | null; limit?: number } = {}, now = new Date()): HistoryPage {
+  const { rows, next } = r.salidas.history({ day: dayStart(now), limit: f.limit, cursor: decodeCursor(f.cursor) });
+  return { rows, next: next ? encodeCursor(next) : null };
 }

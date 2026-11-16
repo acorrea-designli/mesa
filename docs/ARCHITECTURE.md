@@ -302,6 +302,8 @@ JSON in and out. Errors: `{ error: { code, message, details? } }` with 400 `inva
 | POST `/api/reviews/:id/close` | `{ reason }` | `{ review }`; the lead's cleanup (`mesa review close`), not Andrés's buttons; 409 unless `open`, 400 without a reason |
 | GET/POST `/api/salidas` | `?status=` / `SalidaInput` | `Salida[]` / `SalidaDetail` 201 |
 | GET `/api/salidas/:id` | | `SalidaDetail` |
+| GET `/api/salidas/history` | `?cursor=&limit=` (50 a page, at most 500) | `{ rows, next }`: the Historial (t204), the salidas the queue strip no longer shows, by last update, newest first; row data only |
+| GET `/api/salidas/:id/view` | | `SalidaView` (t204): the card's data with the ticket and its history, for a salida opened from the Historial |
 | POST `/api/salidas/:id/versions` | `{ body, author?, turnId?, chipLabel? }` | `SalidaDetail` |
 | PATCH `/api/salidas/:id/versions/:n` | `{ starred }` | `SalidaDetail` |
 | POST `/api/salidas/:id/select` | `{ n }` | `SalidaDetail` |

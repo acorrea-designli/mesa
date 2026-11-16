@@ -3,6 +3,7 @@
 import { eventWhen, eventWhenLine, parseEventBody } from "@/lib/domain/calendar-event";
 import { parseMoveBody } from "@/lib/domain/calendar-move";
 import type { SalidaFile } from "@/lib/domain/salida-files";
+import { isSimulated } from "@/lib/domain/sandbox";
 import type { ConversationLinks, Destination, Salida, SalidaDetail, SalidaVersion } from "@/lib/domain/types";
 
 // ---------- version stepper ----------
@@ -419,3 +420,79 @@ export function calendarLine(body: string): string {
   const m = parseMoveBody(body);
   return m.ok ? `Mover · ${m.fields.title} · ${eventWhen(m.fields)}` : firstLine(body);
 }
+
+// ---------- strip and Historial rows (t204) ----------
+
+/** What a strip item or a Historial row needs to say where its salida stands. */
+export type StatusLine = Pick<Salida, "status" | "source" | "expiresAt" | "sendAt" | "sentAt" | "permalink"> & Partial<Pick<Salida, "releasedAt" | "undoUntil" | "holdKind">>;
+
+/** The short status under a strip item or a Historial row ("caduca 17:30", "Enviada 09:12", "Falló"). */
+export function stripStatus(s: StatusLine, now: number): string {
+  switch (s.status) {
+    case "pending":
+      return s.expiresAt ? `caduca ${hhmm(s.expiresAt)}` : "sin caducidad";
+    case "scheduled":
+      return s.sendAt ? `Sale ${whenLabel(s.sendAt, new Date(now))}` : "Programada";
+    case "sending":
+      return undoOpen({ status: s.status, releasedAt: s.releasedAt ?? null, undoUntil: s.undoUntil ?? null }, now) ? "Enviando…" : "Saliendo…";
+    case "queued_until_back":
+      return s.holdKind === "lead" ? "En espera" : `Al volver ${sourceLabel(s.source)}`;
+    case "draft_created":
+      return s.source === "basecamp" ? "Borrador en Basecamp · publícalo tú" : "Borrador en Slack · envíalo tú";
+    case "sent":
+      return isSimulated(s) ? "Simulado · no salió" : `Enviada ${hhmm(s.sentAt)}`;
+    case "deleted":
+      return "Eliminada";
+    case "denied":
+      return "Denegada";
+    case "expired":
+      return "Caducada";
+    case "withdrawn":
+      return "Retirada";
+    case "failed":
+      return "Falló";
+    default:
+      return s.status;
+  }
+}
+
+/** The line a strip item or a Historial row shows for the text: a calendar salida's event line, else the first line (a GitHub review's first comment when it has no body). */
+export function rowLine(source: Salida["source"], destination: Destination, body: string): string {
+  if (source === "calendar") return calendarLine(body);
+  const text = body || (destination.kind === "github_review" ? (destination.comments?.[0]?.body ?? "Aprobación sin comentario") : "");
+  return firstLine(text);
+}
+
+/** The local day of an instant as YYYY-MM-DD (the Historial groups by it). */
+export function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** "Hoy", "Ayer", else "mié 12 nov" (with the year when it is not this one). */
+export function dayLabel(iso: string, now: Date): string {
+  const d = new Date(iso);
+  if (dayKey(iso) === dayKey(now.toISOString())) return "Hoy";
+  const y = new Date(now);
+  y.setDate(y.getDate() - 1);
+  if (dayKey(iso) === dayKey(y.toISOString())) return "Ayer";
+  const base = `${WD[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return d.getFullYear() === now.getFullYear() ? base : `${base} ${d.getFullYear()}`;
+}
+
+/** Group rows by local day, keeping their order (newest day first when the rows come newest first). */
+export function groupByDay<T extends { updatedAt: string }>(rows: T[]): { day: string; at: string; rows: T[] }[] {
+  const out: { day: string; at: string; rows: T[] }[] = [];
+  for (const r of rows) {
+    const k = dayKey(r.updatedAt);
+    const g = out[out.length - 1];
+    if (g && g.day === k) g.rows.push(r);
+    else out.push({ day: k, at: r.updatedAt, rows: [r] });
+  }
+  return out;
+}
+
+/** The CSS custom property of a source's line colour (the only thing a line colour is ever used for). */
+export const sourceVar = (s: Salida["source"]) => (s === "slack" ? "var(--sl)" : s === "basecamp" ? "var(--bc)" : s === "calendar" ? "var(--ca)" : "var(--gh)");
