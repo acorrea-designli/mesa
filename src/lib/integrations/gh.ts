@@ -40,14 +40,28 @@ export interface GhChild {
   args: string;
   startedAt: number;
 }
-const active = new Set<GhChild>();
+// On globalThis: instrumentation and the route handlers are separate bundles, each with its own copy of this module.
+const gActive = globalThis as unknown as { __mesaGhActive?: Set<GhChild> };
+const active = (gActive.__mesaGhActive ??= new Set<GhChild>());
 export const activeGhChildren = (): GhChild[] => [...active];
 
-/** Kill a child and everything it started: `taskkill /T` on Windows (child.kill reaches gh.exe only), SIGKILL elsewhere. */
+/**
+ * Kill a child and everything it started: `taskkill /T` on Windows (child.kill reaches gh.exe only), SIGKILL elsewhere.
+ * On Windows the plain kill runs only after taskkill is done: killing gh.exe first leaves taskkill nothing to walk from
+ * and its grandchildren survive. A child that already exited is left alone (its PID may have been reused).
+ */
 function killTree(child: ChildProcess): void {
   try {
+    if (child.exitCode !== null || child.signalCode !== null) return;
     if (process.platform === "win32" && child.pid) {
-      execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 5_000 }, () => {});
+      execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, timeout: 5_000 }, () => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      });
+      return;
     }
     child.kill("SIGKILL");
   } catch {
@@ -66,7 +80,8 @@ export function execGh(file: string, args: string[], env: NodeJS.ProcessEnv, tim
     let timedOut = false;
     let giveUp: NodeJS.Timeout | undefined;
     const entry: GhChild = { pid: undefined, args: args.slice(0, 3).join(" "), startedAt: Date.now() };
-    const timeoutResult = (stdout = ""): GhResult => ({ code: GH_TIMEOUT_CODE, stdout, stderr: `gh timed out after ${Math.round(timeoutMs / 1000)}s` });
+    // Partial stdout is dropped on purpose: ghApi would parse a truncated body as a complete 200.
+    const timeoutResult = (): GhResult => ({ code: GH_TIMEOUT_CODE, stdout: "", stderr: `gh timed out after ${Math.round(timeoutMs / 1000)}s` });
     const finish = (r: GhResult) => {
       if (done) return;
       done = true;
@@ -78,7 +93,7 @@ export function execGh(file: string, args: string[], env: NodeJS.ProcessEnv, tim
     const child = execFile(file, args, { env, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       const e = err as (NodeJS.ErrnoException & { code?: string | number }) | null;
       if (e && e.code === "ENOENT") return finish({ code: 127, stdout: "", stderr: "gh: command not found" });
-      if (timedOut) return finish(timeoutResult(String(stdout)));
+      if (timedOut) return finish(timeoutResult());
       const code = e ? (typeof e.code === "number" ? e.code : 1) : 0;
       finish({ code, stdout: String(stdout), stderr: String(stderr) });
     });

@@ -26,22 +26,36 @@ export function stallLine(kind: "loop" | "pool", ms: number, now = Date.now()): 
 export function startLoopWatch(log: (line: string) => void = (l) => console.warn(l)): void {
   if (g.__mesaLoopWatch) return;
   let last = Date.now();
-  let probing = false;
+  let probeStart = 0; // 0 = no probe pending
+  let probeLogged = false;
   g.__mesaLoopWatch = setInterval(() => {
     const now = Date.now();
     const line = stallLine("loop", now - last - WATCH_EVERY_MS, now);
     last = now;
     if (line) log(line);
-    if (probing) return;
-    probing = true;
-    const t0 = Date.now();
+    if (probeStart) {
+      // The pending probe is the stall: log it from here, while the gh children that ran during it are still alive.
+      if (!probeLogged) {
+        const pending = stallLine("pool", now - probeStart, now);
+        if (pending) {
+          probeLogged = true;
+          log(`${pending} (still waiting)`);
+        }
+      }
+      return;
+    }
+    probeStart = now;
+    probeLogged = false;
     void fs
       .stat(".")
       .catch(() => undefined)
       .then(() => {
-        probing = false;
-        const l = stallLine("pool", Date.now() - t0);
+        const ms = Date.now() - probeStart;
+        const wasLogged = probeLogged;
+        probeStart = 0;
+        const l = wasLogged ? null : stallLine("pool", ms);
         if (l) log(l);
+        else if (wasLogged) log(`[mesa] libuv pool recovered after ${(ms / 1000).toFixed(1)}s`);
       });
   }, WATCH_EVERY_MS);
   g.__mesaLoopWatch.unref();

@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { GET as HEALTH } from "@/app/api/health/route";
 import { openDb } from "../db/sqlite";
@@ -63,13 +66,57 @@ describe("execGh hard timeout (t206)", () => {
   it("does not block a request while a slow gh call runs", async () => {
     const g = globalThis as unknown as { __mesaRepos?: Repos };
     g.__mesaRepos = createRepos(openDb(":memory:"));
-    const slow = execGh(process.execPath, sleeper(3_000), process.env, 10_000);
+    let slowDone = false;
+    const slow = execGh(process.execPath, sleeper(3_000), process.env, 10_000).then((r) => {
+      slowDone = true;
+      return r;
+    });
     expect(activeGhChildren()).toHaveLength(1);
     const t0 = Date.now();
     const res = await HEALTH(new Request("http://local/api/health"), { params: Promise.resolve({}) });
     expect(res.status).toBe(200);
     expect(Date.now() - t0).toBeLessThan(1_000);
-    expect(await Promise.race([slow.then(() => "gh"), Promise.resolve("request")])).toBe("request");
-    await slow;
+    // The request was answered while the 3 s child was still running.
+    expect(slowDone).toBe(false);
+    expect((await slow).code).toBe(0);
+  }, 15_000);
+
+  it("drops partial stdout when it times out", async () => {
+    const r = await execGh(process.execPath, ["-e", `console.log("HTTP/2.0 200 OK"); setTimeout(() => {}, 60000)`], process.env, 1_500);
+    expect(r).toMatchObject({ code: GH_TIMEOUT_CODE, stdout: "" });
+  });
+
+  // cmd.exe is not a libuv process (no kill-on-close job), so like gh.exe it leaves its child behind unless the tree is
+  // killed in the right order: taskkill first, the plain kill only from its callback.
+  it.skipIf(process.platform !== "win32")("kills a grandchild started through cmd.exe on timeout", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mesa-gh-"));
+    try {
+      const pidFile = path.join(dir, "pid.txt");
+      const script = path.join(dir, "gc.js");
+      const bat = path.join(dir, "run.cmd");
+      writeFileSync(script, `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30000);`);
+      writeFileSync(bat, `@"${process.execPath}" "${script}"\r\n`);
+      const run = execGh("cmd.exe", ["/d", "/c", bat], process.env, 2_500);
+      let gc = 0;
+      for (let i = 0; i < 40 && !gc; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        gc = existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8")) : 0;
+      }
+      expect(gc).toBeGreaterThan(0);
+      expect((await run).code).toBe(GH_TIMEOUT_CODE);
+      await new Promise((r) => setTimeout(r, 1_000));
+      const alive = (() => {
+        try {
+          process.kill(gc, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (alive) process.kill(gc, "SIGKILL");
+      expect(alive).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }, 15_000);
 });
