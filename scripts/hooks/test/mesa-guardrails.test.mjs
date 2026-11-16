@@ -479,6 +479,14 @@ test("G10: no approvals through the raw API", async () => {
     assert.equal(await rule(sh(mate(), `curl -X POST http://127.0.0.1:8796/api/${p}`)), "G10", p);
     assert.equal(await rule(sh(mate(), `Invoke-RestMethod -Method Post http://localhost:8790/api/${p}`)), "G10", p);
   }
+  // approving a document version (t190) is Andrés's button too: the CLI has no verb for it
+  for (const cmd of [
+    "curl -X PUT http://127.0.0.1:8790/api/tickets/t1/attachments/at_1/approved -d '{\"approved\":true}'",
+    "Invoke-RestMethod -Method Put http://localhost:8796/api/tickets/t1/attachments/at_1/approved -Body x",
+  ]) {
+    assert.equal(await rule(sh(mate(), cmd)), "G10", cmd);
+    assert.equal(await rule(sh(lead, cmd)), "G10", cmd);
+  }
   // reading an approval is fine
   assert.notEqual(await rule(sh(mate(), "curl http://127.0.0.1:8790/api/approvals/ap1")), "G10");
   assert.equal(await rule(sh(lead, "curl -s -m 3 http://127.0.0.1:8790/api/health")), null);

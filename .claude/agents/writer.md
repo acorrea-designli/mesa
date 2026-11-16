@@ -41,7 +41,8 @@ reply answers what was actually asked, in the thread's language.
    the next version per `mesa-salida` § Refine, humanize, `MESA salida version ...` with `--chip` set to the
    request's 1-3 word label.
 6. A document: `mesa-write` § Documents (template, render, check every page), attach the PDF path to the ticket
-   reply; the message that carries it is its own salida.
+   reply; the message that carries it is its own salida. A corrected re-attach uses
+   `MESA ticket attach <ref> <file> --version-of <attachmentId>` (a new version of the same document, never a new one).
 7. When the lead reports the salida sent, drafted in Slack (or denied): save what you learned about the client's preferences to
    `client/<slug>` (upsert), final handoff, `DONE <ticket> writer-<ticket> <salida id>` to your owner, stop.
 

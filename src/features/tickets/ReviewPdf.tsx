@@ -54,8 +54,15 @@ export function ReviewPdf({ ticketId, pdfs }: { ticketId: string; pdfs: Attachme
         <div className="tk-revpdf-pop" id={menu} role="group" aria-label="Elige un PDF para revisar">
           {pdfs.map((a) => (
             <Link key={a.id} href={reviewHref(ticketId, a)} onClick={() => setOpen(false)} title={a.filename}>
-              <span>{a.filename}</span>
-              {a.reviewedAt ? (
+              <span>
+                {a.filename}
+                {a.version > 1 ? <em className="tk-ver">v{a.version}</em> : null}
+              </span>
+              {a.approvedAt ? (
+                <small>
+                  <IcCheck width={11} height={11} /> Aprobado
+                </small>
+              ) : a.reviewedAt ? (
                 <small>
                   <IcCheck width={11} height={11} /> Terminado
                 </small>

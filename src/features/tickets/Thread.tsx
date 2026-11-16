@@ -16,7 +16,7 @@ import { IcBack, IcCheck, IcEngram, IcExternal, IcFile, IcUndo } from "@/feature
 import { ApiError } from "@/features/salidas/api";
 import { classify, normalizeUrl } from "@/lib/domain/links";
 import { ticketApi } from "./api";
-import { isPdf, placeAttachments } from "./attachments";
+import { latestPdfs, placeAttachments, reviewTargets } from "./attachments";
 import { ReviewPdf } from "./ReviewPdf";
 import { DirLine, dirLabel, hm, statusLabel } from "./bits";
 import { KnownTickets, Linked } from "./Linkified";
@@ -269,7 +269,9 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
   const firstCard = cardFor(first);
   // An attachment shows under its own message; one with no message closes the thread (t135).
   const placed = useMemo(() => placeAttachments(t.attachments, t.messages), [t.attachments, t.messages]);
-  const pdfs = useMemo(() => t.attachments.filter(isPdf), [t.attachments]);
+  // One entry per document (t190): "Revisar" opens the latest version of it.
+  const pdfs = useMemo(() => latestPdfs(t.attachments), [t.attachments]);
+  const latest = useMemo(() => reviewTargets(t.attachments), [t.attachments]);
   const closed = t.status === "closed";
   // Claude replies that repeat the review card (older ones, from before hook G12) fold under it.
   const cardFindings = data.reviews.flatMap((r) => r.findings);
@@ -408,7 +410,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
 
           <Sources refs={t.refs.filter((r) => !r.messageId || r.messageId === first?.id)} titles={data.refTitles} owner={t.ownerSession} item={data.item} related={data.related} />
 
-          {first ? <Files atts={placed.byMessage.get(first.id) ?? []} ticketId={t.id} /> : null}
+          {first ? <Files atts={placed.byMessage.get(first.id) ?? []} ticketId={t.id} latest={latest} /> : null}
 
           {t.actions.length ? (
             planAtBottom ? null : planCard
@@ -442,6 +444,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
                   disabled={busy || closed}
                   onSend={(a) => void send(a)}
                   atts={placed.byMessage.get(m.id) ?? []}
+                  latest={latest}
                   refs={t.refs.filter((r) => r.messageId === m.id)}
                   ticketId={t.id}
                   titles={data.refTitles}
@@ -453,7 +456,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
           {placed.tail.length ? (
             <>
               <div className="k">Adjuntos</div>
-              <Files atts={placed.tail} ticketId={t.id} />
+              <Files atts={placed.tail} ticketId={t.id} latest={latest} />
             </>
           ) : null}
 
@@ -652,7 +655,8 @@ function Sources({ refs, titles, owner, item, related }: { refs: TicketRef[]; ti
 }
 
 
-function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
+/** `latest` maps an attachment to the newest version of its document (t190): "Revisar" always opens that one. */
+function Files({ atts, ticketId, latest }: { atts: Attachment[]; ticketId: string; latest: Map<string, string> }) {
   if (!atts.length) return null;
   return (
     <div className="tk-files">
@@ -660,10 +664,10 @@ function Files({ atts, ticketId }: { atts: Attachment[]; ticketId: string }) {
         <span key={a.id} className="tk-att-row">
           <a className="tk-att" href={`/api/tickets/${ticketId}/attachments/${a.id}`} target="_blank" rel="noreferrer">
             <IcFile />
-            <span className="tk-att-t">{a.filename}</span> <small>{fmtSize(a.size)}</small>
+            <span className="tk-att-t">{a.filename}</span> {a.version > 1 ? <em className="tk-ver">v{a.version}</em> : null} <small>{fmtSize(a.size)}</small>{a.approvedAt ? <small className="tk-appr"> · Aprobado</small> : null}
           </a>
           {a.mime === "application/pdf" ? (
-            <Link className="tk-att tk-review" href={`/tickets/${ticketId}/pdf/${a.id}`} aria-label={`Revisar ${a.filename}`}>
+            <Link className="tk-att tk-review" href={`/tickets/${ticketId}/pdf/${latest.get(a.id) ?? a.id}`} aria-label={`Revisar ${a.filename}`}>
               Revisar
             </Link>
           ) : null}
@@ -681,7 +685,7 @@ const answeredTag = (qs: TicketQuestion[], all: TicketQuestion[]) => {
   return qs.every((q) => q.chosen) ? `eligió ${parts.join(" · ")}` : `respondió ${parts.join(" · ")}`;
 };
 
-function Message({ m, fold, card, list, closed, onSetStep, answered, all, picks, onPicks, disabled, onSend, atts, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; card: TicketQuestion[]; list: Checklist | null; closed: boolean; onSetStep: (s: TicketStep, done: boolean) => Promise<void>; answered: TicketQuestion[]; all: TicketQuestion[]; picks: Picks; onPicks: (p: Picks) => void; disabled: boolean; onSend: (a: QuestionAnswer[]) => void; atts: Attachment[]; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
+function Message({ m, fold, card, list, closed, onSetStep, answered, all, picks, onPicks, disabled, onSend, atts, latest, refs, ticketId, titles }: { m: TicketMessage; fold?: boolean; card: TicketQuestion[]; list: Checklist | null; closed: boolean; onSetStep: (s: TicketStep, done: boolean) => Promise<void>; answered: TicketQuestion[]; all: TicketQuestion[]; picks: Picks; onPicks: (p: Picks) => void; disabled: boolean; onSend: (a: QuestionAnswer[]) => void; atts: Attachment[]; latest: Map<string, string>; refs: TicketRef[]; ticketId: string; titles: Record<string, string> }) {
   const tag = answeredTag(answered, all) ?? (m.chosen ? `eligió ${m.chosen}` : null);
   return (
     <div className="tk-msg">
@@ -722,7 +726,7 @@ function Message({ m, fold, card, list, closed, onSetStep, answered, all, picks,
           ))}
         </div>
       ) : null}
-      <Files atts={atts} ticketId={ticketId} />
+      <Files atts={atts} ticketId={ticketId} latest={latest} />
     </div>
   );
 }

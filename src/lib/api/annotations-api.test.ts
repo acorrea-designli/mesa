@@ -5,6 +5,7 @@ import { GET as LIST, POST as CREATE } from "@/app/api/tickets/[id]/annotations/
 import { DELETE as REMOVE, PATCH as PATCH_ONE } from "@/app/api/tickets/[id]/annotations/[annId]/route";
 import { POST as REPLY } from "@/app/api/tickets/[id]/annotations/[annId]/replies/route";
 import { POST as SEND } from "@/app/api/tickets/[id]/annotations/send/route";
+import { PUT as APPROVED } from "@/app/api/tickets/[id]/attachments/[attId]/approved/route";
 import { PUT as REVIEWED } from "@/app/api/tickets/[id]/attachments/[attId]/reviewed/route";
 import { GET as CONTEXT } from "@/app/api/tickets/[id]/context/route";
 import { openDb } from "../db/sqlite";
@@ -106,7 +107,32 @@ describe("GET /api/tickets/:id/context", () => {
     await create();
     await create({ body: "dos" });
     const c = (await (await CONTEXT(call("GET", undefined, true), ctx({ id: ref }))).json()) as TicketContext;
-    expect(c.annotations).toEqual([{ attachmentId: pdf, filename: "informe.pdf", open: 2, total: 2 }]);
+    expect(c.annotations).toEqual([{ attachmentId: pdf, filename: "informe.pdf", version: 1, versions: 1, open: 2, total: 2 }]);
+  });
+});
+
+describe("PUT /api/tickets/:id/attachments/:attId/approved (t190)", () => {
+  const put = (attId: string, b: unknown, id = ref, cli = false) => APPROVED(call("PUT", b, cli), ctx({ id, attId }));
+  const wakes = () => eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "ticket.document_approved");
+
+  it("approves a version, wakes the owner with ticketRef, attachmentId and version, and takes it back", async () => {
+    const done = await put(pdf, { approved: true });
+    expect(done.status).toBe(200);
+    expect(((await done.json()) as Attachment).approvedAt).not.toBeNull();
+    expect(wakes().map((e) => e.payload)).toEqual([{ ref, ticketRef: ref, attachmentId: pdf, version: 1 }]);
+    const undone = await put(pdf, { approved: false });
+    expect(((await undone.json()) as Attachment).approvedAt).toBeNull();
+    expect(wakes()).toHaveLength(1);
+  });
+
+  it("answers 403 to the CLI, 400 for a bad body or a non-PDF and 404 for an unknown PDF or ticket", async () => {
+    expect((await put(pdf, { approved: true }, ref, true)).status).toBe(403);
+    expect(wakes()).toEqual([]);
+    expect((await put(pdf, { approved: "yes" })).status).toBe(400);
+    const png = r.tickets.addAttachment(r.tickets.get(ref).id, { messageId: null, filename: "a.png", mime: "image/png", size: 1, path: "x/a.png" }).id;
+    expect((await put(png, { approved: true })).status).toBe(400);
+    expect((await put("at_nope", { approved: true })).status).toBe(404);
+    expect((await put(pdf, { approved: true }, "t999")).status).toBe(404);
   });
 });
 
@@ -198,6 +224,6 @@ describe("general comments (t147)", () => {
     await comment();
     await create();
     const c = (await (await CONTEXT(call("GET", undefined, true), ctx({ id: ref }))).json()) as TicketContext;
-    expect(c.annotations).toEqual([{ attachmentId: pdf, filename: "informe.pdf", open: 2, total: 2 }]);
+    expect(c.annotations).toEqual([{ attachmentId: pdf, filename: "informe.pdf", version: 1, versions: 1, open: 2, total: 2 }]);
   });
 });

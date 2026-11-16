@@ -708,6 +708,17 @@ describe("PDF review (t125)", () => {
     expect(requests).toEqual([]);
   });
 
+  it("ticket attach --version-of sends versionOf so the file is the next version of that document (t190)", async () => {
+    handler = () => ({ status: 201, body: { id: "at_3", version: 2, versionOf: "at_1" } });
+    const r = await mesa(["ticket", "attach", "t87", pdf, "--version-of", "at_1"]);
+    expect(r.code).toBe(0);
+    expect(r.json()).toMatchObject({ version: 2, versionOf: "at_1" });
+    expect(requests[0].form.fields).toEqual({ versionOf: "at_1" });
+    requests = [];
+    expect((await mesa(["ticket", "attach", "t87", pdf, "--version-of"])).code).toBe(2);
+    expect(requests).toEqual([]);
+  });
+
   it("ticket attach shows the server's refusal (25 MB) and exits 1", async () => {
     handler = () => ({ status: 413, body: { error: { code: "too_large", message: "attachments are limited to 25 MB" } } });
     const r = await mesa(["ticket", "attach", "t87", pdf]);

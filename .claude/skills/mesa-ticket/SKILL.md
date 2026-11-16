@@ -213,6 +213,19 @@ A ticket that is neither Andrés's turn nor yours has its own state, so the boar
   the owner (the `web_url` lets Andrés open it), never a guess.
 - Files Andrés attaches arrive in `ticket context` as attachments with a local path; read them by path. Files you
   produce (PDFs, plans) live in your scratch folder and are named in the reply by absolute path.
+- **Versions of one attachment (t190).** `mesa ticket attach <ref> <file>` uploads a new document (v1). To replace or
+  fix a file you already attached, upload it with `--version-of <attachmentId>` (the id from the earlier `attach`
+  output, or the `documents` list of `ticket context`: `documentId` / `latestAttachmentId`; any version's id works).
+  It becomes v2, v3... of the same document: Archivos and Documentos show one entry with its history, "Revisar" opens
+  the latest, and each version keeps its own marks. `ticket context` carries `documents` (`documentId`,
+  `latestAttachmentId`, `version`, `versions`) and each entry of `annotations` carries its `version`; `ticket
+  annotations` marks carry `version` too, so you know which version a comment was made on. Never re-attach a revised
+  file without `--version-of`.
+- **Approval of a version (t190).** Andrés presses "Aprobar" in the review view on a version of a document: the lead
+  relays `ANSWER <ref> document_approved <attachmentId> <version>` (event `ticket.document_approved`). That version is
+  final: do not edit it or ask for more marks, go on with the next step (the salida that carries it, the close), and
+  say so in the reply if a newer version than the approved one exists. `ticket context` lists it as
+  `documents[].approvedVersion`. Only Andrés approves (the API refuses the CLI).
 
 ## Meeting requests (Calendario)
 

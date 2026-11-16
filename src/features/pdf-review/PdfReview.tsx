@@ -37,6 +37,30 @@ const usePhone = () =>
     () => false,
   );
 
+/** Version switcher of a document (t190): only when it has more than one. Each version keeps its own marks. */
+function Versions({ ticketId, current, versions, from }: { ticketId: string; current: string; versions: ReviewData["versions"]; from?: string }) {
+  if (versions.length < 2) return null;
+  const last = versions[versions.length - 1]!;
+  const old = current !== last.attachmentId;
+  return (
+    <nav className="pr-vers" aria-label="Versiones del documento">
+      {versions.map((v) => (
+        <Link
+          key={v.attachmentId}
+          href={`/tickets/${encodeURIComponent(ticketId)}/pdf/${encodeURIComponent(v.attachmentId)}${from === "docs" ? "?from=docs" : ""}`}
+          aria-current={v.attachmentId === current ? "page" : undefined}
+          title={`Versión ${v.version}, ${new Date(v.createdAt).toLocaleDateString("es", { day: "numeric", month: "short" }).replace(".", "")}${v.total ? ` · ${v.open} de ${v.total} notas abiertas` : " · sin notas"}${v.approvedAt ? " · aprobada" : ""}`}
+        >
+          v{v.version}
+          {v.approvedAt ? <IcCheck width={11} height={11} aria-label="Aprobada" /> : null}
+          {v.total ? <small>{v.open}/{v.total}</small> : null}
+        </Link>
+      ))}
+      {old ? <span className="pr-vers-old">Versión anterior</span> : null}
+    </nav>
+  );
+}
+
 const sorted = (list: Annotation[]) => [...list].sort(byPosition);
 const put = (list: Annotation[], a: Annotation) => sorted([...list.filter((x) => x.id !== a.id), a]);
 const say = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Algo salió mal");
@@ -61,6 +85,8 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [sending, setSending] = useState(false);
   const [reviewedAt, setReviewedAt] = useState<string | null>(attachment.reviewedAt);
+  const [approvedAt, setApprovedAt] = useState<string | null>(attachment.approvedAt);
+  const [approving, setApproving] = useState(false);
   const [marking, setMarking] = useState(false);
   const seq = useRef(0);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,6 +221,21 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
     }
   };
 
+  // "Aprobar" (t190): he approves THIS version; the owner is woken once (ticket.document_approved). Press again to take it back.
+  const toggleApproved = async () => {
+    if (approving) return;
+    setApproving(true);
+    try {
+      const a = await reviewApi.approved(ticket.id, attachment.id, approvedAt === null);
+      setApprovedAt(a.approvedAt);
+      toast({ text: a.approvedAt ? `Aprobaste v${attachment.version}: Claude lo sabe` : "Aprobación retirada" });
+    } catch (e) {
+      fail(e);
+    } finally {
+      setApproving(false);
+    }
+  };
+
   const readOnly = phone;
   const url = `/api/tickets/${encodeURIComponent(ticket.id)}/attachments/${encodeURIComponent(attachment.id)}`;
   const step = (dir: 1 | -1) => setZoom(clampScale(Math.round((scale + dir * 0.25) * 100) / 100));
@@ -212,6 +253,7 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
             {fmtSize(attachment.size)}
           </span>
         </h1>
+        <Versions ticketId={ticket.id} current={attachment.id} versions={data.versions} from={from} />
         {readOnly ? null : (
           <div className="pr-tools" role="toolbar" aria-label="Herramientas">
             {TOOLS.map((t) => (
@@ -233,6 +275,10 @@ export function PdfReview({ data, from }: { data: ReviewData; from?: string }) {
           </button>
           <output>{Math.round(scale * 100)}%</output>
         </div>
+        <button type="button" className="btn sm pr-done" aria-pressed={approvedAt !== null} disabled={approving} title={approvedAt === null ? `Aprobar esta versión (v${attachment.version}) y avisar a Claude` : "Deshacer: quitar la aprobación"} onClick={() => void toggleApproved()}>
+          {approvedAt === null ? null : <IcCheck width={12} height={12} />}
+          {approvedAt === null ? "Aprobar" : "Aprobado"}
+        </button>
         <button type="button" className="btn sm pr-done" aria-pressed={reviewedAt !== null} disabled={marking} title={reviewedAt === null ? "Marcar este PDF como revisado" : "Deshacer: volver a pendiente"} onClick={() => void toggleReviewed()}>
           {reviewedAt === null ? null : <IcCheck width={12} height={12} />}
           {reviewedAt === null ? "Terminé" : "Terminado"}

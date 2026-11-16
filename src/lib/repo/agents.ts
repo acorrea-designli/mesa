@@ -7,6 +7,7 @@ import { fromRow, fromRows, newId, nowIso, NotFoundError, TransitionError } from
 import {
   ticketTopicKey,
   type Approval,
+  type Attachment,
   type Brief,
   type EngramLink,
   type Finding,
@@ -19,6 +20,7 @@ import {
   type TicketContext,
   type TicketMessage,
 } from "../domain/types";
+import { groupDocuments } from "../domain/attachments";
 import { questionText } from "../domain/ticket-questions";
 import { annotationsRepo } from "./annotations";
 import { ticketsRepo } from "./tickets";
@@ -255,6 +257,15 @@ export function agentsRepo(db: Db) {
           ),
         },
         annotations: annotations.summary(t.id),
+        documents: groupDocuments(fromRows<Attachment>(db.prepare("SELECT * FROM attachments WHERE ticket_id = ? ORDER BY created_at, rowid").all(t.id))).map((d) => ({
+          documentId: d.documentId,
+          latestAttachmentId: d.latest.id,
+          filename: d.latest.filename,
+          mime: d.latest.mime,
+          version: d.latest.version,
+          versions: d.versions.length,
+          approvedVersion: [...d.versions].reverse().find((v) => v.approvedAt)?.version ?? null,
+        })),
       };
     },
   };

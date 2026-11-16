@@ -18,5 +18,5 @@ export default async function PdfReviewPage({ params, searchParams }: { params: 
   if (!data) notFound();
   // The thread links by ticket id; the address people share is the ref.
   if (decodeURIComponent(ref) !== data.ticket.ref) redirect(`/tickets/${encodeURIComponent(data.ticket.ref)}/pdf/${encodeURIComponent(data.attachment.id)}${from === "docs" ? "?from=docs" : ""}`);
-  return <PdfReview data={data} from={from} />;
+  return <PdfReview key={data.attachment.id} data={data} from={from} />;
 }

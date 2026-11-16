@@ -225,6 +225,26 @@ export interface Attachment {
   createdAt: string;
   /** t135: when Andrés marked the PDF as reviewed ("Terminé"); null = pendiente. */
   reviewedAt: string | null;
+  /** t190: the root attachment this is a later version of; null for a root (a document's first version). */
+  versionOf: string | null;
+  /** t190: 1 for the root, 2, 3... for each version added with `ticket attach --version-of`. */
+  version: number;
+  /** t190: when Andrés approved this version ("Aprobar" in the review view); null = not approved. */
+  approvedAt: string | null;
+}
+
+/** t190: one document of a ticket in the context: the root id, its latest version and how many there are. */
+export interface ContextDocument {
+  /** The root attachment's id; any version's id is accepted by `--version-of`. */
+  documentId: string;
+  /** The newest version's attachment id (what "Revisar" opens). */
+  latestAttachmentId: string;
+  filename: string;
+  mime: string;
+  version: number;
+  versions: number;
+  /** The newest version Andrés approved, or null when none is. */
+  approvedVersion: number | null;
 }
 
 export type RefType = "ticket" | "item" | "url";
@@ -517,6 +537,7 @@ export type WakeKind =
   | "ticket.reopened"
   | "ticket.resumed" // a paused/ongoing ticket came back to Claude: { ref, ticketRef, by: "andres"|"dependency", dependencyRef? }; the lead respawns the owner
   | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
+  | "ticket.document_approved" // Andrés pressed "Aprobar" on a version of a PDF in the review view: { ref, ticketRef, attachmentId, version }; relay ANSWER <ref> document_approved <attachmentId> <version> to the owner
   | "ticket.annotations" // Andrés sent PDF marks to Claude ("Enviar a Claude (n)"): { ref, ticketRef, attachmentId, annotationIds, count }; read them with mesa ticket annotations, answer with mesa ticket annotation-reply
   | "ticket.pr_message" // a Slack message about the ticket's PR (repo/intake.ts): { ref, ticketRef, messageId, itemId, repo, pr, who, url, channelId, ts, threadTs }; the lead spawns or reuses writer-<ref>, who records a notice (mesa item pr-notice) or answers with a salida
   | "salida.turn" // Andrés asked for a change
@@ -744,6 +765,8 @@ export interface TicketContext {
   engram: { topicKey: string; project: string; links: EngramLink[] };
   /** PDF review marks per attachment (only PDFs that have any); read them with `mesa ticket annotations`. */
   annotations: AnnotationSummary[];
+  /** t190: the ticket's documents (attachments grouped by version), to re-attach with `mesa ticket attach --version-of`. */
+  documents: ContextDocument[];
 }
 
 /** Engram topic key for a ticket: every ticket thread is saved under it. */
@@ -833,6 +856,8 @@ export interface Annotation {
   id: string;
   ticketId: string;
   attachmentId: string;
+  /** t190: the version of the attachment this mark was made on (1 for a document's first version). */
+  version: number;
   /** From 1; 0 only for a general comment on the whole document. */
   page: number;
   kind: AnnotationKind;
@@ -852,7 +877,13 @@ export interface Annotation {
 
 /** One row of Tickets · Documentos (t135): a PDF attachment, its ticket and Andrés's marks on it (his own: open / total). */
 export interface PdfDocument {
+  /** t190: the latest version's attachment id (the row opens it) and its version; `history` lists every version. */
   attachmentId: string;
+  /** The document's root attachment id (stable across versions). */
+  documentId: string;
+  version: number;
+  approvedAt: string | null;
+  history: PdfVersion[];
   filename: string;
   size: number;
   createdAt: string;
@@ -866,10 +897,24 @@ export interface PdfDocument {
   total: number;
 }
 
-/** TicketContext.annotations: what Claude has to look at, per PDF. */
+/** One version of a document in Documentos (t190): its attachment, when it arrived and Andrés's marks on it. */
+export interface PdfVersion {
+  attachmentId: string;
+  version: number;
+  createdAt: string;
+  reviewedAt: string | null;
+  approvedAt: string | null;
+  open: number;
+  total: number;
+}
+
+/** TicketContext.annotations: what Claude has to look at, per PDF (per version: marks stay on the version they were made on). */
 export interface AnnotationSummary {
   attachmentId: string;
   filename: string;
+  /** t190: the version of this attachment, and how many versions its document has. */
+  version: number;
+  versions: number;
   open: number;
   total: number;
 }

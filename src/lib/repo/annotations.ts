@@ -49,10 +49,19 @@ export function annotationsRepo(db: Db) {
     return out;
   };
 
+  /** The version of each attachment (t190), so a mark says which version it was made on. */
+  const versionsOf = (attachmentIds: string[]): Map<string, number> => {
+    const ids = [...new Set(attachmentIds)];
+    if (!ids.length) return new Map();
+    const rows = db.prepare(`SELECT id, version FROM attachments WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as unknown as { id: string; version: number }[];
+    return new Map(rows.map((r) => [r.id, r.version]));
+  };
+
   const hydrate = (rows: unknown[]): Annotation[] => {
-    const base = fromRows<Omit<Annotation, "rect" | "replies">>(rows, SPEC);
+    const base = fromRows<Omit<Annotation, "rect" | "replies" | "version">>(rows, SPEC);
     const replies = repliesOf(base.map((a) => a.id));
-    return base.map((a) => ({ ...a, rect: boundsOf(a.kind, a.geometry), replies: replies.get(a.id) ?? [] })).sort(byPosition);
+    const versions = versionsOf(base.map((a) => a.attachmentId));
+    return base.map((a) => ({ ...a, version: versions.get(a.attachmentId) ?? 1, rect: boundsOf(a.kind, a.geometry), replies: replies.get(a.id) ?? [] })).sort(byPosition);
   };
 
   const one = (ticketId: string, annId: string): Annotation => {
@@ -213,15 +222,41 @@ export function annotationsRepo(db: Db) {
     },
 
     /**
-     * Tickets · Documentos (t135): every PDF attachment of every ticket, open or closed, newest first, with its
-     * ticket and Andrés's own marks (open / total). Claude's marks are not his notes.
+     * "Aprobar" (t190): Andrés approves one version of a PDF, or takes the approval back. Approving wakes the owner
+     * once (ticket.document_approved { ref, ticketRef, attachmentId, version }); approving a version that is already
+     * approved changes nothing and wakes nobody, and taking it back wakes nobody. It counts as him acting on the ticket.
+     */
+    setApproved(id: string, attachmentId: string, approved: boolean, now = new Date()): Attachment {
+      return tx(db, () => {
+        const t = tickets.get(id);
+        const att = pdfOf(t.id, attachmentId);
+        if (approved === (att.approvedAt !== null)) return att;
+        db.prepare("UPDATE attachments SET approved_at = ? WHERE id = ?").run(approved ? nowIso(now) : null, attachmentId);
+        touchInteraction(db, now);
+        if (approved) {
+          db.prepare("UPDATE tickets SET updated_at = ?, woke_at = ? WHERE id = ?").run(nowIso(now), nowIso(now), t.id);
+          emitWake(
+            db,
+            { sessionId: t.ownerSession, kind: "ticket.document_approved", entityType: "ticket", entityId: t.id, payload: { ref: t.ref, ticketRef: t.ref, attachmentId, version: att.version } },
+            now,
+          );
+          tickets.andresActed(t.id, now);
+        }
+        return pdfOf(t.id, attachmentId);
+      });
+    },
+
+    /**
+     * Tickets · Documentos (t135): every PDF of every ticket, open or closed, newest first, with its ticket and
+     * Andrés's own marks (open / total). Claude's marks are not his notes. One row per document (t190): the row is
+     * its latest version, `history` has every version with its own marks (they stay on the version they were made on).
      */
     documents(): PdfDocument[] {
       const mine = (extra: string) => `(SELECT COUNT(*) FROM annotations a WHERE a.attachment_id = f.id AND a.author = 'andres'${extra})`;
-      return fromRows<PdfDocument>(
+      const rows = fromRows<Omit<PdfDocument, "history">>(
         db
           .prepare(
-            `SELECT f.id AS attachment_id, f.filename, f.size, f.created_at, f.reviewed_at,
+            `SELECT f.id AS attachment_id, COALESCE(f.version_of, f.id) AS document_id, f.version, f.filename, f.size, f.created_at, f.reviewed_at, f.approved_at,
                     t.id AS ticket_id, t.ref AS ticket_ref, t.title AS ticket_title, t.status AS ticket_status, t.is_sample,
                     ${mine(" AND a.state = 'open'")} AS open, ${mine("")} AS total
                FROM attachments f JOIN tickets t ON t.id = f.ticket_id
@@ -231,15 +266,27 @@ export function annotationsRepo(db: Db) {
           .all(),
         { bool: ["is_sample"] },
       );
+      const byDoc = new Map<string, typeof rows>();
+      for (const r of rows) byDoc.set(r.documentId, [...(byDoc.get(r.documentId) ?? []), r]);
+      const out: PdfDocument[] = [];
+      for (const r of rows) {
+        const group = byDoc.get(r.documentId)!;
+        const latest = group.reduce((a, b) => (b.version > a.version ? b : a));
+        if (latest !== r) continue;
+        const history = [...group].sort((a, b) => a.version - b.version).map((v) => ({ attachmentId: v.attachmentId, version: v.version, createdAt: v.createdAt, reviewedAt: v.reviewedAt, approvedAt: v.approvedAt, open: v.open, total: v.total }));
+        out.push({ ...r, history });
+      }
+      return out;
     },
 
-    /** Open and total marks per PDF that has any (the context's summary), ordered by attachment. */
+    /** Open and total marks per PDF version that has any (the context's summary), ordered by attachment; it carries the version (t190). */
     summary(id: string): AnnotationSummary[] {
       const t = tickets.get(id);
       return (
         db
           .prepare(
-            `SELECT a.attachment_id AS attachmentId, f.filename AS filename,
+            `SELECT a.attachment_id AS attachmentId, f.filename AS filename, f.version AS version,
+                    (SELECT COUNT(*) FROM attachments g WHERE COALESCE(g.version_of, g.id) = COALESCE(f.version_of, f.id)) AS versions,
                     SUM(CASE WHEN a.state = 'open' THEN 1 ELSE 0 END) AS open, COUNT(*) AS total
                FROM annotations a JOIN attachments f ON f.id = a.attachment_id
               WHERE a.ticket_id = ? GROUP BY a.attachment_id ORDER BY f.created_at, f.id`,
