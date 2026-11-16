@@ -1,6 +1,5 @@
-import fs from "node:fs/promises";
 import { error, route } from "@/lib/api/http";
-import { fileState } from "@/lib/repo/salida-files";
+import { approvedBytes } from "@/lib/repo/salida-files";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +24,11 @@ export const GET = route<{ id: string; index: string }>(async (_req, r, { id, in
   const files = "files" in d ? (d.files ?? []) : [];
   const f = files[Number(index)];
   if (!f || !/^\d+$/.test(index)) return error(404, "not_found", `salida ${id} has no file ${index}`);
-  const state = fileState(f);
-  if (state === "missing") return error(404, "not_found", "the file is no longer on disk");
-  if (state === "changed") return error(409, "file_changed", "the file changed after it was proposed; ask for a new salida");
-  const data = await fs.readFile(f.path);
+  // One read: the bytes that were hashed are the bytes served (no window to swap the file between check and send).
+  const got = approvedBytes(f);
+  if (got.state === "missing") return error(404, "not_found", "the file is no longer on disk");
+  if (got.state === "changed") return error(409, "file_changed", "the file changed after it was proposed; ask for a new salida");
+  const data = got.data;
   const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
   const mime = MIME[ext] ?? "application/octet-stream";
   const inline = /^image\/|^application\/pdf$/.test(mime);

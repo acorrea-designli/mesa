@@ -220,11 +220,11 @@ test("G4: teammates cannot write to Slack, Basecamp or GitHub", async () => {
 test("G5: the lead sends only the text of a released salida", async () => {
   const salidas = fakeMesa({
     "GET /api/salidas?status=sending": {
-      salidas: [{ id: "s1", source: "basecamp", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 2, versions: [{ n: 1, body: "old" }, { n: 2, body: "Hi Matt, the **bucket** is ready: https://x.y/z" }] }],
+      salidas: [{ id: "s1", source: "basecamp", releasedAt: "2026-11-03T20:00:00Z", approvedVersion: 2, destination: { kind: "basecamp_comment", recordingId: "9" }, versions: [{ n: 1, body: "old" }, { n: 2, body: "Hi Matt, the **bucket** is ready: https://x.y/z" }] }],
     },
   });
-  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { content: "<p>Hi Matt, the <strong>bucket</strong> is ready: <a href='https://x.y/z'>https://x.y/z</a></p>" }, salidas.fetchImpl)), null);
-  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { content: "<p>Hi Matt, the bucket is almost ready</p>" }, salidas.fetchImpl)), "G5");
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { recording_id: 9, content: "<p>Hi Matt, the <strong>bucket</strong> is ready: <a href='https://x.y/z'>https://x.y/z</a></p>" }, salidas.fetchImpl)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { recording_id: 9, content: "<p>Hi Matt, the bucket is almost ready</p>" }, salidas.fetchImpl)), "G5");
   assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { content: "hi" })), "G5");
   assert.equal(await rule(run(lead, "mcp__claude_ai_Slack__slack_schedule_message", { channel_id: "C1", message: "x" })), "G5");
 });
@@ -241,9 +241,9 @@ test("G5: a released sample salida never authorises a send", async () => {
 test("G5: a list without bodies is resolved through salida show", async () => {
   const mesa = fakeMesa({
     "GET /api/salidas?status=sending": { salidas: [{ id: "s2", source: "basecamp", releasedAt: "2026-11-03T20:00:00Z" }] },
-    "GET /api/salidas/s2": { salida: { id: "s2", approvedBody: "Listo, ya quedó." } },
+    "GET /api/salidas/s2": { salida: { id: "s2", approvedBody: "Listo, ya quedó.", destination: { kind: "basecamp_campfire", recordingId: "77" } } },
   });
-  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { content: "Listo, ya quedó." }, mesa.fetchImpl)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 77, content: "Listo, ya quedó." }, mesa.fetchImpl)), null);
 });
 
 const commentSalida = (mentions, extra = {}) => ({
@@ -252,10 +252,10 @@ const commentSalida = (mentions, extra = {}) => ({
   releasedAt: "2026-11-03T20:00:00Z",
   approvedVersion: 1,
   versions: [{ n: 1, body: "Hi Matt, the bucket is ready" }],
-  destination: { kind: "basecamp_comment", project: "Scout", postAs: "A", ...(mentions ? { mentions } : {}) },
+  destination: { kind: "basecamp_comment", project: "Scout", recordingId: "9", postAs: "A", ...(mentions ? { mentions } : {}) },
   ...extra,
 });
-const sendComment = (mesa, mentions) => run(lead, "mcp__basecamp__create_comment", { content: "<p>Hi Matt, the bucket is ready</p>", ...(mentions ? { mentions } : {}) }, mesa.fetchImpl);
+const sendComment = (mesa, mentions) => run(lead, "mcp__basecamp__create_comment", { recording_id: 9, content: "<p>Hi Matt, the bucket is ready</p>", ...(mentions ? { mentions } : {}) }, mesa.fetchImpl);
 
 test("G5: a create_comment passes only with the mentions of the released salida's destination", async () => {
   const withMentions = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [commentSalida([{ id: "9001", name: "Matt Myers" }, { id: "9002", name: "Ana Ruiz" }])] } });
@@ -289,7 +289,7 @@ test("G5: the mentions check reads the destination from salida show when the lis
   });
   assert.equal(await rule(sendComment(full, [9001])), null);
   assert.equal((await sendComment(full, undefined))?.rule, "G5");
-  const text = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [commentSalida(undefined, { destination: JSON.stringify({ kind: "basecamp_comment", mentions: [{ id: "7", name: "X" }] }) })] } });
+  const text = fakeMesa({ "GET /api/salidas?status=sending": { salidas: [commentSalida(undefined, { destination: JSON.stringify({ kind: "basecamp_comment", recordingId: 9, mentions: [{ id: "7", name: "X" }] }) })] } });
   assert.equal(await rule(sendComment(text, [7])), null);
   assert.equal((await sendComment(text, [8]))?.rule, "G5");
 });

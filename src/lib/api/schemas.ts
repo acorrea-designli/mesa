@@ -204,7 +204,10 @@ export const actionState = z.object({
   state: z.enum(["running", "done", "failed", "skipped"]),
 });
 
+/** Files exist only on a Basecamp destination (t196): any entry here is a 400 instead of being silently dropped. */
+const noFiles = z.array(z.unknown()).max(0, "files are only for a Basecamp salida").optional();
 const slackDest = z.object({
+  files: noFiles,
   kind: z.enum(["slack_thread", "slack_channel"]),
   workspace: z.string().min(1),
   channel: z.string().min(1),
@@ -219,6 +222,8 @@ const basecampDest = z.object({
   projectId: z.string().optional(),
   recordingId: z.string().optional(),
   recordingTitle: z.string().optional(),
+  /** basecamp_message only (required, refined on salidaInput): the post's subject, which hook G5 compares exactly. */
+  subject: z.string().trim().min(1).max(250).optional(),
   /** basecamp_comment only (refined on salidaInput): Basecamp person ids, with the name shown on the card. */
   mentions: z.array(z.object({ id: z.string().trim().min(1), name: z.string().trim().min(1) })).max(20).optional(),
   /**
@@ -229,6 +234,7 @@ const basecampDest = z.object({
   postAs: z.string().min(1),
 });
 const githubDest = z.object({
+  files: noFiles,
   kind: z.enum(["github_review", "github_comment"]),
   repo: z.string().regex(REPO),
   pr: z.number().int().positive(),
@@ -253,6 +259,7 @@ const githubDest = z.object({
 });
 /** A Google Calendar event (t112). The event's fields live in the version body (calendar-event.ts); this is where it goes. */
 const calendarDest = z.object({
+  files: noFiles,
   kind: z.literal("calendar_event"),
   calendar: z.string().min(1),
   invitees: z.array(z.string().min(3)).max(50).optional(),
@@ -284,6 +291,14 @@ export const salidaInput = z
       return !("mentions" in d && d.mentions?.length) || d.kind === "basecamp_comment" || d.kind === "basecamp_message";
     },
     "mentions are only for a basecamp_comment (pinged through create_comment) or a basecamp_message (the people the post notifies, as subscriptions); a Campfire line is plain text and notifies nobody in particular: drop mentions or send a comment",
+  )
+  .refine(
+    (s) => s.destination.kind !== "basecamp_message" || Boolean(s.destination.subject),
+    "a basecamp_message needs a subject (destination.subject): it is what the post is titled and what the client's notification shows, and hook G5 compares it exactly",
+  )
+  .refine(
+    (s) => !("files" in s.destination && s.destination.files?.length) || Boolean("recordingId" in s.destination && s.destination.recordingId),
+    "a salida with files needs destination.recordingId (the message board, recording or Campfire it goes to): hook G5 checks every upload and send against it",
   )
   .refine(
     (s) =>

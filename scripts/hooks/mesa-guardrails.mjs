@@ -21,7 +21,9 @@
 //                `subscriptions` (none = omit it); a Basecamp post or comment whose destination has files embeds exactly
 //                the sgids recorded by `mesa salida upload` as <bc-attachment sgid="..."> next to the approved text, and
 //                create_attachment / create_campfire_upload pass only for a file of a released salida (name + SHA-256 of
-//                the decoded base64 = the hash taken when it was proposed; t196). A Slack salida carries the mode Andrés chose with his approval click:
+//                the decoded base64, strictly decoded, = the hash taken when it was proposed; t196). The call's target must be
+//                the destination's recordingId (board_id, recording_id, campfire_id) and a post's subject exactly the
+//                destination's subject. A Slack salida carries the mode Andrés chose with his approval click:
 //                slack_send_message_draft passes only for a released, unsent, non-sample Slack salida in mode draft, and
 //                slack_send_message only for one in mode send ("Claude lo envía": the connector appends "Sent using
 //                @Claude" and Andrés accepted that); either way with exactly the approved text and the salida's
@@ -284,8 +286,31 @@ function filesProblem(tool, ti, s) {
   return null;
 }
 
-// Why a create_message does not carry the approved status and subscriptions (null when it does).
+// Where a Basecamp send goes: the call's id must be the destination's recordingId (comment: the recording, post: the
+// message board, Campfire: the chat), so approved text and files cannot land on another project's board.
+const TARGET_PARAM = { create_message: "board_id", create_comment: "recording_id", create_campfire_line: "campfire_id", create_campfire_upload: "campfire_id" };
+function targetProblem(tool, ti, s) {
+  const param = TARGET_PARAM[tool.replace("mcp__basecamp__", "")];
+  if (!param) return null;
+  const want = destinationOf(s).recordingId;
+  if (want === undefined || want === null || String(want) === "") {
+    return { reason: `the salida's destination has no recordingId, so ${param} cannot be checked. Propose it again with the recordingId of the board, recording or Campfire it goes to.` };
+  }
+  if (String(ti[param] ?? "") !== String(want)) {
+    return { reason: `${param} ${ti[param] ?? "(none)"} is not where the salida goes: its destination is ${want}. Pass exactly the destination's recordingId.` };
+  }
+  return null;
+}
+
+// Why a create_message does not carry the approved subject, status and subscriptions (null when it does).
 function messageProblem(ti, s) {
+  const subject = destinationOf(s).subject;
+  if (typeof subject !== "string" || subject.trim() === "") {
+    return { reason: "the salida's destination has no subject, so the post's subject cannot be checked. Propose it again with the destination's subject." };
+  }
+  if (String(ti.subject ?? "").trim() !== subject.trim()) {
+    return { reason: `the post's subject must be exactly the approved one, "${subject}"; this call passes "${ti.subject ?? ""}".` };
+  }
   if (ti.status !== "active") return { reason: 'create_message must pass status "active": without it Basecamp saves a draft that notifies nobody.' };
   const expected = destinationMentionIds(s);
   const subs = Array.isArray(ti.subscriptions) ? ti.subscriptions.map(String).sort() : null;
@@ -326,7 +351,7 @@ async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
         continue;
       }
     }
-    const problem = (isMessage ? messageProblem(ti, s) : null) ?? filesProblem(tool, ti, s);
+    const problem = targetProblem(tool.replace("mcp__basecamp__", ""), ti, s) ?? (isMessage ? messageProblem(ti, s) : null) ?? filesProblem(tool, ti, s);
     if (problem) {
       mismatch = problem;
       continue;
@@ -339,13 +364,22 @@ async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
 // t196. create_attachment / create_campfire_upload (a file as base64) pass only for a released, unsent, non-sample
 // Basecamp salida that carries exactly this file: same name and same SHA-256 of the decoded bytes (the hash taken when it
 // was proposed). A campfire upload passes only for a campfire salida (campfire_id = destination.recordingId when it has one).
-export const sha256Base64 = (b64) => createHash("sha256").update(Buffer.from(String(b64 ?? ""), "base64")).digest("hex");
+// Strict: Node's decoder skips non-alphabet characters and anything after "=" padding, so the hash would be of fewer
+// bytes than the string carries. Whitespace is ignored; anything else must survive a decode and re-encode unchanged.
+export function sha256Base64(b64) {
+  if (typeof b64 !== "string") return null;
+  const clean = b64.replace(/\s+/g, "");
+  const bytes = Buffer.from(clean, "base64");
+  if (bytes.toString("base64") !== clean) return null;
+  return createHash("sha256").update(bytes).digest("hex");
+}
 
 async function releasedUploadSalida(tool, ti, { fetchImpl, base }) {
   const campfireTool = tool === "mcp__basecamp__create_campfire_upload";
   const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
   const list = (data.salidas ?? data ?? []).filter((s) => s.source === "basecamp" && (s.releasedAt ?? s.released_at) && !s.isSample && !(s.sentAt ?? s.sent_at));
   const digest = sha256Base64(ti.content_base64);
+  if (digest === null) return { match: null, near: { id: null, reason: "content_base64 is not canonical base64 (stray characters, data after padding or a bad length): encode the file's bytes exactly" } };
   const name = String(ti.filename ?? "");
   let near = null;
   for (const item of list) {
@@ -366,9 +400,12 @@ async function releasedUploadSalida(tool, ti, { fetchImpl, base }) {
       near = { id: s.id, reason: campfireTool ? `salida ${s.id} is a ${d.kind}, not a Campfire line: upload with create_attachment and embed the sgid` : `salida ${s.id} is a Campfire salida: upload with create_campfire_upload` };
       continue;
     }
-    if (campfireTool && d.recordingId && String(ti.campfire_id) !== String(d.recordingId)) {
-      near = { id: s.id, reason: `campfire_id ${ti.campfire_id} is not the salida's Campfire (${d.recordingId})` };
-      continue;
+    if (campfireTool) {
+      const wrong = targetProblem("create_campfire_upload", ti, s);
+      if (wrong) {
+        near = { id: s.id, reason: wrong.reason.replace(/.$/, "") };
+        continue;
+      }
     }
     return { match: s, near };
   }
@@ -672,7 +709,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/attachments\/[^/\s"']+\/approved\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/attachments\/[^/\s"']+\/approved\b|\/salidas\/[^/\s"']+\/uploads\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
       return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are " + OWNER + "'s, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 

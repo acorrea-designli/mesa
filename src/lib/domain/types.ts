@@ -354,6 +354,8 @@ export type Destination =
       projectId?: string;
       recordingId?: string;
       recordingTitle?: string;
+      /** basecamp_message (required when proposed, t196): the post's subject; hook G5 passes create_message only with exactly this. */
+      subject?: string;
       /**
        * basecamp_comment: the people the comment pings (Basecamp person ids from list_project_people, as strings). The
        * lead passes the ids to create_comment as `mentions`; a typed "@Name" notifies nobody.

@@ -13,7 +13,7 @@ import { openDb } from "@/lib/db/sqlite";
 import { MAX_SALIDA_FILE_BYTES, fileSizeLabel } from "@/lib/domain/salida-files";
 import type { Destination, SalidaDetail } from "@/lib/domain/types";
 import { createRepos, type Repos } from "@/lib/repo";
-import { describeFile, fileState, resolveSalidaFiles } from "@/lib/repo/salida-files";
+import { allowedRoots, approvedBytes, describeFile, fileState, resolveSalidaFiles } from "@/lib/repo/salida-files";
 
 const g = globalThis as unknown as { __mesaRepos?: Repos };
 let r: Repos;
@@ -34,7 +34,7 @@ const write = (name: string, data: string | Buffer = "%PDF-1.4 report") => {
 };
 const post = (p: string, b: unknown) => new Request(`http://local${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
 const ctx = <P extends Record<string, string>>(params = {} as P) => ({ params: Promise.resolve(params) });
-const dest = (kind: string, extra: Record<string, unknown> = {}) => ({ kind, project: "Scout", recordingId: "55", postAs: "Andrés", ...extra });
+const dest = (kind: string, extra: Record<string, unknown> = {}) => ({ kind, project: "Scout", recordingId: "55", postAs: "Andrés", ...(kind === "basecamp_message" ? { subject: "Cost report" } : {}), ...extra });
 const propose = (d: unknown) => CREATE(post("/api/salidas", { source: "basecamp", destination: d, body: "Hey Matt, here is the report." }), ctx());
 const filesOf = (s: SalidaDetail) => (s.destination as Extract<Destination, { files?: unknown }>).files!;
 
@@ -51,6 +51,15 @@ describe("describeFile / resolveSalidaFiles", () => {
     expect(() => describeFile(dir)).toThrow(/is not a file/);
     expect(() => describeFile(write("empty.pdf", ""))).toThrow(/is empty/);
     expect(() => describeFile(write("big.bin", Buffer.alloc(MAX_SALIDA_FILE_BYTES + 1)))).toThrow(/limit is 25 MB/);
+  });
+
+  it("allows only the temp folder, data/uploads and MESA_FILE_ROOTS: never the home folder or Mesa's checkout", () => {
+    const roots = allowedRoots({});
+    expect(roots).toContain(fs.realpathSync(os.tmpdir()));
+    expect(roots.some((x) => x === fs.realpathSync(os.homedir()))).toBe(false);
+    expect(roots.some((x) => x === fs.realpathSync(process.cwd()))).toBe(false);
+    expect(allowedRoots({ MESA_FILE_ROOTS: dir })).toContain(fs.realpathSync(dir));
+    expect(() => describeFile(path.join(os.homedir(), "NTUSER.DAT"), roots)).toThrow();
   });
 
   it("refuses hidden paths and anything outside the allowed folders", () => {
@@ -75,6 +84,15 @@ describe("describeFile / resolveSalidaFiles", () => {
     expect(fileState(f)).toBe("changed");
     fs.rmSync(p);
     expect(fileState(f)).toBe("missing");
+  });
+
+  it("approvedBytes returns the bytes it hashed, and nothing when they differ", () => {
+    const p = write("a.pdf", "one");
+    const f = describeFile(p);
+    const ok = approvedBytes(f);
+    expect(ok.state === "ok" && ok.data.toString()).toBe("one");
+    fs.writeFileSync(p, "two");
+    expect(approvedBytes(f)).toEqual({ state: "changed" });
   });
 });
 
@@ -102,10 +120,25 @@ describe("POST /api/salidas with files", () => {
     expect(r.salidas.list({})).toHaveLength(0);
   });
 
-  it("is a 400 for files on a non-Basecamp destination", async () => {
-    const res = await CREATE(post("/api/salidas", { source: "slack", destination: { kind: "slack_channel", workspace: "D", channel: "#a", postAs: "A", files: [write("a.pdf")] }, body: "x" }), ctx());
-    expect(res.status).toBe(201); // zod strips the unknown key: Slack never carries files
-    expect(JSON.stringify(((await res.json()) as SalidaDetail).destination)).not.toContain("files");
+  it("is a 400 for files on a non-Basecamp destination, and an empty list is fine", async () => {
+    const slack = { kind: "slack_channel", workspace: "D", channel: "#a", postAs: "A" };
+    const res = await CREATE(post("/api/salidas", { source: "slack", destination: { ...slack, files: [write("a.pdf")] }, body: "x" }), ctx());
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/files are only for a Basecamp salida/);
+    const gh = { kind: "github_comment", repo: "a/b", pr: 1, postAs: "A", files: ["/x/a.pdf"] };
+    expect((await CREATE(post("/api/salidas", { source: "github", destination: gh, body: "x" }), ctx())).status).toBe(400);
+    expect(r.salidas.list({})).toHaveLength(0);
+    expect((await CREATE(post("/api/salidas", { source: "slack", destination: { ...slack, files: [] }, body: "x" }), ctx())).status).toBe(201);
+  });
+
+  it("is a 400 for a post without a subject and for files without a recordingId", async () => {
+    const noSubject = await propose({ kind: "basecamp_message", project: "Scout", recordingId: "55", postAs: "A" });
+    expect(noSubject.status).toBe(400);
+    expect(JSON.stringify(await noSubject.json())).toMatch(/needs a subject/);
+    const noTarget = await propose({ kind: "basecamp_comment", project: "Scout", postAs: "A", files: [write("a.pdf")] });
+    expect(noTarget.status).toBe(400);
+    expect(JSON.stringify(await noTarget.json())).toMatch(/needs destination.recordingId/);
+    expect(r.salidas.list({})).toHaveLength(0);
   });
 });
 
@@ -159,6 +192,7 @@ describe("the read model", () => {
     const f = { path: "/x/a.pdf", name: "a.pdf", size: 2048, sha256: "0".repeat(64) };
     const d = { kind: "basecamp_message", project: "Scout", postAs: "A", files: [f, { ...f, name: "b.pdf" }], mentions: [{ id: "9001", name: "Matt Myers" }] } as Destination;
     expect(destinationFiles(d)).toHaveLength(2);
+    expect(routeStops({ ...d, subject: "Cost report" } as Destination)).toEqual(expect.arrayContaining([{ label: "Asunto", value: "Cost report" }]));
     expect(routeStops(d)).toEqual(expect.arrayContaining([{ label: "Avisa a", value: "Matt Myers" }, expect.objectContaining({ label: "Adjunta", value: "2 archivos" })]));
     const one = { ...d, files: [f], mentions: undefined } as Destination;
     expect(routeStops(one)).toEqual(expect.arrayContaining([{ label: "Avisa a", value: "Los de siempre del tablero", note: "Sin personas elegidas" }, { label: "Adjunta", value: "a.pdf" }]));

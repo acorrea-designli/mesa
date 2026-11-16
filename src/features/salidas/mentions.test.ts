@@ -54,8 +54,14 @@ describe("salidaInput mentions", () => {
   });
 
   it("a message-board post keeps its mentions: they are the people it notifies (t196)", () => {
-    const r = salidaInput.parse(input({ kind: "basecamp_message", ...base, mentions }));
+    const r = salidaInput.parse(input({ kind: "basecamp_message", ...base, subject: "Report", mentions }));
     expect(r.destination).toMatchObject({ kind: "basecamp_message", mentions });
+  });
+
+  it("a message-board post needs a subject (t196)", () => {
+    const r = salidaInput.safeParse(input({ kind: "basecamp_message", ...base, mentions }));
+    expect(r.success).toBe(false);
+    expect(JSON.stringify(r.error?.issues)).toMatch(/needs a subject/);
   });
 
   it("a campfire line with mentions is rejected with a clear message", () => {

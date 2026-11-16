@@ -211,6 +211,7 @@ export function routeStops(d: Destination): RouteStop[] {
       ];
     const stops: RouteStop[] = [
       { label: "Proyecto", value: d.project },
+      ...(d.kind === "basecamp_message" && d.subject ? [{ label: "Asunto", value: d.subject }] : []),
       { label: d.kind === "basecamp_message" ? "Message Board" : "Mensaje", value: d.recordingTitle ? `«${d.recordingTitle}»` : (d.recordingId ?? "") },
       { label: "Como", value: d.kind === "basecamp_message" ? "Mensaje nuevo" : "Comentario", note: d.postAs },
     ];

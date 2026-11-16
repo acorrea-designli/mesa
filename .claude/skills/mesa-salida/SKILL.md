@@ -32,7 +32,7 @@ Destination JSON (the server validates it; `postAs` is who it posts as):
 | kind | fields |
 |---|---|
 | `slack_thread` / `slack_channel` | `workspace` ("designli"), `channel` ("#name"), `channelId` (required to send: it is the draft's and the send's `channel_id`), `threadTs` (thread only), `threadLabel`, `postAs` |
-| `basecamp_comment` / `basecamp_message` / `basecamp_campfire` | `project`, `projectId`, `recordingId` (comment: the recording it attaches to; post: the message board id; campfire: the chat id), `recordingTitle`, `mentions` (comment: pinged; post: notified, see below; never on a campfire), `files` (any of the three, see **Files**), `postAs` |
+| `basecamp_comment` / `basecamp_message` / `basecamp_campfire` | `project`, `projectId`, `recordingId` (comment: the recording it attaches to; post: the message board id; campfire: the chat id), `recordingTitle`, `subject` (**required on a post**: the post's title, shown on the card as "Asunto"), `mentions` (comment: pinged; post: notified, see below; never on a campfire), `files` (any of the three, see **Files**), `postAs` |
 | `github_review` / `github_comment` | `repo`, `pr`, `event`, `path`, `line`, `commitId`, `findingN`, `postAs` (see `mesa-review`) |
 | `calendar_event` | `calendar` ("primary"), `invitees` (addresses, for the chips), `meet` (true/false), `postAs`. The event itself is the BODY (see **Calendar events**) |
 
@@ -51,7 +51,8 @@ if their destination carries `mentions`; say in `--context` that nobody gets pin
 
 **Files** (`files`, any Basecamp kind). `"files": ["C:/.../informe.pdf"]`: absolute local paths, at most 10, 25 MB each,
 each must exist when you propose (400 otherwise), none inside a hidden folder (`.env`, `.claude`...), all under the
-home folder, the temp folder (the writer's scratch), Mesa's own folder or `MESA_FILE_ROOTS`. Mesa measures each file
+temp folder (the writer's scratch), Mesa's `data/uploads` or `MESA_FILE_ROOTS` (never the home folder), and the
+destination needs `recordingId` (400 otherwise). Mesa measures each file
 and stores its name, size and SHA-256 on the destination; the card lists the names, each one opens, and a file that
 changed after you proposed it is flagged and cannot be sent. Put the file's name in the `--context`; the body is the
 message text only (a Campfire salida still needs its caption line). To change a file, propose a new salida.
@@ -136,7 +137,7 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 1. Body = `versions[approvedVersion - 1].body`, unchanged. Destination = the salida's `destination`, exactly.
 2. Send with one MCP call: Basecamp `create_comment` (comment on `recordingId`; pass the destination's
    `mentions` ids as `mentions`, numbers: `"9001"` becomes `9001`; none when the destination has none, never add one),
-   `create_message` (`board_id` = `recordingId`, `status: "active"` always, because without it Basecamp saves a draft
+   `create_message` (`board_id` = `recordingId`, `subject` = `destination.subject` exactly, `status: "active"` always, because without it Basecamp saves a draft
    that notifies nobody; `subscriptions` = the destination's `mentions` ids as numbers, or omitted when it has none),
    or `create_campfire_line`, converting Markdown to the HTML the tool takes without changing words
    (for `create_comment` the server builds the mention markup itself: do not type an `@Name` or a mention tag in

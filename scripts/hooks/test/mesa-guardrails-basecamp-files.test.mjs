@@ -22,20 +22,20 @@ const SG2 = "BAh7CEkiCGdpZAY6BkVUSSIfZ2lkOi8vYmMzL1VwbG9hZC8yMjIyMj9leHBpcmVz";
 const tag = (sg) => `<bc-attachment sgid="${sg}"></bc-attachment>`;
 const TEXT = "Hey Matt, the report is attached.";
 
-const salida = ({ kind = "basecamp_message", files = [file("report.pdf", PDF)], mentions, uploads = [], recordingId, extra = {}, id = "s1" } = {}) => ({
+const salida = ({ kind = "basecamp_message", files = [file("report.pdf", PDF)], mentions, uploads = [], recordingId = "55", subject = "Cost report", extra = {}, id = "s1" } = {}) => ({
   id,
   source: "basecamp",
   releasedAt: "2026-11-16T20:00:00Z",
   approvedVersion: 1,
   versions: [{ n: 1, body: TEXT }],
-  destination: { kind, project: "Scout", postAs: "A", ...(files ? { files } : {}), ...(mentions ? { mentions } : {}), ...(recordingId ? { recordingId } : {}) },
+  destination: { kind, project: "Scout", postAs: "A", ...(kind === "basecamp_message" && subject ? { subject } : {}), ...(files ? { files } : {}), ...(mentions ? { mentions } : {}), ...(recordingId ? { recordingId } : {}) },
   uploads: uploads.map((sgid, fileIndex) => ({ fileIndex, sgid, sha256: files[fileIndex]?.sha256 })),
   ...extra,
 });
 const mesaWith = (...ss) => fakeMesa({ "GET /api/salidas?status=sending": { salidas: ss } });
 
 const upload = (mesa, buf = PDF, filename = "report.pdf") => run(lead, "mcp__basecamp__create_attachment", { filename, content_type: "application/pdf", content_base64: b64(buf) }, mesa.fetchImpl);
-const campfireUpload = (mesa, buf = PDF, filename = "report.pdf", campfire_id = 77) =>
+const campfireUpload = (mesa, buf = PDF, filename = "report.pdf", campfire_id = 55) =>
   run(lead, "mcp__basecamp__create_campfire_upload", { campfire_id, filename, content_type: "application/pdf", content_base64: b64(buf) }, mesa.fetchImpl);
 
 test("helpers: sha256Base64 hashes the decoded bytes; splitAttachments separates tags from text", () => {
@@ -76,12 +76,15 @@ test("G5 upload: the second file of a salida is found, and the list without dest
 });
 
 test("G5 upload: create_campfire_upload passes only for a Campfire salida's file, in its Campfire", async () => {
-  const cf = salida({ kind: "basecamp_campfire", recordingId: "77" });
+  const cf = salida({ kind: "basecamp_campfire" });
   assert.equal(await rule(campfireUpload(mesaWith(cf))), null);
-  assert.equal(await rule(campfireUpload(mesaWith(salida({ kind: "basecamp_campfire" })), PDF, "report.pdf", 12)), null); // no recordingId: nothing to compare
+  const noTarget = await campfireUpload(mesaWith(salida({ kind: "basecamp_campfire", recordingId: null })));
+  assert.equal(noTarget.rule, "G5");
+  assert.match(noTarget.reason, /no recordingId/);
+  assert.equal(await rule(campfireUpload(mesaWith(cf), PDF, "report.pdf", "55")), null); // string and number ids compare equal
   const wrong = await campfireUpload(mesaWith(cf), PDF, "report.pdf", 12);
   assert.equal(wrong.rule, "G5");
-  assert.match(wrong.reason, /not the salida's Campfire/);
+  assert.match(wrong.reason, /campfire_id 12 is not where the salida goes: its destination is 55/);
   assert.equal(await rule(campfireUpload(mesaWith(cf), Buffer.from("other"))), "G5");
   // each upload tool is for its own kind
   const crossed = await campfireUpload(mesaWith(salida({ kind: "basecamp_message" })));
@@ -99,8 +102,8 @@ test("G5 upload: a teammate is blocked by G4 and the sandbox by G11", async () =
 });
 
 const post = (mesa, content, extra = {}, tool = "mcp__basecamp__create_message") =>
-  run(lead, tool, { board_id: 5, subject: "Cost report", content, ...extra }, mesa.fetchImpl);
-const comment = (mesa, content, extra = {}) => run(lead, "mcp__basecamp__create_comment", { recording_id: 9, content, ...extra }, mesa.fetchImpl);
+  run(lead, tool, { board_id: 55, subject: "Cost report", content, ...extra }, mesa.fetchImpl);
+const comment = (mesa, content, extra = {}) => run(lead, "mcp__basecamp__create_comment", { recording_id: 55, content, ...extra }, mesa.fetchImpl);
 
 test("G5 post: with files it passes only when the content embeds exactly the recorded sgids next to the approved text", async () => {
   const mesa = mesaWith(salida({ uploads: [SG1] }));
@@ -182,12 +185,83 @@ test("G5 post: a salida that names nobody omits subscriptions; no status or a dr
 test("G5 Campfire line: plain text as before, files never embedded in it", async () => {
   const cf = salida({ kind: "basecamp_campfire", uploads: [] });
   const mesa = mesaWith(cf);
-  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 77, content: TEXT }, mesa.fetchImpl)), null);
-  assert.equal((await run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 77, content: `${TEXT} ${tag(SG1)}` }, mesa.fetchImpl))?.rule, "G5");
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 55, content: TEXT }, mesa.fetchImpl)), null);
+  assert.equal((await run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 55, content: `${TEXT} ${tag(SG1)}` }, mesa.fetchImpl))?.rule, "G5");
 });
 
 test("G4: a teammate cannot record an upload", async () => {
   const mate = fakeAgent({ name: "dev-t196" }).input;
   const r = await run(mate, "Bash", { command: "node G:/WorkSpace/designli/ops/bin/mesa salida upload sa_1 --file 0 --sgid BAh7" });
   assert.equal(r?.rule, "G4");
+});
+
+test("G5 target: board_id, recording_id and campfire_id must be the destination's recordingId", async () => {
+  const content = `<p>${TEXT}</p>`;
+  const msg = mesaWith(salida({ files: null }));
+  assert.equal(await rule(post(msg, content, { status: "active" })), null);
+  const wrongBoard = await run(lead, "mcp__basecamp__create_message", { board_id: 424242, subject: "Cost report", status: "active", content }, msg.fetchImpl);
+  assert.equal(wrongBoard.rule, "G5");
+  assert.match(wrongBoard.reason, /board_id 424242 is not where the salida goes: its destination is 55/);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_message", { subject: "Cost report", status: "active", content }, msg.fetchImpl)), "G5");
+
+  const com = mesaWith(salida({ kind: "basecamp_comment", files: null }));
+  assert.equal(await rule(comment(com, content)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { recording_id: 56, content }, com.fetchImpl)), "G5");
+
+  const cf = mesaWith(salida({ kind: "basecamp_campfire", files: null }));
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 55, content: TEXT }, cf.fetchImpl)), null);
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_campfire_line", { campfire_id: 999, content: TEXT }, cf.fetchImpl)), "G5");
+});
+
+test("G5 target: a Basecamp salida without a recordingId sends nothing, whatever the tool", async () => {
+  const content = `<p>${TEXT}</p>`;
+  for (const [kind, tool, input] of [
+    ["basecamp_message", "create_message", { board_id: 55, subject: "Cost report", status: "active", content }],
+    ["basecamp_comment", "create_comment", { recording_id: 55, content }],
+    ["basecamp_campfire", "create_campfire_line", { campfire_id: 55, content: TEXT }],
+  ]) {
+    const r = await run(lead, `mcp__basecamp__${tool}`, input, mesaWith(salida({ kind, files: null, recordingId: null })).fetchImpl);
+    assert.equal(r?.rule, "G5", tool);
+    assert.match(r.reason, /no recordingId/);
+  }
+});
+
+test("G5 subject: a post passes only with exactly the approved subject; a salida without one sends nothing", async () => {
+  const content = `<p>${TEXT}</p>`;
+  const mesa = mesaWith(salida({ files: null }));
+  assert.equal(await rule(post(mesa, content, { status: "active" })), null);
+  for (const subject of ["anything at all", "Cost report 2", "", undefined]) {
+    const r = await run(lead, "mcp__basecamp__create_message", { board_id: 55, ...(subject === undefined ? {} : { subject }), status: "active", content }, mesa.fetchImpl);
+    assert.equal(r?.rule, "G5", String(subject));
+    assert.match(r.reason, /subject must be exactly the approved one, "Cost report"/);
+  }
+  const legacy = await post(mesaWith(salida({ files: null, subject: null })), content, { status: "active" });
+  assert.equal(legacy.rule, "G5");
+  assert.match(legacy.reason, /no subject/);
+});
+
+test("G5 upload: the base64 must be canonical, so no byte hides after the hash", async () => {
+  const mesa = mesaWith(salida());
+  const good = b64(PDF);
+  assert.equal(await rule(upload(mesa)), null);
+  const send = (content_base64) => run(lead, "mcp__basecamp__create_attachment", { filename: "report.pdf", content_type: "application/pdf", content_base64 }, mesa.fetchImpl);
+  assert.equal(await rule(send(good.replace(/(.{20})/g, "$1" + String.fromCharCode(10)))), null); // line breaks are not data
+  assert.equal((await send(good + "QUJD"))?.rule, "G5"); // canonical, but other bytes: not the approved file
+  for (const bad of [good.slice(0, 8) + "!!" + good.slice(8), good + "=", good.slice(0, -1), undefined, 42]) {
+    const r = await send(bad);
+    assert.equal(r?.rule, "G5", String(bad));
+    assert.match(r.reason, /not canonical base64/);
+  }
+  assert.equal(sha256Base64(Buffer.from("abcd").toString("base64") + "QUJD"), null); // data after the "=" padding
+  assert.equal(sha256Base64("YWJjZA== "), sha(Buffer.from("abcd"))); // trailing whitespace is not data
+  assert.equal(sha256Base64(undefined), null);
+});
+
+test("G10: nobody records an upload through the raw API either", async () => {
+  const curl = "curl -s -X POST http://127.0.0.1:8790/api/salidas/sa_1/uploads -H 'content-type: application/json' -d '{\"file\":0,\"sgid\":\"x\"}'";
+  for (const who of [lead, fakeAgent({ name: "dev-t196" }).input]) {
+    const r = await run(who, "Bash", { command: curl });
+    assert.equal(r?.rule, "G10");
+  }
+  assert.equal(await rule(run(lead, "Bash", { command: "curl -s http://127.0.0.1:8790/api/salidas/sa_1" })), null);
 });

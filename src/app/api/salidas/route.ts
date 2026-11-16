@@ -22,7 +22,7 @@ export const POST = route(async (req, r) => {
   const ticketId = input.ticketId ? r.tickets.get(input.ticketId).id : undefined;
   let destination = input.destination as Destination;
   if ("files" in input.destination && input.destination.files?.length) {
-    destination = { ...input.destination, files: resolveSalidaFiles(input.destination.files) } as Destination;
+    destination = { ...input.destination, files: resolveSalidaFiles(input.destination.files as (string | { path: string })[]) } as Destination;
   }
   return json(withDestinationUrl(r.salidas.create({ ...input, destination, ticketId })), { status: 201 });
 });
