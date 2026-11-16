@@ -185,11 +185,21 @@ export const ticketTransition = z
     reason: z.string().optional(),
     session: z.string().optional(),
     untilTicket: z.string().trim().min(1).optional(),
+    /** When a paused ticket comes back by itself (t191): "2026-11-18T09:00" (Bogota), "2026-11-18" or a full ISO instant. */
+    untilAt: z.string().trim().min(1).optional(),
   })
   .superRefine((b, ctx) => {
-    if ((b.event === "pause" || b.event === "ongoing") && !b.reason?.trim()) ctx.addIssue({ code: "custom", path: ["reason"], message: "a pause needs a reason" });
+    // A return date is a reason of its own, so only a pause without one needs the reason typed.
+    if ((b.event === "pause" || b.event === "ongoing") && !b.reason?.trim() && !(b.event === "pause" && b.untilAt)) ctx.addIssue({ code: "custom", path: ["reason"], message: "a pause needs a reason" });
     if (b.untilTicket && b.event !== "pause") ctx.addIssue({ code: "custom", path: ["untilTicket"], message: "only a paused ticket can wait for another ticket" });
+    if (b.untilAt && b.event !== "pause") ctx.addIssue({ code: "custom", path: ["untilAt"], message: "only a paused ticket can have a return date" });
   });
+/** A standalone reminder (t191). */
+export const reminderCreate = z.object({
+  when: z.string().trim().min(1),
+  text: z.string().trim().min(1).max(500),
+  ticket: z.string().trim().min(1).optional(),
+});
 /** The lead groups same-topic tickets of a ticket.batch (mesa ticket fold <primary> <ref>... --why W). */
 export const ticketFold = z.object({
   from: z.array(z.string().min(1)).min(1).max(50),

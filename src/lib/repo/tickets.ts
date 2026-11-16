@@ -13,6 +13,7 @@ import {
 import { identity } from "../config/identity";
 import { isPdfMime, sameKind } from "../domain/attachments";
 import { inferKind } from "../domain/dispatch-kind";
+import { autoReason, fullLabel } from "../domain/reminders";
 import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
 import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, stepsOwed, type StepInput } from "../domain/ticket-checklists";
 import { answersBody, cardProblem, optionLabel, parseShorthand, type QuestionInput } from "../domain/ticket-questions";
@@ -335,7 +336,7 @@ export function ticketsRepo(db: Db) {
        WHERE id = ?`,
     ).run(r.status, ts, r.status, ts, r.wake && !quiet ? 1 : 0, ts, t.id);
     // The pause fields only live while the ticket is paused/ongoing (pause() writes them after this).
-    if (!isPauseStatus(r.status)) db.prepare("UPDATE tickets SET pause_reason = NULL, paused_until_ticket_id = NULL, paused_at = NULL WHERE id = ?").run(t.id);
+    if (!isPauseStatus(r.status)) db.prepare("UPDATE tickets SET pause_reason = NULL, paused_until_ticket_id = NULL, paused_until_at = NULL, paused_at = NULL WHERE id = ?").run(t.id);
     // Closing withdraws what is still open; a reopen does not bring it back (Claude asks again if it still matters).
     if (r.status === "closed") {
       db.prepare("UPDATE ticket_questions SET state = 'withdrawn', withdraw_reason = ? WHERE ticket_id = ? AND state = 'open'").run(CLOSED_WITHDRAW_REASON, t.id);
@@ -824,13 +825,21 @@ export function ticketsRepo(db: Db) {
      * is unknown, closed or the ticket itself, or an until-ticket on an ongoing one. It never wakes. Andrés's pause
      * (`by: "andres"`, the UI) is an interaction of his; Claude's (the CLI) is not.
      */
-    pause(id: string, o: { kind: PauseKind; reason: string; untilTicket?: string; by: "andres" | "claude" }, now = new Date()): TicketDetail {
+    pause(id: string, o: { kind: PauseKind; reason?: string; untilTicket?: string; untilAt?: string; by: "andres" | "claude" }, now = new Date()): TicketDetail {
       return tx(db, () => {
         const t = get(id);
         const ev: TicketEvent = { type: "pause", kind: o.kind };
         const check = transitionTicket(t.status, ev);
         if (!check.ok) throw new TransitionError(check.error);
-        const reason = o.reason.trim();
+        // A date is a reason of its own ("Hasta mié 18 nov 9:00"); without one the reason is required.
+        let untilAt: string | null = null;
+        if (o.untilAt) {
+          if (o.kind !== "paused") throw new ValidationError("only a paused ticket can have a return date");
+          if (Number.isNaN(Date.parse(o.untilAt))) throw new ValidationError("the return date is not a valid date");
+          if (Date.parse(o.untilAt) <= now.getTime()) throw new ValidationError("the return date is already past");
+          untilAt = new Date(o.untilAt).toISOString();
+        }
+        const reason = (o.reason ?? "").trim() || (untilAt ? autoReason(untilAt) : "");
         if (!reason) throw new ValidationError("a pause needs a reason");
         let until: string | null = null;
         if (o.untilTicket) {
@@ -844,7 +853,7 @@ export function ticketsRepo(db: Db) {
         apply(t, ev, now);
         const ts = nowIso(now);
         // paused_at is when the ticket entered paused/ongoing; changing the reason or switching kind restarts it.
-        db.prepare("UPDATE tickets SET pause_reason = ?, paused_until_ticket_id = ?, paused_at = ? WHERE id = ?").run(reason, until, ts, t.id);
+        db.prepare("UPDATE tickets SET pause_reason = ?, paused_until_ticket_id = ?, paused_until_at = ?, paused_at = ? WHERE id = ?").run(reason, until, untilAt, ts, t.id);
         if (o.by === "andres") touchInteraction(db, now);
         return this.detail(t.id);
       });
@@ -862,6 +871,26 @@ export function ticketsRepo(db: Db) {
         if (o.by === "andres") touchInteraction(db, now);
         return this.detail(t.id);
       });
+    },
+
+    /**
+     * A timed pause whose date is reached (t191, the sweep): back to Claude (waiting_claude), a system line in the thread and
+     * ticket.resumed { ref, ticketRef, by: "date", until } to the owner. Null when the ticket is no longer paused with a date
+     * that is reached (resumed by hand, closed, paused again for a later date), so a stale call never throws.
+     */
+    resumeByDate(id: string, now = new Date()): TicketDetail | null {
+      return tx(db, () => {
+        const t = get(id);
+        if (t.status !== "paused" || !t.pausedUntilAt || Date.parse(t.pausedUntilAt) > now.getTime()) return null;
+        insertMessage(t.id, { author: "claude", body: `Llegó la fecha (${fullLabel(t.pausedUntilAt)}): vuelve a Claude` }, nowIso(now));
+        apply(t, { type: "resume", by: "date" }, now, { ticketRef: t.ref, by: "date", until: t.pausedUntilAt });
+        return this.detail(t.id);
+      });
+    },
+
+    /** Ids of the paused tickets whose return date is reached, oldest date first. */
+    pausedDue(now = new Date()): string[] {
+      return (db.prepare("SELECT id FROM tickets WHERE status = 'paused' AND paused_until_at IS NOT NULL AND paused_until_at <= ? ORDER BY paused_until_at, id").all(nowIso(now)) as { id: string }[]).map((x) => x.id);
     },
 
     /** claim / close / reopen. `reason` rides on the ticket.reopened wake. */

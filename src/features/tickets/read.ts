@@ -1,6 +1,7 @@
 // Server read model for Tickets A (list + thread).
 import type { Repos } from "@/lib/repo";
 import { isSimulated } from "@/lib/domain/sandbox";
+import { isAutoReason, returnsLabel } from "@/lib/domain/reminders";
 import { needLine, needRank, type TicketNeed } from "@/lib/domain/ticket-needs";
 import { related, type RelItem, type RelTicket, type Related } from "@/lib/domain/related";
 import { loadTicketNeeds } from "./needs";
@@ -89,7 +90,11 @@ function excerpt(t: TicketDetail, needs: TicketNeed[], now: Date): string {
   if (t.status === "closed") return last && last.author === "claude" ? `Hecho por Claude · ${clip(last.body, 60)}` : "Cerrado";
   if (t.status === "working") return `Claude trabaja desde las ${hm(t.wokeAt ?? t.updatedAt)}`;
   // "En pausa" and "En proceso" read their reason (the dependency link lives in the thread header, a row is one link).
-  if (t.status === "paused") return [t.pauseReason, t.pausedUntil ? `hasta ${t.pausedUntil}` : ""].filter(Boolean).join(" · ") || "En pausa";
+  // A date-only pause has the auto reason "Hasta mié 9:00": say it once, as "Vuelve mié 9:00" (t191).
+  if (t.status === "paused") {
+    const why = isAutoReason(t.pauseReason, t.pausedUntilAt) ? "" : t.pauseReason;
+    return [why, t.pausedUntil ? `hasta ${t.pausedUntil}` : "", t.pausedUntilAt ? returnsLabel(t.pausedUntilAt, now) : ""].filter(Boolean).join(" · ") || "En pausa";
+  }
   if (t.status === "ongoing") return t.pauseReason || "En proceso";
   if (t.status === "waiting_claude" && last?.chosen) return `Respondiste ${last.chosen} · ${hm(last.createdAt)}`;
   if (t.actions.some((a) => a.state === "planned")) return "Claude va a hacer · te pide OK";

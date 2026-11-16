@@ -50,8 +50,13 @@ Tickets
   mesa ticket plan <id|ref> --action "kind:source:direct|needs_ok:label"...
   mesa ticket claim <id|ref>      take an Andrés request and start work
   mesa ticket close <id|ref>
-  mesa ticket pause <id|ref> --reason R [--until-ticket tN]
-                  "En pausa": blocked on something else (another ticket, a third party, a date: put the date in R). R is required.
+  mesa ticket pause <id|ref> --reason R [--until-ticket tN] [--until <datetime>]
+                  "En pausa": blocked on something else (another ticket, a third party, a date). R is required unless --until is given.
+                  --until <datetime> (2026-11-18T09:00 in Bogota time, a bare date = 09:00, or a full ISO instant with Z or an
+                  offset; must be in the future, 400 otherwise) is when it comes back by itself, even across a server restart: the
+                  ticket goes to Claude, its owner wakes with ticket.resumed by "date" (payload until) and Andrés gets a push
+                  "Vuelve · tN" with the ticket's title; the ticket and its card read "Vuelve mié 18 nov 9:00". Combined with
+                  --until-ticket, whichever happens first resumes it. Resuming by hand or replying clears the date
                   --until-ticket names an open ticket (not this one): when it closes (close or fold) this one resumes by itself,
                   back to Claude, and its owner wakes with ticket.resumed. From any open status; 400 on a bad ticket, 409 closed
   mesa ticket ongoing <id|ref> --reason R        "En proceso": going on with nobody active (CI, a third party). R is required
@@ -136,6 +141,14 @@ Sources and sweep (github|github_project|slack|basecamp|engram|calendar)
                   [--new ISO|now] [--backoff-until ISO|none] [--cadence SECONDS]
                   [--error-count N] [--last-error MSG|none]
   mesa sweep [--source slack|basecamp|github]...        same as "Barrer ahora"
+
+Reminders (stored in the database; they survive a restart)
+  mesa remind <datetime> <text> [--ref tN]       a standalone reminder: it shows in Hoy (Recordatorios) and fires as a push with its text
+                  at that time. <datetime> as in "ticket pause --until"; the text is one or more words (quote it); --ref points the
+                  push and the Hoy row at a ticket. 400 on an unreadable or past date, 404 on an unknown ref
+  mesa remind list [--all]                         open reminders (pending and fired), soonest first; --all adds done and cancelled
+  mesa remind cancel <id>                          a pending reminder will not fire (409 once it fired)
+  mesa remind done <id>                            a fired reminder leaves Hoy ("Hecho"; 409 unless it fired)
 
 Calendario (Andrés's Google Calendar, read only: the server polls his private iCal feed; creating is a salida)
   mesa calendar list [--from YYYY-MM-DD] [--to YYYY-MM-DD]   stored events (Bogota days, default this week and the next) + health
@@ -506,8 +519,13 @@ async function main() {
           const until = opt["until-ticket"];
           if (until !== undefined && cmd === "ongoing") usage("--until-ticket only goes with pause");
           if (until !== undefined && (typeof until !== "string" || !until)) usage("--until-ticket wants one ticket ref (tN)");
+          const untilAt = opt.until;
+          if (untilAt !== undefined && cmd === "ongoing") usage("--until only goes with pause");
+          if (untilAt !== undefined && (typeof untilAt !== "string" || !untilAt)) usage("--until wants a datetime (2026-11-18T09:00, Bogota time)");
+          // A return date stands in for the reason (the server writes "Hasta mié 18 nov 9:00").
+          const reason = untilAt !== undefined && opt.reason === undefined ? undefined : text(opt.reason, "--reason");
           return out(
-            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: cmd, by: "claude", reason: text(opt.reason, "--reason"), untilTicket: until, session }),
+            await call("POST", `/api/tickets/${enc(need(id, "<id>"))}/transition`, { event: cmd, by: "claude", reason, untilTicket: until, untilAt, session }),
           );
         }
         case "resume":
@@ -705,6 +723,15 @@ async function main() {
     case "sandbox":
       if (cmd !== "push") return usage(`unknown sandbox command "${cmd ?? ""}"`);
       return out(await call("POST", "/api/sandbox/push", { ref: need(id, "<ref>"), sha: typeof opt.sha === "string" ? opt.sha : undefined }));
+
+    case "remind": {
+      if (cmd === "list") return out(await call("GET", `/api/reminders${opt.all ? "?all=1" : ""}`));
+      if (cmd === "cancel" || cmd === "done") return out(await call("POST", `/api/reminders/${enc(need(id, "<id>"))}/${cmd}`));
+      const words = pos.slice(2);
+      if (!words.length) usage("remind wants <datetime> <text>");
+      if (opt.ref !== undefined && (typeof opt.ref !== "string" || !opt.ref)) usage("--ref wants one ticket ref (tN)");
+      return out(await call("POST", "/api/reminders", { when: need(cmd, "<datetime>"), text: words.join(" "), ticket: opt.ref }));
+    }
 
     case "lead":
       if (cmd !== "focus") return usage(`unknown lead command "${cmd ?? ""}"`);

@@ -1,5 +1,6 @@
 import { getDb, type Db } from "../db/sqlite";
 import { STATIONS, type Counts, type Station } from "../domain/types";
+import { publishChange } from "../live/bus";
 import { emitWake } from "../wake/wake";
 import { agentsRepo } from "./agents";
 import { annotationsRepo } from "./annotations";
@@ -18,6 +19,7 @@ import { pairingRepo } from "./pairing";
 import { pushRepo } from "./push";
 import { sourcesRepo } from "./sources";
 import { itemsRepo } from "./items";
+import { remindersRepo } from "./reminders";
 import { reviewsRepo } from "./reviews";
 import { salidasRepo } from "./salidas";
 import { sessionsRepo, sweeperSession } from "./sessions";
@@ -50,13 +52,17 @@ export function createRepos(db: Db) {
     ignored: ignoredRepo(db),
     pairing: pairingRepo(db),
     push: pushRepo(db),
+    reminders: remindersRepo(db),
     week: weekRepo(db),
     usage: usageRepo(db),
     counts: () => counts(db),
-    /** Time-driven transitions: salida undo windows, schedules, expiry; approval expiry. */
+    /** Time-driven transitions: salida undo windows, schedules, expiry; approval expiry; reminders and timed pauses that came due. */
     sweep: (now = new Date()) => {
       salidasRepo(db).sweep(now);
       approvalsRepo(db).expire(now);
+      const fired = remindersRepo(db).fireDue(now);
+      // Hoy, the ticket list and the push notifier look at these (the wake of a resumed ticket publishes on its own).
+      if (fired.notes.length || fired.resumed.length) publishChange({ entityType: "reminder", entityId: "", kind: "fired" });
     },
     /** "Barrer ahora": wake the sweeper session so it runs a full sweep now, ignoring backoff. */
     requestSweep: (sources: string[] = ["slack", "basecamp"], now = new Date()) => {

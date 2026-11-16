@@ -111,6 +111,8 @@ export interface HoyData {
   approvals: HoyApproval[];
   /** The ticket the lead's permission prompts are filed to (mesa lead focus), with when it lapses ("14:30"). */
   leadFocus: { ticketRef: string; title: string; until: string } | null;
+  /** Open standalone reminders (t191, mesa remind): pending with when they ring, fired until Andrés marks them done. `when` is "hoy 15:00", "mié 18 nov 9:00". */
+  reminders: { id: string; text: string; ticketRef: string | null; when: string; fired: boolean }[];
   health: Partial<Record<Source, SourceHealth>>;
   done: DoneRow[];
   doneToday: number;

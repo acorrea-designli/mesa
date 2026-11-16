@@ -241,6 +241,42 @@
 .hy-focus small {
   color: var(--mute);
 }
+/* Recordatorios (t191): one quiet line per reminder, between Permisos and the source tabs. */
+.hy-rem {
+  margin-bottom: 14px;
+}
+.hy-rem .grp {
+  height: 22px;
+  margin-bottom: 6px;
+}
+.hy-rem-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--raise);
+  font-size: 13px;
+}
+.hy-rem-row .when {
+  color: var(--mute);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.hy-rem-row .what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hy-rem-row .what a {
+  font-weight: 700;
+}
+.hy-rem-row.fired .when {
+  color: var(--ink);
+  font-weight: 700;
+}
 /* Permission cards are <ApprovalCard> (src/features/approvals, own CSS). */
 
 /* ---------- detail pane ---------- */

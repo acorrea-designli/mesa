@@ -23,12 +23,12 @@ export type TicketEvent =
   | { type: "andres_acted" } // Andrés pressed a button on the ticket (review action, salida, permission): his turn is taken
   | { type: "claim" } // a session takes the ticket and starts work
   | { type: "pause"; kind: PauseKind } // blocked on something else (paused) or going on with nobody active (ongoing)
-  | { type: "resume"; by: ResumeBy } // paused/ongoing ends: Claude -> working (no wake); Andrés or the dependency closing -> waiting_claude + ticket.resumed
+  | { type: "resume"; by: ResumeBy } // paused/ongoing ends: Claude -> working (no wake); Andrés, the dependency closing or the date reached -> waiting_claude + ticket.resumed
   | { type: "close"; by: "andres" | "claude" }
   | { type: "reopen"; by?: "andres" | "claude" }; // by defaults to Andrés (the UI); Claude's reopen is not his interaction
 
 export type PauseKind = "paused" | "ongoing";
-export type ResumeBy = "claude" | "andres" | "dependency";
+export type ResumeBy = "claude" | "andres" | "dependency" | "date";
 
 export const isPauseStatus = (s: TicketStatus): s is PauseKind => s === "paused" || s === "ongoing";
 

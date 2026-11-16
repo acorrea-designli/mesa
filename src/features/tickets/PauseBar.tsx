@@ -1,7 +1,8 @@
 "use client";
 // "En pausa" / "En proceso" controls in the thread header (t126). A paused or ongoing ticket shows its reason, the ticket
 // it waits for (a link) and "Reanudar"; any other open ticket offers "Pausar" (a reason and, optionally, a ticket ref).
-// "En proceso" is Claude's to set (mesa ticket ongoing): the UI only pauses and resumes.
+// "En proceso" is Claude's to set (mesa ticket ongoing): the UI only pauses and resumes. A pause may carry a return date
+// (t191): "Vuelve mié 18 nov 9:00", and at that time the ticket goes back to Claude by itself.
 import Link from "next/link";
 import { useState } from "react";
 import type { PickTicket } from "./read";
@@ -9,19 +10,28 @@ import type { TicketDetail } from "@/lib/domain/types";
 import { useToast } from "@/components/ui/interactive";
 import { ticketApi } from "./api";
 import { statusLabel } from "./bits";
+import { isAutoReason, returnsLabel } from "@/lib/domain/reminders";
 
 interface Props {
-  t: Pick<TicketDetail, "id" | "ref" | "status" | "pauseReason" | "pausedUntil">;
+  t: Pick<TicketDetail, "id" | "ref" | "status" | "pauseReason" | "pausedUntil" | "pausedUntilAt">;
   pick: PickTicket[];
   listening: boolean;
   onChanged: () => void;
 }
+
+/** "2026-11-18T09:00": now in the browser's local time, the picker's own format (its `min`). */
+const localNow = (): string => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+};
 
 export function PauseBar({ t, pick, listening, onChanged }: Props) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [until, setUntil] = useState("");
+  const [when, setWhen] = useState("");
   const [busy, setBusy] = useState(false);
   if (t.status === "closed") return null;
 
@@ -44,7 +54,13 @@ export function PauseBar({ t, pick, listening, onChanged }: Props) {
       <div className="tk-pause" role="group" aria-label={statusLabel(t.status)}>
         <span className="st">{statusLabel(t.status)}</span>
         <span className="tk-pause-why">
-          {t.pauseReason}
+          {isAutoReason(t.pauseReason, t.pausedUntilAt) ? null : t.pauseReason}
+          {t.pausedUntilAt ? (
+            <>
+              {isAutoReason(t.pauseReason, t.pausedUntilAt) ? "" : " · "}
+              <strong className="tk-pause-when">{returnsLabel(t.pausedUntilAt, new Date())}</strong>
+            </>
+          ) : null}
           {t.pausedUntil ? (
             <>
               {" "}
@@ -79,14 +95,22 @@ export function PauseBar({ t, pick, listening, onChanged }: Props) {
 
   const candidates = pick.filter((p) => p.status !== "closed" && p.ref !== t.ref);
   const submit = () => {
-    if (!reason.trim() || busy) return;
+    if ((!reason.trim() && !when) || busy) return;
+    // The picker is the browser's local time; the server takes the instant.
+    const at = when ? new Date(when) : null;
+    if (at && Number.isNaN(at.getTime())) return;
+    if (at && at.getTime() <= Date.now()) {
+      toast({ text: "La fecha ya pasó" });
+      return;
+    }
     void run(
-      () => ticketApi.pause(t.id, reason.trim(), until.trim()),
+      () => ticketApi.pause(t.id, reason.trim(), until.trim(), at?.toISOString()),
       "Ticket en pausa",
       () => {
         setOpen(false);
         setReason("");
         setUntil("");
+        setWhen("");
       },
     );
   };
@@ -98,7 +122,11 @@ export function PauseBar({ t, pick, listening, onChanged }: Props) {
         submit();
       }}
     >
-      <input className="tk-field" aria-label="Motivo de la pausa" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo (obligatorio)" autoFocus />
+      <input className="tk-field" aria-label="Motivo de la pausa" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={when ? "Motivo (opcional con fecha)" : "Motivo (obligatorio)"} autoFocus />
+      <label className="tk-pause-at">
+        <span>Vuelve el</span>
+        <input className="tk-field" type="datetime-local" min={localNow()} aria-label="Fecha en que vuelve a Claude" value={when} onChange={(e) => setWhen(e.target.value)} />
+      </label>
       <input
         className="tk-field"
         aria-label="Ticket del que depende"
@@ -115,7 +143,7 @@ export function PauseBar({ t, pick, listening, onChanged }: Props) {
         ))}
       </datalist>
       <span className="tk-pause-acts">
-        <button className="btn sm p" type="submit" disabled={busy || !reason.trim()}>
+        <button className="btn sm p" type="submit" disabled={busy || (!reason.trim() && !when)}>
           Pausar
         </button>
         <button className="btn sm" type="button" disabled={busy} onClick={() => setOpen(false)}>

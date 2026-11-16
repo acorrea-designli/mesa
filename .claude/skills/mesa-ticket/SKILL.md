@@ -185,17 +185,26 @@ wake `ticket.reopened { ref, repo, pr, oldHead, newHead }`; pushes by Andrés or
 A ticket that is neither Andrés's turn nor yours has its own state, so the board does not call it "Claude trabaja" or
 "Te espera":
 
-- **Waiting on another ticket, a third party or a date:** `MESA ticket pause <ref> --reason "<why>" [--until-ticket tN]`
-  ("En pausa"). The reason is required; put a date in it ("espera al cliente hasta el viernes"). With `--until-ticket`
+- **Waiting on another ticket, a third party or a date:** `MESA ticket pause <ref> --reason "<why>" [--until-ticket tN]
+  [--until <datetime>]` ("En pausa"). The reason is required unless `--until` is given. With `--until-ticket`
   (an open ticket, not this one) it comes back by itself the moment that ticket closes, by any path: the ticket goes to
-  `waiting_claude` and its owner session gets `ticket.resumed`.
+  `waiting_claude` and its owner session gets `ticket.resumed`. With `--until <datetime>` (t191; `2026-11-18T09:00`
+  is Bogota time, a bare date is 09:00, a full ISO instant keeps its zone; it must be in the future) it comes back by
+  itself at that time, even if the server restarts meanwhile (it is stored in the database): `ticket.resumed` with
+  `by: "date"`, a push "Vuelve · tN" with the ticket's title, and the ticket and its card read "Vuelve mié 18 nov
+  9:00". Use it for "esperamos al cliente hasta el miércoles" instead of a date inside the reason; with both options
+  whichever comes first resumes it.
+- **A reminder with no ticket:** `MESA remind <datetime> <text> [--ref tN]` (t191). At that time Andrés gets a push with
+  the text and it shows in Hoy under "Recordatorios" until he presses "Hecho". `MESA remind list [--all]`,
+  `MESA remind cancel <id>` (still pending) and `MESA remind done <id>`. It is Andrés's reminder: never use it to wake
+  yourself (a ticket you wait on goes in `pause --until`).
 - **Going on with nobody active** (CI running, a third party working): `MESA ticket ongoing <ref> --reason "<what>"`
   ("En proceso"). No dependency, no auto-resume.
 - **Back to work yourself:** `MESA ticket resume <ref>` (to `working`, no wake). A claim, your own question or plan, or
   Andrés replying also end it. An informational `ticket reply` does not.
 - Pausing never withdraws a question, plan step or salida: whatever Andrés owes still reads "Te espera".
-- **The lead relays `ticket.resumed`** (`RESUMED <ref> by <andres|dependency>`) to the owner and respawns one if none
-  is live; the owner boots from `MESA ticket context <ref>` (`ticket.status`, `pauseReason`, `pausedUntil`) and continues.
+- **The lead relays `ticket.resumed`** (`RESUMED <ref> by <andres|dependency|date>`) to the owner and respawns one if none
+  is live; the owner boots from `MESA ticket context <ref>` (`ticket.status`, `pauseReason`, `pausedUntil`, `pausedUntilAt`) and continues.
   Andrés can also pause and resume from the ticket header; "En proceso" is only set from here.
 
 ## @ refs and files

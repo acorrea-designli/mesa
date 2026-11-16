@@ -2,6 +2,7 @@
 import { mapHealth } from "@/components/shell/health";
 import { nextMeeting } from "@/lib/domain/calendar";
 import type { Source } from "@/lib/domain/types";
+import { dueLabel } from "@/lib/domain/reminders";
 import { identity } from "@/lib/config/identity";
 import { calendarConfigState } from "@/lib/integrations/calendar-env";
 import { healthContext } from "@/lib/integrations/health";
@@ -91,6 +92,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
   const approvals = r.approvals.list({ status: "pending", hoy: true }, now).map((a) => ({ ...a, createdLabel: clock(a.createdAt) }));
 
   const leadFocus = r.focus.current(now);
+  const reminders = r.reminders.list().map((x) => ({ id: x.id, text: x.text, ticketRef: x.ticketRef, when: dueLabel(x.dueAt, now), fired: x.state === "fired" }));
 
   const done = all
     .filter((i) => i.station === "done" && isToday(i.updatedAt, now))
@@ -131,6 +133,7 @@ export function loadHoy(now: Date = new Date()): HoyData {
     band: items.map((i) => ({ id: i.id, source: i.source, station: i.station, taskId: i.taskId })),
     approvals,
     leadFocus: leadFocus ? { ticketRef: leadFocus.ticketRef, title: leadFocus.title, until: clock(new Date(leadFocus.expiresAt)) } : null,
+    reminders,
     health,
     done,
     doneToday: counts.itemsDoneToday,
