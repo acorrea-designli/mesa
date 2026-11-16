@@ -1,0 +1,55 @@
+// Names the synchronous calls that can hold the event loop (t206). node:sqlite statements and process spawns run on the
+// loop thread and block it for as long as the OS makes them wait (a lock held by another connection up to busy_timeout,
+// an fsync on a loaded disk, CreateProcess behind an antivirus). Each such call is wrapped in `syncMark`, which
+//  - logs `[mesa] slow sync <kind> <ms>: <detail>` when it took SLOW_SYNC_MS or more, and
+//  - publishes what the loop thread is inside right now in a SharedArrayBuffer, so the stall probe (a worker thread, see
+//    startStallProbe) can say "main thread unresponsive for 12 s, in sqlite BEGIN IMMEDIATE" while the loop is still stuck.
+// The state lives on globalThis: instrumentation and the route handlers are separate bundles in one process.
+
+export const SLOW_SYNC_MS = 250;
+export const KINDS = ["", "sqlite", "spawn"] as const;
+export type SyncKind = (typeof KINDS)[number];
+
+/** Layout of the shared buffer: [0] mark start (epoch ms, 0 = none), [1] heartbeat (epoch ms), [2] kind index; then DETAIL_BYTES. */
+export const DETAIL_OFFSET = 3 * 8;
+export const DETAIL_BYTES = 120;
+export const MARK_BYTES = DETAIL_OFFSET + DETAIL_BYTES;
+
+interface MarkState {
+  sab: SharedArrayBuffer;
+  nums: Float64Array;
+  detail: Uint8Array;
+  depth: number;
+}
+const gm = globalThis as unknown as { __mesaSyncMark?: MarkState };
+
+export function markState(): MarkState {
+  if (!gm.__mesaSyncMark) {
+    const sab = new SharedArrayBuffer(MARK_BYTES);
+    gm.__mesaSyncMark = { sab, nums: new Float64Array(sab, 0, 3), detail: new Uint8Array(sab, DETAIL_OFFSET, DETAIL_BYTES), depth: 0 };
+  }
+  return gm.__mesaSyncMark;
+}
+
+const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/** Run `fn` as a tracked synchronous call. Nested calls keep the outermost mark. */
+export function syncMark<T>(kind: Exclude<SyncKind, "">, detail: string, fn: () => T): T {
+  const m = markState();
+  const t0 = Date.now();
+  if (m.depth++ === 0) {
+    const d = oneLine(detail);
+    const n = Math.min(d.length, DETAIL_BYTES);
+    for (let i = 0; i < n; i++) m.detail[i] = d.charCodeAt(i) & 0x7f;
+    if (n < DETAIL_BYTES) m.detail[n] = 0;
+    m.nums[2] = KINDS.indexOf(kind);
+    m.nums[0] = t0;
+  }
+  try {
+    return fn();
+  } finally {
+    if (--m.depth === 0) m.nums[0] = 0;
+    const ms = Date.now() - t0;
+    if (ms >= SLOW_SYNC_MS) console.warn(`[mesa] slow sync ${kind} ${ms}ms: ${oneLine(detail).slice(0, 160)}`);
+  }
+}
