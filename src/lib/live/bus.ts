@@ -52,6 +52,7 @@ const ENTITY: Record<string, string> = {
   github: "github",
   "ignored-projects": "ignored_project",
   questions: "question",
+  reminders: "reminder",
 };
 
 // Plumbing that changes nothing a screen shows.

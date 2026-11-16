@@ -2,6 +2,7 @@
 // card chips and wait tags, caps with "+N más", and the GitHub Project sync summary.
 import type { StatusTone } from "@/components/ui/primitives";
 import { chipOfMeta, type FilesChip } from "@/lib/domain/files";
+import { returnsLabel } from "@/lib/domain/reminders";
 import { ignoreTarget, type IgnoreTarget } from "../ignore/model";
 import { SOURCES, STATIONS, type Item, type Source, type Station, type SyncState, type Task, type TaskOwner, type TicketStatus, type WaitOn } from "@/lib/domain/types";
 
@@ -64,12 +65,17 @@ const TICKET_STATE: Record<TicketStatus, string> = {
   ongoing: "En proceso",
 };
 
-/** The owner chip: the live owner agent and the ticket's state, or "Claude · por asignar". A paused or ongoing ticket is nobody's turn, so it is never "por asignar": "En pausa · hasta t125", "En pausa", "En proceso" (with the agent in front when there is one). */
-export function ownerChip(o: TaskOwner | null | undefined): OwnerChip | null {
+/** The owner chip: the live owner agent and the ticket's state, or "Claude · por asignar". A paused or ongoing ticket is nobody's turn, so it is never "por asignar": "En pausa · hasta t125", "En pausa · Vuelve mié 18 nov 9:00" (a return date wins over the ticket, t191), "En pausa", "En proceso" (with the agent in front when there is one). */
+export function ownerChip(o: TaskOwner | null | undefined, now = new Date()): OwnerChip | null {
   if (!o) return null;
   const idle = o.ticketStatus === "paused" || o.ticketStatus === "ongoing";
   const unassigned = !o.agent && o.ticketStatus !== "closed" && !idle;
-  const state = o.ticketStatus === "paused" && o.pausedUntil ? `${TICKET_STATE.paused} · hasta ${o.pausedUntil}` : TICKET_STATE[o.ticketStatus];
+  const state =
+    o.ticketStatus === "paused" && o.pausedUntilAt
+      ? `${TICKET_STATE.paused} · ${returnsLabel(o.pausedUntilAt, now)}`
+      : o.ticketStatus === "paused" && o.pausedUntil
+        ? `${TICKET_STATE.paused} · hasta ${o.pausedUntil}`
+        : TICKET_STATE[o.ticketStatus];
   const label = unassigned ? "Claude · por asignar" : idle && !o.agent ? state : `${o.agent ?? "Claude"} · ${state}`;
   return { ticketRef: o.ticketRef, label, href: `/tickets?t=${encodeURIComponent(o.ticketRef)}`, unassigned, closed: o.ticketStatus === "closed" };
 }

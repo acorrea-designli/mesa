@@ -1758,6 +1758,24 @@
   flex: 1 1 200px;
   min-width: 0;
 }
+.tk-pause-when {
+  font-weight: 700;
+  color: var(--ink);
+}
+.tk-pause-at {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.tk-pause-at span {
+  color: var(--mute);
+  white-space: nowrap;
+}
+.tk-pause-at .tk-field {
+  flex: 1 1 auto;
+}
 .tk-pause-acts {
   display: inline-flex;
   gap: 6px;

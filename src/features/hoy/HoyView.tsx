@@ -19,6 +19,7 @@ import { ApprovalCard } from "@/features/approvals/ApprovalCard";
 import { SalidaApproval } from "@/features/salidas/SalidaApproval";
 import { clock } from "./format";
 import { LeadFocus } from "./LeadFocus";
+import { Reminders } from "./Reminders";
 import { NextStrip } from "@/features/calendar/NextStrip";
 import { useLive } from "./useLive";
 import { useSkip } from "./useSkip";
@@ -416,6 +417,8 @@ export function HoyView({ data }: { data: HoyData }) {
               </fieldset>
             </section>
           ) : null}
+
+          {data.reminders.length ? <Reminders rows={data.reminders} disabled={live.offline} /> : null}
 
           <div className="hy-tabs">
             <Tabs items={tabs} value={source} onChange={goSource} label="Fuentes" trailing={

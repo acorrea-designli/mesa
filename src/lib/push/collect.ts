@@ -6,6 +6,7 @@ import {
   approvalWaiting,
   itemWaiting,
   meetingWaiting,
+  reminderWaiting,
   salidaKey,
   salidaWaiting,
   ticketKey,
@@ -23,7 +24,7 @@ const NO_BODY = "";
  * The whole waiting set. Costlier lookups (the open review, the own-version check) only run for keys not in `seen`;
  * pass `seen = null` for a baseline read, which needs none.
  */
-export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals" | "reviews" | "items" | "calendar">, seen: Seen | null, now = new Date()): Waiting[] {
+export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals" | "reviews" | "items" | "calendar" | "reminders">, seen: Seen | null, now = new Date()): Waiting[] {
   const fresh = (key: string) => seen !== null && !(key in seen);
   const out: Waiting[] = [];
 
@@ -58,5 +59,8 @@ export function collectWaiting(r: Pick<Repos, "tickets" | "salidas" | "approvals
   for (const e of remindersDue(r.calendar.list({ from: now, to: new Date(now.getTime() + 11 * 60_000) }), now)) {
     out.push(meetingWaiting(e, now));
   }
+
+  // Reminders (t191): the text travels like a meeting's title (the second exception); a fired one is news once.
+  for (const x of r.reminders.recentlyFired(now)) out.push({ ...reminderWaiting(x), body: x.text });
   return out;
 }

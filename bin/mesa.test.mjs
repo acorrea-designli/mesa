@@ -643,6 +643,40 @@ describe("mesa CLI", () => {
     expect(requests).toEqual([]);
   });
 
+  it("ticket pause --until sends the date and needs no reason; remind creates, lists, cancels and marks done (t191)", async () => {
+    const h = await mesa(["help"]);
+    for (const c of ["--until <datetime>", "mesa remind <datetime> <text>", "mesa remind list", "mesa remind cancel", "mesa remind done"]) expect(h.stdout).toContain(c);
+
+    expect((await mesa(["ticket", "pause", "t188", "--until", "2026-11-18T09:00"])).code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/tickets/t188/transition", body: { event: "pause", by: "claude", untilAt: "2026-11-18T09:00" } });
+    expect(requests[0].body.reason).toBeUndefined();
+    requests = [];
+    await mesa(["ticket", "pause", "t188", "--reason", "Espera a Matt", "--until", "2026-11-18", "--until-ticket", "t125"]);
+    expect(requests[0].body).toMatchObject({ event: "pause", reason: "Espera a Matt", untilAt: "2026-11-18", untilTicket: "t125" });
+    requests = [];
+    expect((await mesa(["ticket", "ongoing", "t90", "--reason", "CI", "--until", "2026-11-18"])).code).toBe(2);
+    expect((await mesa(["ticket", "pause", "t188", "--until"])).code).toBe(2);
+    expect(requests).toEqual([]);
+
+    expect((await mesa(["remind", "2026-11-18T09:00", "Llamar", "a", "Matt", "--ref", "t188"])).code).toBe(0);
+    expect(requests[0]).toMatchObject({ method: "POST", path: "/api/reminders", body: { when: "2026-11-18T09:00", text: "Llamar a Matt", ticket: "t188" } });
+    requests = [];
+    await mesa(["remind", "2026-11-18", "Sin ticket"]);
+    expect(requests[0].body).toMatchObject({ when: "2026-11-18", text: "Sin ticket" });
+    expect(requests[0].body.ticket).toBeUndefined();
+    requests = [];
+    await mesa(["remind", "list"]);
+    await mesa(["remind", "list", "--all"]);
+    await mesa(["remind", "cancel", "rm_1"]);
+    await mesa(["remind", "done", "rm_2"]);
+    expect(requests.map((q) => `${q.method} ${q.path}${q.query.all ? "?all=" + q.query.all : ""}`)).toEqual(["GET /api/reminders", "GET /api/reminders?all=1", "POST /api/reminders/rm_1/cancel", "POST /api/reminders/rm_2/done"]);
+    requests = [];
+    expect((await mesa(["remind"])).code).toBe(2);
+    expect((await mesa(["remind", "2026-11-18"])).code).toBe(2);
+    expect((await mesa(["remind", "cancel"])).code).toBe(2);
+    expect(requests).toEqual([]);
+  });
+
   it("salida withdraw posts the withdraw event with its reason; the reason is required", async () => {
     const r = await mesa(["salida", "withdraw", "sa_1", "--reason", "stale leftover of mesa#36"]);
     expect(r.code).toBe(0);

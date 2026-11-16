@@ -19,12 +19,15 @@
 //                          one kind that ignores the quiet rule and the baseline: a meeting in ten minutes is news even
 //                          while a Mesa tab is focused, and it carries the meeting's title (the t33 "no titles" rule is
 //                          kept for every other entry)
+//   reminder:<id>          a fired reminder (t191): a standalone `mesa remind` text or a timed pause that ended ("Vuelve · t188").
+//                          It is about the clock like a meeting: it ignores the quiet rule and the baseline, and it carries
+//                          text Andrés (or Claude, for him) wrote himself, so it is the second exception to "no titles"
 import { clockOf, meetingKey } from "@/lib/domain/calendar";
-import { SOURCE_LABEL, SOURCES, type Approval, type CalendarEvent, type Item, type Salida, type Source, type Ticket } from "@/lib/domain/types";
+import { SOURCE_LABEL, SOURCES, type Approval, type CalendarEvent, type Item, type Reminder, type Salida, type Source, type Ticket } from "@/lib/domain/types";
 import { localDay } from "@/lib/domain/week";
 import { destShort } from "@/features/salidas/model";
 
-export type WaitingKind = "ticket" | "salida" | "approval" | "item" | "meeting";
+export type WaitingKind = "ticket" | "salida" | "approval" | "item" | "meeting" | "reminder";
 
 export interface Waiting {
   key: string;
@@ -41,6 +44,8 @@ export interface Waiting {
   source?: Source;
   /** A meeting reminder: shown even while Mesa is being looked at, and even on a baseline scan. */
   meeting?: true;
+  /** A fired reminder: same urgency as a meeting, its body is the reminder text. */
+  reminder?: true;
 }
 
 export interface Shown {
@@ -54,6 +59,8 @@ export interface Shown {
   source?: Source;
   /** A meeting reminder: its body is the meeting's title (the one place a title travels), its url the Meet link or the event in Mesa. */
   meeting?: true;
+  /** A fired reminder: its body is the reminder's own text (a timed pause: the ticket's title). */
+  reminder?: true;
 }
 
 /** key -> last time it was seen waiting (epoch ms). */
@@ -169,6 +176,21 @@ export function meetingWaiting(e: Pick<CalendarEvent, "id" | "title" | "startsAt
   };
 }
 
+export const reminderKey = (r: Pick<Reminder, "id">) => `reminder:${r.id}`;
+
+/** A fired reminder. A timed pause that ended reads "Vuelve · t188" with the ticket's title; a standalone one "Recordatorio" with its text. A tap opens the ticket, or Hoy. */
+export function reminderWaiting(r: Pick<Reminder, "id" | "kind" | "text" | "ticketRef">): Waiting {
+  const resume = r.kind === "resume";
+  return {
+    key: reminderKey(r),
+    kind: "reminder",
+    title: resume ? `Vuelve · ${r.ticketRef ?? "ticket"}` : r.ticketRef ? `Recordatorio · ${r.ticketRef}` : "Recordatorio",
+    body: r.text,
+    url: r.ticketRef ? `/tickets?t=${encodeURIComponent(r.ticketRef)}` : "/",
+    reminder: true,
+  };
+}
+
 // ---------- decision ----------
 
 /** Keys in `waiting` that `seen` does not know yet (what the collector enriches before deciding). */
@@ -230,10 +252,10 @@ export function decide({ seen, waiting, now, baseline = false, quiet = false, sa
   for (const w of live) {
     const isNew = !(w.key in seen);
     next[w.key] = now; // still waiting: the key stays fresh
-    // A meeting reminder ignores the quiet rule and the baseline (it is about the clock, not about what is new).
-    const urgent = w.meeting === true;
+    // A meeting reminder or a fired reminder ignores the quiet rule and the baseline (it is about the clock, not about what is new).
+    const urgent = w.meeting === true || w.reminder === true;
     if (isNew && (urgent || (!baseline && !quiet && !w.own && !(hoyBaseline && w.kind === "item")))) {
-      show.push({ key: w.key, title: prefix + w.title, body: w.body, url: w.url, ...(w.kind === "item" ? { hoy: true as const, source: w.source } : {}), ...(urgent ? { meeting: true as const } : {}) });
+      show.push({ key: w.key, title: prefix + w.title, body: w.body, url: w.url, ...(w.kind === "item" ? { hoy: true as const, source: w.source } : {}), ...(w.meeting ? { meeting: true as const } : {}), ...(w.reminder ? { reminder: true as const } : {}) });
     }
   }
 

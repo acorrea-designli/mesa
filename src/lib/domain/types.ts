@@ -103,6 +103,8 @@ export interface TaskOwner {
   ticketStatus: TicketStatus;
   /** Ref of the ticket a paused ticket waits for ("t125"), for the chip "En pausa · hasta t125". */
   pausedUntil?: string | null;
+  /** The instant a paused ticket comes back by itself, for the chip "En pausa · Vuelve mié 9:00" (t191). */
+  pausedUntilAt?: string | null;
   /** Live owner agent ("tl-t21"); null until the lead claims the ticket and spawns one. */
   agent: string | null;
   role: string | null;
@@ -298,6 +300,8 @@ export interface Ticket {
   pausedUntilTicketId: string | null;
   /** When the ticket entered paused/ongoing. */
   pausedAt: string | null;
+  /** The instant a paused ticket comes back to Claude by itself (ISO, t191); null when the pause has no date. */
+  pausedUntilAt: string | null;
 }
 
 export interface TicketDetail extends Ticket {
@@ -310,6 +314,26 @@ export interface TicketDetail extends Ticket {
   refs: TicketRef[];
   actions: PlannedAction[];
   engram: EngramLink[];
+}
+
+// ---------- reminders (t191) ----------
+
+export type ReminderKind = "note" | "resume";
+export type ReminderState = "pending" | "fired" | "done" | "cancelled";
+
+/** A standalone reminder (note) or the record of a timed pause that ended (resume); migration 1140. */
+export interface Reminder {
+  id: string;
+  kind: ReminderKind;
+  text: string;
+  /** ISO instant it is due. */
+  dueAt: string;
+  /** The ticket it points at ("t188"), if any. */
+  ticketRef: string | null;
+  state: ReminderState;
+  createdAt: string;
+  firedAt: string | null;
+  closedAt: string | null;
 }
 
 // ---------- salidas ----------
@@ -535,7 +559,7 @@ export type WakeKind =
   | "ticket.checklist" // Andrés ticked or unticked a checklist step (never Claude's own mark): { ref, ticketRef, messageId, stepId, n, done, doneCount, total, allDone }
   | "ticket.closed"
   | "ticket.reopened"
-  | "ticket.resumed" // a paused/ongoing ticket came back to Claude: { ref, ticketRef, by: "andres"|"dependency", dependencyRef? }; the lead respawns the owner
+  | "ticket.resumed" // a paused/ongoing ticket came back to Claude: { ref, ticketRef, by: "andres"|"dependency"|"date", dependencyRef?, until? }; the lead respawns the owner
   | "ticket.permission_requested" // "Pídeme permiso": { ref, ticketRef, messageId }; the agent files the approval card (docs/TEAM.md section 6)
   | "ticket.document_approved" // Andrés pressed "Aprobar" on a version of a PDF in the review view: { ref, ticketRef, attachmentId, version }; relay ANSWER <ref> document_approved <attachmentId> <version> to the owner
   | "ticket.annotations" // Andrés sent PDF marks to Claude ("Enviar a Claude (n)"): { ref, ticketRef, attachmentId, annotationIds, count }; read them with mesa ticket annotations, answer with mesa ticket annotation-reply

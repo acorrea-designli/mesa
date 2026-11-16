@@ -117,7 +117,7 @@ self.addEventListener("push", (event) => {
     data = {};
   }
   const title = typeof data.title === "string" && data.title ? data.title.slice(0, 120) : "Mesa";
-  // Only a meeting reminder (a Meet link or its own title) may stray from the fixed body; others never carry `body`.
+  // Only a meeting reminder (a Meet link or its own title) or a fired reminder (t191: its text) may stray from the fixed body; others never carry `body`.
   const external = meetUrl(data.url);
   const meetingBody = typeof data.body === "string" && data.body ? data.body.slice(0, 140) : null;
   const options = { body: meetingBody || PUSH_BODY, data: { url: external || safePath(data.url) } };
