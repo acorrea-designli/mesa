@@ -58,6 +58,42 @@ describe("addAttachment --version-of", () => {
   });
 });
 
+describe("addAttachment auto-version by filename (t205)", () => {
+  it("stores a PDF with the filename of a PDF already on the ticket as its next version", () => {
+    const v1 = add("informe.pdf", 1);
+    const v2 = add("informe.pdf", 2);
+    const v3 = add("informe.pdf", 3);
+    expect(v2).toMatchObject({ version: 2, versionOf: v1.id });
+    expect(v3).toMatchObject({ version: 3, versionOf: v1.id });
+    expect(r.annotations.documents()).toHaveLength(1);
+  });
+
+  it("joins the document whose any version has that filename, and leaves other filenames alone", () => {
+    const v1 = add("informe.pdf", 1);
+    add("informe-v2.pdf", 2, v1.id);
+    const again = add("informe-v2.pdf", 3);
+    const other = add("propuesta.pdf", 4);
+    expect(again).toMatchObject({ version: 3, versionOf: v1.id });
+    expect(other).toMatchObject({ version: 1, versionOf: null });
+  });
+
+  it("does not link across tickets or for files that are not PDFs", () => {
+    const other = r.tickets.create({ direction: "andres_asks", title: "Otro", body: "x", ownerSession: "lead" }, T0);
+    add("informe.pdf", 1, undefined, other.id);
+    expect(add("informe.pdf", 2)).toMatchObject({ version: 1, versionOf: null });
+    add("foto.png", 3, undefined, tid, "image/png");
+    expect(add("foto.png", 4, undefined, tid, "image/png")).toMatchObject({ version: 1, versionOf: null });
+  });
+
+  it("an explicit versionOf wins over the filename match", () => {
+    const a = add("a.pdf", 1);
+    const b = add("b.pdf", 2);
+    const v = add("a.pdf", 3, b.id);
+    expect(v).toMatchObject({ version: 2, versionOf: b.id });
+    expect(a).toMatchObject({ version: 1 });
+  });
+});
+
 describe("marks stay on their version", () => {
   it("each mark carries the version it was made on and lists per version", () => {
     const v1 = add("informe.pdf", 1);

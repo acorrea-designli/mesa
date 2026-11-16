@@ -78,7 +78,7 @@ Tickets
                   (/tickets/<ref>/pdf/<attId>). --version-of <attId> stores the file as the NEXT VERSION (v2, v3...) of that attachment's
                   document instead of a new unrelated one (any version's id works, 404 if it is not on this ticket, 400 if only one of the file and the document is a PDF): Documentos shows
                   one entry with its history, "Revisar" opens the latest and every mark stays on the version it was made on. Use it
-                  whenever you re-attach a corrected file. Without it nothing changes (a new v1 document)
+                  whenever you re-attach a corrected file. Without it, a PDF whose filename matches a PDF already on the ticket is stored as the next version of that document anyway; any other file is a new v1 document
   mesa ticket annotations <ref> [--att <attId>] [--open]   Andrés's marks on the ticket's PDFs, in reading order, as JSON:
                   [{id, attachmentId, page, kind highlight|note|rect|ellipse|arrow|comment, rect {x,y,w,h} in page units (PDF points,
                   top left origin), geometry, quote, body, author, state open|resolved, replies [{author, body, createdAt}]}]
