@@ -578,7 +578,7 @@ export function sandboxBlock(tool, ti) {
     return `${NADA} ${tool} writes to Google Calendar. On salida.released, report the event as simulated ("mesa salida sent <id> --simulated") and never call the MCP tool; reads (list, free time) are fine.`;
   }
   if (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool)) {
-    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`; a Slack salida in mode draft: \`mesa salida drafted <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
+    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`; a Slack salida or a Basecamp post in mode draft: \`mesa salida drafted <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
   }
   if (tool !== "Bash" && tool !== "PowerShell") return null;
   const cmd = String(ti.command ?? "");
@@ -599,7 +599,7 @@ export function sandboxBlock(tool, ti) {
     return `${NADA} Nothing was really sent, so report it as \`mesa salida sent <id> --simulated\` (no --permalink); Mesa records sandbox://<source>/<id>.`;
   }
   if (/\bmesa\b[^\n|;&]*\bsalida\s+drafted\b/.test(c) && !/--simulated\b/.test(c)) {
-    return `${NADA} No Slack draft was really created, so report it as \`mesa salida drafted <id> --simulated\`; Mesa records sandbox://slack/<id>.`;
+    return `${NADA} No draft was really created (Slack or Basecamp), so report it as \`mesa salida drafted <id> --simulated\`; Mesa records sandbox://<source>/<id>.`;
   }
   return null;
 }

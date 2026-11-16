@@ -11,11 +11,13 @@ export interface RevealCommand {
 }
 
 /** The command that shows `file` selected in its folder; pure, so it is tested for every platform. */
-export function revealCommand(platform: NodeJS.Platform, file: string): RevealCommand {
+export function revealCommand(platform: NodeJS.Platform, file: string, env: Record<string, string | undefined> = process.env): RevealCommand {
   if (platform === "win32") {
     // A Windows file name cannot hold a double quote, so a quote here means a crafted path: never build a command from it.
     if (file.includes('"')) throw new Error("refusing a path with a double quote");
-    return { cmd: "explorer.exe", args: [`/select,"${path.win32.normalize(file)}"`], verbatim: true };
+    // The full path, so a planted explorer.exe in the working directory or on PATH is never the one launched.
+    const explorer = path.win32.join(env.SystemRoot ?? env.windir ?? "C:\\Windows", "explorer.exe");
+    return { cmd: explorer, args: [`/select,"${path.win32.normalize(file)}"`], verbatim: true };
   }
   if (platform === "darwin") return { cmd: "open", args: ["-R", file], verbatim: false };
   return { cmd: "xdg-open", args: [path.dirname(file)], verbatim: false };

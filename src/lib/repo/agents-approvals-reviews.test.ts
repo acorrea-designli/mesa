@@ -389,6 +389,29 @@ describe("source outages", () => {
     expect(rel.at(-1)?.payload).toMatchObject({ recheckThread: true, version: 1 });
   });
 
+  it("recovery resumes the salidas held for the outage, not the ones the lead held with a reason (t87)", () => {
+    const post = { kind: "basecamp_message" as const, project: "DRE", recordingId: "55", subject: "AWS cost report", postAs: "Andrés" };
+    const mk = () => r.salidas.create({ source: "basecamp", destination: post, body: "ok", ownerSession: "lead" }, T0);
+    const release = (id: string) => {
+      r.salidas.transition(id, { type: "approve", version: 1, mode: "send" }, at(1));
+      r.salidas.sweep(at(UNDO_WINDOW_MS * 2));
+    };
+    const outage = mk();
+    const lead = mk();
+    release(outage.id);
+    release(lead.id);
+    r.salidas.transition(outage.id, { type: "hold", reason: "basecamp unreachable", outage: true }, at(UNDO_WINDOW_MS * 2 + 1));
+    r.salidas.transition(lead.id, { type: "hold", reason: "no puedo subir el PDF" }, at(UNDO_WINDOW_MS * 2 + 1));
+    expect(r.salidas.get(lead.id)).toMatchObject({ status: "queued_until_back", holdKind: "lead" });
+    r.sources.set("basecamp", { health: "down", note: "x" }, at(UNDO_WINDOW_MS * 3));
+    const { resumed } = r.sources.set("basecamp", { health: "ok" }, at(UNDO_WINDOW_MS * 4));
+    expect(resumed).toEqual([outage.id]);
+    expect(r.salidas.get(outage.id)).toMatchObject({ status: "sending", holdKind: null });
+    expect(r.salidas.get(lead.id)).toMatchObject({ status: "queued_until_back", holdKind: "lead", error: "no puedo subir el PDF" });
+    // only Andrés moves it
+    expect(r.salidas.transition(lead.id, { type: "unqueue" }, at(UNDO_WINDOW_MS * 5))).toMatchObject({ status: "pending", holdKind: null });
+  });
+
   it("keeps sweep watermarks per source", () => {
     expect(r.sources.get("basecamp")).toMatchObject({ health: "ok", watermark: null, cadenceS: 60, errorCount: 0, lastError: null });
     r.sources.set("basecamp", { watermark: "2026-11-03T09:59:00Z", lastChecked: T0.toISOString(), cadenceS: 120, backoffUntil: at(120_000).toISOString() }, T0);

@@ -104,7 +104,8 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
                                                    status draft_created, closed by his "Ya lo envié"
   mesa salida drafted <id> --simulated             sandbox only: no draft was created; Mesa records sandbox://<source>/<id>
   mesa salida failed <id> --error E
-  mesa salida hold <id> --reason R               released but the source is down (waits as "Aprobar al volver")
+  mesa salida hold <id> --reason R [--outage]    released but not sent. --outage = the source is down (waits as "Aprobar al volver" and resumes
+                                                   when the source is ok again); without it a lead hold: waits for Andrés ("En espera", «Volver a pendiente»), never auto-resumed
   mesa salida bounce <id> --reason R             the thread changed: back to Andrés for a new approval
   mesa salida deleted <id> | restored <id>
   mesa salida withdraw <id> --reason R           (lead) take a stale draft/pending salida back: final status "withdrawn", never sent,
@@ -649,6 +650,7 @@ async function main() {
         case "failed":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "failed", error: text(opt.error, "--error") }));
         case "hold":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "hold", reason: text(opt.reason, "--reason"), ...(opt.outage !== undefined ? { outage: true } : {}) }));
         case "bounce":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd, reason: text(opt.reason, "--reason") }));
         case "withdraw":

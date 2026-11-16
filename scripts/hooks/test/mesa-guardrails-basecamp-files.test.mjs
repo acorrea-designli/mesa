@@ -397,6 +397,7 @@ test("G4/G11: a teammate never creates the draft, and the sandbox reports it as 
   const sandboxed = await check({ ...lead, tool_name: "mcp__basecamp__create_message", tool_input: { board_id: 55, subject: "Cost report", content: TEXT, ...DRAFTED } }, { fetchImpl: unreachable, sandbox: true });
   assert.equal(sandboxed?.rule, "G11");
   assert.match(sandboxed.reason, /drafted <id> --simulated/);
+  assert.match(sandboxed.reason, /Slack salida or a Basecamp post in mode draft/);
 });
 
 test("G10: nobody opens a salida file's folder through the raw API (it launches Explorer on Andrés's PC)", async () => {

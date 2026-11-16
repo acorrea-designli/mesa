@@ -94,8 +94,15 @@ describe("POST /api/salidas/:id/files/:index/folder", () => {
 
 describe("revealCommand", () => {
   it("Windows: Explorer with the file selected, the command line passed verbatim (spaces survive)", () => {
-    expect(revealCommand("win32", "C:\\tmp\\DRE AWS cost report.pdf")).toEqual({ cmd: "explorer.exe", args: ['/select,"C:\\tmp\\DRE AWS cost report.pdf"'], verbatim: true });
-    expect(revealCommand("win32", "C:/tmp/a b.pdf").args[0]).toBe('/select,"C:\\tmp\\a b.pdf"');
+    const env = { SystemRoot: "C:\\Windows" };
+    expect(revealCommand("win32", "C:\\tmp\\DRE AWS cost report.pdf", env)).toEqual({ cmd: "C:\\Windows\\explorer.exe", args: ['/select,"C:\\tmp\\DRE AWS cost report.pdf"'], verbatim: true });
+    expect(revealCommand("win32", "C:/tmp/a b.pdf", env).args[0]).toBe('/select,"C:\\tmp\\a b.pdf"');
+  });
+
+  it("Windows launches Explorer by its full path, never a bare name that PATH or the working directory could shadow", () => {
+    expect(revealCommand("win32", "C:\\tmp\\a.pdf", { SystemRoot: "D:\\WINNT" }).cmd).toBe("D:\\WINNT\\explorer.exe");
+    expect(revealCommand("win32", "C:\\tmp\\a.pdf", { windir: "E:\\Win" }).cmd).toBe("E:\\Win\\explorer.exe");
+    expect(revealCommand("win32", "C:\\tmp\\a.pdf", {}).cmd).toBe("C:\\Windows\\explorer.exe");
   });
 
   it("refuses a Windows path with a double quote instead of building a command from it", () => {

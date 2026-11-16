@@ -364,6 +364,9 @@ export type SalidaSource = "slack" | "basecamp" | "github" | "calendar";
  */
 export type SalidaSendMode = "draft" | "send";
 
+/** Why a salida is queued_until_back: its source is down ("source", the source coming back resumes it) or the lead held it with a reason ("lead", only Andrés moves it). */
+export type SalidaHoldKind = "source" | "lead";
+
 /** The destinations that carry a send mode: Slack messages and Basecamp message-board posts. */
 export const hasSendMode = (d: Pick<Destination, "kind">): boolean =>
   d.kind === "slack_thread" || d.kind === "slack_channel" || d.kind === "basecamp_message";
@@ -477,6 +480,8 @@ export interface Salida {
   approvedVersion: number | null;
   /** Slack only: set with the approval (or Programar), cleared by an undo; null for every other source. */
   sendMode: SalidaSendMode | null;
+  /** queued_until_back only (t87): "source" waits for its source to come back, "lead" was held by the lead with a reason and waits for Andrés. */
+  holdKind: SalidaHoldKind | null;
   undoUntil: string | null;
   releasedAt: string | null;
   sendAt: string | null;

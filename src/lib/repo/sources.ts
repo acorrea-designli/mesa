@@ -55,7 +55,7 @@ export function sourcesRepo(db: Db) {
         const resumed: string[] = [];
         if (wasDown && row.health !== "down") {
           const s = salidasRepo(db);
-          for (const q of s.list({ status: ["queued_until_back"] }).filter((x) => x.source === source)) {
+          for (const q of s.list({ status: ["queued_until_back"] }).filter((x) => x.source === source && x.holdKind !== "lead")) {
             s.transition(q.id, { type: "resume" }, now);
             resumed.push(q.id);
           }

@@ -591,6 +591,15 @@ describe("mesa CLI", () => {
     expect((await mesa(["salida", "drafted"])).code).toBe(2);
   });
 
+  it("salida hold marks an outage only with --outage (a plain hold is a lead hold that waits for Andrés)", async () => {
+    requests = [];
+    expect((await mesa(["salida", "hold", "sa_1", "--reason", "no puedo subir el PDF"])).code).toBe(0);
+    expect(requests[0].body).toEqual({ type: "hold", reason: "no puedo subir el PDF" });
+    requests = [];
+    expect((await mesa(["salida", "hold", "sa_1", "--reason", "basecamp unreachable", "--outage"])).code).toBe(0);
+    expect(requests[0].body).toEqual({ type: "hold", reason: "basecamp unreachable", outage: true });
+  });
+
   it("salida drafted --permalink carries the Basecamp draft's link, and is refused together with --simulated", async () => {
     requests = [];
     expect((await mesa(["salida", "drafted", "sa_1", "--permalink", "https://3.basecamp.com/1/buckets/2/messages/3"])).code).toBe(0);

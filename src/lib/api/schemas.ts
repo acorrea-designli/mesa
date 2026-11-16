@@ -364,7 +364,7 @@ export const salidaTransition = z.discriminatedUnion("type", [
   z.object({ type: z.literal("deleted") }),
   z.object({ type: z.literal("request_restore") }),
   z.object({ type: z.literal("restored") }),
-  z.object({ type: z.literal("hold"), reason: z.string().min(1) }),
+  z.object({ type: z.literal("hold"), reason: z.string().min(1), outage: z.boolean().optional() }),
   z.object({ type: z.literal("unqueue") }),
   z.object({ type: z.literal("bounce"), reason: z.string().min(1) }),
 ]);

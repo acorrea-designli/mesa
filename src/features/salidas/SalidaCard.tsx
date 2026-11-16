@@ -409,7 +409,7 @@ export function StateBlocks({
     case "queued_until_back":
       // Claude held it with a reason (the source is fine, the send failed or could not start): it waits for Andrés, who
       // pulls it back to pending to approve it again (as a draft or as a send). Approved while the source was down: it waits for the source.
-      if (s.error) {
+      if (s.holdKind === "lead") {
         return (
           <Banner tone="queued" title="En espera · Claude no pudo sacarla" text={`Firmada v${s.approvedVersion ?? s.currentVersion}. Motivo: ${s.error}`}>
             <div className="sx-del">

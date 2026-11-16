@@ -43,7 +43,7 @@ export function SalidaFiles({ s }: { s: Pick<SalidaDetail, "id" | "destination">
   // "Abrir carpeta" launches Explorer on the PC Mesa runs on, so it is offered only in a browser on that PC (the phone cannot use it).
   const onPc = useSyncExternalStore(
     () => () => {},
-    () => /^(localhost|127.0.0.1|[::1])$/i.test(window.location.hostname),
+    () => /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname),
     () => false,
   );
   if (!files.length) return null;

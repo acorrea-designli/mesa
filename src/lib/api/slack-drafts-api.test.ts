@@ -234,9 +234,10 @@ describe("Basecamp post modes (t87)", () => {
     r.db.prepare("UPDATE salidas SET send_mode = NULL WHERE id = ?").run(a.id);
     await show(a.id); // the sweep releases it
     expect((await post(a.id, { type: "hold", reason: "no puedo subir el PDF" })).status).toBe(200);
-    expect(await show(a.id)).toMatchObject({ status: "queued_until_back", error: "no puedo subir el PDF", sendMode: null });
+    expect(await show(a.id)).toMatchObject({ status: "queued_until_back", error: "no puedo subir el PDF", sendMode: null, holdKind: "lead" });
+    expect((await post(a.id, { type: "hold", reason: "again", outage: "yes" })).status).toBe(400);
     expect((await post(a.id, { type: "unqueue" })).status).toBe(200);
-    expect(await show(a.id)).toMatchObject({ status: "pending", sendMode: null });
+    expect(await show(a.id)).toMatchObject({ status: "pending", sendMode: null, holdKind: null });
     expect((await post(a.id, { type: "approve", version: 1 })).status).toBe(200);
     expect((await show(a.id)).sendMode).toBe("draft");
   });

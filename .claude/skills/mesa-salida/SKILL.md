@@ -188,17 +188,18 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
    it cannot be copied reliably), do not paste it: Aprobar (draft) exists so Andrés attaches it himself.
    **The draft call fails** (a draft already exists in that channel or thread, or any error from the tool):
    `MESA salida hold <id> --reason "<clear reason, e.g. ya hay un borrador en ese canal>"` and tell Andrés in the
-   ticket what to clear. Unreachable or rate limited: hold with that error and step 4. Never fall back to
+   ticket what to clear. Unreachable or rate limited: step 4 (hold with `--outage`). Never fall back to
    `slack_send_message`, and never retry with different text. A draft may replace what he is typing in that
    channel; the card says so next to Aprobar.
 3. `MESA salida sent <id> --permalink <url>` with the URL the tool returned (Slack direct mode, Basecamp, GitHub),
    `MESA salida drafted <id>` (Slack draft mode, no permalink exists; a Basecamp post adds `--permalink <app_url>`), or `MESA salida failed <id> --error
    "<message>"`. Tell the writer `SENT <ref> <salida>` (`DRAFTED <ref> <salida>` for a draft).
 4. Source down at send time (the MCP call fails as unreachable or rate limited): `MESA salida hold <id> --reason
-   "<error>"` ("Aprobar al volver") and `MESA source set <slack|basecamp> --health down --note "<error>"`. When the
-   source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with
-   `recheckThread: true` (step 0); its mode is kept.
-   **A hold whose reason is not an outage** (an upload or a draft that failed, a file that cannot be sent): the salida
+   "<error>" --outage` ("Aprobar al volver") and `MESA source set <slack|basecamp> --health down --note "<error>"`. When the
+   source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every salida held with `--outage`
+   (and every one approved while the source was down) with `recheckThread: true` (step 0); its mode is kept.
+   **A hold without `--outage`** (an upload or a draft that failed, a file that cannot be sent: the source is fine) is a
+   lead hold: Mesa records it as such (`holdKind: "lead"`), a source coming back never resumes it, the salida
    stays `queued_until_back` and the card reads "En espera · Claude no pudo sacarla" with the reason and «Volver a
    pendiente» (Andrés's click, `unqueue`: approval and mode are cleared). You cannot unqueue (G10); tell him in the
    ticket what changed (e.g. "ahora puedes aprobarla como borrador"). After he approves again a new `salida.released`
