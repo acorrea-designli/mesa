@@ -234,6 +234,7 @@ export function annotationsRepo(db: Db) {
         db.prepare("UPDATE attachments SET approved_at = ? WHERE id = ?").run(approved ? nowIso(now) : null, attachmentId);
         touchInteraction(db, now);
         if (approved) {
+          db.prepare("UPDATE tickets SET updated_at = ?, woke_at = ? WHERE id = ?").run(nowIso(now), nowIso(now), t.id);
           emitWake(
             db,
             { sessionId: t.ownerSession, kind: "ticket.document_approved", entityType: "ticket", entityId: t.id, payload: { ref: t.ref, ticketRef: t.ref, attachmentId, version: att.version } },

@@ -1037,6 +1037,8 @@ export function ticketsRepo(db: Db) {
             | undefined;
           if (!row) throw new NotFoundError("attachment", target);
           versionOf = row.versionOf ?? row.id;
+          const root = db.prepare("SELECT mime FROM attachments WHERE id = ?").get(versionOf) as { mime: string };
+          if (root.mime !== fields.mime) throw new ValidationError(`a version of ${versionOf} must be ${root.mime}, not ${fields.mime}`);
           const top = db.prepare("SELECT MAX(version) AS v FROM attachments WHERE id = ? OR version_of = ?").get(versionOf, versionOf) as { v: number };
           version = top.v + 1;
         }

@@ -40,6 +40,12 @@ describe("addAttachment --version-of", () => {
     expect(r.tickets.detail(tid).attachments.map((a) => a.version)).toEqual([1, 2, 3]);
   });
 
+  it("refuses a version whose type differs from the document's", () => {
+    const v1 = add("informe.pdf", 1);
+    expect(() => add("foto.png", 2, v1.id, tid, "image/png")).toThrow(/must be application\/pdf/);
+    expect(r.tickets.detail(tid).attachments).toHaveLength(1);
+  });
+
   it("is 404 for an attachment that does not exist or belongs to another ticket", () => {
     const other = r.tickets.create({ direction: "andres_asks", title: "Otro", body: "x", ownerSession: "lead" }, T0);
     const foreign = add("ajeno.pdf", 1, undefined, other.id);
