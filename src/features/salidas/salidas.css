@@ -1362,6 +1362,11 @@
 .sa-sx.queued .sx-del {
   grid-column: auto;
 }
+/* A lead hold has a long reason and a long hint: stack text, then the button row, full width. */
+.sa-sx.queued.hold .sx-tx,
+.sa-sx.queued.hold .sx-del {
+  grid-column: 1/-1;
+}
 .sx-why {
   font-size: 12px;
   color: var(--mute);
