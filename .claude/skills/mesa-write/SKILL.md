@@ -72,7 +72,13 @@ Procedure:
 3. **Check every page** with the Read tool on the PDF: no orphan heading at a page bottom, no table split, no page
    holding only the footer (tighten or cut, then re-render), page numbers present.
 4. Attach the PDF to the ticket reply by its absolute path and propose the message that carries it as its own
-   salida. Uploading the file to Basecamp is part of the lead's send, after approval.
+   salida. The salida carries the file: put the PDF's absolute path on the destination (`"files": ["<scratchpad>/writer-<ref>/<slug>.pdf"]`, with the `recordingId` of where it goes and, for a post, its `subject`; a Basecamp
+   post, comment or Campfire destination; `mesa-salida` § Files) and the card then lists it with a link Andrés can open.
+   Mesa hashes it when you propose, so render the final PDF before you propose and never overwrite it afterwards (a
+   changed file cannot be sent: re-render under a new name and propose again). The message text only mentions the
+   attachment ("the report is attached"); the lead uploads the file and embeds it after approval. For a post that
+   should notify someone (a client greeting "Hey Matt,"), add the person to the destination's `mentions` (the ids from
+   `list_project_people`): a post cannot @mention, those ids are the people it notifies.
    **Re-attaching a corrected document is a new version, not a new document**: when `MESA ticket context <ref>`
    already lists the document (`documents`, or `annotations` for one with marks), attach the fix with
    `MESA ticket attach <ref> <file> --version-of <attachmentId>` (any version's id works; the first attach has no

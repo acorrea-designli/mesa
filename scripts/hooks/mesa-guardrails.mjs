@@ -17,7 +17,13 @@
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
 //                the text being sent; its pr-gh.mjs writes need a released github salida for that repo and PR.
 //                A Basecamp create_comment also needs its `mentions` ids to equal the salida's destination.mentions
-//                (same set; none = none). A Slack salida carries the mode Andrés chose with his approval click:
+//                (same set; none = none). A create_message must pass status "active" and exactly the destination's mentions as
+//                `subscriptions` (none = omit it); a Basecamp post or comment whose destination has files embeds exactly
+//                the sgids recorded by `mesa salida upload` as <bc-attachment sgid="..."> next to the approved text, and
+//                create_attachment / create_campfire_upload pass only for a file of a released salida (name + SHA-256 of
+//                the decoded base64, strictly decoded, = the hash taken when it was proposed; t196). The call's target must be
+//                the destination's recordingId (board_id, recording_id, campfire_id) and a post's subject exactly the
+//                destination's subject. A Slack salida carries the mode Andrés chose with his approval click:
 //                slack_send_message_draft passes only for a released, unsent, non-sample Slack salida in mode draft, and
 //                slack_send_message only for one in mode send ("Claude lo envía": the connector appends "Sent using
 //                @Claude" and Andrés accepted that); either way with exactly the approved text and the salida's
@@ -44,6 +50,7 @@
 //                the live board on :8790. Live mode is unaffected. docs/SANDBOX.md.
 //   (G9 retired: commit message shape and attribution belong to the commit-guard hook,
 //    vendor/commit-guard.mjs, registered by `install-team --commit-guard` or by the user's own profile.)
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,6 +67,9 @@ const SLACK_SEND = /^mcp__claude_ai_Slack__slack_(send_message|send_message_draf
 const BASECAMP_WRITE =
   /^mcp__basecamp__(create|update|trash|delete|destroy|complete|uncomplete|move|archive|unarchive|pin|unpin|enable|disable|remove|reposition|reorder|subscribe|unsubscribe|watch|unwatch|toggle|pause|resume|copy|prioritize|deprioritize|set|mark|restore)_/;
 // Sends whose text the lead may only post from a released salida. (The two Slack message tools have their own check below.)
+// File uploads (t196): checked against the released salida's files, name and SHA-256.
+const BASECAMP_UPLOAD = /^mcp__basecamp__(create_attachment|create_campfire_upload)$/;
+const BASECAMP_EDIT = /^mcp__basecamp__update_(comment|message)$/;
 const LEAD_TEXT_SENDS = /^(mcp__basecamp__create_(comment|campfire_line|message|ping)|mcp__basecamp__update_(comment|message))$/;
 // Google Calendar through the claude.ai connector (mcp__claude_ai_Google_Calendar__<action>) or a self-hosted one
 // (mcp__google-calendar__<action>). Reads (list, get, find free time) are open; every other action writes.
@@ -229,31 +239,186 @@ const sentMentionIds = (ti) => (Array.isArray(ti.mentions) ? ti.mentions.map(Str
 
 const sameIds = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
+// t196. A Basecamp post or comment embeds each uploaded file as <bc-attachment sgid="..."></bc-attachment> in its HTML.
+const BC_TAG = /<bc-attachment\b[^>]*>(?:\s*<\/bc-attachment\s*>)?/gi;
+const BC_TAG_STRICT = /^<bc-attachment\s+sgid="([^"]+)"\s*(?:\/>|>\s*<\/bc-attachment\s*>)$/i;
+// The text with its attachment tags removed, and the sgids those tags carry (null for a tag that is not exactly <bc-attachment sgid="...">).
+export function splitAttachments(content) {
+  const all = String(content ?? "");
+  const tags = all.match(BC_TAG) ?? [];
+  return { text: all.replace(BC_TAG, " "), sgids: tags.map((t) => BC_TAG_STRICT.exec(t)?.[1] ?? null) };
+}
+
+const destinationOf = (s) => slackDestination(s);
+// The files of a Basecamp salida's destination ([{path, name, size, sha256}]); [] when it has none.
+const destinationFiles = (s) => {
+  const f = destinationOf(s).files;
+  return Array.isArray(f) ? f : [];
+};
+
+// What `mesa salida upload` recorded: the sgid per file index, only while the row's hash is the file's approved hash.
+function uploadedSgids(s) {
+  const rows = s.uploads ?? [];
+  return destinationFiles(s).map((f, i) => rows.find((u) => (u.fileIndex ?? u.file_index) === i && u.sha256 === f.sha256)?.sgid ?? null);
+}
+
+const TEXT_TOOL_KIND = { create_comment: "comment", update_comment: "comment", create_message: "message", update_message: "message", create_campfire_line: "campfire", create_ping: "ping" };
+
+// Why a post or comment call does not carry exactly the approved files (null when it does).
+function filesProblem(tool, ti, s) {
+  const kind = TEXT_TOOL_KIND[tool.replace("mcp__basecamp__", "")];
+  const files = kind === "comment" || kind === "message" ? destinationFiles(s) : [];
+  const { sgids } = splitAttachments(sentText(ti));
+  if (!files.length) {
+    return sgids.length ? { reason: "this salida carries no files, but the content embeds a <bc-attachment>: remove the tag." } : null;
+  }
+  const recorded = uploadedSgids(s);
+  const missing = recorded.map((x, i) => (x ? null : files[i].name)).filter(Boolean);
+  if (missing.length) {
+    return {
+      reason: `the salida's files are not all uploaded yet (missing: ${missing.join(", ")}). Upload each one first (create_attachment with its exact bytes), run \`mesa salida upload <id> --file N --sgid <attachable_sgid>\` for each, and only then post with <bc-attachment sgid="..."></bc-attachment> for every one.`,
+    };
+  }
+  if (sgids.includes(null) || !sameIds([...sgids].sort(), [...recorded].sort())) {
+    return {
+      reason: `the content must embed exactly the uploaded files' sgids (${recorded.join(", ")}), each as <bc-attachment sgid="..."></bc-attachment>, next to the approved text; it embeds [${sgids.map((x) => x ?? "a malformed tag").join(", ")}].`,
+    };
+  }
+  return null;
+}
+
+// Where a Basecamp send goes: the call's id must be the destination's recordingId (comment: the recording, post: the
+// message board, Campfire: the chat), so approved text and files cannot land on another project's board.
+// Each text tool serves one destination kind: a comment never goes out as a post or the other way round.
+const TOOL_KIND = { create_message: "basecamp_message", create_comment: "basecamp_comment", create_campfire_line: "basecamp_campfire" };
+const TARGET_PARAM = { create_message: "board_id", create_comment: "recording_id", create_campfire_line: "campfire_id", create_campfire_upload: "campfire_id" };
+function targetProblem(tool, ti, s) {
+  const param = TARGET_PARAM[tool.replace("mcp__basecamp__", "")];
+  if (!param) return null;
+  const want = destinationOf(s).recordingId;
+  if (want === undefined || want === null || String(want) === "") {
+    return { reason: `the salida's destination has no recordingId, so ${param} cannot be checked. Propose it again with the recordingId of the board, recording or Campfire it goes to.` };
+  }
+  if (String(ti[param] ?? "") !== String(want)) {
+    return { reason: `${param} ${ti[param] ?? "(none)"} is not where the salida goes: its destination is ${want}. Pass exactly the destination's recordingId.` };
+  }
+  return null;
+}
+
+// Why a create_message does not carry the approved subject, status and subscriptions (null when it does).
+function messageProblem(ti, s) {
+  const subject = destinationOf(s).subject;
+  if (typeof subject !== "string" || subject.trim() === "") {
+    return { reason: "the salida's destination has no subject, so the post's subject cannot be checked. Propose it again with the destination's subject." };
+  }
+  if (String(ti.subject ?? "").trim() !== subject.trim()) {
+    return { reason: `the post's subject must be exactly the approved one, "${subject}"; this call passes "${ti.subject ?? ""}".` };
+  }
+  if (ti.status !== "active") return { reason: 'create_message must pass status "active": without it Basecamp saves a draft that notifies nobody.' };
+  const expected = destinationMentionIds(s);
+  const subs = Array.isArray(ti.subscriptions) ? ti.subscriptions.map(String).sort() : null;
+  if (expected.length) {
+    if (subs && sameIds(expected, subs)) return null;
+    return { reason: `the salida's people to notify are [${expected.join(", ")}]: pass exactly those ids as \`subscriptions\` (integers); this call passes [${(subs ?? []).join(", ") || "none"}]. A post cannot @mention: the text names them.` };
+  }
+  if (subs === null) return null;
+  return { reason: `the salida names nobody to notify, so omit \`subscriptions\` (Basecamp's default); this call passes [${subs.join(", ")}]. To notify someone, put them in the destination's mentions and get that approved first.` };
+}
+
 // Returns { match, mismatch }: match is the released salida with exactly this text (and, for create_comment, exactly
-// these mentions); mismatch is set when a salida has the text but other mentions.
+// these mentions; for a post or comment with files, exactly the uploaded files' sgids; for create_message, status
+// "active" and exactly the destination's people as subscriptions); mismatch is set when a salida has the text but not those.
 async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
   const source = tool.includes("Slack") ? "slack" : "basecamp";
   const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
   // Sample salidas ("Datos de muestra.") never match: they can never be sent.
   const list = (data.salidas ?? data ?? []).filter((s) => s.source === source && (s.releasedAt ?? s.released_at) && !s.isSample);
-  const want = tokens(sentText(ti)).join(" ");
+  const want = tokens(splitAttachments(sentText(ti)).text).join(" ");
   const checkMentions = tool === "mcp__basecamp__create_comment";
+  const isMessage = tool === "mcp__basecamp__create_message";
   const got = sentMentionIds(ti);
   let mismatch = null;
   for (const item of list) {
     let s = item;
-    if (approvedBody(s) === null) {
+    // The list carries no versions or uploads: fetch the detail.
+    if (approvedBody(s) === null || (s.uploads === undefined && destinationFiles(s).length)) {
       const full = await mesaCall(`/api/salidas/${encodeURIComponent(item.id)}`, { fetchImpl, base, timeoutMs: 4000 });
       s = full.salida ?? full;
     }
     const body = approvedBody(s);
     if (body === null || tokens(body).join(" ") !== want) continue;
-    if (!checkMentions) return { match: s, mismatch };
-    const expected = destinationMentionIds(s);
-    if (sameIds(expected, got)) return { match: s, mismatch };
-    mismatch = { expected, got };
+    if (checkMentions) {
+      const expected = destinationMentionIds(s);
+      if (!sameIds(expected, got)) {
+        mismatch = { expected, got };
+        continue;
+      }
+    }
+    const wantKind = TOOL_KIND[tool.replace("mcp__basecamp__", "")];
+    const kind = destinationOf(s).kind;
+    if (wantKind && kind !== wantKind) {
+      mismatch = { reason: `this salida is a ${kind ?? "destination without a kind"}, not a ${wantKind}: send it with the tool of its own kind (basecamp_message: create_message, basecamp_comment: create_comment, basecamp_campfire: create_campfire_line).` };
+      continue;
+    }
+    const problem = targetProblem(tool.replace("mcp__basecamp__", ""), ti, s) ?? (isMessage ? messageProblem(ti, s) : null) ?? filesProblem(tool, ti, s);
+    if (problem) {
+      mismatch = problem;
+      continue;
+    }
+    return { match: s, mismatch };
   }
   return { match: null, mismatch };
+}
+
+// t196. create_attachment / create_campfire_upload (a file as base64) pass only for a released, unsent, non-sample
+// Basecamp salida that carries exactly this file: same name and same SHA-256 of the decoded bytes (the hash taken when it
+// was proposed). A campfire upload passes only for a campfire salida (campfire_id = destination.recordingId when it has one).
+// Strict: Node's decoder skips non-alphabet characters and anything after "=" padding, so the hash would be of fewer
+// bytes than the string carries. Whitespace is ignored; anything else must survive a decode and re-encode unchanged.
+export function sha256Base64(b64) {
+  if (typeof b64 !== "string") return null;
+  const clean = b64.replace(/\s+/g, "");
+  const bytes = Buffer.from(clean, "base64");
+  if (bytes.toString("base64") !== clean) return null;
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function releasedUploadSalida(tool, ti, { fetchImpl, base }) {
+  const campfireTool = tool === "mcp__basecamp__create_campfire_upload";
+  const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
+  const list = (data.salidas ?? data ?? []).filter((s) => s.source === "basecamp" && (s.releasedAt ?? s.released_at) && !s.isSample && !(s.sentAt ?? s.sent_at));
+  const digest = sha256Base64(ti.content_base64);
+  if (digest === null) return { match: null, near: { id: null, reason: "content_base64 is not canonical base64 (stray characters, data after padding or a bad length): encode the file's bytes exactly" } };
+  const name = String(ti.filename ?? "");
+  let near = null;
+  for (const item of list) {
+    let s = item;
+    if (!destinationFiles(s).length) {
+      const full = await mesaCall(`/api/salidas/${encodeURIComponent(item.id)}`, { fetchImpl, base, timeoutMs: 4000 });
+      s = full.salida ?? full;
+    }
+    const d = destinationOf(s);
+    const files = destinationFiles(s);
+    const hit = files.find((f) => f.name === name && f.sha256 === digest);
+    if (!hit) {
+      const sameName = files.find((f) => f.name === name);
+      if (sameName) near = { id: s.id, reason: `"${name}" is a file of salida ${s.id} but these bytes hash to ${digest.slice(0, 12)}, not the approved ${sameName.sha256.slice(0, 12)}: upload the file exactly as it was proposed` };
+      continue;
+    }
+    if (campfireTool !== (d.kind === "basecamp_campfire")) {
+      near = { id: s.id, reason: campfireTool ? `salida ${s.id} is a ${d.kind}, not a Campfire line: upload with create_attachment and embed the sgid` : `salida ${s.id} is a Campfire salida: upload with create_campfire_upload` };
+      continue;
+    }
+    if (campfireTool) {
+      const wrong = targetProblem("create_campfire_upload", ti, s);
+      if (wrong) {
+        near = { id: s.id, reason: wrong.reason.replace(/.$/, "") };
+        continue;
+      }
+    }
+    return { match: s, near };
+  }
+  return { match: null, near };
 }
 
 // The released calendar salida a create_event call is exactly: { match } or { mismatches } (the nearest one).
@@ -483,6 +648,12 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
     if (!found.match) return block("G5", slackRefusal(tool, found));
   }
 
+  // t196: no Mesa flow edits a Basecamp comment or post that is already out, and an edit carries no board or recording id
+  // to bind to the salida's destination (an approved file or text could be written over any comment of any project).
+  if (!teammate && BASECAMP_EDIT.test(tool)) {
+    return block("G5", `rule 3: Mesa never edits a Basecamp comment or post that is already sent (${tool.replace("mcp__basecamp__", "")}). Send the approved text as a new comment or post with create_comment / create_message, or hold the salida and tell ${OWNER}.`);
+  }
+
   if (!teammate && LEAD_TEXT_SENDS.test(tool)) {
     let found;
     try {
@@ -491,11 +662,24 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this send cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and send on salida.released.`);
     }
     if (!found.match && found.mismatch) {
+      if (found.mismatch.reason) return block("G5", `rule 3: the text matches a released salida but ${found.mismatch.reason}`);
       const show = (ids) => (ids.length ? ids.join(", ") : "none");
       return block("G5", `rule 3: the text matches a released salida but its mentions do not. The salida's destination.mentions are [${show(found.mismatch.expected)}] and this create_comment passes [${show(found.mismatch.got)}]: pass exactly the destination's person ids (numbers) as \`mentions\`, no more and no fewer, or fix the salida's destination first.`);
     }
     if (!found.match) {
       return block("G5", "rule 3: no released salida in Mesa has exactly this text. Send only on `salida.released`, with the approved version's text unchanged (the 20 s undo window must be over).");
+    }
+  }
+  // t196: the lead uploads a file to Basecamp only for the exact file (name and bytes) of a released salida.
+  if (!teammate && BASECAMP_UPLOAD.test(tool)) {
+    let found;
+    try {
+      found = await releasedUploadSalida(tool, ti, { fetchImpl, base });
+    } catch (err) {
+      return block("G5", `rule 3: Mesa is unreachable (${err.message}), so this upload cannot be matched to an approved salida. Nothing goes out unseen: wait for Mesa and upload on salida.released.`);
+    }
+    if (!found.match) {
+      return block("G5", found.near ? `rule 3: ${found.near.reason}.` : "rule 3: no released Basecamp salida carries this file. Upload only a file listed in a released salida's destination.files (same filename, same bytes as when it was proposed), after salida.released.");
     }
   }
   // Google Calendar: the lead creates an event only from a released calendar salida, with exactly its approved fields.
@@ -540,7 +724,7 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/attachments\/[^/\s"']+\/approved\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/attachments\/[^/\s"']+\/approved\b|\/salidas\/[^/\s"']+\/uploads\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
       return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are " + OWNER + "'s, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
@@ -573,8 +757,8 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
       if (/\bgh\s+pr\s+(review|comment|merge|close|reopen|edit|ready)\b|\bgh\s+issue\s+(comment|create|close|reopen|edit|delete)\b|\bgh\s+release\s+create\b/.test(c)) {
         return block("G4", "rule 3: that gh command writes to GitHub on " + OWNER + "'s behalf. Only `gh pr create --draft` for your own branch is yours; everything else goes through the lead after approval.");
       }
-      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|drafted|failed|hold|bounce|deleted|restored|withdraw)\b/.test(c)) {
-        return block("G4", "rule 3: only the lead reports a salida as sent, drafted, failed, held, bounced, deleted or restored, or withdraws one.");
+      if (/\bmesa\b[^\n|;&]*\bsalida\s+(sent|drafted|failed|hold|bounce|deleted|restored|withdraw|upload)\b/.test(c)) {
+        return block("G4", "rule 3: only the lead reports a salida as sent, drafted, failed, held, bounced, deleted or restored, withdraws one, or records a Basecamp upload.");
       }
       if (/\bmesa\b[^\n|;&]*\breview\s+close\b/.test(c)) {
         return block("G4", "rule 3: only the lead closes a review card (`mesa review close`).");

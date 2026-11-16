@@ -32,7 +32,7 @@ Destination JSON (the server validates it; `postAs` is who it posts as):
 | kind | fields |
 |---|---|
 | `slack_thread` / `slack_channel` | `workspace` ("designli"), `channel` ("#name"), `channelId` (required to send: it is the draft's and the send's `channel_id`), `threadTs` (thread only), `threadLabel`, `postAs` |
-| `basecamp_comment` / `basecamp_message` / `basecamp_campfire` | `project`, `projectId`, `recordingId` (comment: the recording it attaches to; campfire: the chat id), `recordingTitle`, `mentions` (`basecamp_comment` only), `postAs` |
+| `basecamp_comment` / `basecamp_message` / `basecamp_campfire` | `project`, `projectId`, `recordingId` (**required on every Basecamp kind**, 400 without it; comment: the recording it attaches to; post: the message board id; campfire: the chat id), `recordingTitle`, `subject` (**required on a post, refused on any other kind**: the post's title, shown on the card as "Asunto"), `mentions` (comment: pinged; post: notified, see below; never on a campfire), `files` (any of the three, see **Files**), `postAs` |
 | `github_review` / `github_comment` | `repo`, `pr`, `event`, `path`, `line`, `commitId`, `findingN`, `postAs` (see `mesa-review`) |
 | `calendar_event` | `calendar` ("primary"), `invitees` (addresses, for the chips), `meet` (true/false), `postAs`. The event itself is the BODY (see **Calendar events**) |
 
@@ -40,9 +40,21 @@ Destination JSON (the server validates it; `postAs` is who it posts as):
 in its destination: `id` is the person id as a string from `list_project_people` (the exact person of that
 project, never guessed), `name` is what the card shows ("Menciona a: Matt Myers"). The lead sends the ids to
 `create_comment` as `mentions` and hook G5 checks they equal the destination's (same set; none = none). A typed
-"@Name" notifies nobody. Campfire lines (plain text) and message-board posts (no mentions param) cannot mention
-through the MCP: the server answers 400 if their destination carries `mentions`; say in `--context` that nobody
-gets pinged.
+"@Name" notifies nobody.
+
+A `basecamp_message` (Message Board post) takes `mentions` too, but `create_message` has no mentions parameter (the
+mention markup carries an sgid signed by Basecamp, so Mesa cannot build it): the ids are the people the post
+**notifies**, passed as `subscriptions`, and the card says "Avisa a: Matt Myers". Name them in the text ("Hey Matt,");
+the text alone notifies nobody. A post with no `mentions` omits `subscriptions` and Basecamp's default applies (the
+card says "Los de siempre del tablero"). Campfire lines (plain text) cannot mention or notify: the server answers 400
+if their destination carries `mentions`; say in `--context` that nobody gets pinged.
+
+**Files** (`files`, any Basecamp kind). `"files": ["C:/.../informe.pdf"]`: absolute local paths, at most 10, 25 MB each,
+each must exist when you propose (400 otherwise), none inside a hidden folder (`.env`, `.claude`...), all under the
+temp folder (the writer's scratch), Mesa's `data/uploads` or `MESA_FILE_ROOTS` (never the home folder). Mesa measures each file
+and stores its name, size and SHA-256 on the destination; the card lists the names, each one opens, and a file that
+changed after you proposed it is flagged and cannot be sent. Put the file's name in the `--context`; the body is the
+message text only (a Campfire salida still needs its caption line). To change a file, propose a new salida.
 
 **No attribution.** No Claude or AI attribution in any Slack or Basecamp text: no "sent by Claude", no "written
 with Claude", no robot sign-off (unless Andrés asks for that exact line on purpose). A Slack message carries the
@@ -124,9 +136,22 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 1. Body = `versions[approvedVersion - 1].body`, unchanged. Destination = the salida's `destination`, exactly.
 2. Send with one MCP call: Basecamp `create_comment` (comment on `recordingId`; pass the destination's
    `mentions` ids as `mentions`, numbers: `"9001"` becomes `9001`; none when the destination has none, never add one),
-   `create_message`, or `create_campfire_line`, converting Markdown to the HTML the tool takes without changing words
+   `create_message` (`board_id` = `recordingId`, `subject` = `destination.subject` exactly, `status: "active"` always, because without it Basecamp saves a draft
+   that notifies nobody; `subscriptions` = the destination's `mentions` ids as numbers, or omitted when it has none),
+   or `create_campfire_line`, converting Markdown to the HTML the tool takes without changing words
    (for `create_comment` the server builds the mention markup itself: do not type an `@Name` or a mention tag in
-   `content`). GitHub: `mesa-review` § Lead writes.
+   `content`).
+   **Basecamp with files: upload first, then post.** For each `destination.files[i]`, in order:
+   (a) comment or post: `create_attachment { filename: file.name, content_type, content_base64 }` with the file's bytes read
+   from `file.path` unchanged (hook G5 hashes the decoded base64 and passes it only when name and SHA-256 equal the
+   file's); it returns `attachable_sgid`; run `MESA salida upload <id> --file <i> --sgid <attachable_sgid>` right away.
+   (b) When every file is recorded, send the text with one `create_comment` / `create_message` whose `content` is the
+   approved text as HTML plus, for each file, `<bc-attachment sgid="<attachable_sgid>"></bc-attachment>` (nothing else
+   inside the tag). G5 passes it only when the content holds exactly the recorded sgids and the approved text.
+   (c) Campfire: `create_campfire_upload { campfire_id: recordingId, filename, content_type, content_base64 }` once per file
+   (no sgid step; the chat shows the file), then the caption with `create_campfire_line` as usual.
+   If an upload fails, `MESA salida hold <id> --reason ...`; never retry with different bytes or another name. If the
+   file on disk changed since it was proposed (the card flags it), `bounce` it instead of uploading. GitHub: `mesa-review` § Lead writes.
    **Slack goes out in the mode Andrés chose with his approval click**, carried in the event (`mode`) and stored on
    the salida (`MESA salida show <id>`: `sendMode`). Never choose or change it yourself.
    - **`draft`** ("Aprobar", the default; also what Programar records): ONE call to

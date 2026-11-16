@@ -1,5 +1,6 @@
 // Shared domain types. These are the shapes the API returns and the UI renders.
 // Keep them free of server-only imports so client components can use them.
+import type { SalidaFile } from "./salida-files";
 
 export const SOURCES = ["github", "slack", "basecamp", "claude"] as const;
 export type Source = (typeof SOURCES)[number];
@@ -377,12 +378,18 @@ export type Destination =
       projectId?: string;
       recordingId?: string;
       recordingTitle?: string;
+      /** basecamp_message (required when proposed, t196): the post's subject; hook G5 passes create_message only with exactly this. */
+      subject?: string;
       /**
-       * basecamp_comment only: the people the comment pings (Basecamp person ids from list_project_people, as
-       * strings). The lead passes the ids to create_comment as `mentions`; a typed "@Name" notifies nobody.
-       * Campfire lines and message-board posts cannot mention through the MCP, so they never carry this.
+       * basecamp_comment: the people the comment pings (Basecamp person ids from list_project_people, as strings). The
+       * lead passes the ids to create_comment as `mentions`; a typed "@Name" notifies nobody.
+       * basecamp_message (t196): the people the post notifies. create_message has no mentions param (the sgid markup is
+       * signed by Basecamp), so the lead passes the ids as `subscriptions` and the text names them; with none, the call
+       * omits `subscriptions` and Basecamp's default applies. Campfire lines never carry this.
        */
       mentions?: BasecampMention[];
+      /** t196: local files the salida uploads first (any kind). Measured when proposed; hook G5 passes the upload only for exactly these. */
+      files?: SalidaFile[];
       postAs: string;
     }
   | {
@@ -518,10 +525,20 @@ export interface SalidaDetail extends Salida {
   versions: SalidaVersion[];
   turns: SalidaTurn[];
   engram: EngramLink[];
+  /** t196: the Basecamp uploads made for this salida's files (the sgid create_attachment returned, per file index). */
+  uploads?: SalidaUpload[];
   /** "Abrir destino": where this salida is published (the permalink once sent). Set by the read model and the salida API; null when unknowable. */
   destinationUrl?: string | null;
   /** "Abrir conversación" on a Slack salida: the Slack-app deep link (needs MESA_SLACK_TEAM_ID) and the https fallback (needs MESA_SLACK_DOMAIN). Set by the read model and the salida API. */
   conversation?: ConversationLinks | null;
+}
+
+/** One recorded Basecamp upload of a salida's file (`mesa salida upload`): the file's hash and the sgid to embed. */
+export interface SalidaUpload {
+  fileIndex: number;
+  sha256: string;
+  sgid: string;
+  createdAt: string;
 }
 
 export interface ConversationLinks {
