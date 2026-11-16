@@ -19,6 +19,21 @@ export function defaultDbPath(): string {
  * its SQL and the stall probe can name it while it is happening (t206).
  */
 class MesaDatabase extends DatabaseSync {
+  private countKey: string | null;
+  constructor(file: string, countKey: string | null = null) {
+    super(file);
+    this.countKey = countKey;
+  }
+  /** Also gives the connection back to the per-file count, once, so close and reopen does not look like two writers. */
+  override close(): void {
+    try {
+      super.close();
+    } finally {
+      const key = this.countKey;
+      this.countKey = null;
+      if (key !== null) releaseConnection(key);
+    }
+  }
   override exec(sql: string): void {
     return syncMark("sqlite", sql, () => super.exec(sql));
   }
@@ -35,20 +50,34 @@ class MesaDatabase extends DatabaseSync {
 
 const gc = globalThis as unknown as { __mesaDbOpen?: Map<string, number> };
 
+function releaseConnection(key: string): void {
+  const open = gc.__mesaDbOpen;
+  const n = (open?.get(key) ?? 0) - 1;
+  if (n > 0) open?.set(key, n);
+  else open?.delete(key);
+}
+
 /** Connections opened per file in this process. More than one means two writers contending for the file's lock. */
 export const openConnections = (file: string): number => gc.__mesaDbOpen?.get(path.resolve(/*turbopackIgnore: true*/ file)) ?? 0;
 
 /** Open a database and apply pending migrations. Use ":memory:" in tests. */
 export function openDb(file: string = defaultDbPath()): Db {
+  let key: string | null = null;
   if (file !== ":memory:") {
     fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(file), { recursive: true });
     const open = (gc.__mesaDbOpen ??= new Map<string, number>());
-    const key = path.resolve(/*turbopackIgnore: true*/ file);
+    key = path.resolve(/*turbopackIgnore: true*/ file);
     const n = (open.get(key) ?? 0) + 1;
     open.set(key, n);
     if (n > 1) console.warn(`[mesa] ${n} SQLite connections to ${file} in this process: writers wait on each other's lock (up to busy_timeout) with the event loop held`);
   }
-  const db = new MesaDatabase(file);
+  let db: MesaDatabase;
+  try {
+    db = new MesaDatabase(file, key);
+  } catch (err) {
+    if (key !== null) releaseConnection(key);
+    throw err;
+  }
   db.exec("PRAGMA foreign_keys = ON;");
   if (file !== ":memory:") {
     db.exec("PRAGMA journal_mode = WAL;");

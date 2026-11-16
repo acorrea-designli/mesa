@@ -37,19 +37,35 @@ const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 export function syncMark<T>(kind: Exclude<SyncKind, "">, detail: string, fn: () => T): T {
   const m = markState();
   const t0 = Date.now();
-  if (m.depth++ === 0) {
-    const d = oneLine(detail);
-    const n = Math.min(d.length, DETAIL_BYTES);
-    for (let i = 0; i < n; i++) m.detail[i] = d.charCodeAt(i) & 0x7f;
-    if (n < DETAIL_BYTES) m.detail[n] = 0;
-    m.nums[2] = KINDS.indexOf(kind);
-    m.nums[0] = t0;
-  }
+  // Nothing between the depth increment and the try may throw (exec(undefined) must reach node's own error with depth intact),
+  // so the publish below only touches a string and plain typed arrays, and is skipped for any other value.
+  if (m.depth === 0 && typeof detail === "string") publish(m, kind, detail, t0);
+  m.depth++;
   try {
     return fn();
   } finally {
     if (--m.depth === 0) m.nums[0] = 0;
     const ms = Date.now() - t0;
-    if (ms >= SLOW_SYNC_MS) console.warn(`[mesa] slow sync ${kind} ${ms}ms: ${oneLine(detail).slice(0, 160)}`);
+    if (ms >= SLOW_SYNC_MS) console.warn(`[mesa] slow sync ${kind} ${ms}ms: ${oneLine(String(detail)).slice(0, 160)}`);
   }
+}
+
+/** Copy the first DETAIL_BYTES of `detail` into the shared buffer, collapsing whitespace runs and trimming, without allocating. */
+function publish(m: MarkState, kind: Exclude<SyncKind, "">, detail: string, t0: number): void {
+  let n = 0;
+  let space = true; // true while at the start or after a space: skips leading whitespace and collapses runs
+  for (let i = 0; i < detail.length && n < DETAIL_BYTES; i++) {
+    const c = detail.charCodeAt(i);
+    if (c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0xfeff || c === 0x2028 || c === 0x2029) {
+      if (!space) m.detail[n++] = 32;
+      space = true;
+    } else {
+      m.detail[n++] = c & 0x7f;
+      space = false;
+    }
+  }
+  if (space && n > 0) n--; // trailing space
+  if (n < DETAIL_BYTES) m.detail[n] = 0;
+  m.nums[2] = KINDS.indexOf(kind);
+  m.nums[0] = t0;
 }

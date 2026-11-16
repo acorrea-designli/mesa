@@ -16,10 +16,15 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { isSandbox } = await import("./lib/env");
   if (isSandbox()) console.info("[mesa] SANDBOX: no GitHub worker, no Project sync, no sweep wake; salida sends are simulated");
-  const { startLoopWatch } = await import("./lib/integrations/loop-watch");
-  startLoopWatch();
-  const { startStallProbe } = await import("./lib/integrations/stall-probe");
-  startStallProbe();
+  // Diagnostics only: a failure here (a Worker that cannot start) is logged once and never keeps the workers below from starting.
+  try {
+    const { startLoopWatch } = await import("./lib/integrations/loop-watch");
+    startLoopWatch();
+    const { startStallProbe } = await import("./lib/integrations/stall-probe");
+    startStallProbe();
+  } catch (err) {
+    console.error("[mesa] stall diagnostics failed to start", err);
+  }
   const { startSweeper } = await import("./lib/wake/sweeper");
   startSweeper();
   const { startGithubWorker } = await import("./lib/integrations/github-worker");
