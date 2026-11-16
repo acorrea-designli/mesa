@@ -14,7 +14,8 @@ import { useSalidaController } from "./controller";
 import { IcPencil } from "./icons";
 import { useLive, useNow } from "./live";
 import { hhmm, SLACK_QUICK_STATUSES, sourceLabel } from "./model";
-import { DestChips, DestLink, Route, SalidaFiles, SlackModes, SlackQuick } from "./parts";
+import { DestChips, DestLink, Route, SalidaFiles, SendModes, SlackQuick } from "./parts";
+import { hasSendMode } from "@/lib/domain/types";
 import { ExactBlock, StateBlocks } from "./SalidaCard";
 import "./salidas.css";
 
@@ -57,6 +58,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
   const cur = s.versions.find((v) => v.n === s.currentVersion);
   const text = cur?.body ?? "";
   const isSlack = s.source === "slack";
+  const modal = hasSendMode(s.destination);
   return (
     <div className={compact ? "sa-apv compact" : "sa-apv"} ref={ref}>
       <Kind source={s.source}>
@@ -75,8 +77,8 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
           <div className="k">Tu versión</div>
           <textarea className="sa-edit" value={draft} aria-label="Tu versión del texto" onChange={(e) => setDraft(e.target.value)} autoFocus />
           <div className="acts">
-            <SplitApprove slack={isSlack} version={s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : s.source === "calendar" ? "Aprobar y crear mi versión" : "Aprobar y enviar mi versión"} disabled={!draft.trim() || draft === text || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
-            {isSlack ? (
+            <SplitApprove slack={isSlack} basecamp={modal && !isSlack} version={s.versions.length + 1} label={modal ? "Aprobar mi versión" : s.source === "calendar" ? "Aprobar y crear mi versión" : "Aprobar y enviar mi versión"} disabled={!draft.trim() || draft === text || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
+            {modal ? (
               <button className="btn" type="button" disabled={!draft.trim() || draft === text || c.busy} onClick={() => c.approveText(draft, "send")}>
                 Aprobar y que Claude lo envíe
               </button>
@@ -99,7 +101,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
       {s.status === "pending" && c.mode === "view" ? (
         // In Hoy (compact) the row docks at the bottom of the phone detail via .hy-acts.
         <div className={compact ? "acts hy-acts" : "acts"}>
-          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove slack={isSlack} basecamp={modal && !isSlack} label={modal ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button
             className="btn"
             type="button"
@@ -117,7 +119,7 @@ function ApprovalBody({ data, compact, onChange }: { data: SalidaDetail; compact
           </button>
         </div>
       ) : null}
-      {s.status === "pending" && c.mode === "view" && isSlack ? <SlackModes disabled={c.locked || c.busy} onDirect={() => c.approve("send")} /> : null}
+      {s.status === "pending" && c.mode === "view" && modal ? <SendModes source={isSlack ? "slack" : "basecamp"} disabled={c.locked || c.busy} onDirect={() => c.approve("send")} /> : null}
       {c.rewritePending ? <p className="sa-why-line">Claude está reescribiendo; espera la nueva versión para aprobar.</p> : null}
       <div className="meta">
         <Link href={`/salidas?s=${s.id}`}>Abrir en Salidas · afinar con Claude</Link>

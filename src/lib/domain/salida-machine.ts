@@ -5,7 +5,7 @@
 //     │                 │  │  └─schedule─▶ scheduled ─(send_at)─▶ sending(released)│
 //     │                 │  └──unschedule──────┘                                    ▼
 //     │                 │   (approve while the source is down ──▶ queued_until_back ─resume─▶ sending(released))
-//     │                 │                          Slack, mode draft: drafted ──▶ draft_created ──confirm_sent (Andrés)──▶ sent
+//     │                 │                          Slack/Basecamp post, mode draft: drafted ──▶ draft_created ──confirm_sent (Andrés)──▶ sent
 //     │                 ├─deny──▶ denied                       sent ──deleted──▶ deleted
 //     │                 └─expire─▶ expired                     failed ──retry──▶ pending
 //     └─────withdraw (the lead, with a reason; draft or pending only)──▶ withdrawn (final, never sent)
@@ -16,12 +16,15 @@
 // The session that owns a salida only executes the send after the `release`
 // (the 20 s undo window is over). `sent` before release is refused.
 //
-// Slack salidas carry a send mode chosen with the approval click (`approve`/`schedule` take `mode`, default
-// "draft"; an undo or any return to pending clears it): "draft" leaves the text as a Slack draft that Andrés sends
-// himself (`drafted` -> draft_created, closed by his "Ya lo envié" = `confirm_sent`), "send" has Claude send it
-// through the connector (it appends "Sent using @Claude"). A draft_created salida is never sent and never re-released.
+// Slack salidas and Basecamp message-board posts (basecamp_message, t87) carry a send mode chosen with the approval
+// click (`approve`/`schedule` take `mode`, default "draft"; an undo or any return to pending clears it): "draft" leaves
+// the text as a draft that Andrés sends himself (a Slack draft, or a Basecamp post saved with status "drafted" that he
+// attaches files to and publishes: `drafted` -> draft_created, closed by his "Ya lo envié" = `confirm_sent`), "send"
+// has Claude send it (Slack: the connector appends "Sent using @Claude"; Basecamp: the post goes out with status
+// "active"). A draft_created salida is never sent and never re-released. A queued_until_back salida (held with a
+// reason or approved while the source was down) comes back to Andrés with `unqueue` ("Sacar de la cola" in the UI).
 
-import { DELETE_POLICY, type Destination, type Salida, type SalidaSendMode, type SalidaStatus, type WakeKind } from "./types";
+import { DELETE_POLICY, hasSendMode, type Salida, type SalidaSendMode, type SalidaStatus, type WakeKind } from "./types";
 
 export const UNDO_WINDOW_MS = 20_000;
 
@@ -31,7 +34,7 @@ export type SalidaEvent =
   | { type: "undo" }
   | { type: "release" }
   | { type: "sent"; permalink?: string }
-  | { type: "drafted"; permalink?: string } // Slack, mode draft: the draft is in Andrés's composer (the sandbox records a simulated permalink)
+  | { type: "drafted"; permalink?: string } // mode draft: the draft is in Andrés's Slack composer or saved as a Basecamp draft post (permalink = its link; the sandbox records a simulated one)
   | { type: "confirm_sent" } // Andrés: "Ya lo envié" (he sent the Slack draft himself)
   | { type: "failed"; error: string }
   | { type: "retry" }
@@ -85,12 +88,10 @@ function expect(s: S, allowed: SalidaStatus[], event: string): Transition | null
   return allowed.includes(s.status) ? null : fail(`cannot ${event} a salida that is ${s.status}`);
 }
 
-const isSlack = (d: Destination) => d.kind === "slack_thread" || d.kind === "slack_channel";
-
-/** The mode an approval records: Slack takes the requested one (default draft), every other source has none and refuses one. */
+/** The mode an approval records: Slack and Basecamp posts take the requested one (default draft), every other destination has none and refuses one. */
 function approvalMode(s: S, requested: SalidaSendMode | undefined): { ok: true; mode: SalidaSendMode | null } | { ok: false; error: string } {
-  if (!isSlack(s.destination)) {
-    return requested ? { ok: false, error: "only a Slack salida has a send mode" } : { ok: true, mode: null };
+  if (!hasSendMode(s.destination)) {
+    return requested ? { ok: false, error: "only a Slack salida or a Basecamp post has a send mode" } : { ok: true, mode: null };
   }
   return { ok: true, mode: requested ?? "draft" };
 }
@@ -180,7 +181,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
     case "drafted": {
       const bad = expect(s, ["sending"], "mark drafted");
       if (bad) return bad;
-      if (!isSlack(s.destination)) return fail("only a Slack salida can be left as a draft");
+      if (!hasSendMode(s.destination)) return fail("only a Slack salida or a Basecamp post can be left as a draft");
       if (!s.releasedAt) return fail("refusing to mark drafted before the undo window is over");
       if (s.sendMode === "send") return fail("this salida was approved as \"Claude lo envía\": it is sent, not drafted");
       return { ok: true, patch: { status: "draft_created", draftedAt: iso, permalink: ev.permalink ?? null, error: null } };

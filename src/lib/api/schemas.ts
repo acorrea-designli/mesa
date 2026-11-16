@@ -343,7 +343,7 @@ export const salidaTurn = z.object({
   chipLabel: z.string().max(40).optional(),
 });
 
-/** Slack only (the machine refuses a mode on any other source): omitted = draft. */
+/** Slack and Basecamp message-board posts only (the machine refuses a mode on any other destination): omitted = draft. */
 const sendMode = z.enum(["draft", "send"]);
 
 export const salidaTransition = z.discriminatedUnion("type", [
@@ -351,7 +351,8 @@ export const salidaTransition = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approve"), version: z.number().int().min(1), mode: sendMode.optional() }),
   z.object({ type: z.literal("undo") }),
   z.object({ type: z.literal("sent"), permalink: z.string().optional(), simulated: z.boolean().optional() }),
-  z.object({ type: z.literal("drafted"), simulated: z.boolean().optional() }),
+  // permalink: the Basecamp draft post's link ("Borrador en Basecamp · publícalo tú" opens it); https only, it becomes an href.
+  z.object({ type: z.literal("drafted"), permalink: z.string().url().startsWith("https://").optional(), simulated: z.boolean().optional() }),
   z.object({ type: z.literal("confirm_sent") }),
   z.object({ type: z.literal("failed"), error: z.string().min(1) }),
   z.object({ type: z.literal("retry") }),

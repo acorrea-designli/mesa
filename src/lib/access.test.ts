@@ -137,6 +137,15 @@ describe("decideAccess", () => {
     expect(await decide({ host: "localhost:8790" }, env, "/api/pairing")).toEqual({ allow: true, reason: "local" });
   });
 
+  it("Abrir carpeta (it launches Explorer on this PC) only answers to the PC itself, even with the JWT and the token", async () => {
+    const folder = "/api/salidas/sa_1/files/0/folder";
+    expect(await decide(withJwt(), env, folder, TOKEN)).toMatchObject({ allow: false, status: 403, why: "local_only" });
+    expect(await decide(withJwt(), env, `${folder}/`, TOKEN)).toMatchObject({ allow: false, status: 403, why: "local_only" });
+    expect(await decide({ host: "localhost:8790" }, env, folder)).toEqual({ allow: true, reason: "local" });
+    // the file itself (the preview) is still reachable from the paired phone
+    expect(await decide(withJwt(), env, "/api/salidas/sa_1/files/0", TOKEN)).toEqual({ allow: true, reason: "token" });
+  });
+
   it("?token= is not a credential", async () => {
     // The guard never reads the query: a URL with the token and no cookie/header is refused.
     expect(await decide(withJwt(), env, "/")).toMatchObject({ allow: false, status: 401 });

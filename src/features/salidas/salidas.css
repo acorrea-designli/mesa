@@ -1936,6 +1936,9 @@
   font-weight: 600;
   color: var(--ink);
 }
+.sa-files .sa-folder {
+  margin-left: auto;
+}
 .sa-files li.bad > span {
   text-decoration: line-through;
   color: var(--mute);

@@ -30,6 +30,8 @@ const salida = ({ kind = "basecamp_message", files = [file("report.pdf", PDF)], 
   versions: [{ n: 1, body: TEXT }],
   destination: { kind, project: "Scout", postAs: "A", ...(kind === "basecamp_message" && subject ? { subject } : {}), ...(files ? { files } : {}), ...(mentions ? { mentions } : {}), ...(recordingId ? { recordingId } : {}) },
   uploads: uploads.map((sgid, fileIndex) => ({ fileIndex, sgid, sha256: files[fileIndex]?.sha256 })),
+  // t87: a post carries the mode Andrés chose with his approval click; the t196 tests below are about the publishing one.
+  sendMode: kind === "basecamp_message" ? "send" : null,
   ...extra,
 });
 const mesaWith = (...ss) => fakeMesa({ "GET /api/salidas?status=sending": { salidas: ss } });
@@ -307,4 +309,103 @@ test("G5 kind: an upload is for the tool of the salida's kind and only for kinds
   assert.equal(await rule(upload(mesaWith(salida({ kind: "basecamp_campfire" })))), "G5");
   assert.equal(await rule(campfireUpload(mesaWith(salida({ kind: "basecamp_comment" })))), "G5");
   assert.equal(await rule(upload(mesaWith(salida({ files: null })))), "G5");
+});
+
+// t87: a message-board post carries the send mode like a Slack salida. Draft (the default, also for a salida approved before
+// modes existed) = status "drafted", no files, Andrés attaches them and publishes it; send = status "active".
+const draftPost = (extra = {}) => salida({ extra: { sendMode: "draft", ...extra } });
+const DRAFTED = { status: "drafted" };
+
+test("G5 draft post: create_message passes with status drafted, the approved subject, board and people, and no files", async () => {
+  // the salida lists a PDF that was never uploaded: a draft post does not need it uploaded (nor allow it)
+  const mesa = mesaWith(draftPost());
+  assert.equal(await rule(post(mesa, `<p>${TEXT}</p>`, DRAFTED)), null);
+  const withPeople = mesaWith(salida({ files: null, mentions: [{ id: "9001", name: "Matt Myers" }], extra: { sendMode: "draft" } }));
+  assert.equal(await rule(post(withPeople, `<p>${TEXT}</p>`, { ...DRAFTED, subscriptions: [9001] })), null);
+  for (const extra of [DRAFTED, { ...DRAFTED, subscriptions: [9002] }, { ...DRAFTED, subscriptions: [] }]) {
+    const r = await post(withPeople, `<p>${TEXT}</p>`, extra);
+    assert.equal(r?.rule, "G5", JSON.stringify(extra));
+  }
+});
+
+test("G5 draft post: a draft is never published (active, no status, any other status are refused with the right path)", async () => {
+  const mesa = mesaWith(draftPost());
+  for (const extra of [{ status: "active" }, {}, { status: "published" }]) {
+    const r = await post(mesa, `<p>${TEXT}</p>`, extra);
+    assert.equal(r?.rule, "G5", JSON.stringify(extra));
+    assert.match(r.reason, /approved as a draft/);
+    assert.match(r.reason, /status "drafted"/);
+    assert.match(r.reason, /--permalink/);
+  }
+});
+
+test("G5 draft post: a salida released before modes existed carries none and is a draft too (snake_case rows included)", async () => {
+  for (const extra of [{ sendMode: null }, { sendMode: undefined }, { sendMode: undefined, send_mode: "draft" }]) {
+    const mesa = mesaWith(salida({ extra }));
+    assert.equal(await rule(post(mesa, `<p>${TEXT}</p>`, DRAFTED)), null, JSON.stringify(extra));
+    assert.equal(await rule(post(mesa, `<p>${TEXT}</p>`, { status: "active" })), "G5", JSON.stringify(extra));
+  }
+  // the snake_case column wins when the camelCase one is absent
+  assert.equal(await rule(post(mesaWith(salida({ files: null, extra: { sendMode: undefined, send_mode: "send" } })), `<p>${TEXT}</p>`, { status: "active" })), null);
+});
+
+test("G5 draft post: a send is never drafted", async () => {
+  const mesa = mesaWith(salida({ files: null }));
+  const r = await post(mesa, `<p>${TEXT}</p>`, DRAFTED);
+  assert.equal(r?.rule, "G5");
+  assert.match(r.reason, /approved as "Claude lo envía"/);
+  assert.match(r.reason, /status "active"/);
+  assert.equal(await rule(post(mesa, `<p>${TEXT}</p>`, { status: "active" })), null);
+});
+
+test("G5 draft post: same text, target, subject and file checks as a send", async () => {
+  const mesa = mesaWith(draftPost());
+  assert.equal(await rule(post(mesa, `<p>Another text</p>`, DRAFTED)), "G5");
+  assert.equal((await post(mesa, `<p>${TEXT}</p>`, { ...DRAFTED, subject: "Other" }))?.rule, "G5");
+  assert.equal((await run(lead, "mcp__basecamp__create_message", { board_id: 99, subject: "Cost report", content: `<p>${TEXT}</p>`, ...DRAFTED }, mesa.fetchImpl))?.rule, "G5");
+  // a draft carries no files: not an uploaded one, not a stray tag
+  const tagged = await post(mesa, `<p>${TEXT}</p>${tag(SG1)}`, DRAFTED);
+  assert.equal(tagged.rule, "G5");
+  assert.match(tagged.reason, /carries no files/);
+  assert.match(tagged.reason, /attaches them himself/);
+  // the wrong tool for the kind
+  assert.equal(await rule(run(lead, "mcp__basecamp__create_comment", { recording_id: 55, content: `<p>${TEXT}</p>` }, mesa.fetchImpl)), "G5");
+  // a sample or an unreleased one never authorises a draft either
+  assert.equal(await rule(post(mesaWith(draftPost({ isSample: true })), `<p>${TEXT}</p>`, DRAFTED)), "G5");
+  assert.equal(await rule(post(mesaWith(draftPost({ releasedAt: null })), `<p>${TEXT}</p>`, DRAFTED)), "G5");
+});
+
+test("G5 draft post: a drafted salida leaves the sending list, so a second create_message has no match (no duplicate drafts)", async () => {
+  const none = await post(mesaWith(), `<p>${TEXT}</p>`, DRAFTED);
+  assert.equal(none.rule, "G5");
+  assert.match(none.reason, /no released salida/);
+});
+
+test("G5 draft post: create_attachment is refused for a draft-mode post and still passes for a send", async () => {
+  const draft = await upload(mesaWith(draftPost()));
+  assert.equal(draft.rule, "G5");
+  assert.match(draft.reason, /approved as a draft/);
+  assert.match(draft.reason, /attaches "report\.pdf" himself/);
+  assert.equal(await rule(upload(mesaWith(salida()))), null);
+  // a comment with files has no mode: the upload is unchanged
+  assert.equal(await rule(upload(mesaWith(salida({ kind: "basecamp_comment", extra: { sendMode: "draft" } })))), null);
+});
+
+test("G4/G11: a teammate never creates the draft, and the sandbox reports it as simulated", async () => {
+  const mate = fakeAgent({ name: "dev-t87" }).input;
+  assert.equal(await rule(run(mate, "mcp__basecamp__create_message", { board_id: 55, subject: "Cost report", content: TEXT, ...DRAFTED })), "G4");
+  const sandboxed = await check({ ...lead, tool_name: "mcp__basecamp__create_message", tool_input: { board_id: 55, subject: "Cost report", content: TEXT, ...DRAFTED } }, { fetchImpl: unreachable, sandbox: true });
+  assert.equal(sandboxed?.rule, "G11");
+  assert.match(sandboxed.reason, /drafted <id> --simulated/);
+});
+
+test("G10: nobody opens a salida file's folder through the raw API (it launches Explorer on Andrés's PC)", async () => {
+  const curl = "curl -s -X POST http://127.0.0.1:8790/api/salidas/sa_1/files/0/folder";
+  for (const who of [lead, fakeAgent({ name: "dev-t87" }).input]) {
+    const r = await run(who, "Bash", { command: curl });
+    assert.equal(r?.rule, "G10");
+    assert.match(r.reason, /Abrir carpeta/);
+  }
+  // reading the file itself (the preview) is not a click
+  assert.equal(await rule(run(lead, "Bash", { command: "curl -s http://127.0.0.1:8790/api/salidas/sa_1/files/0" })), null);
 });

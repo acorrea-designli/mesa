@@ -27,6 +27,14 @@ describe("gateSalidaEvent", () => {
     expect(gateSalidaEvent(true, s, { type: "drafted", simulated: true })).toEqual({ ok: true, event: { type: "drafted", permalink: "sandbox://slack/sa_1" } });
   });
 
+  it("a Basecamp draft keeps its link in live and is simulated in sandbox, whatever link it carries (t87)", () => {
+    const bc = { id: "sa_2", source: "basecamp" as const, permalink: null };
+    const link = "https://3.basecamp.com/1/buckets/2/messages/3";
+    expect(gateSalidaEvent(false, bc, { type: "drafted", permalink: link })).toEqual({ ok: true, event: { type: "drafted", permalink: link } });
+    expect(gateSalidaEvent(true, bc, { type: "drafted", simulated: true, permalink: link })).toEqual({ ok: true, event: { type: "drafted", permalink: "sandbox://basecamp/sa_2" } });
+    expect(gateSalidaEvent(true, bc, { type: "drafted", permalink: link })).toMatchObject({ ok: false, code: "sandbox" });
+  });
+
   it("sandbox: delete and restore only for simulated sends; live is unaffected", () => {
     const real = { ...s, permalink: "https://basecamp.com/1" };
     const fake = { ...s, permalink: simulatedPermalink(s) };

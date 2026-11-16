@@ -7,7 +7,7 @@ description: Outgoing messages through Mesa Salidas - propose a draft with its e
 
 Every message on Andrés's behalf is a salida: exact destination + exact text, approved by him in Mesa. Writers
 propose and refine; only the lead sends, and only on `salida.released` (hook G5 checks it). No session ever calls
-approve (which carries the Slack mode), schedule, deny, undo or "Ya lo envié": those are his clicks (hook G10). `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`.
+approve (which carries the send mode of a Slack message or a Basecamp post), schedule, deny, undo or "Ya lo envié": those are his clicks (hook G10). `MESA` = `node G:/WorkSpace/designli/ops/bin/mesa`.
 
 ## Language and voice
 
@@ -54,7 +54,9 @@ each must exist when you propose (400 otherwise), none inside a hidden folder (`
 temp folder (the writer's scratch), Mesa's `data/uploads` or `MESA_FILE_ROOTS` (never the home folder). Mesa measures each file
 and stores its name, size and SHA-256 on the destination; the card lists the names, each one opens, and a file that
 changed after you proposed it is flagged and cannot be sent. Put the file's name in the `--context`; the body is the
-message text only (a Campfire salida still needs its caption line). To change a file, propose a new salida.
+message text only (a Campfire salida still needs its caption line). To change a file, propose a new salida. Each file on
+the card has «Abrir carpeta» (Explorer on Andrés's PC, the file selected; only from that PC, never yours to call, hook
+G10), so a file he must attach himself is one click away.
 
 **No attribution.** No Claude or AI attribution in any Slack or Basecamp text: no "sent by Claude", no "written
 with Claude", no robot sign-off (unless Andrés asks for that exact line on purpose). A Slack message carries the
@@ -136,12 +138,14 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
 1. Body = `versions[approvedVersion - 1].body`, unchanged. Destination = the salida's `destination`, exactly.
 2. Send with one MCP call: Basecamp `create_comment` (comment on `recordingId`; pass the destination's
    `mentions` ids as `mentions`, numbers: `"9001"` becomes `9001`; none when the destination has none, never add one),
-   `create_message` (`board_id` = `recordingId`, `subject` = `destination.subject` exactly, `status: "active"` always, because without it Basecamp saves a draft
-   that notifies nobody; `subscriptions` = the destination's `mentions` ids as numbers, or omitted when it has none),
+   `create_message` (`board_id` = `recordingId`, `subject` = `destination.subject` exactly, `status` per the mode Andrés chose,
+   see "A Basecamp post" below: `"drafted"` in mode draft, `"active"` in mode send, never the other;
+   `subscriptions` = the destination's `mentions` ids as numbers, or omitted when it has none),
    or `create_campfire_line`, converting Markdown to the HTML the tool takes without changing words
    (for `create_comment` the server builds the mention markup itself: do not type an `@Name` or a mention tag in
    `content`).
-   **Basecamp with files: upload first, then post.** For each `destination.files[i]`, in order:
+   **Basecamp comment or post in mode send, with files: upload first, then post.** (A post in mode draft carries no files: see
+   "A Basecamp post".) For each `destination.files[i]`, in order:
    (a) comment or post: `create_attachment { filename: file.name, content_type, content_base64 }` with the file's bytes read
    from `file.path` unchanged (hook G5 hashes the decoded base64 and passes it only when name and SHA-256 equal the
    file's); it returns `attachable_sgid`; run `MESA salida upload <id> --file <i> --sgid <attachable_sgid>` right away.
@@ -167,18 +171,38 @@ Delivery is at least once: first `MESA salida show <id>`; if it is already `sent
    Hook G5 passes each tool only for a released, unsent Slack salida in that mode with exactly that text and
    `channel_id` (and `thread_ts` when the destination has a thread). The wrong tool for the mode is refused with the
    right path: a draft-mode salida is never sent, whatever happens to the draft call.
+   **A Basecamp post (`basecamp_message`) has the same two modes** (t87), also carried in the event (`mode`) and on the
+   salida (`sendMode`); a salida approved before modes existed carries none and is a draft. Never choose or change it.
+   - **`draft`** ("Aprobar", the default; also what Programar records): ONE call to `create_message` with `status:
+     "drafted"`, the exact `subject`, the approved body and the `subscriptions` rule above, **no files**: no
+     `create_attachment`, no `<bc-attachment>` in the content (G5 refuses both). Basecamp saves a draft post that
+     notifies nobody until Andrés opens it, attaches the file(s) (the card says which and has «Abrir carpeta»), and
+     publishes it. Then step 3 is `MESA salida drafted <id> --permalink <the post's app_url>` (https; status
+     `draft_created`, "Borrador en Basecamp · publícalo tú", the card links the draft). His «Ya lo envié» closes it
+     (never yours, G10). A draft never counts as sent and never re-releases.
+   - **`send`** ("Aprobar y que Claude lo envíe"): `status: "active"`, with the upload-then-post steps above when the
+     destination has files. Step 3 is `MESA salida sent <id> --permalink <url>`.
+   G5 passes `"drafted"` only for a released post in mode draft and `"active"` only in mode send: a draft is never
+   published and a send is never drafted. If `create_message` fails, `MESA salida hold <id> --reason "<clear reason>"`;
+   never publish a draft-mode post to get around it. If the file is the problem (a PDF the tool needs inline as base64:
+   it cannot be copied reliably), do not paste it: Aprobar (draft) exists so Andrés attaches it himself.
    **The draft call fails** (a draft already exists in that channel or thread, or any error from the tool):
    `MESA salida hold <id> --reason "<clear reason, e.g. ya hay un borrador en ese canal>"` and tell Andrés in the
    ticket what to clear. Unreachable or rate limited: hold with that error and step 4. Never fall back to
    `slack_send_message`, and never retry with different text. A draft may replace what he is typing in that
    channel; the card says so next to Aprobar.
 3. `MESA salida sent <id> --permalink <url>` with the URL the tool returned (Slack direct mode, Basecamp, GitHub),
-   `MESA salida drafted <id>` (Slack draft mode, no permalink exists), or `MESA salida failed <id> --error
+   `MESA salida drafted <id>` (Slack draft mode, no permalink exists; a Basecamp post adds `--permalink <app_url>`), or `MESA salida failed <id> --error
    "<message>"`. Tell the writer `SENT <ref> <salida>` (`DRAFTED <ref> <salida>` for a draft).
 4. Source down at send time (the MCP call fails as unreachable or rate limited): `MESA salida hold <id> --reason
    "<error>"` ("Aprobar al volver") and `MESA source set <slack|basecamp> --health down --note "<error>"`. When the
    source is set back to `ok` (the sweeper's next good probe does it) Mesa resumes every held salida with
    `recheckThread: true` (step 0); its mode is kept.
+   **A hold whose reason is not an outage** (an upload or a draft that failed, a file that cannot be sent): the salida
+   stays `queued_until_back` and the card reads "En espera · Claude no pudo sacarla" with the reason and «Volver a
+   pendiente» (Andrés's click, `unqueue`: approval and mode are cleared). You cannot unqueue (G10); tell him in the
+   ticket what changed (e.g. "ahora puedes aprobarla como borrador"). After he approves again a new `salida.released`
+   arrives with the new mode. Only an outage ends with a source `ok`: do not toggle a source to resume a salida.
 
 **Calendar** (`source: calendar`, no mode): step 2 is ONE `create_event` call of the Google Calendar connector
 (`mcp__claude_ai_Google_Calendar__create_event`) with exactly the fields of the approved body: title, start, end
@@ -207,7 +231,7 @@ Guests get Google's update e-mail when `Avisar: sí`: that is what he approved.
 
 **Sandbox** (`echo $MESA_ENV` prints `sandbox`): step 2 is skipped, never call the MCP tool (hook G11 blocks both
 Slack tools). Step 3 is `MESA salida sent <id> --simulated` (no `--permalink`; Mesa records `sandbox://<source>/<id>`
-and shows "Simulado · no salió"), or `MESA salida drafted <id> --simulated` for a Slack salida in mode draft. Steps
+and shows "Simulado · no salió"), or `MESA salida drafted <id> --simulated` for a Slack salida or a Basecamp post in mode draft (no `--permalink`). Steps
 0, 1 and 4 are the same. A delete is `MESA salida deleted <id>` alone, a restore `MESA salida restored <id>`.
 
 Scheduled sends (Programar) need nothing from you: at `send_at` Mesa releases the salida and the same
@@ -229,6 +253,7 @@ review is open). Teammates never run either verb (G4). Deny stays Andrés's clic
 |---|---|---|
 | Basecamp comment / message | `trash_comment` / `trash_message` (recoverable 25 days) | `MESA salida deleted <id>`; restore: `restore_recording`, then `MESA salida restored <id>` |
 | Campfire line | `delete_campfire_line` (permanent; Mesa warned him) | `MESA salida deleted <id>` |
+| Basecamp post, draft mode | the draft is Andrés's to delete or publish in Basecamp; after his «Ya lo envié» the post is sent and the normal trash route applies (the message id is the last number of the stored link) | `MESA salida deleted <id>` once trashed |
 | Slack, draft mode | a draft is Andrés's to delete in Slack (Mesa never touched a message); once he sends it, it is his own message and Mesa cannot delete it | nothing |
 | Slack, direct send | not possible from Mesa (no delete tool): Mesa already refuses it; the 20 s undo was the only way back | nothing |
 | GitHub | not supported: tell Andrés in the ticket with the comment link | nothing |

@@ -591,6 +591,15 @@ describe("mesa CLI", () => {
     expect((await mesa(["salida", "drafted"])).code).toBe(2);
   });
 
+  it("salida drafted --permalink carries the Basecamp draft's link, and is refused together with --simulated", async () => {
+    requests = [];
+    expect((await mesa(["salida", "drafted", "sa_1", "--permalink", "https://3.basecamp.com/1/buckets/2/messages/3"])).code).toBe(0);
+    expect(requests[0].body).toEqual({ type: "drafted", permalink: "https://3.basecamp.com/1/buckets/2/messages/3" });
+    requests = [];
+    expect((await mesa(["salida", "drafted", "sa_1", "--simulated", "--permalink", "https://x"])).code).toBe(2);
+    expect(requests).toHaveLength(0);
+  });
+
   it("has no verb for \"Ya lo envié\" or the Slack mode: those are Andrés's clicks", async () => {
     for (const args of [["salida", "confirm_sent", "sa_1"], ["salida", "approve", "sa_1", "--mode", "send"], ["salida", "mode", "sa_1", "send"]]) {
       requests = [];

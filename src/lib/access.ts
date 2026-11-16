@@ -52,6 +52,8 @@ const PAIR_PATH = "/pair";
 
 /** Paths that only answer to a request that is local to this PC, even with a valid token. */
 const LOCAL_ONLY_PREFIXES = ["/api/pairing"];
+/** Local-only routes with an id in the middle: "Abrir carpeta" launches Explorer on this PC (t87), so never from the phone. */
+const LOCAL_ONLY_PATTERNS = [/^\/api\/salidas\/[^/]+\/files\/[^/]+\/folder\/?$/];
 
 export interface HeaderReader {
   get(name: string): string | null;
@@ -138,7 +140,7 @@ export async function decideAccess(input: AccessInput, env: AccessEnv, verify: V
   if (!verdict.ok) {
     return { allow: false, status: 403, why: verdict.reason, message: "Forbidden: sign in through Cloudflare Access." };
   }
-  if (LOCAL_ONLY_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) {
+  if (LOCAL_ONLY_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`)) || LOCAL_ONLY_PATTERNS.some((re) => re.test(path))) {
     return { allow: false, status: 403, why: "local_only", message: "Forbidden: only from the PC Mesa runs on." };
   }
   if (PUBLIC_PATHS.has(path)) return { allow: true, reason: "public" };
