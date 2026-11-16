@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { error, json, route } from "@/lib/api/http";
 import { newId } from "@/lib/db/util";
+import { isPdfMime, sameKind } from "@/lib/domain/attachments";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const UPLOADS = path.join(process.cwd(), "data", "uploads");
@@ -24,7 +25,7 @@ export const POST = route<{ id: string }>(async (req, r, { id }) => {
     const hit = all.find((x) => x.id === target);
     if (!hit) return error(404, "not_found", `attachment ${target} not found`);
     const root = all.find((x) => x.id === (hit.versionOf ?? hit.id));
-    if (root && root.mime !== mime) return error(400, "invalid_request", `a version of ${root.id} must be ${root.mime}, not ${mime}`);
+    if (root && !sameKind(root.mime, mime)) return error(400, "invalid_request", `a version of ${root.id} must ${isPdfMime(root.mime) ? "be" : "not be"} a PDF`);
   }
   if (file.size > MAX_BYTES) return error(413, "too_large", "attachments are limited to 25 MB");
   const safe = path.basename(file.name).replace(/[^\w.\- ]+/g, "_") || "file";

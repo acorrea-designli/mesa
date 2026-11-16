@@ -13,6 +13,14 @@ export interface AttachmentDocument<T extends Versioned = Attachment> {
   latest: T;
 }
 
+export const isPdfMime = (mime: string): boolean => mime === "application/pdf";
+
+/**
+ * A version must be a PDF exactly when its document is: "Revisar" opens the latest version, so a non-PDF latest would 404.
+ * Other types are not compared (the CLI derives the type from the extension, the browser reports its own).
+ */
+export const sameKind = (rootMime: string, mime: string): boolean => isPdfMime(rootMime) === isPdfMime(mime);
+
 /** The document an attachment belongs to: the root id of its group. */
 export const documentIdOf = (a: Pick<Attachment, "id" | "versionOf">): string => a.versionOf ?? a.id;
 

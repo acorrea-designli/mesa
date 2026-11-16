@@ -11,6 +11,7 @@ import {
   ValidationError,
 } from "../db/util";
 import { identity } from "../config/identity";
+import { isPdfMime, sameKind } from "../domain/attachments";
 import { inferKind } from "../domain/dispatch-kind";
 import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
 import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, stepsOwed, type StepInput } from "../domain/ticket-checklists";
@@ -1038,7 +1039,7 @@ export function ticketsRepo(db: Db) {
           if (!row) throw new NotFoundError("attachment", target);
           versionOf = row.versionOf ?? row.id;
           const root = db.prepare("SELECT mime FROM attachments WHERE id = ?").get(versionOf) as { mime: string };
-          if (root.mime !== fields.mime) throw new ValidationError(`a version of ${versionOf} must be ${root.mime}, not ${fields.mime}`);
+          if (!sameKind(root.mime, fields.mime)) throw new ValidationError(`a version of ${versionOf} must ${isPdfMime(root.mime) ? "be" : "not be"} a PDF`);
           const top = db.prepare("SELECT MAX(version) AS v FROM attachments WHERE id = ? OR version_of = ?").get(versionOf, versionOf) as { v: number };
           version = top.v + 1;
         }

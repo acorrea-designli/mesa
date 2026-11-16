@@ -40,10 +40,13 @@ describe("addAttachment --version-of", () => {
     expect(r.tickets.detail(tid).attachments.map((a) => a.version)).toEqual([1, 2, 3]);
   });
 
-  it("refuses a version whose type differs from the document's", () => {
+  it("refuses a version when it is a PDF and its document is not, or the other way round, and accepts other type differences", () => {
     const v1 = add("informe.pdf", 1);
-    expect(() => add("foto.png", 2, v1.id, tid, "image/png")).toThrow(/must be application\/pdf/);
+    expect(() => add("foto.png", 2, v1.id, tid, "image/png")).toThrow(/must be a PDF/);
     expect(r.tickets.detail(tid).attachments).toHaveLength(1);
+    const doc = add("notas.md", 3, undefined, tid, "text/markdown");
+    expect(() => add("notas.pdf", 4, doc.id)).toThrow(/must not be a PDF/);
+    expect(add("notas.txt", 5, doc.id, tid, "application/octet-stream")).toMatchObject({ version: 2, versionOf: doc.id });
   });
 
   it("is 404 for an attachment that does not exist or belongs to another ticket", () => {
