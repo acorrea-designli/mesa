@@ -25,7 +25,7 @@ function stripStatus(s: SalidaView, now: number): string {
     case "sending":
       return undoOpen(s, now) ? "Enviando…" : "Saliendo…";
     case "queued_until_back":
-      return `Al volver ${sourceLabel(s.source)}`;
+      return s.holdKind === "lead" ? "En espera" : `Al volver ${sourceLabel(s.source)}`;
     case "draft_created":
       return s.source === "basecamp" ? "Borrador en Basecamp · publícalo tú" : "Borrador en Slack · envíalo tú";
     case "sent":
@@ -72,7 +72,8 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
   const counts = {
     pending: items.filter(isUndecided).length,
     scheduled: items.filter((s) => s.status === "scheduled").length,
-    queued: items.filter((s) => s.status === "queued_until_back").length,
+    queued: items.filter((s) => s.status === "queued_until_back" && s.holdKind !== "lead").length,
+    held: items.filter((s) => s.status === "queued_until_back" && s.holdKind === "lead").length,
     drafted: items.filter((s) => s.status === "draft_created").length,
     draftedBc: items.filter((s) => s.status === "draft_created" && s.source === "basecamp").length,
   };
@@ -146,6 +147,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
     `${counts.pending} ${counts.pending === 1 ? "pendiente" : "pendientes"}`,
     counts.scheduled ? `${counts.scheduled} ${counts.scheduled === 1 ? "programada" : "programadas"}` : "",
     counts.queued ? `${counts.queued} al volver` : "",
+    counts.held ? `${counts.held} en espera` : "",
     counts.drafted - counts.draftedBc ? `${counts.drafted - counts.draftedBc} ${counts.drafted - counts.draftedBc === 1 ? "borrador en Slack" : "borradores en Slack"}` : "",
     counts.draftedBc ? `${counts.draftedBc} ${counts.draftedBc === 1 ? "borrador en Basecamp" : "borradores en Basecamp"}` : "",
   ]

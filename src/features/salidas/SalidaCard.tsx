@@ -411,7 +411,7 @@ export function StateBlocks({
       // pulls it back to pending to approve it again (as a draft or as a send). Approved while the source was down: it waits for the source.
       if (s.holdKind === "lead") {
         return (
-          <Banner tone="queued" title="En espera · Claude no pudo sacarla" text={`Firmada v${s.approvedVersion ?? s.currentVersion}. Motivo: ${s.error}`}>
+          <Banner tone="queued hold" title="En espera · Claude no pudo sacarla" text={`Firmada v${s.approvedVersion ?? s.currentVersion}. Motivo: ${s.error}`}>
             <div className="sx-del">
               <button className="btn p" type="button" disabled={c.busy} onClick={() => c.unqueue()}>
                 Volver a pendiente
