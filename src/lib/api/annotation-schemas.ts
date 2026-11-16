@@ -23,6 +23,8 @@ export const annotationSend = z.object({ attachmentId: z.string().min(1) });
 
 /** "Terminé" on a PDF (t135): true marks it reviewed, false takes it back. */
 export const attachmentReviewed = z.object({ reviewed: z.boolean() });
+/** "Aprobar" on a version of a PDF (t190): true approves it (wakes the owner), false takes the approval back. */
+export const attachmentApproved = z.object({ approved: z.boolean() });
 
 /** Who is calling: the CLI (bin/mesa sends x-mesa-client: cli, only the lead and the agents use it) is Claude; the board is Andrés. */
 export const callerOf = (req: Request): Author => (req.headers.get("x-mesa-client") === "cli" ? "claude" : "andres");

@@ -73,6 +73,13 @@ Procedure:
    holding only the footer (tighten or cut, then re-render), page numbers present.
 4. Attach the PDF to the ticket reply by its absolute path and propose the message that carries it as its own
    salida. Uploading the file to Basecamp is part of the lead's send, after approval.
+   **Re-attaching a corrected document is a new version, not a new document**: when `MESA ticket context <ref>`
+   already lists the document (`documents`, or `annotations` for one with marks), attach the fix with
+   `MESA ticket attach <ref> <file> --version-of <attachmentId>` (any version's id works; the first attach has no
+   flag). Mesa then shows one document with v2, v3... in Archivos and Documentos, "Revisar" opens the latest, and
+   Andrés's marks stay on the version they were made on. Read the open marks of the version he reviewed
+   (`MESA ticket annotations <ref> --att <id> --open`, each mark carries its `version`) before you cut the next one.
+   Never re-attach a revision without `--version-of`: it would show as an unrelated second document.
 
 Other formats: when Andrés asks for Word, PowerPoint, an editable doc or PDF manipulation, use the `docx`, `pptx`,
 `docs` or `pdf` skill with the same structure and practices.

@@ -68,8 +68,12 @@ Tickets
   mesa ticket context <ref> [--messages N]     resume payload: brief, plan, last messages, team, handoffs, approvals, findings
   mesa ticket brief <ref> [--body -] [--goal G] [--step S] [--next N] [--decision D]... [--question Q]...
   mesa ticket list [--open]
-  mesa ticket attach <ref> <file> [--message <id>]   upload a file to the ticket (25 MB max) and print the attachment JSON; a PDF
-                  gets a "Revisar" button in the thread that opens the PDF review view (/tickets/<ref>/pdf/<attId>)
+  mesa ticket attach <ref> <file> [--message <id>] [--version-of <attId>]   upload a file to the ticket (25 MB max) and print the
+                  attachment JSON (id, version, versionOf); a PDF gets a "Revisar" button in the thread that opens the PDF review view
+                  (/tickets/<ref>/pdf/<attId>). --version-of <attId> stores the file as the NEXT VERSION (v2, v3...) of that attachment's
+                  document instead of a new unrelated one (any version's id works, 404 if it is not on this ticket): Documentos shows
+                  one entry with its history, "Revisar" opens the latest and every mark stays on the version it was made on. Use it
+                  whenever you re-attach a corrected file. Without it nothing changes (a new v1 document)
   mesa ticket annotations <ref> [--att <attId>] [--open]   Andrés's marks on the ticket's PDFs, in reading order, as JSON:
                   [{id, attachmentId, page, kind highlight|note|rect|ellipse|arrow|comment, rect {x,y,w,h} in page units (PDF points,
                   top left origin), geometry, quote, body, author, state open|resolved, replies [{author, body, createdAt}]}]
@@ -553,6 +557,7 @@ async function main() {
           const form = new FormData();
           form.set("file", new File([data], name, { type: MIME[extname(name).toLowerCase()] ?? "application/octet-stream" }));
           if (opt.message !== undefined) form.set("messageId", String(need(opt.message, "--message")));
+          if (opt["version-of"] !== undefined) form.set("versionOf", String(need(opt["version-of"], "--version-of")));
           return out(await upload(`/api/tickets/${enc(need(id, "<ref>"))}/attachments`, form));
         }
         case "annotations": {

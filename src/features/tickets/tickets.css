@@ -2227,3 +2227,63 @@
     display: none;
   }
 }
+
+/* ---------- Documentos: a document's versions (t190) ---------- */
+.tk-ver {
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 0 5px;
+  vertical-align: 1px;
+}
+.tk-docgroup {
+  border-bottom: 1px solid var(--rule2);
+}
+.tk-docgroup .tk-doc {
+  border-bottom: 0;
+}
+.tk-docvers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 8px;
+  font-size: 12px;
+  color: var(--mute);
+}
+.tk-docvers > span {
+  margin-right: 4px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.tk-docvers a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.tk-docvers a:hover {
+  border-color: var(--ink);
+}
+.tk-docvers a[aria-current="true"] {
+  border-color: var(--ink);
+  border-width: 2px;
+}
+.tk-docvers a small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mute);
+}

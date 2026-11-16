@@ -7,6 +7,7 @@ const mark = (id: string, kind: AnnotationKind, geometry: AnnotationGeometry, pa
   id,
   ticketId: "tk",
   attachmentId: "at",
+  version: 1,
   page,
   kind,
   geometry,

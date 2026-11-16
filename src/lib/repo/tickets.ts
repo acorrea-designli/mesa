@@ -1016,16 +1016,34 @@ export function ticketsRepo(db: Db) {
       });
     },
 
+    /**
+     * Stores an attachment. With `versionOf` (t190) it becomes the next version of that attachment's document
+     * (v2, v3...): the id may be any version of it, a version of another ticket is 404.
+     */
     addAttachment(
       id: string,
-      a: Omit<Attachment, "id" | "ticketId" | "createdAt" | "reviewedAt">,
+      a: Omit<Attachment, "id" | "ticketId" | "createdAt" | "reviewedAt" | "approvedAt" | "versionOf" | "version"> & { versionOf?: string | null },
       now = new Date(),
     ): Attachment {
-      const t = get(id);
-      const attId = newId("at");
-      const { sql, values } = insertSql("attachments", { id: attId, ticketId: t.id, ...a, createdAt: nowIso(now) });
-      db.prepare(sql).run(...values);
-      return fromRow<Attachment>(db.prepare("SELECT * FROM attachments WHERE id = ?").get(attId));
+      return tx(db, () => {
+        const t = get(id);
+        const attId = newId("at");
+        const { versionOf: target, ...fields } = a;
+        let versionOf: string | null = null;
+        let version = 1;
+        if (target) {
+          const row = db.prepare("SELECT id, version_of AS versionOf FROM attachments WHERE id = ? AND ticket_id = ?").get(target, t.id) as
+            | { id: string; versionOf: string | null }
+            | undefined;
+          if (!row) throw new NotFoundError("attachment", target);
+          versionOf = row.versionOf ?? row.id;
+          const top = db.prepare("SELECT MAX(version) AS v FROM attachments WHERE id = ? OR version_of = ?").get(versionOf, versionOf) as { v: number };
+          version = top.v + 1;
+        }
+        const { sql, values } = insertSql("attachments", { id: attId, ticketId: t.id, ...fields, versionOf, version, createdAt: nowIso(now) });
+        db.prepare(sql).run(...values);
+        return fromRow<Attachment>(db.prepare("SELECT * FROM attachments WHERE id = ?").get(attId));
+      });
     },
   };
 }

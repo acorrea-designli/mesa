@@ -246,9 +246,11 @@ function Documents({ docs }: { docs: PdfDocument[] }) {
       </div>
       <div ref={listRef} role="list">
         {docs.map((d) => (
-          <Link key={d.attachmentId} role="listitem" className={["tk-doc", d.ticketStatus === "closed" && "closed"].filter(Boolean).join(" ")} href={`/tickets/${encodeURIComponent(d.ticketRef)}/pdf/${encodeURIComponent(d.attachmentId)}?from=docs`}>
+          <div key={d.attachmentId} role="listitem" className="tk-docgroup">
+          <Link className={["tk-doc", d.ticketStatus === "closed" && "closed"].filter(Boolean).join(" ")} href={`/tickets/${encodeURIComponent(d.ticketRef)}/pdf/${encodeURIComponent(d.attachmentId)}?from=docs`}>
             <span className="subj">
               {d.filename}
+              {d.version > 1 ? <em className="tk-ver">v{d.version}</em> : null}
               <small>
                 <b>{d.ticketRef}</b> · {d.ticketTitle}
               </small>
@@ -263,7 +265,11 @@ function Documents({ docs }: { docs: PdfDocument[] }) {
               )}
             </span>
             <span className="tk-docst">
-              {d.reviewedAt ? (
+              {d.approvedAt ? (
+                <StatusTag tone="plain" icon={<IcCheck width={12} height={12} />}>
+                  Aprobado
+                </StatusTag>
+              ) : d.reviewedAt ? (
                 <StatusTag tone="plain" icon={<IcCheck width={12} height={12} />}>
                   Terminado
                 </StatusTag>
@@ -273,6 +279,24 @@ function Documents({ docs }: { docs: PdfDocument[] }) {
             </span>
             <span className="t">{shortDate(d.createdAt)}</span>
           </Link>
+          {d.history.length > 1 ? (
+            <div className="tk-docvers" role="group" aria-label={`Versiones de ${d.filename}`}>
+              <span>Versiones</span>
+              {[...d.history].reverse().map((v) => (
+                <Link
+                  key={v.attachmentId}
+                  href={`/tickets/${encodeURIComponent(d.ticketRef)}/pdf/${encodeURIComponent(v.attachmentId)}?from=docs`}
+                  title={`${shortDate(v.createdAt)}${v.total ? ` · ${v.open} de ${v.total} notas abiertas` : " · sin notas"}${v.approvedAt ? " · aprobada" : ""}`}
+                  aria-current={v.attachmentId === d.attachmentId ? "true" : undefined}
+                >
+                  v{v.version}
+                  {v.approvedAt ? <IcCheck width={11} height={11} aria-label="Aprobada" /> : null}
+                  {v.total ? <small>{v.open}/{v.total}</small> : null}
+                </Link>
+              ))}
+            </div>
+          ) : null}
+          </div>
         ))}
       </div>
     </>

@@ -24,6 +24,9 @@ export const reviewApi = {
   reply: (ticketId: string, id: string, body: string) => call<Annotation>(`${A(ticketId)}/${encodeURIComponent(id)}/replies`, { body: { body } }),
   /** "Enviar a Claude (n)": one ticket.annotations wake for the marks not sent yet. */
   send: (ticketId: string, attachmentId: string) => call<{ count: number; annotationIds: string[] }>(`${A(ticketId)}/send`, { body: { attachmentId } }),
+  /** "Aprobar": approve this version of the PDF (wakes the owner once), or take the approval back. */
+  approved: (ticketId: string, attachmentId: string, approved: boolean) =>
+    call<Attachment>(`/api/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}/approved`, { method: "PUT", body: { approved } }),
   /** "Terminé": mark the PDF as reviewed, or take it back. */
   reviewed: (ticketId: string, attachmentId: string, reviewed: boolean) =>
     call<Attachment>(`/api/tickets/${encodeURIComponent(ticketId)}/attachments/${encodeURIComponent(attachmentId)}/reviewed`, { method: "PUT", body: { reviewed } }),

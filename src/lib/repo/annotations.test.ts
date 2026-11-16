@@ -170,8 +170,8 @@ describe("summary (the context)", () => {
     r.annotations.update(ref, a.id, { state: "resolved" }, "andres", at(5));
     r.annotations.create(ref, { attachmentId: pdf2, page: 1, kind: "rect", geometry: { x: 1, y: 1, w: 2, h: 2 }, author: "andres" }, at(6));
     expect(r.annotations.summary(ref)).toEqual([
-      { attachmentId: pdf, filename: "informe.pdf", open: 1, total: 2 },
-      { attachmentId: pdf2, filename: "otro.pdf", open: 1, total: 1 },
+      { attachmentId: pdf, filename: "informe.pdf", version: 1, versions: 1, open: 1, total: 2 },
+      { attachmentId: pdf2, filename: "otro.pdf", version: 1, versions: 1, open: 1, total: 1 },
     ]);
     expect(r.agents.context(ref).annotations).toEqual(r.annotations.summary(ref));
   });
@@ -268,7 +268,7 @@ describe("general comments", () => {
     general({ body: "de claude", author: "claude" }, 3);
     note();
     r.annotations.update(ref, c.id, { state: "resolved" }, "andres", at(5));
-    expect(r.annotations.summary(ref)).toEqual([{ attachmentId: pdf, filename: "informe.pdf", open: 3, total: 4 }]);
+    expect(r.annotations.summary(ref)).toEqual([{ attachmentId: pdf, filename: "informe.pdf", version: 1, versions: 1, open: 3, total: 4 }]);
     expect(r.agents.context(ref).annotations).toEqual(r.annotations.summary(ref));
     expect(r.annotations.documents().find((d) => d.attachmentId === pdf)).toMatchObject({ open: 2, total: 3 });
   });
