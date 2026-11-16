@@ -94,15 +94,18 @@ Salidas (outgoing messages; nothing is sent without Andrés's approval)
                   Mesa stores name, size and SHA-256, the card lists them and G5 lets only those exact files upload. A basecamp_message
                   "mentions" [{"id","name"}] are the people the post notifies (create_message subscriptions); a Campfire cannot carry them
   mesa salida version <id> --body B [--turn TURN_ID] [--chip "Más corto"]
-  mesa salida sent <id> [--permalink URL]          only after salida.released, for a Slack salida in mode send ("Claude lo envía"),
-                                                   Basecamp and GitHub
+  mesa salida sent <id> [--permalink URL]          only after salida.released, for a Slack salida or a Basecamp post in mode send
+                                                   ("Claude lo envía"), a Basecamp comment or Campfire line, and GitHub
   mesa salida sent <id> --simulated                sandbox only (MESA_ENV=sandbox): nothing was sent; Mesa records
                                                    sandbox://<source>/<id>. Refused in live
-  mesa salida drafted <id>                         Slack salida in mode draft (the default): its text is now a draft in Andrés's Slack
-                                                   (slack_send_message_draft); status draft_created, closed by his "Ya lo envié"
-  mesa salida drafted <id> --simulated             sandbox only: no draft was created; Mesa records sandbox://slack/<id>
+  mesa salida drafted <id> [--permalink URL]       salida in mode draft (the default): a Slack salida is now a draft in Andrés's Slack
+                                                   (slack_send_message_draft); a Basecamp post (basecamp_message) is now a draft post
+                                                   (create_message status "drafted", --permalink = its https app_url, shown as a link);
+                                                   status draft_created, closed by his "Ya lo envié"
+  mesa salida drafted <id> --simulated             sandbox only: no draft was created; Mesa records sandbox://<source>/<id>
   mesa salida failed <id> --error E
-  mesa salida hold <id> --reason R               released but the source is down (waits as "Aprobar al volver")
+  mesa salida hold <id> --reason R [--outage]    released but not sent. --outage = the source is down (waits as "Aprobar al volver" and resumes
+                                                   when the source is ok again); without it a lead hold: waits for Andrés ("En espera", «Volver a pendiente»), never auto-resumed
   mesa salida bounce <id> --reason R             the thread changed: back to Andrés for a new approval
   mesa salida deleted <id> | restored <id>
   mesa salida withdraw <id> --reason R           (lead) take a stale draft/pending salida back: final status "withdrawn", never sent,
@@ -639,11 +642,15 @@ async function main() {
           // --simulated is a flag; `drafted --simulated <id>` would otherwise read the id as its value.
           const did = id ?? (typeof opt.simulated === "string" ? opt.simulated : undefined);
           const simulated = opt.simulated !== undefined;
-          return out(await call("POST", `/api/salidas/${enc(need(did, "<id>"))}/transition`, simulated ? { type: "drafted", simulated: true } : { type: "drafted" }));
+          if (simulated && opt.permalink) usage("--simulated takes no --permalink: Mesa records sandbox://<source>/<id>");
+          return out(
+            await call("POST", `/api/salidas/${enc(need(did, "<id>"))}/transition`, simulated ? { type: "drafted", simulated: true } : { type: "drafted", ...(opt.permalink ? { permalink: opt.permalink } : {}) }),
+          );
         }
         case "failed":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "failed", error: text(opt.error, "--error") }));
         case "hold":
+          return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: "hold", reason: text(opt.reason, "--reason"), ...(opt.outage !== undefined ? { outage: true } : {}) }));
         case "bounce":
           return out(await call("POST", `/api/salidas/${enc(need(id, "<id>"))}/transition`, { type: cmd, reason: text(opt.reason, "--reason") }));
         case "withdraw":

@@ -42,6 +42,8 @@ export const salidaApi = {
   unqueue: (id: string) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "unqueue" } }),
   requestDelete: (id: string) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "request_delete" } }),
   requestRestore: (id: string) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "request_restore" } }),
+  /** "Abrir carpeta" (t87): Explorer opens on this PC with the file selected. Local requests only; the server takes the path from the salida. */
+  openFolder: (id: string, index: number) => call<{ opened: string }>(`${S(id)}/files/${index}/folder`, { body: {} }),
   select: (id: string, n: number) => call<SalidaDetail>(`${S(id)}/select`, { body: { n } }),
   star: (id: string, n: number, starred: boolean) => call<SalidaDetail>(`${S(id)}/versions/${n}`, { method: "PATCH", body: { starred } }),
   edit: (id: string, body: string) => call<SalidaDetail>(`${S(id)}/edit`, { body: { body } }),

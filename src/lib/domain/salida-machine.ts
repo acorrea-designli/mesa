@@ -5,7 +5,7 @@
 //     │                 │  │  └─schedule─▶ scheduled ─(send_at)─▶ sending(released)│
 //     │                 │  └──unschedule──────┘                                    ▼
 //     │                 │   (approve while the source is down ──▶ queued_until_back ─resume─▶ sending(released))
-//     │                 │                          Slack, mode draft: drafted ──▶ draft_created ──confirm_sent (Andrés)──▶ sent
+//     │                 │                          Slack/Basecamp post, mode draft: drafted ──▶ draft_created ──confirm_sent (Andrés)──▶ sent
 //     │                 ├─deny──▶ denied                       sent ──deleted──▶ deleted
 //     │                 └─expire─▶ expired                     failed ──retry──▶ pending
 //     └─────withdraw (the lead, with a reason; draft or pending only)──▶ withdrawn (final, never sent)
@@ -16,12 +16,15 @@
 // The session that owns a salida only executes the send after the `release`
 // (the 20 s undo window is over). `sent` before release is refused.
 //
-// Slack salidas carry a send mode chosen with the approval click (`approve`/`schedule` take `mode`, default
-// "draft"; an undo or any return to pending clears it): "draft" leaves the text as a Slack draft that Andrés sends
-// himself (`drafted` -> draft_created, closed by his "Ya lo envié" = `confirm_sent`), "send" has Claude send it
-// through the connector (it appends "Sent using @Claude"). A draft_created salida is never sent and never re-released.
+// Slack salidas and Basecamp message-board posts (basecamp_message, t87) carry a send mode chosen with the approval
+// click (`approve`/`schedule` take `mode`, default "draft"; an undo or any return to pending clears it): "draft" leaves
+// the text as a draft that Andrés sends himself (a Slack draft, or a Basecamp post saved with status "drafted" that he
+// attaches files to and publishes: `drafted` -> draft_created, closed by his "Ya lo envié" = `confirm_sent`), "send"
+// has Claude send it (Slack: the connector appends "Sent using @Claude"; Basecamp: the post goes out with status
+// "active"). A draft_created salida is never sent and never re-released. A queued_until_back salida (held with a
+// reason or approved while the source was down) comes back to Andrés with `unqueue` ("Sacar de la cola" in the UI).
 
-import { DELETE_POLICY, type Destination, type Salida, type SalidaSendMode, type SalidaStatus, type WakeKind } from "./types";
+import { DELETE_POLICY, hasSendMode, type Salida, type SalidaSendMode, type SalidaStatus, type WakeKind } from "./types";
 
 export const UNDO_WINDOW_MS = 20_000;
 
@@ -31,7 +34,7 @@ export type SalidaEvent =
   | { type: "undo" }
   | { type: "release" }
   | { type: "sent"; permalink?: string }
-  | { type: "drafted"; permalink?: string } // Slack, mode draft: the draft is in Andrés's composer (the sandbox records a simulated permalink)
+  | { type: "drafted"; permalink?: string } // mode draft: the draft is in Andrés's Slack composer or saved as a Basecamp draft post (permalink = its link; the sandbox records a simulated one)
   | { type: "confirm_sent" } // Andrés: "Ya lo envié" (he sent the Slack draft himself)
   | { type: "failed"; error: string }
   | { type: "retry" }
@@ -44,7 +47,7 @@ export type SalidaEvent =
   | { type: "deleted" }
   | { type: "request_restore" }
   | { type: "restored" }
-  | { type: "hold"; reason: string } // released, but the source is down: wait for it
+  | { type: "hold"; reason: string; outage?: boolean } // released but not sent: outage (or a source reported down) = wait for the source, otherwise a lead hold that waits for Andrés
   | { type: "resume" } // the source is back: release again (the session re-checks the thread)
   | { type: "unqueue" } // Andrés pulls a queued salida back to pending
   | { type: "bounce"; reason: string }; // the thread changed before sending: back to pending for a new approval
@@ -76,6 +79,7 @@ type S = Pick<
   | "currentVersion"
   | "approvedVersion"
   | "sendMode"
+  | "holdKind"
   | "deleteRequestedAt"
 >;
 
@@ -85,12 +89,10 @@ function expect(s: S, allowed: SalidaStatus[], event: string): Transition | null
   return allowed.includes(s.status) ? null : fail(`cannot ${event} a salida that is ${s.status}`);
 }
 
-const isSlack = (d: Destination) => d.kind === "slack_thread" || d.kind === "slack_channel";
-
-/** The mode an approval records: Slack takes the requested one (default draft), every other source has none and refuses one. */
+/** The mode an approval records: Slack and Basecamp posts take the requested one (default draft), every other destination has none and refuses one. */
 function approvalMode(s: S, requested: SalidaSendMode | undefined): { ok: true; mode: SalidaSendMode | null } | { ok: false; error: string } {
-  if (!isSlack(s.destination)) {
-    return requested ? { ok: false, error: "only a Slack salida has a send mode" } : { ok: true, mode: null };
+  if (!hasSendMode(s.destination)) {
+    return requested ? { ok: false, error: "only a Slack salida or a Basecamp post has a send mode" } : { ok: true, mode: null };
   }
   return { ok: true, mode: requested ?? "draft" };
 }
@@ -124,7 +126,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (g.sourceDown) {
         return {
           ok: true,
-          patch: { status: "queued_until_back", approvedVersion: ev.version, sendMode: m.mode, undoUntil: null, releasedAt: null, error: null },
+          patch: { status: "queued_until_back", approvedVersion: ev.version, sendMode: m.mode, holdKind: "source", undoUntil: null, releasedAt: null, error: null },
           wake: "salida.queued",
         };
       }
@@ -174,13 +176,15 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       const bad = expect(s, ["sending"], "mark sent");
       if (bad) return bad;
       if (!s.releasedAt) return fail("refusing to mark sent before the undo window is over");
+      // A draft is never published (mirror of drafted-on-send): a Basecamp post approved as a draft is reported drafted.
+      if (s.destination.kind === "basecamp_message" && s.sendMode !== "send") return fail("this post was approved as a draft (Aprobar): it is drafted, not sent; Andrés publishes it himself");
       return { ok: true, patch: { status: "sent", sentAt: iso, permalink: ev.permalink ?? null, error: null } };
     }
 
     case "drafted": {
       const bad = expect(s, ["sending"], "mark drafted");
       if (bad) return bad;
-      if (!isSlack(s.destination)) return fail("only a Slack salida can be left as a draft");
+      if (!hasSendMode(s.destination)) return fail("only a Slack salida or a Basecamp post can be left as a draft");
       if (!s.releasedAt) return fail("refusing to mark drafted before the undo window is over");
       if (s.sendMode === "send") return fail("this salida was approved as \"Claude lo envía\": it is sent, not drafted");
       return { ok: true, patch: { status: "draft_created", draftedAt: iso, permalink: ev.permalink ?? null, error: null } };
@@ -211,7 +215,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
     case "deny": {
       const bad = expect(s, ["draft", "pending", "scheduled", "queued_until_back"], "deny");
       if (bad) return bad;
-      return { ok: true, patch: { status: "denied", sendAt: null, sendMode: null }, wake: "salida.denied" };
+      return { ok: true, patch: { status: "denied", sendAt: null, sendMode: null, holdKind: null }, wake: "salida.denied" };
     }
 
     case "withdraw": {
@@ -280,19 +284,19 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       const bad = expect(s, ["sending"], "hold");
       if (bad) return bad;
       if (!s.releasedAt) return fail("only a released salida can wait for its source");
-      return { ok: true, patch: { status: "queued_until_back", releasedAt: null, error: ev.reason } };
+      return { ok: true, patch: { status: "queued_until_back", releasedAt: null, error: ev.reason, holdKind: ev.outage || g.sourceDown ? "source" : "lead" } };
     }
 
     case "resume": {
       const bad = expect(s, ["queued_until_back"], "resume");
       if (bad) return bad;
-      return { ok: true, patch: { status: "sending", undoUntil: iso, releasedAt: iso, error: null }, wake: "salida.released" };
+      return { ok: true, patch: { status: "sending", undoUntil: iso, releasedAt: iso, error: null, holdKind: null }, wake: "salida.released" };
     }
 
     case "unqueue": {
       const bad = expect(s, ["queued_until_back"], "unqueue");
       if (bad) return bad;
-      return { ok: true, patch: { status: "pending", approvedVersion: null, sendMode: null, error: null } };
+      return { ok: true, patch: { status: "pending", approvedVersion: null, sendMode: null, holdKind: null, error: null } };
     }
 
     case "bounce": {
@@ -301,7 +305,7 @@ export function transitionSalida(s: S, ev: SalidaEvent, now: Date, g: SalidaGuar
       if (s.status === "sending" && !s.releasedAt) return fail("the undo window is still open; Andrés can undo");
       return {
         ok: true,
-        patch: { status: "pending", approvedVersion: null, sendMode: null, undoUntil: null, releasedAt: null, error: ev.reason },
+        patch: { status: "pending", approvedVersion: null, sendMode: null, holdKind: null, undoUntil: null, releasedAt: null, error: ev.reason },
       };
     }
 

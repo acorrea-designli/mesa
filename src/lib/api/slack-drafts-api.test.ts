@@ -163,3 +163,82 @@ describe("live: simulated drafts do not exist", () => {
     expect(r.salidas.get(a).status).toBe("sending");
   });
 });
+
+// t87: a Basecamp message-board post has the same two modes. Aprobar = draft (create_message status "drafted", Andrés attaches
+// the file and publishes), "Aprobar y que Claude lo envíe" = send (status "active").
+describe("Basecamp post modes (t87)", () => {
+  const postDest = { kind: "basecamp_message" as const, project: "DRE Central", projectId: "46358302", recordingId: "9643034990", subject: "AWS cost report", postAs: "Andrés Correa" };
+  const bcPost = (isSample = false) => r.salidas.create({ source: "basecamp", destination: postDest, body: "Hey Matt, attached.", ownerSession: "lead", isSample });
+  const releasedPost = (mode?: "draft" | "send") => {
+    const s = bcPost();
+    r.salidas.transition(s.id, { type: "approve", version: 1, mode }, new Date(Date.now() - 30_000));
+    return s.id;
+  };
+
+  it("approve defaults to draft, takes send, and refuses an unknown mode", async () => {
+    const a = bcPost();
+    expect((await post(a.id, { type: "approve", version: 1 })).status).toBe(200);
+    expect((await show(a.id)).sendMode).toBe("draft");
+    const b = bcPost();
+    expect((await post(b.id, { type: "approve", version: 1, mode: "send" })).status).toBe(200);
+    expect((await show(b.id)).sendMode).toBe("send");
+    expect((await post(bcPost().id, { type: "approve", version: 1, mode: "pigeon" })).status).toBe(400);
+  });
+
+  it("the mode travels in salida.released", async () => {
+    const a = releasedPost("draft");
+    const b = releasedPost("send");
+    await show(a);
+    expect(releasedWake().map((p) => p.mode).sort()).toEqual(["draft", "send"]);
+    expect(await show(b)).toMatchObject({ status: "sending", sendMode: "send" });
+  });
+
+  it("drafted moves a released draft post to draft_created with its https link; \"Ya lo envié\" closes it", async () => {
+    const a = releasedPost("draft");
+    const link = "https://3.basecamp.com/3790348/buckets/46358302/messages/9700000001";
+    expect((await post(a, { type: "drafted", permalink: link })).status).toBe(200);
+    const s = await show(a);
+    expect(s).toMatchObject({ status: "draft_created", sendMode: "draft", permalink: link });
+    expect(s.draftedAt).not.toBeNull();
+    expect((r.db.prepare("SELECT sent_at FROM salidas WHERE id = ?").get(a) as { sent_at: string | null }).sent_at).toBeNull();
+    expect((await post(a, { type: "confirm_sent" })).status).toBe(200);
+    expect((await show(a)).status).toBe("sent");
+  });
+
+  it("a link that is not https never reaches an href (400), and a draft needs no link", async () => {
+    const a = releasedPost("draft");
+    for (const permalink of ["javascript:alert(1)", "http://3.basecamp.com/x", "not a url"]) {
+      expect((await post(a, { type: "drafted", permalink })).status, permalink).toBe(400);
+    }
+    expect((await post(a, { type: "drafted" })).status).toBe(200);
+    expect((await show(a)).permalink).toBeNull();
+  });
+
+  it("a send-mode post is never drafted, and a draft-mode one is not drafted twice", async () => {
+    expect((await post(releasedPost("send"), { type: "drafted" })).status).toBe(409);
+    const a = releasedPost("draft");
+    expect((await post(a, { type: "drafted" })).status).toBe(200);
+    expect((await post(a, { type: "drafted" })).status).toBe(409);
+  });
+
+  it("a sample post can never be drafted", async () => {
+    const s = bcPost(true);
+    r.salidas.transition(s.id, { type: "approve", version: 1, mode: "draft" }, new Date(Date.now() - 30_000));
+    expect((await errorOf(await post(s.id, { type: "drafted" }))).message).toMatch(/sample data/);
+  });
+
+  it("a salida the lead held with a reason comes back with unqueue and is approved again as a draft", async () => {
+    // approved before modes existed, released, then held: the state of sa_3j5i6ahw6cv9
+    const a = bcPost();
+    r.salidas.transition(a.id, { type: "approve", version: 1 }, new Date(Date.now() - 30_000));
+    r.db.prepare("UPDATE salidas SET send_mode = NULL WHERE id = ?").run(a.id);
+    await show(a.id); // the sweep releases it
+    expect((await post(a.id, { type: "hold", reason: "no puedo subir el PDF" })).status).toBe(200);
+    expect(await show(a.id)).toMatchObject({ status: "queued_until_back", error: "no puedo subir el PDF", sendMode: null, holdKind: "lead" });
+    expect((await post(a.id, { type: "hold", reason: "again", outage: "yes" })).status).toBe(400);
+    expect((await post(a.id, { type: "unqueue" })).status).toBe(200);
+    expect(await show(a.id)).toMatchObject({ status: "pending", sendMode: null, holdKind: null });
+    expect((await post(a.id, { type: "approve", version: 1 })).status).toBe(200);
+    expect((await show(a.id)).sendMode).toBe("draft");
+  });
+});

@@ -17,6 +17,7 @@ const base = (over: Partial<Salida> = {}): S => ({
   currentVersion: 1,
   approvedVersion: null,
   sendMode: null,
+  holdKind: null,
   deleteRequestedAt: null,
   ...over,
 });
@@ -150,6 +151,83 @@ describe("salida machine: source outages", () => {
     expect(run(q, { type: "deny" }).status).toBe("denied");
     const b = run(q, { type: "bounce", reason: "new messages in the thread" });
     expect(b).toMatchObject({ status: "pending", approvedVersion: null, error: "new messages in the thread" });
+  });
+});
+
+describe("salida machine: Basecamp post send modes (t87)", () => {
+  const post: Destination = { kind: "basecamp_message", project: "DRE Central", subject: "AWS cost report", postAs: "Andrés" };
+  const released = (mode?: "draft" | "send") =>
+    run(run(base({ destination: post }), { type: "approve", version: 1, mode }), { type: "release" }, at(UNDO_WINDOW_MS));
+
+  it("a post approval records the mode (default draft) and keeps it through release, schedule and the source outage", () => {
+    expect(run(base({ destination: post }), { type: "approve", version: 1 }).sendMode).toBe("draft");
+    expect(run(base({ destination: post }), { type: "approve", version: 1, mode: "send" }).sendMode).toBe("send");
+    expect(released().sendMode).toBe("draft");
+    expect(released("send").sendMode).toBe("send");
+    const when = at(3_600_000).toISOString();
+    expect(run(base({ destination: post }), { type: "schedule", at: when, version: 1 }).sendMode).toBe("draft");
+    expect(run(base({ destination: post }), { type: "schedule", at: when, version: 1, mode: "send" }).sendMode).toBe("send");
+    const queued = run(base({ destination: post }), { type: "approve", version: 1, mode: "send" }, T0, { ...g, sourceDown: true });
+    expect(queued).toMatchObject({ status: "queued_until_back", sendMode: "send" });
+  });
+
+  it("drafted needs a released draft-mode post and moves it to draft_created with its link", () => {
+    const sending = run(base({ destination: post }), { type: "approve", version: 1 });
+    expect(transitionSalida(sending, { type: "drafted" }, at(1_000), g)).toMatchObject({ ok: false }); // undo window open
+    const d = run(released("draft"), { type: "drafted", permalink: "https://3.basecamp.com/1/buckets/2/messages/3" }, at(UNDO_WINDOW_MS + 500));
+    expect(d).toMatchObject({ status: "draft_created", draftedAt: at(UNDO_WINDOW_MS + 500).toISOString(), sendMode: "draft", permalink: "https://3.basecamp.com/1/buckets/2/messages/3" });
+    // a draft is never published and a send is never drafted
+    expect(transitionSalida(released("send"), { type: "drafted" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: false });
+  });
+
+  it("\"Ya lo envié\" closes the draft post as sent; draft_created is never released again", () => {
+    const d = run(released("draft"), { type: "drafted" }, at(UNDO_WINDOW_MS));
+    expect(run(d, { type: "confirm_sent" }, at(UNDO_WINDOW_MS + 60_000))).toMatchObject({ status: "sent" });
+    for (const ev of [{ type: "release" }, { type: "sent" }, { type: "undo" }, { type: "retry" }, { type: "approve", version: 1 }, { type: "hold", reason: "x" }] as SalidaEvent[]) {
+      expect(transitionSalida(d, ev, at(UNDO_WINDOW_MS * 3), g), ev.type).toMatchObject({ ok: false });
+    }
+  });
+
+  it("a comment and a Campfire line still have no mode", () => {
+    expect(transitionSalida(base({ destination: bcComment }), { type: "approve", version: 1, mode: "draft" }, T0, g)).toMatchObject({ ok: false });
+    expect(transitionSalida({ ...base({ destination: campfire }), status: "sending", releasedAt: T0.toISOString(), sendMode: null }, { type: "drafted" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: false });
+  });
+
+  it("sent is refused for a post approved as a draft (and for one with no mode), allowed for a send", () => {
+    for (const mode of ["draft", undefined] as const) {
+      const r = transitionSalida(released(mode), { type: "sent", permalink: "https://x" }, at(UNDO_WINDOW_MS), g);
+      expect(r, String(mode)).toMatchObject({ ok: false });
+      expect(!r.ok && r.error).toMatch(/approved as a draft/);
+    }
+    expect(transitionSalida(released("send"), { type: "sent", permalink: "https://x" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: true });
+    // a comment has no mode: sent is unchanged
+    const comment = run(run(base({ destination: bcComment }), { type: "approve", version: 1 }), { type: "release" }, at(UNDO_WINDOW_MS));
+    expect(transitionSalida(comment, { type: "sent" }, at(UNDO_WINDOW_MS), g)).toMatchObject({ ok: true });
+  });
+
+  it("a queued salida records why: the source (approved while it was down, or held with outage) or the lead (a hold with a reason)", () => {
+    const down = run(base({ destination: post }), { type: "approve", version: 1 }, T0, { ...g, sourceDown: true });
+    expect(down).toMatchObject({ status: "queued_until_back", holdKind: "source" });
+    expect(run(released("send"), { type: "hold", reason: "basecamp unreachable", outage: true }, at(UNDO_WINDOW_MS + 1)).holdKind).toBe("source");
+    expect(run(released("send"), { type: "hold", reason: "the source is reported down" }, at(UNDO_WINDOW_MS + 1), { ...g, sourceDown: true }).holdKind).toBe("source");
+    const lead = run(released("send"), { type: "hold", reason: "upload failed" }, at(UNDO_WINDOW_MS + 1));
+    expect(lead.holdKind).toBe("lead");
+    // every way out clears it
+    expect(run(lead, { type: "resume" }, at(UNDO_WINDOW_MS + 2)).holdKind).toBeNull();
+    expect(run(lead, { type: "unqueue" }).holdKind).toBeNull();
+    expect(run(lead, { type: "bounce", reason: "x" }).holdKind).toBeNull();
+    expect(run(lead, { type: "deny" }).holdKind).toBeNull();
+  });
+
+  it("a held salida (queued_until_back with a reason, the source is fine) comes back to Andrés with unqueue, with no mode, to be approved again as a draft", () => {
+    // sa_3j5i6ahw6cv9: approved before modes existed (no mode), released, then held by the lead with a reason
+    const legacy: S = { ...base({ destination: post }), status: "sending", approvedVersion: 1, undoUntil: T0.toISOString(), releasedAt: at(UNDO_WINDOW_MS).toISOString() };
+    const held = run(legacy, { type: "hold", reason: "no puedo subir el PDF" }, at(UNDO_WINDOW_MS + 1_000));
+    expect(held).toMatchObject({ status: "queued_until_back", error: "no puedo subir el PDF", holdKind: "lead" });
+    const back = run(held, { type: "unqueue" }, at(UNDO_WINDOW_MS + 2_000));
+    expect(back).toMatchObject({ status: "pending", approvedVersion: null, sendMode: null, holdKind: null, error: null });
+    const again = run(back, { type: "approve", version: 1 }, at(UNDO_WINDOW_MS + 3_000));
+    expect(again).toMatchObject({ status: "sending", sendMode: "draft" });
   });
 });
 

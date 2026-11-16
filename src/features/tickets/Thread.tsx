@@ -465,7 +465,7 @@ export function Thread({ data, listening, pick, verbs, onChanged, focusMode, onT
               {data.salidas.map((s) => (
                 <Link key={s.id} className={`lk ${srcClass(s.source)}`} href={`/salidas?s=${s.id}`}>
                   <span className="ln" style={{ background: "var(--c)", width: 12, height: 4 }} />
-                  Salida · {s.title} · {s.simulated && s.status === "sent" ? "simulado · no salió" : (SAL_STATUS[s.status] ?? s.status)}
+                  Salida · {s.title} · {s.simulated && s.status === "sent" ? "simulado · no salió" : (s.status === "draft_created" && s.source === "basecamp" ? "borrador en Basecamp" : (SAL_STATUS[s.status] ?? s.status))}
                 </Link>
               ))}
             </div>

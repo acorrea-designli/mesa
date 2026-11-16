@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { realpathSync, statSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ValidationError } from "@/lib/db/util";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/db/util";
 import { MAX_SALIDA_FILE_BYTES, MAX_SALIDA_FILES, type FileState, type SalidaFile } from "@/lib/domain/salida-files";
 
 const sameCase = (p: string) => (process.platform === "win32" ? p.toLowerCase() : p);
@@ -73,6 +73,24 @@ export function resolveSalidaFiles(files: readonly (string | { path: string })[]
     seen.add(k);
   }
   return out;
+}
+
+/**
+ * The real path of a stored file Mesa may reveal in the file manager (t87, "Abrir carpeta"): it must still exist as a
+ * regular file, sit in no hidden folder and inside an allowed root. The bytes are not read: opening a folder discloses
+ * nothing, and Andrés may want to see a file that changed. Throws NotFoundError (gone) or ForbiddenError (outside).
+ */
+export function revealablePath(f: SalidaFile, roots = allowedRoots()): string {
+  let real: string;
+  try {
+    real = realpathSync(f.path);
+    if (!statSync(real).isFile()) throw new Error("not a file");
+  } catch {
+    throw new NotFoundError("file on disk", f.name);
+  }
+  const hidden = real.split(/[\\/]+/).some((seg) => seg.startsWith(".") && seg !== "." && seg !== "..");
+  if (hidden || !roots.some((r) => inside(r, real))) throw new ForbiddenError("this file is outside the folders Mesa may open");
+  return real;
 }
 
 /** The file's bytes when they still hash to the approved SHA-256: read once, so what is checked is what the caller uses. */

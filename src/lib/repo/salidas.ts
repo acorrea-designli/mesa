@@ -366,7 +366,8 @@ export function salidasRepo(db: Db) {
               payload: {
                 version: next.approvedVersion,
                 status: next.status,
-                // Slack only: "draft" = leave a Slack draft Andrés sends himself, "send" = send through the connector (null elsewhere).
+                // Slack and Basecamp posts: "draft" = leave a draft Andrés sends himself (Slack draft; Basecamp status "drafted"),
+                // "send" = send it (Slack connector; Basecamp status "active"). Null elsewhere.
                 mode: next.sendMode,
                 // A salida that waited for its source must re-read the thread before sending.
                 recheckThread: ev.type === "resume",

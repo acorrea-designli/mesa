@@ -29,9 +29,12 @@ export interface SplitApproveProps {
   kbd?: string;
   /** A Slack salida: Aprobar leaves a draft Andrés sends himself, so the menu says that instead of "Enviar en 20 s". */
   slack?: boolean;
+  /** A Basecamp message-board post (t87): the same two modes; Aprobar saves a draft post that Andrés publishes himself. */
+  basecamp?: boolean;
 }
 
-export function SplitApprove({ version, onSend, onSchedule, disabled, phone, up, label = "Aprobar y enviar", kbd, slack }: SplitApproveProps) {
+export function SplitApprove({ version, onSend, onSchedule, disabled, phone, up, label = "Aprobar y enviar", kbd, slack, basecamp }: SplitApproveProps) {
+  const draft = slack || basecamp;
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLSpanElement>(null);
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -75,12 +78,12 @@ export function SplitApprove({ version, onSend, onSchedule, disabled, phone, up,
       {open ? (
         <span ref={menuRef} className="ap-menu" role="menu" id={menuId}>
           <button type="button" role="menuitemradio" aria-checked="true" onClick={() => (setOpen(false), onSend())}>
-            <b>{slack ? "Borrador en Slack" : "Enviar en 20 s"}</b>
-            <small>{slack ? "Queda en tu Slack; tú le das enviar" : "Con Deshacer, como siempre"}</small>
+            <b>{basecamp ? "Borrador en Basecamp" : slack ? "Borrador en Slack" : "Enviar en 20 s"}</b>
+            <small>{basecamp ? "Queda guardado en Basecamp; tú lo publicas" : slack ? "Queda en tu Slack; tú le das enviar" : "Con Deshacer, como siempre"}</small>
           </button>
           <button type="button" role="menuitemradio" aria-checked="false" onClick={() => (setOpen(false), onSchedule())}>
             <b>Programar…</b>
-            <small>{slack ? "Elige día y hora; sale como borrador" : "Elige día y hora de salida"}</small>
+            <small>{draft ? "Elige día y hora; sale como borrador" : "Elige día y hora de salida"}</small>
           </button>
         </span>
       ) : null}

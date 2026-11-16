@@ -590,6 +590,8 @@ test("G11: the lead reports sends only as simulated and never calls the live boa
   const d = await sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1");
   assert.equal(d?.rule, "G11");
   assert.match(d.reason, /drafted <id> --simulated/);
+  assert.match(d.reason, /sandbox:\/\/<source>\/<id>/); // the draft may be a Slack one or a Basecamp post
+  assert.doesNotMatch(d.reason, /No Slack draft/);
   assert.equal(await rule(sbxSh(lead, "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1 --simulated")), null);
   assert.equal(await rule(sbxSh(mate(), "node G:/WorkSpace/designli/ops/bin/mesa salida drafted s1 --simulated")), "G4");
   assert.equal(await rule(sbxSh(lead, "MESA_URL=http://127.0.0.1:8790 node G:/WorkSpace/designli/ops/bin/mesa ticket list")), "G11");

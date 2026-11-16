@@ -17,8 +17,8 @@
 //   G5 (rule 3)  The lead's Slack / Basecamp message sends need a released salida in Mesa whose approved text is
 //                the text being sent; its pr-gh.mjs writes need a released github salida for that repo and PR.
 //                A Basecamp create_comment also needs its `mentions` ids to equal the salida's destination.mentions
-//                (same set; none = none). A create_message must pass status "active" and exactly the destination's mentions as
-//                `subscriptions` (none = omit it); a Basecamp post or comment whose destination has files embeds exactly
+//                (same set; none = none). A create_message must pass the status of its mode ("drafted" or "active") and exactly the
+//                destination's mentions as `subscriptions` (none = omit it); a Basecamp post or comment whose destination has files embeds exactly
 //                the sgids recorded by `mesa salida upload` as <bc-attachment sgid="..."> next to the approved text, and
 //                create_attachment / create_campfire_upload pass only for a file of a released salida (name + SHA-256 of
 //                the decoded base64, strictly decoded, = the hash taken when it was proposed; t196). The call's target must be
@@ -29,6 +29,10 @@
 //                @Claude" and Andrés accepted that); either way with exactly the approved text and the salida's
 //                channelId (and threadTs when it has one) as channel_id / thread_ts. The wrong tool for the mode is
 //                refused with the right path: a draft is never sent, a direct send is never drafted.
+//                A Basecamp message-board post carries the same mode (t87): create_message passes status "drafted" (no files;
+//                Andrés attaches them and publishes it; reported with the salida drafted verb and --permalink <url>) only
+//                for a released basecamp_message salida in mode draft (the default), and status "active" only in mode send;
+//                create_attachment is refused for a draft-mode post.
 //                A Google Calendar create_event (the connector, t112) passes only for a released, unsent, non-sample
 //                `calendar` salida whose approved body (title, start, end, invitees, Meet, Repetir, description: one
 //                field per line, scripts/hooks/calendar-body.mjs) is exactly what the call writes, a series included
@@ -38,8 +42,8 @@
 //                calendar-move.mjs) whose eventId, calendar, start and end instants the call matches exactly, with no
 //                parameter beyond eventId/calendarId/startTime/endTime/timeZone/notificationLevel.
 //                Mesa unreachable = blocked (nothing goes out unseen).
-//   G10 (rule 3) Nobody approves (and so never picks the Slack mode), schedules, denies or undoes a salida, closes a
-//                Slack draft as sent ("Ya lo envié"), approves a plan or decides a permission card through the raw
+//   G10 (rule 3) Nobody approves (and so never picks the send mode), schedules, denies or undoes a salida, closes a
+//                Slack draft as sent ("Ya lo envié"), opens a salida file's folder ("Abrir carpeta", t87), approves a plan or decides a permission card through the raw
 //                API: those are Andrés's clicks. The raw /reviews/:id/close route is blocked the same way (the lead
 //                closes a card with `mesa review close`).
 //   G6 (rule 8)  run_in_background for git, gh, tests or builds. Only `mesa wait` may run in the background.
@@ -250,6 +254,10 @@ export function splitAttachments(content) {
 }
 
 const destinationOf = (s) => slackDestination(s);
+// The mode Andrés chose with his approval click (Slack and Basecamp posts); a salida released before modes existed carries none = draft (the default).
+const approvedMode = (s) => s.sendMode ?? s.send_mode ?? "draft";
+// A Basecamp message-board post approved as a draft (t87): saved with status "drafted", no files, Andrés attaches and publishes it.
+const isDraftPost = (s) => destinationOf(s).kind === "basecamp_message" && approvedMode(s) === "draft";
 // The files of a Basecamp salida's destination ([{path, name, size, sha256}]); [] when it has none.
 const destinationFiles = (s) => {
   const f = destinationOf(s).files;
@@ -267,10 +275,16 @@ const TEXT_TOOL_KIND = { create_comment: "comment", update_comment: "comment", c
 // Why a post or comment call does not carry exactly the approved files (null when it does).
 function filesProblem(tool, ti, s) {
   const kind = TEXT_TOOL_KIND[tool.replace("mcp__basecamp__", "")];
-  const files = kind === "comment" || kind === "message" ? destinationFiles(s) : [];
+  const draftPost = kind === "message" && isDraftPost(s);
+  const files = !draftPost && (kind === "comment" || kind === "message") ? destinationFiles(s) : [];
   const { sgids } = splitAttachments(sentText(ti));
   if (!files.length) {
-    return sgids.length ? { reason: "this salida carries no files, but the content embeds a <bc-attachment>: remove the tag." } : null;
+    if (!sgids.length) return null;
+    return {
+      reason: draftPost
+        ? `this post is saved as a draft (mode draft) and a draft carries no files: ${OWNER} attaches them himself in Basecamp. Remove the <bc-attachment> tag and upload nothing.`
+        : "this salida carries no files, but the content embeds a <bc-attachment>: remove the tag.",
+    };
   }
   const recorded = uploadedSgids(s);
   const missing = recorded.map((x, i) => (x ? null : files[i].name)).filter(Boolean);
@@ -305,7 +319,7 @@ function targetProblem(tool, ti, s) {
   return null;
 }
 
-// Why a create_message does not carry the approved subject, status and subscriptions (null when it does).
+// Why a create_message does not carry the approved subject, status (per mode) and subscriptions (null when it does).
 function messageProblem(ti, s) {
   const subject = destinationOf(s).subject;
   if (typeof subject !== "string" || subject.trim() === "") {
@@ -314,7 +328,14 @@ function messageProblem(ti, s) {
   if (String(ti.subject ?? "").trim() !== subject.trim()) {
     return { reason: `the post's subject must be exactly the approved one, "${subject}"; this call passes "${ti.subject ?? ""}".` };
   }
-  if (ti.status !== "active") return { reason: 'create_message must pass status "active": without it Basecamp saves a draft that notifies nobody.' };
+  // A draft is never published and a send is never drafted: the status follows the mode Andrés chose with his approval click.
+  if (approvedMode(s) === "draft") {
+    if (ti.status !== "drafted") {
+      return { reason: `salida ${s.id} was approved as a draft (mode draft, the default): ${OWNER} attaches the files and publishes it himself. Call create_message with status "drafted" (not "active": a draft is never published), no files and exactly the approved subject and subscriptions, then report it with the salida drafted verb (--permalink <the post's app_url>). "Aprobar y que Claude lo envíe" is the button that publishes.` };
+    }
+  } else if (ti.status !== "active") {
+    return { reason: `salida ${s.id} was approved as "Claude lo envía" (mode send): create_message must pass status "active" (a "drafted" post would sit in Basecamp and notify nobody; a send is never drafted).` };
+  }
   const expected = destinationMentionIds(s);
   const subs = Array.isArray(ti.subscriptions) ? ti.subscriptions.map(String).sort() : null;
   if (expected.length) {
@@ -327,7 +348,8 @@ function messageProblem(ti, s) {
 
 // Returns { match, mismatch }: match is the released salida with exactly this text (and, for create_comment, exactly
 // these mentions; for a post or comment with files, exactly the uploaded files' sgids; for create_message, status
-// "active" and exactly the destination's people as subscriptions); mismatch is set when a salida has the text but not those.
+// "drafted" (mode draft: no files) or "active" (mode send) and exactly the destination's people as subscriptions);
+// mismatch is set when a salida has the text but not those.
 async function releasedSalidaMatches(tool, ti, { fetchImpl, base }) {
   const source = tool.includes("Slack") ? "slack" : "basecamp";
   const data = await mesaCall("/api/salidas?status=sending", { fetchImpl, base, timeoutMs: 4000 });
@@ -405,6 +427,10 @@ async function releasedUploadSalida(tool, ti, { fetchImpl, base }) {
       if (sameName) near = { id: s.id, reason: `"${name}" is a file of salida ${s.id} but these bytes hash to ${digest.slice(0, 12)}, not the approved ${sameName.sha256.slice(0, 12)}: upload the file exactly as it was proposed` };
       continue;
     }
+    if (isDraftPost(s)) {
+      near = { id: s.id, reason: `salida ${s.id} was approved as a draft (mode draft): its post is saved with no files and ${OWNER} attaches "${name}" himself in Basecamp, so do not upload it` };
+      continue;
+    }
     if (campfireTool !== (d.kind === "basecamp_campfire")) {
       near = { id: s.id, reason: campfireTool ? `salida ${s.id} is a ${d.kind}, not a Campfire line: upload with create_attachment and embed the sgid` : `salida ${s.id} is a Campfire salida: upload with create_campfire_upload` };
       continue;
@@ -474,9 +500,6 @@ const slackDestination = (s) => {
   }
 };
 
-// The mode Andrés chose with his approval click; a salida released before modes existed carries none = draft (the default).
-const slackMode = (s) => s.sendMode ?? s.send_mode ?? "draft";
-
 const SLACK_TOOL_MODE = { [SLACK_SEND_DRAFT]: "draft", [SLACK_SEND_MESSAGE]: "send" };
 const showTarget = (channel, thread) => `channel ${channel || "(none)"}${thread ? `, thread ${thread}` : ", no thread"}`;
 
@@ -507,7 +530,7 @@ async function releasedSlackSalida(tool, ti, { fetchImpl, base }) {
       mismatch = { id: s.id, expected, got: { channel, thread } };
       continue;
     }
-    if (slackMode(s) !== wantMode) {
+    if (approvedMode(s) !== wantMode) {
       wrongMode = s;
       continue;
     }
@@ -555,7 +578,7 @@ export function sandboxBlock(tool, ti) {
     return `${NADA} ${tool} writes to Google Calendar. On salida.released, report the event as simulated ("mesa salida sent <id> --simulated") and never call the MCP tool; reads (list, free time) are fine.`;
   }
   if (SLACK_SEND.test(tool) || BASECAMP_WRITE.test(tool)) {
-    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`; a Slack salida in mode draft: \`mesa salida drafted <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
+    return `${NADA} ${tool} writes to ${tool.includes("Slack") ? "Slack" : "Basecamp"}. On salida.released, report the send as simulated (\`mesa salida sent <id> --simulated\`; a Slack salida or a Basecamp post in mode draft: \`mesa salida drafted <id> --simulated\`) and never call the MCP tool; a delete is \`mesa salida deleted <id>\` alone.`;
   }
   if (tool !== "Bash" && tool !== "PowerShell") return null;
   const cmd = String(ti.command ?? "");
@@ -576,7 +599,7 @@ export function sandboxBlock(tool, ti) {
     return `${NADA} Nothing was really sent, so report it as \`mesa salida sent <id> --simulated\` (no --permalink); Mesa records sandbox://<source>/<id>.`;
   }
   if (/\bmesa\b[^\n|;&]*\bsalida\s+drafted\b/.test(c) && !/--simulated\b/.test(c)) {
-    return `${NADA} No Slack draft was really created, so report it as \`mesa salida drafted <id> --simulated\`; Mesa records sandbox://slack/<id>.`;
+    return `${NADA} No draft was really created (Slack or Basecamp), so report it as \`mesa salida drafted <id> --simulated\`; Mesa records sandbox://<source>/<id>.`;
   }
   return null;
 }
@@ -724,8 +747,8 @@ export async function check(input, { fetchImpl = fetch, base, sandbox = hookSand
 
     // G10 (rule 3): approving is Andrés's, in the Mesa UI. No session calls approve/schedule/deny/undo, approves a
     // plan or decides a permission card through the raw API (the CLI has no such verbs on purpose).
-    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/attachments\/[^/\s"']+\/approved\b|\/salidas\/[^/\s"']+\/uploads\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
-      return block("G10", "rule 3: approvals (and the Slack mode they carry), \"Ya lo envié\", plan approvals, permission decisions and Pídeme permiso are " + OWNER + "'s, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
+    if (/(127\.0\.0\.1|localhost|\[::1\]):(8790|8796)\/api\//.test(cmd) && /\/transition\b|\/plan\/approve\b|\/approvals\/[^/\s"']+\/(decision|approve|read-config|deny)\b|\/approvals\/grants\/|\/tickets\/[^/\s"']+\/permission-request\b|\/reviews\/[^/\s"']+\/(actions|close)\b|\/attachments\/[^/\s"']+\/approved\b|\/salidas\/[^/\s"']+\/uploads\b|\/salidas\/[^/\s"']+\/files\/[^/\s"']+\/folder\b|\/select\b|\/edit\b/.test(cmd) && /\b(curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm|fetch)\b/i.test(cmd)) {
+      return block("G10", "rule 3: approvals (and the send mode they carry), \"Ya lo envié\", \"Abrir carpeta\" (it launches Explorer on his PC), plan approvals, permission decisions and Pídeme permiso are " + OWNER + "'s, in the Mesa UI. Use the mesa CLI verbs (propose, version, sent, drafted, failed) and wait for the wake event.");
     }
 
     // G10 (t143 PR5): a card is filed only by the permission hooks (node, straight to Mesa). A session that POSTs a card

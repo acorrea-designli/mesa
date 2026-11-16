@@ -1,13 +1,14 @@
 "use client";
 // Building blocks of a salida: route, version stepper and list, diff line, undo
 // track, state banners, scheduler. Used by the Salidas B card and <SalidaApproval>.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Destination, SalidaDetail, SalidaTurn, SalidaVersion } from "@/lib/domain/types";
-import { DELETE_POLICY } from "@/lib/domain/types";
+import { DELETE_POLICY, hasSendMode } from "@/lib/domain/types";
 import { isSimulated } from "@/lib/domain/sandbox";
 import { Chip, srcClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/interactive";
 import { confirmPick, rise, travel } from "@/lib/motion";
+import { salidaApi } from "./api";
 import { COPY_TOAST, copyExactText } from "./copy";
 import { IcCheck, IcClock, IcCopy, IcExternal, IcStar, IcUndo } from "./icons";
 import { fileOpenHref, fileSizeLabel, fileStateNote, type FileState } from "@/lib/domain/salida-files";
@@ -38,7 +39,22 @@ export function Route({ d, source }: { d: Destination; source: SalidaDetail["sou
 /** t196: the files this salida uploads, each openable. A file that changed or vanished since it was proposed is flagged and cannot be opened. */
 export function SalidaFiles({ s }: { s: Pick<SalidaDetail, "id" | "destination"> & { fileStates?: FileState[] } }) {
   const files = destinationFiles(s.destination);
+  const toast = useToast();
+  // "Abrir carpeta" launches Explorer on the PC Mesa runs on, so it is offered only in a browser on that PC (the phone cannot use it).
+  const onPc = useSyncExternalStore(
+    () => () => {},
+    () => /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname),
+    () => false,
+  );
   if (!files.length) return null;
+  const openFolder = async (i: number) => {
+    try {
+      await salidaApi.openFolder(s.id, i);
+      toast({ text: "Abriendo la carpeta con el archivo seleccionado" });
+    } catch (e) {
+      toast({ text: e instanceof Error ? `No se pudo abrir la carpeta: ${e.message}` : "No se pudo abrir la carpeta" });
+    }
+  };
   return (
     <div className="sa-files" aria-label="Archivos que se suben">
       <div className="k">{files.length === 1 ? "Archivo adjunto" : "Archivos adjuntos"}</div>
@@ -58,6 +74,11 @@ export function SalidaFiles({ s }: { s: Pick<SalidaDetail, "id" | "destination">
               )}
               <small>{fileSizeLabel(f.size)}</small>
               <code title="SHA-256 del archivo propuesto: es el único que sale">{f.sha256.slice(0, 10)}</code>
+              {onPc && state !== "missing" ? (
+                <button type="button" className="btn sm sa-folder" onClick={() => void openFolder(i)} aria-label={`Abrir carpeta de ${f.name}`}>
+                  Abrir carpeta
+                </button>
+              ) : null}
               {note ? <em role="alert">{note}</em> : null}
             </li>
           );
@@ -112,16 +133,22 @@ export function PhoneRoute({ d, source }: { d: Destination; source: SalidaDetail
 
 // ---------- Slack: send mode and quick buttons ----------
 
-/** A Slack salida: what "Aprobar" does (a draft Andrés sends) and the second button, with its cost said next to it. */
-export function SlackModes({ onDirect, disabled, phone }: { onDirect: () => void; disabled?: boolean; phone?: boolean }) {
+/** A Slack message or a Basecamp post: what "Aprobar" does (a draft Andrés sends) and the second button, with its cost said next to it. */
+export function SendModes({ onDirect, disabled, phone, source = "slack" }: { onDirect: () => void; disabled?: boolean; phone?: boolean; source?: "slack" | "basecamp" }) {
   return (
     <div className={cx("sa-modes", phone && "phone")}>
       <button type="button" className="btn" disabled={disabled} onClick={onDirect}>
         Aprobar y que Claude lo envíe
       </button>
-      <span className="sa-modenote">
-        <b>Sale con «Sent using @Claude».</b> Aprobar deja el texto como borrador en tu Slack y lo envías tú; si ya escribes algo en ese canal, el borrador puede reemplazarlo.
-      </span>
+      {source === "basecamp" ? (
+        <span className="sa-modenote">
+          <b>Publica el post ya y avisa a quienes elegiste.</b> Aprobar lo deja como borrador en Basecamp, sin archivos: adjuntas lo que falte y lo publicas tú.
+        </span>
+      ) : (
+        <span className="sa-modenote">
+          <b>Sale con «Sent using @Claude».</b> Aprobar deja el texto como borrador en tu Slack y lo envías tú; si ya escribes algo en ese canal, el borrador puede reemplazarlo.
+        </span>
+      )}
     </div>
   );
 }
@@ -179,25 +206,37 @@ export function SlackQuick({ s }: { s: SalidaDetail }) {
   );
 }
 
-/** Slack, mode draft, drafted: the text waits in Andrés's Slack until he sends it and presses "Ya lo envié". */
+/**
+ * Mode draft, drafted: the text waits as a draft until Andrés sends it and presses "Ya lo envié". A Slack draft is in his
+ * composer; a Basecamp post (t87) is saved as a draft post: he attaches the file(s), publishes it and presses the same button.
+ */
 export function DraftBlock({ s, busy, onSent }: { s: SalidaDetail; busy: boolean; onSent: () => void }) {
   const simulated = isSimulated(s);
+  const basecamp = s.source === "basecamp";
+  const where = basecamp ? "Basecamp" : "Slack";
+  const link = !simulated && basecamp && s.permalink?.startsWith("https://") ? s.permalink : null;
+  const pending = basecamp ? destinationFiles(s.destination).map((f) => f.name) : [];
+  const since = s.draftedAt ? ` · desde las ${hhmm(s.draftedAt)}` : "";
+  const text = simulated
+    ? `Simulado · no salió. Sandbox: Claude marcó el borrador sin crear nada en ${where} (${destShort(s.destination)}).`
+    : basecamp
+      ? `Está guardado en Basecamp, en ${destShort(s.destination)}${since}. Ábrelo, ${pending.length ? `adjunta ${pending.length === 1 ? "el archivo" : "los archivos"}, ` : ""}revísalo y publícalo; recién ahí avisa a quienes elegiste.`
+      : `Está en tu Slack, en ${destShort(s.destination)}${since}. Ábrelo, revisa y dale enviar; sale como mensaje tuyo.`;
   return (
-    <Banner
-      tone="draft"
-      title="Borrador en Slack · envíalo tú"
-      text={
-        simulated
-          ? `Simulado · no salió. Sandbox: Claude marcó el borrador sin crear nada en Slack (${destShort(s.destination)}).`
-          : `Está en tu Slack, en ${destShort(s.destination)}${s.draftedAt ? ` · desde las ${hhmm(s.draftedAt)}` : ""}. Ábrelo, revisa y dale enviar; sale como mensaje tuyo.`
-      }
-    >
+    <Banner tone="draft" title={basecamp ? "Borrador en Basecamp · publícalo tú" : "Borrador en Slack · envíalo tú"} text={text}>
+      {pending.length ? <span className="sx-why">Te falta adjuntar: {pending.join(", ")}</span> : null}
       <div className="sx-del">
+        {link ? (
+          <a className="btn" href={link} target="_blank" rel="noopener noreferrer" aria-label="Abrir el borrador en Basecamp">
+            Abrir borrador
+            <IcExternal />
+          </a>
+        ) : null}
         <button className="btn p" type="button" disabled={busy} onClick={onSent}>
           <IcCheck />
           Ya lo envié
         </button>
-        <span className="sx-why">Márcalo cuando lo hayas enviado; Mesa no ve tu Slack.</span>
+        <span className="sx-why">{basecamp ? "Márcalo cuando lo hayas publicado; Mesa no ve tu Basecamp." : "Márcalo cuando lo hayas enviado; Mesa no ve tu Slack."}</span>
       </div>
     </Banner>
   );
@@ -407,7 +446,8 @@ export function UndoTrack({ undoUntil, now, source }: { undoUntil: string | null
 export function SendingBanner({ s, now, onUndo }: { s: SalidaDetail; now: number; onUndo: () => void }) {
   const left = secondsLeft(s.undoUntil, now);
   const slack = DELETE_POLICY[s.destination.kind] === "none";
-  const draft = s.source === "slack" && s.sendMode !== "send";
+  const draft = hasSendMode(s.destination) && s.sendMode !== "send";
+  const where = s.source === "basecamp" ? "Basecamp" : "Slack";
   return (
     <div className="sa-sx send" role="status">
       <UndoTrack undoUntil={s.undoUntil} now={now} source={s.source} />
@@ -418,7 +458,7 @@ export function SendingBanner({ s, now, onUndo }: { s: SalidaDetail; now: number
         </b>
         <span>
           a {destShort(s.destination)}
-          {draft ? " · queda en tu Slack y lo envías tú" : s.source === "slack" ? " · sale con «Sent using @Claude»" : ""}
+          {draft ? (s.source === "basecamp" ? " · queda como borrador en Basecamp y lo publicas tú" : ` · queda en tu ${where} y lo envías tú`) : s.source === "slack" ? " · sale con «Sent using @Claude»" : ""}
           {slack ? (s.source === "slack" ? " · después Slack no deja borrarlo desde Mesa" : " · después no se puede borrar desde Mesa") : ""}
         </span>
       </div>

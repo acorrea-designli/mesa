@@ -349,7 +349,7 @@ export type SalidaStatus =
   | "expired"
   | "scheduled"
   | "queued_until_back" // approved while the source was down ("Aprobar al volver")
-  | "draft_created" // Slack, mode draft: the text waits as a draft in Andrés's Slack ("Borrador en Slack · envíalo tú") until "Ya lo envié"
+  | "draft_created" // Slack or Basecamp post, mode draft: the text waits as a draft in Andrés's Slack ("Borrador en Slack · envíalo tú") or Basecamp ("Borrador en Basecamp · publícalo tú") until "Ya lo envié"
   | "deleted"
   | "withdrawn"; // the lead took a stale pending/draft salida back (t123): final, never sent, the reason stays visible
 
@@ -358,9 +358,18 @@ export type SalidaSource = "slack" | "basecamp" | "github" | "calendar";
 /**
  * How a Slack salida goes out, chosen by Andrés with his approval click: "draft" (default) leaves the text as a draft in
  * his Slack that he sends himself (it goes out as his own message); "send" has Claude send it through the connector,
- * which adds "Sent using @Claude". Non-Slack salidas have none (null).
+ * which adds "Sent using @Claude". A Basecamp message-board post (basecamp_message, t87) has the same two modes: "draft"
+ * (default) saves it in Basecamp with status "drafted" (no files; Andrés attaches them and publishes it himself),
+ * "send" publishes it with status "active". Every other salida has none (null).
  */
 export type SalidaSendMode = "draft" | "send";
+
+/** Why a salida is queued_until_back: its source is down ("source", the source coming back resumes it) or the lead held it with a reason ("lead", only Andrés moves it). */
+export type SalidaHoldKind = "source" | "lead";
+
+/** The destinations that carry a send mode: Slack messages and Basecamp message-board posts. */
+export const hasSendMode = (d: Pick<Destination, "kind">): boolean =>
+  d.kind === "slack_thread" || d.kind === "slack_channel" || d.kind === "basecamp_message";
 
 export type Destination =
   | {
@@ -471,6 +480,8 @@ export interface Salida {
   approvedVersion: number | null;
   /** Slack only: set with the approval (or Programar), cleared by an undo; null for every other source. */
   sendMode: SalidaSendMode | null;
+  /** queued_until_back only (t87): "source" waits for its source to come back, "lead" was held by the lead with a reason and waits for Andrés. */
+  holdKind: SalidaHoldKind | null;
   undoUntil: string | null;
   releasedAt: string | null;
   sendAt: string | null;

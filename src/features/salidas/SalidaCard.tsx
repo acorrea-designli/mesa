@@ -4,6 +4,7 @@
 // top, engram memory below. On the phone the actions dock at the bottom.
 import { useEffect, useRef, useState } from "react";
 import type { LearnedChip, Mark, SalidaDetail } from "@/lib/domain/types";
+import { hasSendMode } from "@/lib/domain/types";
 import { Alert, Kind } from "@/components/ui/primitives";
 import { SplitApprove, Sheet } from "@/components/ui/interactive";
 import { usePress } from "@/lib/motion";
@@ -26,7 +27,7 @@ import {
   SchedulePicker,
   SendingBanner,
   SentBlock,
-  SlackModes,
+  SendModes,
   SlackQuick,
   VersionList,
   VersionStepper,
@@ -83,6 +84,9 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
   const canMark = s.status === "pending" && !c.rewritePending && Boolean(text) && !isGithubBatch && c.mode === "view";
   const sendLabel = s.status === "pending";
   const isSlack = s.source === "slack";
+  // Slack and a Basecamp post share the modes: Aprobar = draft Andrés sends himself, the second button = Claude sends it.
+  const modal = hasSendMode(s.destination);
+  const modeSource = isSlack ? "slack" : "basecamp";
   const outcome = answeringTurn?.marks.length ? markOutcome(answeringTurn.marks, text) : null;
 
   const sendTurn = async (body: string, chip?: string) => {
@@ -93,7 +97,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
     s.status === "scheduled" && s.sendAt
       ? `Texto programado · sale ${whenLabel(s.sendAt, new Date(now))}`
       : s.status === "draft_created"
-        ? "Texto del borrador en Slack"
+        ? `Texto del borrador en ${sourceLabel(s.source)}`
         : s.status === "sent" || s.status === "deleted"
           ? "Texto enviado"
           : s.status === "denied" || s.status === "withdrawn"
@@ -158,7 +162,7 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
 
       {c.mode === "view" && sendLabel ? (
         <div className="acts sa-desk-acts">
-          <SplitApprove slack={isSlack} label={isSlack ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove slack={isSlack} basecamp={modal && !isSlack} label={modal ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
           <button className="btn" type="button" disabled={c.locked || c.busy || isGithubBatch} onClick={() => c.setMode("edit")}>
             <IcPencil />
             Editar
@@ -173,9 +177,9 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
           ) : null}
         </div>
       ) : null}
-      {c.mode === "view" && sendLabel && isSlack ? (
+      {c.mode === "view" && sendLabel && modal ? (
         <div className="sa-desk-only">
-          <SlackModes disabled={c.locked || c.busy} onDirect={() => c.approve("send")} />
+          <SendModes source={modeSource} disabled={c.locked || c.busy} onDirect={() => c.approve("send")} />
         </div>
       ) : null}
       {c.mode === "view" && sendLabel ? (
@@ -247,12 +251,12 @@ export function SalidaCard({ view, chips, now, marks, setMarks, bind, onDecided,
             placeholder={c.openTurnId ? `Espera a v${pendingN} o cancela el cambio` : "Pídele un cambio a Claude…"}
             onSend={sendTurn}
           />
-          {isSlack ? <SlackModes phone disabled={c.locked || c.busy} onDirect={() => c.approve("send")} /> : null}
+          {modal ? <SendModes phone source={modeSource} disabled={c.locked || c.busy} onDirect={() => c.approve("send")} /> : null}
         </div>
       ) : null}
       {s.status === "pending" && c.mode === "view" ? (
         <div className="sa-dock sa-phone-only">
-          <SplitApprove phone up slack={isSlack} label={isSlack ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
+          <SplitApprove phone up slack={isSlack} basecamp={modal && !isSlack} label={modal ? "Aprobar" : s.source === "calendar" ? "Aprobar y crear" : undefined} version={s.currentVersion} disabled={c.locked || c.busy} onSend={() => c.approve()} onSchedule={() => c.setMode("pick")} />
         </div>
       ) : null}
     </article>
@@ -327,6 +331,7 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
   }, []);
   const changed = draft.trim() !== text.trim() && draft.trim().length > 0;
   const isSlack = c.s.source === "slack";
+  const modal = hasSendMode(c.s.destination);
   return (
     <>
       <div className="k">Tu versión</div>
@@ -346,8 +351,8 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
         </div>
       ) : null}
       <div className="acts">
-        <SplitApprove slack={isSlack} version={c.s.versions.length + 1} label={isSlack ? "Aprobar mi versión" : c.s.source === "calendar" ? "Aprobar y crear mi versión" : "Aprobar y enviar mi versión"} disabled={!changed || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
-        {isSlack ? (
+        <SplitApprove slack={isSlack} basecamp={modal && !isSlack} version={c.s.versions.length + 1} label={modal ? "Aprobar mi versión" : c.s.source === "calendar" ? "Aprobar y crear mi versión" : "Aprobar y enviar mi versión"} disabled={!changed || c.busy} onSend={() => c.approveText(draft)} onSchedule={async () => (await c.saveText(draft)) && c.setMode("pick")} />
+        {modal ? (
           <button className="btn" type="button" disabled={!changed || c.busy} onClick={() => c.approveText(draft, "send")}>
             Aprobar y que Claude lo envíe
           </button>
@@ -359,7 +364,7 @@ function EditBox({ c, text }: { c: SalidaController<SalidaView>; text: string })
           Descartar cambios
         </button>
       </div>
-      <div className="sa-legend">Edición manual sobre v{c.s.currentVersion} · se envía tu versión{isSlack ? " · «Aprobar y que Claude lo envíe» sale con «Sent using @Claude»" : ""}</div>
+      <div className="sa-legend">Edición manual sobre v{c.s.currentVersion} · se envía tu versión{isSlack ? " · «Aprobar y que Claude lo envíe» sale con «Sent using @Claude»" : modal ? " · «Aprobar y que Claude lo envíe» publica el post en Basecamp" : ""}</div>
     </>
   );
 }
@@ -392,8 +397,8 @@ export function StateBlocks({
     case "sending":
       return undoOpen(s, now) ? (
         <SendingBanner s={s} now={now} onUndo={() => c.undo()} />
-      ) : s.source === "slack" && s.sendMode !== "send" ? (
-        <Banner tone="send" title="Dejando el borrador en tu Slack…" text="La sesión de Claude lo crea ahora; aquí verás cuándo esté listo para que lo envíes." />
+      ) : hasSendMode(s.destination) && s.sendMode !== "send" ? (
+        <Banner tone="send" title={s.source === "basecamp" ? "Dejando el borrador en Basecamp…" : "Dejando el borrador en tu Slack…"} text={s.source === "basecamp" ? "La sesión de Claude lo guarda ahora; aquí verás el enlace cuando esté listo para que adjuntes el archivo y lo publiques." : "La sesión de Claude lo crea ahora; aquí verás cuándo esté listo para que lo envíes."} />
       ) : (
         <Banner tone="send" title="Enviando…" text="La sesión de Claude lo publica ahora; aquí verás el enlace cuando confirme." />
       );
@@ -402,6 +407,20 @@ export function StateBlocks({
     case "scheduled":
       return <ScheduledBanner s={s} now={now} onChange={() => c.reschedule()} onCancel={() => c.unschedule()} />;
     case "queued_until_back":
+      // Claude held it with a reason (the source is fine, the send failed or could not start): it waits for Andrés, who
+      // pulls it back to pending to approve it again (as a draft or as a send). Approved while the source was down: it waits for the source.
+      if (s.holdKind === "lead") {
+        return (
+          <Banner tone="queued" title="En espera · Claude no pudo sacarla" text={`Firmada v${s.approvedVersion ?? s.currentVersion}. Motivo: ${s.error}`}>
+            <div className="sx-del">
+              <button className="btn p" type="button" disabled={c.busy} onClick={() => c.unqueue()}>
+                Volver a pendiente
+              </button>
+              <span className="sx-why">Podrás aprobarla de nuevo, como borrador o con «Aprobar y que Claude lo envíe».</span>
+            </div>
+          </Banner>
+        );
+      }
       return (
         <Banner tone="queued" title={`Aprobar al volver · sale cuando vuelva ${sourceLabel(s.source)}`} text={s.error ? `Firmada v${s.approvedVersion ?? s.currentVersion}. ${s.error}` : `Firmada v${s.approvedVersion ?? s.currentVersion}. Antes de enviar, Claude relee el hilo por si cambió.`}>
           <div className="sx-del">
