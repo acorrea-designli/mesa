@@ -4,6 +4,7 @@
 // gh account on this PC does not change who Mesa reads as.
 import { execFile, type ChildProcess } from "node:child_process";
 import { identity } from "../config/identity";
+import { syncMark } from "./sync-mark";
 
 export const GH_USER = identity().ghUser;
 
@@ -90,13 +91,16 @@ export function execGh(file: string, args: string[], env: NodeJS.ProcessEnv, tim
       active.delete(entry);
       resolve(r);
     };
-    const child = execFile(file, args, { env, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
-      const e = err as (NodeJS.ErrnoException & { code?: string | number }) | null;
-      if (e && e.code === "ENOENT") return finish({ code: 127, stdout: "", stderr: "gh: command not found" });
-      if (timedOut) return finish(timeoutResult());
-      const code = e ? (typeof e.code === "number" ? e.code : 1) : 0;
-      finish({ code, stdout: String(stdout), stderr: String(stderr) });
-    });
+    // The spawn itself is synchronous on the loop thread (CreateProcess on Windows): marked so a slow one is logged.
+    const child = syncMark("spawn", `${file} ${args.slice(0, 3).join(" ")}`, () =>
+      execFile(file, args, { env, maxBuffer: 32 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+        const e = err as (NodeJS.ErrnoException & { code?: string | number }) | null;
+        if (e && e.code === "ENOENT") return finish({ code: 127, stdout: "", stderr: "gh: command not found" });
+        if (timedOut) return finish(timeoutResult());
+        const code = e ? (typeof e.code === "number" ? e.code : 1) : 0;
+        finish({ code, stdout: String(stdout), stderr: String(stderr) });
+      }),
+    );
     entry.pid = child.pid;
     active.add(entry);
     const deadline = setTimeout(() => {
