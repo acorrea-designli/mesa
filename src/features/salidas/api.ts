@@ -1,7 +1,7 @@
 // Client calls for Salidas. Every call returns the fresh SalidaDetail (or throws
 // with the API's English error message, which the UI turns into a toast).
 import type { Mark, SalidaDetail, SalidaSendMode } from "@/lib/domain/types";
-import type { EngramSearch } from "./types";
+import type { EngramSearch, HistoryPage, SalidaView } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -30,6 +30,15 @@ const S = (id: string) => `/api/salidas/${encodeURIComponent(id)}`;
 
 export const salidaApi = {
   get: (id: string) => call<SalidaDetail>(S(id)),
+  /** t204: the card's data (ticket and its history included) of a salida opened from the Historial. */
+  view: (id: string) => call<SalidaView>(`${S(id)}/view`),
+  /** t204: one page of the Historial; `limit` re-reads that many rows from the top (a refresh keeps the pages already shown). */
+  history: (cursor?: string | null, limit?: number) => {
+    const p = new URLSearchParams();
+    if (cursor) p.set("cursor", cursor);
+    if (limit) p.set("limit", String(limit));
+    return call<HistoryPage>(`/api/salidas/history${p.size ? `?${p}` : ""}`);
+  },
   /** `mode` is Slack only: omitted = draft (Aprobar); "send" = "Aprobar y que Claude lo envíe". */
   approve: (id: string, version: number, mode?: SalidaSendMode) => call<SalidaDetail>(`${S(id)}/transition`, { body: { type: "approve", version, ...(mode ? { mode } : {}) } }),
   /** "Ya lo envié": Andrés sent the Slack draft himself. */

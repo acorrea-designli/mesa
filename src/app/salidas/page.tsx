@@ -1,4 +1,4 @@
-// Salidas B: one card at a time, free order, queue strip.
+// Salidas B: one card at a time, free order, queue strip (newest first) and the Historial (t204).
 import type { Metadata } from "next";
 import { loadSalidas } from "@/features/salidas/read";
 import { SalidasScreen } from "@/features/salidas/SalidasScreen";
@@ -11,5 +11,5 @@ export default async function SalidasPage({ searchParams }: { searchParams: Prom
   const { s } = await searchParams;
   const r = repos();
   r.sweep();
-  return <SalidasScreen data={loadSalidas(r)} initial={s} />;
+  return <SalidasScreen data={loadSalidas(r, new Date(), s)} initial={s} />;
 }

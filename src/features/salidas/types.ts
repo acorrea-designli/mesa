@@ -1,5 +1,6 @@
 // View types shared by the Salidas server read model and its client components.
 import type { FileState } from "@/lib/domain/salida-files";
+import type { SalidaHistoryRow } from "@/lib/domain/salida-queue";
 import type { HealthSource, LearnedChip, SalidaDetail, Source } from "@/lib/domain/types";
 
 export interface HistoryEvent {
@@ -33,10 +34,21 @@ export interface SalidaView extends SalidaDetail {
 }
 
 export interface SalidasData {
+  /** The queue strip, newest first. */
   items: SalidaView[];
   chips: LearnedChip[];
   sourcesDown: HealthSource[];
   now: string;
+  /** t204: the `?s=` salida when it is not in the strip (it opens through the Historial). */
+  focus: SalidaView | null;
+  /** t204: the `?s=` id when no such salida exists. */
+  missing: string | null;
+}
+
+/** t204: one page of the Historial (`GET /api/salidas/history`); `next` is the cursor of the following page, null on the last. */
+export interface HistoryPage {
+  rows: SalidaHistoryRow[];
+  next: string | null;
 }
 
 export interface EngramObservation {

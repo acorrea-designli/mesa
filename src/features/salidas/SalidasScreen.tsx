@@ -4,10 +4,11 @@
 // Deciding opens the next undecided item.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Mark } from "@/lib/domain/types";
-import { isSimulated } from "@/lib/domain/sandbox";
 import { useArrive, usePress } from "@/lib/motion";
+import { salidaApi } from "./api";
+import { Historial } from "./Historial";
 import { IcClock } from "./icons";
-import { ago, calendarLine, destShort, firstLine, hhmm, sourceLabel, undoOpen, whenLabel } from "./model";
+import { ago, destShort, rowLine, sourceLabel, sourceVar, stripStatus, undoOpen } from "./model";
 import { cx } from "./parts";
 import { SalidaCard } from "./SalidaCard";
 import { useLiveRefresh, useNow } from "./live";
@@ -16,57 +17,43 @@ import type { SalidaView, SalidasData } from "./types";
 const UNDECIDED = new Set(["pending"]);
 const isDecided = (s: SalidaView) => ["sent", "denied", "expired", "deleted", "withdrawn"].includes(s.status);
 
-function stripStatus(s: SalidaView, now: number): string {
-  switch (s.status) {
-    case "pending":
-      return s.expiresAt ? `caduca ${hhmm(s.expiresAt)}` : "sin caducidad";
-    case "scheduled":
-      return s.sendAt ? `Sale ${whenLabel(s.sendAt, new Date(now))}` : "Programada";
-    case "sending":
-      return undoOpen(s, now) ? "Enviando…" : "Saliendo…";
-    case "queued_until_back":
-      return s.holdKind === "lead" ? "En espera" : `Al volver ${sourceLabel(s.source)}`;
-    case "draft_created":
-      return s.source === "basecamp" ? "Borrador en Basecamp · publícalo tú" : "Borrador en Slack · envíalo tú";
-    case "sent":
-      return isSimulated(s) ? "Simulado · no salió" : `Enviada ${hhmm(s.sentAt)}`;
-    case "deleted":
-      return "Eliminada";
-    case "denied":
-      return "Denegada";
-    case "expired":
-      return "Caducada";
-    case "withdrawn":
-      return "Retirada";
-    case "failed":
-      return "Falló";
-    default:
-      return s.status;
-  }
+/** The card that opens by default: the newest pending one (the strip is newest first), else the newest undecided, else the first. */
+const defaultOpen = (items: SalidaView[]) => (items.find((s) => UNDECIDED.has(s.status)) ?? items.find((s) => !isDecided(s)) ?? items[0])?.id ?? null;
+
+/** Put `?s=<id>` in the address bar (no navigation); null removes it. */
+function setUrlSalida(id: string | null) {
+  const u = new URL(window.location.href);
+  if (id) u.searchParams.set("s", id);
+  else u.searchParams.delete("s");
+  window.history.replaceState(null, "", u);
 }
 
 export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: string }) {
   const refresh = useLiveRefresh();
   const [order, setOrder] = useState<string[]>(() => data.items.map((s) => s.id));
   const [denied, setDenied] = useState<Set<string>>(() => new Set());
-  const [openId, setOpenId] = useState<string | null>(() => {
-    if (initial && data.items.some((s) => s.id === initial)) return initial;
-    return (data.items.find((s) => UNDECIDED.has(s.status)) ?? data.items.find((s) => !isDecided(s)) ?? data.items[0])?.id ?? null;
-  });
+  const inStrip = Boolean(initial && data.items.some((s) => s.id === initial));
+  const [openId, setOpenId] = useState<string | null>(() => (inStrip ? (initial ?? null) : defaultOpen(data.items)));
+  // t204: the Historial panel. A `?s=` that is not in the strip opens through it, with its card (or a notice when it does not exist).
+  const [panel, setPanel] = useState<"queue" | "history">(() => (initial && !inStrip ? "history" : "queue"));
+  const [hOpen, setHOpen] = useState<string | null>(() => (initial && !inStrip && data.focus ? initial : null));
+  const [fetched, setFetched] = useState<SalidaView | null>(data.focus);
+  const [hError, setHError] = useState<string | null>(null);
+  const [missing, setMissing] = useState<string | null>(data.missing);
   const [marks, setMarksMap] = useState<Record<string, Mark[]>>({});
   const anySending = data.items.some((s) => s.status === "sending");
   const now = useNow(data.now, true, anySending ? 250 : 1000);
 
-  // Keep the client order, appending new items from the server.
+  // Keep the client order; an item new from the server is newer than every one here, so it goes first.
   const ids = data.items.map((s) => s.id).join(",");
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrder((o) => [...o.filter((id) => data.items.some((s) => s.id === id)), ...data.items.filter((s) => !o.includes(s.id)).map((s) => s.id)]);
+    setOrder((o) => [...data.items.filter((s) => !o.includes(s.id)).map((s) => s.id), ...o.filter((id) => data.items.some((s) => s.id === id))]);
   }, [ids, data.items]);
 
   const byId = useMemo(() => new Map(data.items.map((s) => [s.id, s])), [data.items]);
   const items = order.map((id) => byId.get(id)).filter((s): s is SalidaView => Boolean(s));
-  const open = openId ? byId.get(openId) : undefined;
+  const open = byId.get(openId ?? "") ?? byId.get(defaultOpen(items) ?? "");
   const isUndecided = (s: SalidaView) => s.status === "pending" && !denied.has(s.id);
 
   const counts = {
@@ -80,10 +67,49 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
 
   const select = useCallback((id: string) => {
     setOpenId(id);
-    const u = new URL(window.location.href);
-    u.searchParams.set("s", id);
-    window.history.replaceState(null, "", u);
+    setUrlSalida(id);
   }, []);
+
+  // The salida open in the Historial: the strip's copy when it has come back to the strip (a retry), else the fetched one.
+  const hView = hOpen ? (byId.get(hOpen) ?? (fetched?.id === hOpen ? fetched : null)) : null;
+  const fetchedAt = useRef<string | null>(data.focus ? data.now : null);
+  useEffect(() => {
+    if (!hOpen || byId.has(hOpen)) return;
+    if (fetched?.id === hOpen && fetchedAt.current === data.now) return;
+    let live = true;
+    fetchedAt.current = data.now;
+    salidaApi
+      .view(hOpen)
+      .then((v) => {
+        if (!live) return;
+        setFetched(v);
+        setHError(null);
+      })
+      .catch((e: unknown) => live && setHError(e instanceof Error ? e.message : "No se pudo abrir la salida"));
+    return () => {
+      live = false;
+    };
+  }, [hOpen, data.now, byId, fetched]);
+
+  const openHistory = useCallback(() => {
+    setPanel("history");
+    setHOpen(null);
+    setHError(null);
+    setMissing(null);
+    setUrlSalida(null);
+  }, []);
+  const openFromHistory = useCallback((id: string) => {
+    setHOpen(id);
+    setHError(null);
+    setMissing(null);
+    setUrlSalida(id);
+  }, []);
+  const backToQueue = useCallback(() => {
+    setPanel("queue");
+    setHOpen(null);
+    setMissing(null);
+    setUrlSalida(openId && byId.has(openId) ? openId : null);
+  }, [openId, byId]);
 
   const openNext = useCallback(
     (from: string) => {
@@ -109,19 +135,20 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
   }, [open, now, openNext]);
 
   const skip = useCallback(() => {
-    if (!openId) return;
-    setOrder((o) => [...o.filter((x) => x !== openId), openId]);
-    openNext(openId);
-  }, [openId, openNext]);
+    if (!open) return;
+    const id = open.id;
+    setOrder((o) => [...o.filter((x) => x !== id), id]);
+    openNext(id);
+  }, [open, openNext]);
 
   const move = useCallback(
     (d: number) => {
       if (!items.length) return;
-      const i = Math.max(0, items.findIndex((s) => s.id === openId));
+      const i = Math.max(0, items.findIndex((s) => s.id === open?.id));
       const next = items[(i + d + items.length) % items.length];
       if (next) select(next.id);
     },
-    [items, openId, select],
+    [items, open, select],
   );
 
   // Navigation keys only; never while typing, never with modifiers, never while the semáforo toolbar is open.
@@ -131,17 +158,19 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
       const t = e.target as HTMLElement | null;
       if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable || t.closest("[data-sema],[role=dialog],[role=menu]"))) return;
       if (document.querySelector(".sm-float")) return;
+      if (panel === "history") return;
       const k = e.key.toLowerCase();
       if (k === "j" || e.key === "ArrowRight") return e.preventDefault(), move(1);
       if (k === "k" || e.key === "ArrowLeft") return e.preventDefault(), move(-1);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [move]);
+  }, [move, panel]);
 
   const listRef = useArrive<HTMLDivElement>(".sa-qi");
   const pressRef = usePress<HTMLDivElement>(".sa-qi", true);
-  const setMarks = useCallback((m: Mark[]) => openId && setMarksMap((x) => ({ ...x, [openId]: m })), [openId]);
+  const markId = panel === "history" ? hOpen : (open?.id ?? null);
+  const setMarks = useCallback((m: Mark[]) => markId && setMarksMap((x) => ({ ...x, [markId]: m })), [markId]);
 
   const counter = [
     `${counts.pending} ${counts.pending === 1 ? "pendiente" : "pendientes"}`,
@@ -154,25 +183,68 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
     .filter(Boolean)
     .join(" · ");
 
+  const history = panel === "history";
   return (
     <div className="sa-one">
       <div className="sa-head">
         <h1>
           Salidas<span>Nada sale sin tu firma</span>
         </h1>
-        <span className="sort sa-keys">J/K o ←/→ moverse</span>
+        <div className="sa-headr">
+          {history ? null : <span className="sort sa-keys">J/K o ←/→ moverse</span>}
+          <button type="button" className="btn sa-histbtn" aria-pressed={history} onClick={history ? backToQueue : openHistory}>
+            {history ? "Volver a la cola" : "Historial"}
+          </button>
+        </div>
       </div>
-      {items.length ? (
+      {history ? (
+        <>
+          {hOpen ? (
+            <div className="sa-hback">
+              <button type="button" className="btn" onClick={openHistory}>
+                ← Historial
+              </button>
+              <button type="button" className="btn" onClick={backToQueue}>
+                Ir a la cola
+              </button>
+            </div>
+          ) : null}
+          {missing ? (
+            <div className="sa-hist-note sa-hist-missing" role="alert">
+              No existe ninguna salida con el id {missing}. Búscala en el historial.
+            </div>
+          ) : null}
+          {hOpen && hView ? (
+            <SalidaCard
+              key={hView.id}
+              view={hView}
+              chips={data.chips}
+              now={now}
+              marks={marks[hView.id] ?? []}
+              setMarks={setMarks}
+              onChanged={refresh}
+              onDecided={() => {}}
+              onUndecided={() => {}}
+            />
+          ) : null}
+          {hOpen && !hView ? (
+            <div className="sa-hist-note" role={hError ? "alert" : undefined}>
+              {hError ? `No se pudo abrir la salida: ${hError}` : "Abriendo la salida…"}
+            </div>
+          ) : null}
+          <Historial refreshKey={data.now} now={now} hidden={Boolean(hOpen)} onOpen={openFromHistory} />
+        </>
+      ) : items.length ? (
         <>
           <div className="sa-q">
             <div className="sa-qh">
               <b>{counter}</b>
-              <span>Abre la que quieras; saltar no decide nada.</span>
+              <span>Más nuevas primero. Abre la que quieras; saltar no decide nada.</span>
             </div>
             <div
               className="sa-ql"
               role="list"
-              aria-label="Salidas, en cualquier orden"
+              aria-label="Salidas, de la más nueva a la más vieja"
               ref={(el) => {
                 listRef.current = el;
                 pressRef.current = el;
@@ -183,11 +255,11 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
                   key={s.id}
                   s={s}
                   now={now}
-                  current={s.id === openId}
+                  current={s.id === open?.id}
                   denied={denied.has(s.id)}
                   onOpen={() => select(s.id)}
                   onSwipe={() => {
-                    if (s.id === openId) skip();
+                    if (s.id === open?.id) skip();
                   }}
                 />
               ))}
@@ -218,7 +290,7 @@ export function SalidasScreen({ data, initial }: { data: SalidasData; initial?: 
       ) : (
         <div className="sa-blank">
           <h2>Nada por firmar</h2>
-          <p>Cuando Claude proponga un mensaje para Slack, Basecamp o GitHub aparece aquí con su destino y su texto exactos.</p>
+          <p>Cuando Claude proponga un mensaje para Slack, Basecamp o GitHub aparece aquí con su destino y su texto exactos. Lo de días anteriores está en el Historial.</p>
         </div>
       )}
     </div>
@@ -231,9 +303,9 @@ function QueueItem({ s, now, current, denied, onOpen, onSwipe }: { s: SalidaView
   useEffect(() => {
     if (current) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [current]);
-  const body = s.versions.find((v) => v.n === s.currentVersion)?.body || (s.destination.kind === "github_review" ? (s.destination.comments?.[0]?.body ?? "Aprobación sin comentario") : "");
+  const body = s.versions.find((v) => v.n === s.currentVersion)?.body ?? "";
   const decided = denied || isDecided(s);
-  const color = s.source === "slack" ? "var(--sl)" : s.source === "basecamp" ? "var(--bc)" : s.source === "calendar" ? "var(--ca)" : "var(--gh)";
+  const color = sourceVar(s.source);
   return (
     <button
       ref={ref}
@@ -256,7 +328,7 @@ function QueueItem({ s, now, current, denied, onOpen, onSwipe }: { s: SalidaView
         <span className="a">{ago(s.createdAt, now)}</span>
       </span>
       <span className="d">{destShort(s.destination)}</span>
-      <span className="x">{s.source === "calendar" ? calendarLine(body) : firstLine(body)}</span>
+      <span className="x">{rowLine(s.source, s.destination, body)}</span>
       <span className="s">
         {s.status === "scheduled" ? <IcClock /> : null}
         {denied ? "Denegada" : stripStatus(s, now)}

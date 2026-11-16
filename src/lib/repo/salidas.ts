@@ -13,6 +13,7 @@ import {
 } from "../db/util";
 import { eventBodyProblem, parseEventBody } from "../domain/calendar-event";
 import { isMoveBody, moveBodyProblem } from "../domain/calendar-move";
+import { HISTORY_MAX, HISTORY_PAGE, NOT_LISTED, QUEUE_STAY, type HistoryCursor, type SalidaHistoryRow } from "../domain/salida-queue";
 import {
   canAddVersion,
   dueEvent,
@@ -200,6 +201,52 @@ export function salidasRepo(db: Db) {
       const st = f.status ?? [];
       const where = st.length ? `WHERE status IN (${st.map(() => "?").join(", ")})` : "";
       return fromRows<Salida>(db.prepare(`SELECT * FROM salidas ${where} ORDER BY created_at`).all(...st), S_SPEC);
+    },
+
+    /** t204: the queue strip, newest first: `inQueue` (src/lib/domain/salida-queue.ts) as SQL. `day` is `dayStart(now)`. */
+    queue(day: string): Salida[] {
+      const stay = QUEUE_STAY.map(() => "?").join(", ");
+      const hidden = NOT_LISTED.map(() => "?").join(", ");
+      return fromRows<Salida>(
+        db
+          .prepare(
+            `SELECT * FROM salidas WHERE status NOT IN (${hidden}) AND (status IN (${stay}) OR created_at >= ? OR updated_at >= ?) ORDER BY created_at DESC, rowid DESC`,
+          )
+          .all(...NOT_LISTED, ...QUEUE_STAY, day, day),
+        S_SPEC,
+      );
+    },
+
+    /**
+     * t204: one page of the Historial: every salida the strip does not show (the complement of `queue(day)`), by last
+     * update, newest first. Reads only what a row shows (no versions, no ticket history). `next` is the cursor of the
+     * following page, null on the last one.
+     */
+    history(f: { day: string; limit?: number; cursor?: HistoryCursor | null }): { rows: SalidaHistoryRow[]; next: HistoryCursor | null } {
+      const limit = Math.min(Math.max(Math.trunc(f.limit ?? HISTORY_PAGE) || HISTORY_PAGE, 1), HISTORY_MAX);
+      const stay = QUEUE_STAY.map(() => "?").join(", ");
+      const hidden = NOT_LISTED.map(() => "?").join(", ");
+      const args: (string | number)[] = [...NOT_LISTED, ...QUEUE_STAY, f.day, f.day];
+      let after = "";
+      if (f.cursor) {
+        after = "AND (s.updated_at < ? OR (s.updated_at = ? AND s.id < ?))";
+        args.push(f.cursor.updatedAt, f.cursor.updatedAt, f.cursor.id);
+      }
+      const raw = db
+        .prepare(
+          `SELECT s.id, s.source, s.status, s.destination, s.permalink, s.sent_at, s.expires_at, s.send_at, s.created_at, s.updated_at, s.is_sample,
+                  (SELECT substr(v.body, 1, 400) FROM salida_versions v WHERE v.salida_id = s.id AND v.n = s.current_version) AS body,
+                  (SELECT t.ref FROM tickets t WHERE t.id = s.ticket_id) AS ticket_ref
+             FROM salidas s
+            WHERE s.status NOT IN (${hidden}) AND s.status NOT IN (${stay}) AND s.created_at < ? AND s.updated_at < ? ${after}
+            ORDER BY s.updated_at DESC, s.id DESC
+            LIMIT ${limit + 1}`,
+        )
+        .all(...args);
+      const all = fromRows<SalidaHistoryRow>(raw, S_SPEC).map((r) => ({ ...r, body: r.body ?? "", ticketRef: r.ticketRef ?? null }));
+      const rows = all.slice(0, limit);
+      const last = rows[rows.length - 1];
+      return { rows, next: all.length > limit && last ? { updatedAt: last.updatedAt, id: last.id } : null };
     },
 
     /** Claude proposes a message: creates the salida with v1. */
