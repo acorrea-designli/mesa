@@ -8,6 +8,12 @@ export const DEFAULT_HOUR = "09:00";
 const WITH_ZONE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i;
 const LOCAL = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2})(:\d{2})?)?$/;
 
+/** True when a YYYY-MM-DD is a day that exists (no 2026-02-31). */
+const realDay = (ymd: string): boolean => {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === ymd;
+};
+
 /**
  * An ISO instant for what a person typed: "2026-11-18T09:00" (Bogota), "2026-11-18 09:00", "2026-11-18" (09:00 Bogota) or
  * a full instant with Z or an offset. Null when it is not a real date and time.
@@ -17,6 +23,8 @@ export function parseWhen(input: string): string | null {
   if (!s) return null;
   let ms: number;
   if (WITH_ZONE.test(s)) {
+    // Date.parse rolls 2026-02-31T09:00Z over to March; the day the text names has to exist.
+    if (!realDay(s.slice(0, 10))) return null;
     ms = Date.parse(s.replace(" ", "T").replace(/([+-]\d{2})(\d{2})$/, "$1:$2"));
   } else {
     const m = LOCAL.exec(s);
@@ -45,6 +53,10 @@ export function dueLabel(iso: string, now: Date): string {
   if (day === localDay(new Date(now.getTime() + 86_400_000))) return `mañana ${clockLabel(iso)}`;
   return fullLabel(iso);
 }
+
+/** The reason a timed pause gets when none was typed. A typed reason that merely starts the same way is not this one. */
+export const autoReason = (untilAt: string): string => `Hasta ${fullLabel(untilAt)}`;
+export const isAutoReason = (reason: string | null | undefined, untilAt: string | null | undefined): boolean => Boolean(reason && untilAt && reason === autoReason(untilAt));
 
 /** "Vuelve mié 18 nov 9:00": what a timed pause shows on the ticket and its card. */
 export const returnsLabel = (iso: string, now: Date): string => `Vuelve ${dueLabel(iso, now)}`;

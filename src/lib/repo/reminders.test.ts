@@ -9,6 +9,7 @@ import { GET as LIST, POST as CREATE } from "@/app/api/reminders/route";
 import { POST as CANCEL } from "@/app/api/reminders/[id]/cancel/route";
 import { POST as DONE } from "@/app/api/reminders/[id]/done/route";
 import { loadHoy } from "@/features/hoy/data";
+import { loadTickets } from "@/features/tickets/read";
 import { ownerChip } from "@/features/tablero/model";
 import { scanOnce } from "@/lib/push/notifier";
 import type { Sender } from "@/lib/push/send";
@@ -97,6 +98,16 @@ describe("timed pause", () => {
     const t = mk();
     expect(() => r.tickets.pause(t.ref, { kind: "paused", by: "claude" }, T0)).toThrow(/needs a reason/);
     expect(r.tickets.pause(t.ref, { kind: "paused", reason: "Espera a Matt", untilAt: iso(H), by: "claude" }, T0).pauseReason).toBe("Espera a Matt");
+  });
+
+  it("keeps a typed reason that starts with \"Hasta\" in the row, next to the date", () => {
+    const a = mk("A");
+    const b = mk("B");
+    r.tickets.pause(a.ref, { kind: "paused", reason: "Hasta que Matt confirme", untilAt: iso(48 * H), by: "claude" }, T0);
+    r.tickets.pause(b.ref, { kind: "paused", untilAt: iso(48 * H), by: "claude" }, T0);
+    const rows = loadTickets(r, { tab: "paused" }, T0).rows;
+    expect(rows.find((x) => x.ref === a.ref)!.excerpt).toBe("Hasta que Matt confirme · Vuelve mié 18 nov 10:00");
+    expect(rows.find((x) => x.ref === b.ref)!.excerpt).toBe("Vuelve mié 18 nov 10:00");
   });
 
   it("refuses a past or unreadable date, and a date on an ongoing ticket", () => {

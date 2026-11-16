@@ -13,7 +13,7 @@ import {
 import { identity } from "../config/identity";
 import { isPdfMime, sameKind } from "../domain/attachments";
 import { inferKind } from "../domain/dispatch-kind";
-import { fullLabel } from "../domain/reminders";
+import { autoReason, fullLabel } from "../domain/reminders";
 import { initialTicketStatus, isPauseStatus, transitionTicket, type PauseKind, type TicketEvent } from "../domain/ticket-machine";
 import { checklistProblem, findStep, groupChecklists, MAX_STEP_NOTE, stepCount, stepsOwed, type StepInput } from "../domain/ticket-checklists";
 import { answersBody, cardProblem, optionLabel, parseShorthand, type QuestionInput } from "../domain/ticket-questions";
@@ -839,7 +839,7 @@ export function ticketsRepo(db: Db) {
           if (Date.parse(o.untilAt) <= now.getTime()) throw new ValidationError("the return date is already past");
           untilAt = new Date(o.untilAt).toISOString();
         }
-        const reason = (o.reason ?? "").trim() || (untilAt ? `Hasta ${fullLabel(untilAt)}` : "");
+        const reason = (o.reason ?? "").trim() || (untilAt ? autoReason(untilAt) : "");
         if (!reason) throw new ValidationError("a pause needs a reason");
         let until: string | null = null;
         if (o.untilTicket) {

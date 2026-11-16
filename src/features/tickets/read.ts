@@ -1,7 +1,7 @@
 // Server read model for Tickets A (list + thread).
 import type { Repos } from "@/lib/repo";
 import { isSimulated } from "@/lib/domain/sandbox";
-import { returnsLabel } from "@/lib/domain/reminders";
+import { isAutoReason, returnsLabel } from "@/lib/domain/reminders";
 import { needLine, needRank, type TicketNeed } from "@/lib/domain/ticket-needs";
 import { related, type RelItem, type RelTicket, type Related } from "@/lib/domain/related";
 import { loadTicketNeeds } from "./needs";
@@ -92,7 +92,7 @@ function excerpt(t: TicketDetail, needs: TicketNeed[], now: Date): string {
   // "En pausa" and "En proceso" read their reason (the dependency link lives in the thread header, a row is one link).
   // A date-only pause has the auto reason "Hasta mié 9:00": say it once, as "Vuelve mié 9:00" (t191).
   if (t.status === "paused") {
-    const why = t.pausedUntilAt && t.pauseReason?.startsWith("Hasta ") ? "" : t.pauseReason;
+    const why = isAutoReason(t.pauseReason, t.pausedUntilAt) ? "" : t.pauseReason;
     return [why, t.pausedUntil ? `hasta ${t.pausedUntil}` : "", t.pausedUntilAt ? returnsLabel(t.pausedUntilAt, now) : ""].filter(Boolean).join(" · ") || "En pausa";
   }
   if (t.status === "ongoing") return t.pauseReason || "En proceso";
