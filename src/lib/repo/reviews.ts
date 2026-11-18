@@ -65,6 +65,8 @@ export function reviewsRepo(db: Db) {
       const next =
         s.status === "sent" ? (stale ? "open" : "approved") : ["pending", "denied", "failed", "expired", "withdrawn"].includes(s.status) ? "open" : null;
       if (next) {
+        // A "post and approve all" that did not go out (undone, denied, failed) or landed on an old commit frees its findings.
+        if (next === "open" && s.status !== "sent") db.prepare("UPDATE review_findings SET salida_id = NULL WHERE salida_id = ?").run(r.salidaId);
         db.prepare("UPDATE reviews SET state = ?, salida_id = CASE WHEN ? = 'open' THEN NULL ELSE salida_id END WHERE id = ?").run(next, next, id);
         r = fromRow<Omit<Review, "findings">>(db.prepare("SELECT * FROM reviews WHERE id = ?").get(id));
       }
@@ -334,6 +336,66 @@ export function reviewsRepo(db: Db) {
               links: [{ source: "github", label: `PR #${r.pr}`, url: `https://github.com/${r.repo}/pull/${r.pr}` }],
             });
             db.prepare("UPDATE reviews SET state = 'approving', salida_id = ?, updated_at = ? WHERE id = ?").run(id, ts, r.id);
+            break;
+          }
+          case "post_approve": {
+            // "Post and approve all": ONE review that approves and carries every open finding not yet on GitHub.
+            // A finding with a path and line is an inline comment; one without (the review body) is the review's text.
+            if (r.state !== "open") throw new TransitionError(`review is ${r.state}`);
+            const open = r.findings.filter((f) => f.state === "open");
+            if (open.some((f) => f.label === "blocker")) {
+              throw new TransitionError("there are open blockers; post them (request changes) or use approve_anyway");
+            }
+            const list = open.filter((f) => !f.ghCommentId && !f.salidaId);
+            const inline = list.filter((f) => parseAt(f.at).line !== undefined);
+            const text = list.filter((f) => parseAt(f.at).line === undefined);
+            const id = write({
+              source: "github",
+              title: `Aprobar ${r.repo}#${r.pr} · ${inline.length} ${inline.length === 1 ? "comentario" : "comentarios"}`,
+              destination: {
+                kind: "github_review",
+                repo: r.repo,
+                pr: r.pr,
+                event: "APPROVE",
+                commitId: r.headSha || undefined,
+                comments: inline.map((f) => ({ ...parseAt(f.at), body: findingCommentBody(f), findingN: f.n })),
+                postAs: GITHUB_LOGIN,
+              },
+              body: [a.note, ...text.map(findingCommentBody)].filter(Boolean).join("\n\n"),
+              links: [{ source: "github", label: `PR #${r.pr}`, url: `https://github.com/${r.repo}/pull/${r.pr}` }],
+            });
+            for (const f of list) db.prepare("UPDATE review_findings SET salida_id = ?, updated_at = ? WHERE id = ?").run(id, ts, f.id);
+            db.prepare("UPDATE reviews SET state = 'approving', salida_id = ?, updated_at = ? WHERE id = ?").run(id, ts, r.id);
+            affected = list.map((f) => f.n);
+            break;
+          }
+          case "post_all": {
+            // "Post all and request changes": ONE review with every open finding not yet on GitHub, without approving.
+            // A blocker among them asks for changes; otherwise it only comments. A finding with a path and line is an
+            // inline comment; one without (the review body) is the review's text.
+            if (r.state !== "open") throw new TransitionError(`review is ${r.state}`);
+            const list = r.findings.filter((f) => f.state === "open" && !f.ghCommentId && !f.salidaId);
+            if (!list.length) throw new TransitionError("nothing open to post");
+            const event = list.some((f) => f.label === "blocker") ? "REQUEST_CHANGES" : "COMMENT";
+            const inline = list.filter((f) => parseAt(f.at).line !== undefined);
+            const text = list.filter((f) => parseAt(f.at).line === undefined);
+            const id = write({
+              source: "github",
+              title: `${event === "REQUEST_CHANGES" ? "Pedir cambios" : "Revisión"} ${r.repo}#${r.pr} · ${inline.length} ${inline.length === 1 ? "comentario" : "comentarios"}`,
+              destination: {
+                kind: "github_review",
+                repo: r.repo,
+                pr: r.pr,
+                event,
+                commitId: r.headSha || undefined,
+                comments: inline.map((f) => ({ ...parseAt(f.at), body: findingCommentBody(f), findingN: f.n })),
+                postAs: GITHUB_LOGIN,
+              },
+              body: [a.note, ...text.map(findingCommentBody)].filter(Boolean).join("\n\n"),
+              links: [{ source: "github", label: `PR #${r.pr}`, url: `https://github.com/${r.repo}/pull/${r.pr}` }],
+            });
+            for (const f of list) db.prepare("UPDATE review_findings SET salida_id = ?, updated_at = ? WHERE id = ?").run(id, ts, f.id);
+            affected = list.map((f) => f.n);
             break;
           }
           case "post": {

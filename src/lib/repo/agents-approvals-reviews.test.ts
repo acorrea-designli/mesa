@@ -149,6 +149,53 @@ describe("reviews", () => {
     expect(hard.title).toMatch(/^Pedir cambios acme\/scout#59 · 1 comentario/);
   });
 
+  it("post and approve all sends ONE approving review with the inline findings and the pathless ones as its text", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    expect(() => r.reviews.action(rev.id, { action: "post_approve" }, T0)).toThrow(/blockers/);
+    r.reviews.action(rev.id, { action: "dismiss", findingNs: [1] }, T0);
+    r.reviews.upsertFinding(ref, { repo: "acme/scout", pr: 59, label: "comment", at: "src/b.ts:7", summary: "SUGGESTION: a helper", sha: "abc" }, T0); // n = 3
+    const out = r.reviews.action(rev.id, { action: "post_approve" }, T0);
+    expect(out.state).toBe("approving");
+    expect(out.salidaIds).toHaveLength(1);
+    const s = r.salidas.detail(out.salidaIds[0]!);
+    expect(s.destination).toMatchObject({ kind: "github_review", event: "APPROVE", commitId: "abc", comments: [{ path: "src/b.ts", line: 7, body: "SUGGESTION: a helper", findingN: 3 }] });
+    expect(s.versions[0]?.body).toBe("Naming"); // finding 2 has no path: it is the review's text
+    expect(s.title).toBe("Aprobar acme/scout#59 · 1 comentario");
+    expect(out.findings.filter((f) => f.salidaId).map((f) => f.n)).toEqual([2, 3]);
+    const wake = eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "review.action").at(-1);
+    expect(wake?.payload).toMatchObject({ action: "post_approve", findingNs: [2, 3] });
+
+    // undone: the review is open again and its findings can be sent again
+    r.salidas.transition(out.salidaIds[0]!, { type: "undo" }, at(1000));
+    const back = r.reviews.get(rev.id);
+    expect(back.state).toBe("open");
+    expect(back.findings.some((f) => f.salidaId)).toBe(false);
+  });
+
+  it("post all sends every open finding as ONE review that asks for changes when a blocker is among them", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    const out = r.reviews.action(rev.id, { action: "post_all" }, T0);
+    expect(out.state).toBe("open"); // posting is not approving
+    expect(out.salidaIds).toHaveLength(1);
+    const s = r.salidas.detail(out.salidaIds[0]!);
+    expect(s.destination).toMatchObject({ kind: "github_review", event: "REQUEST_CHANGES", commitId: "abc", comments: [{ path: "src/a.ts", line: 42, body: "Null deref", findingN: 1 }] });
+    expect(s.versions[0]?.body).toBe("Naming"); // finding 2 has no path: it is the review's text
+    expect(s.title).toBe("Pedir cambios acme/scout#59 · 1 comentario");
+    expect(out.findings.filter((f) => f.salidaId).map((f) => f.n)).toEqual([1, 2]);
+    const wake = eventsAfter(r.db, "lead", 0).filter((e) => e.kind === "review.action").at(-1);
+    expect(wake?.payload).toMatchObject({ action: "post_all", findingNs: [1, 2] });
+    expect(() => r.reviews.action(rev.id, { action: "post_all" }, T0)).toThrow(/nothing open to post/);
+  });
+
+  it("post all only comments when no blocker is open", () => {
+    const rev = r.reviews.byPr("acme/scout", 59);
+    r.reviews.action(rev.id, { action: "dismiss", findingNs: [1] }, T0);
+    const out = r.reviews.action(rev.id, { action: "post_all" }, T0);
+    const s = r.salidas.detail(out.salidaIds[0]!);
+    expect(s.destination).toMatchObject({ event: "COMMENT", comments: [] });
+    expect(s.title).toBe("Revisión acme/scout#59 · 0 comentarios");
+  });
+
   it("approve paths keep their APPROVE event", () => {
     const rev = r.reviews.byPr("acme/scout", 59);
     const out = r.reviews.action(rev.id, { action: "approve_anyway" }, T0);

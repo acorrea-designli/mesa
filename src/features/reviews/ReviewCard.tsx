@@ -23,6 +23,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
   const [r, setR] = useState(review);
   const [picked, setPicked] = useState<number[]>([]);
   const [preview, setPreview] = useState<number[] | null>(null);
+  // The "everything in one review" preview: "approve" = Post and approve all, "request" = Post all and request changes.
+  const [allMode, setAllMode] = useState<"approve" | "request" | null>(null);
   const [sent, setSent] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const ref = usePress<HTMLDivElement>(".btn");
@@ -44,6 +46,7 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
       setSent((s) => [...res.salidaIds, ...s]);
       setPicked([]);
       setPreview(null);
+      setAllMode(null);
       if (action === "dismiss") toast({ text: "Descartado" });
       if (action === "explain") toast({ text: "Le pediste más detalle al revisor" });
       onChange?.();
@@ -57,6 +60,11 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
   const previewList = preview ? r.findings.filter((f) => preview.includes(f.n)) : [];
   // Same rule as the server: a blocker among the posted findings makes the GitHub review request changes.
   const requestsChanges = previewList.some((f) => f.label === "blocker");
+  // "Post and approve all": every open finding not yet on GitHub goes out with the approval, as ONE review.
+  // A finding with a line is an inline comment; one without (the review body) is the review's own text.
+  const toPublish = open.filter((f) => canPost(f));
+  const inlineAll = toPublish.filter((f) => /:\d+(-\d+)?$/.test(f.at.trim()));
+  const textAll = toPublish.filter((f) => !/:\d+(-\d+)?$/.test(f.at.trim()));
 
   return (
     <div className="rv-card" ref={ref} aria-label={`Revisión de ${r.repo}#${r.pr}`}>
@@ -144,9 +152,52 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
         </div>
       ) : null}
 
+      {allMode && r.state === "open" ? (
+        <div className="rv-preview" role="dialog" aria-label={allMode === "approve" ? "Lo que se publicará con la aprobación" : "Lo que se publicará"}>
+          <div className="k">
+            {allMode === "approve"
+              ? `Se publica como una revisión que aprueba ${r.repo}#${r.pr} · como ${ghUser}`
+              : blockers.length
+                ? `Se publica como una revisión que pide cambios en ${r.repo}#${r.pr} · como ${ghUser}`
+                : `Se publica como una revisión en ${r.repo}#${r.pr} · como ${ghUser}`}
+          </div>
+          {textAll.map((f) => (
+            <div key={f.n} className="msg src-github rv-msg">
+              <span className="sa-ghat">Texto de la revisión</span>
+              {body(f)}
+            </div>
+          ))}
+          {inlineAll.map((f) => (
+            <div key={f.n} className="msg src-github rv-msg">
+              <span className="sa-ghat">{f.at}</span>
+              {body(f)}
+            </div>
+          ))}
+          <div className="rv-acts">
+            <button className="btn sm p" type="button" disabled={busy} onClick={() => act(allMode === "approve" ? "post_approve" : "post_all")}>
+              {allMode === "approve" ? "Aprobar y publicar" : blockers.length ? "Pedir cambios y publicar" : "Publicar"}{" "}
+              {inlineAll.length === 1 ? "1 comentario" : `${inlineAll.length} comentarios`} · 20 s para deshacer
+            </button>
+            <button className="btn sm" type="button" onClick={() => setAllMode(null)}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {r.state === "open" ? (
         <div className="rv-bar">
-          <button className="btn sm p" type="button" disabled={busy || blockers.length > 0} onClick={() => act("approve")} aria-describedby={blockers.length ? `rv-why-${r.id}` : undefined}>
+          {toPublish.length && !blockers.length ? (
+            <button className="btn sm p" type="button" disabled={busy} onClick={() => { setPreview(null); setAllMode("approve"); }} title="Aprueba y publica todos los hallazgos abiertos en una sola revisión">
+              Post and approve all
+            </button>
+          ) : null}
+          {toPublish.length && blockers.length ? (
+            <button className="btn sm p" type="button" disabled={busy} onClick={() => { setPreview(null); setAllMode("request"); }} title="Publica todos los hallazgos abiertos en una sola revisión que pide cambios, sin aprobar">
+              Post all and request changes
+            </button>
+          ) : null}
+          <button className={toPublish.length && !blockers.length ? "btn sm" : "btn sm p"} type="button" disabled={busy || blockers.length > 0} onClick={() => act("approve")} aria-describedby={blockers.length ? `rv-why-${r.id}` : undefined}>
             Approve
           </button>
           {open.length ? (
@@ -164,7 +215,7 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
               {blockers.length} {blockers.length === 1 ? "bloqueante abierto" : "bloqueantes abiertos"}: Approve espera a que se corrijan
             </span>
           ) : (
-            <span className="rv-why">Aprobación sin comentario</span>
+            <span className="rv-why">{toPublish.length ? "Approve aprueba sin publicar nada" : "Aprobación sin comentario"}</span>
           )}
         </div>
       ) : null}

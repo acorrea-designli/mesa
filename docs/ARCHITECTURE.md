@@ -192,6 +192,8 @@ The reviewer agent first opens the review with `mesa review open <ref> --repo ow
 | `approve` | refused while open blockers exist | github_review APPROVE salida |
 | `approve_anyway` | waives every open finding | github_review APPROVE salida |
 | `post {findingNs}` | the chosen findings become inline comments; each text is the summary plus the explanation, as shown on the card | ONE github_review salida per decision (REQUEST_CHANGES when any posted finding is a blocker, else COMMENT), with `destination.comments[]` |
+| `post_approve` | "Post and approve all": refused while open blockers exist; every open finding not yet on GitHub goes out with the approval (a finding with a line is an inline comment, one without is the review's text) | ONE github_review APPROVE salida with `destination.comments[]` and the text as its body; an undo, deny or failure frees its findings |
+| `post_all` | "Post all and request changes": every open finding not yet on GitHub in one review, without approving; the review stays open | ONE github_review salida (REQUEST_CHANGES when a blocker is among them, else COMMENT) with `destination.comments[]` and the text as its body |
 | `dismiss {findingNs}` | finding → dismissed | none |
 | `explain {findingNs}` | asks the reviewer for more | none |
 
