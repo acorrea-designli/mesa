@@ -766,7 +766,7 @@ export interface Review {
   findings: Finding[];
 }
 
-export type ReviewAction = "approve" | "approve_anyway" | "post" | "dismiss" | "explain";
+export type ReviewAction = "approve" | "approve_anyway" | "post" | "post_approve" | "post_all" | "dismiss" | "explain";
 
 // ---------- sources: sweep state and health ----------
 

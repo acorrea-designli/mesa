@@ -39,6 +39,12 @@ relays his click as `ANSWER <ticket> review.action <action> <findingNs> <salidaI
 - **approve** / **approve_anyway**: Mesa already created the approved github salida. On the lead's `SENT`, open
   findings become `waived` (never `fixed`), record `approvedHead`, DONE.
 - **post**: Mesa already created the salidas; the lead sends them as ONE review. On `SENT`, set `posted: true`.
+- **post_approve** ("Post and approve all"): Mesa created ONE approved github salida (event APPROVE) that carries
+  every open finding not yet on GitHub, inline or as the review's text. On the lead's `SENT`, those findings and any
+  other open one become `waived` (never `fixed`), record `approvedHead` and set `posted: true`, DONE.
+- **post_all** ("Post all and request changes"): ONE github salida with every open finding not yet on GitHub, without
+  approving (REQUEST_CHANGES when a blocker is among them, else COMMENT). On `SENT`, set `posted: true`; the findings
+  stay `open` and the review stays open.
 - **dismiss**: those findings to `dismissed`; never report them again on this PR.
 - **explain**: the long English write-up goes only into the finding's `explanation` (the card shows it); the ticket
   reply is one line: `Detalle en el hallazgo N de la tarjeta.`

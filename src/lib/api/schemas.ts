@@ -467,7 +467,7 @@ export const reviewOpenInput = z.object({
 });
 export const reviewCloseInput = z.object({ reason: z.string().trim().min(1) });
 export const reviewActionInput = z.object({
-  action: z.enum(["approve", "approve_anyway", "post", "dismiss", "explain"]),
+  action: z.enum(["approve", "approve_anyway", "post", "post_approve", "post_all", "dismiss", "explain"]),
   findingNs: z.array(z.number().int().positive()).optional(),
   note: z.string().optional(),
 });
