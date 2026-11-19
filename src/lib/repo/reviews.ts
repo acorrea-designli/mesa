@@ -65,7 +65,7 @@ export function reviewsRepo(db: Db) {
       const next =
         s.status === "sent" ? (stale ? "open" : "approved") : ["pending", "denied", "failed", "expired", "withdrawn"].includes(s.status) ? "open" : null;
       if (next) {
-        // A "post and approve all" that did not go out (undone, denied, failed) or landed on an old commit frees its findings.
+        // A "post and approve all" that did not go out (undone, denied, failed) frees its findings.
         if (next === "open" && s.status !== "sent") db.prepare("UPDATE review_findings SET salida_id = NULL WHERE salida_id = ?").run(r.salidaId);
         db.prepare("UPDATE reviews SET state = ?, salida_id = CASE WHEN ? = 'open' THEN NULL ELSE salida_id END WHERE id = ?").run(next, next, id);
         r = fromRow<Omit<Review, "findings">>(db.prepare("SELECT * FROM reviews WHERE id = ?").get(id));

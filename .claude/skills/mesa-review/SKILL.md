@@ -100,14 +100,22 @@ Post, Dismiss, Approve; nothing open → Approve (and Re-review, which is a tick
 
 Each press calls `POST /api/reviews/:id/actions`. Mesa wakes the lead with `review.action {action, repo, pr,
 findingNs, salidaIds, note, ticketRef}`, and the lead relays `ANSWER <ref> review.action <action> <findingNs>
-<salidaIds>`. The press is Andrés's approval of the exact text on the card: approve, approve_anyway and post create
-github salidas that are already approved and in the 20 s undo window. You never propose GitHub salidas yourself.
+<salidaIds>`. The press is Andrés's approval of the exact text on the card: approve, approve_anyway, post,
+post_approve and post_all create github salidas that are already approved and in the 20 s undo window. You never propose GitHub salidas yourself.
 
 - **approve / approve_anyway**: nothing to send. On the lead's `SENT`: every open finding → `waived` at the head
   sha (never `fixed`), `approvedHead`/`approvedAt` in the review-state, DONE. Approving publishes nothing else, not
   even nits (pr-monitor, 2026-09-07); approve_anyway's trail is the waived blockers listed in your DONE.
 - **post**: on `SENT <ref> <salidaIds> <commentIds>`, the lead has already stored each `ghCommentId`; set
   `posted: true` in the review-state.
+- **post_approve** ("Post and approve all", offered with no open blocker): ONE salida, event APPROVE, whose
+  `destination.comments[]` are the open findings with a line that are not on GitHub yet and whose body is the text of
+  those without one. On `SENT <ref> <salidaIds> <commentIds>` the lead has stored each `ghCommentId`: every open
+  finding → `waived` at the head sha (never `fixed`), `approvedHead`/`approvedAt` and `posted: true` in the
+  review-state, DONE.
+- **post_all** ("Post all and request changes"): the same single salida without the approval, event REQUEST_CHANGES
+  when a blocker is among the findings it carries, else COMMENT. On `SENT`: `posted: true`; the findings stay `open`
+  (they wait on the author) and the review stays open.
 - **dismiss**: `MESA finding upsert` each listed finding with `state: "dismissed"` (keep `at` and `anchor`) unless
   Mesa already did; an FYI reply naming any blocker among them. No GitHub write.
 - **explain**: reread the code with more context, write the English long form (*Why it is a problem*, *What breaks,
@@ -142,8 +150,16 @@ One click is one GitHub write, as in pr-monitor. The salidas of one `review.acti
 together; send them as a batch through pr-gh.mjs (PowerShell tool, bare; hook G5 checks each write has a released
 github salida for that repo and PR; it writes under the token of `MESA_GH_USER`, from the environment or the checkout's `.env.local`):
 
-- **approve / approve_anyway** (`github_review`, event APPROVE): `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs approve
-  <repo> <pr> <commitId>`, always with an empty body.
+- **approve / approve_anyway** (`github_review`, event APPROVE, no `destination.comments[]` and an empty salida
+  body): `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs approve <repo> <pr> <commitId>`, always with an empty body.
+- **post_approve / post_all** (`github_review` with `destination.comments[]` or a salida body; event APPROVE,
+  REQUEST_CHANGES or COMMENT as the destination says): never `pr-gh.mjs approve`, which would drop the comments and
+  the text. Build the payload from the released salida and nothing else,
+  `{"body":"<the approved version's body>","commit_id":"<commitId>","comments":[{"path","line","side":"RIGHT","body"}, …]}`
+  with one entry per `destination.comments[]` item, write it with the Write tool to
+  `<scratchpad>/lead/review-<ref>-<n>.json` and send
+  `node G:/WorkSpace/designli/ops/vendor/pr-gh.mjs review <repo> <pr> <destination.event> <payload>`. Then read the
+  review's comments back and store each `ghCommentId` on the finding its `findingN` names.
 - **post**: ONE review per decision. Every new finding (`github_comment` with `path`/`line`) goes into a single
   payload, `{"body":"","commit_id":"<commitId>","comments":[{"path","line","body"}, …]}` written with the Write tool
   to `<scratchpad>/lead/review-<ref>-<n>.json`, sent with

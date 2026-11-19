@@ -65,6 +65,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
   const toPublish = open.filter((f) => canPost(f));
   const inlineAll = toPublish.filter((f) => /:\d+(-\d+)?$/.test(f.at.trim()));
   const textAll = toPublish.filter((f) => !/:\d+(-\d+)?$/.test(f.at.trim()));
+  // Same rule as the server for "post all": the event comes from the findings that go out now, not from every open blocker.
+  const allRequestsChanges = toPublish.some((f) => f.label === "blocker");
 
   return (
     <div className="rv-card" ref={ref} aria-label={`Revisión de ${r.repo}#${r.pr}`}>
@@ -157,7 +159,7 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
           <div className="k">
             {allMode === "approve"
               ? `Se publica como una revisión que aprueba ${r.repo}#${r.pr} · como ${ghUser}`
-              : blockers.length
+              : allRequestsChanges
                 ? `Se publica como una revisión que pide cambios en ${r.repo}#${r.pr} · como ${ghUser}`
                 : `Se publica como una revisión en ${r.repo}#${r.pr} · como ${ghUser}`}
           </div>
@@ -175,7 +177,7 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
           ))}
           <div className="rv-acts">
             <button className="btn sm p" type="button" disabled={busy} onClick={() => act(allMode === "approve" ? "post_approve" : "post_all")}>
-              {allMode === "approve" ? "Aprobar y publicar" : blockers.length ? "Pedir cambios y publicar" : "Publicar"}{" "}
+              {allMode === "approve" ? "Aprobar y publicar" : allRequestsChanges ? "Pedir cambios y publicar" : "Publicar"}{" "}
               {inlineAll.length === 1 ? "1 comentario" : `${inlineAll.length} comentarios`} · 20 s para deshacer
             </button>
             <button className="btn sm" type="button" onClick={() => setAllMode(null)}>
@@ -193,8 +195,8 @@ export function ReviewCard({ review, onChange }: { review: Review; onChange?: ()
             </button>
           ) : null}
           {toPublish.length && blockers.length ? (
-            <button className="btn sm p" type="button" disabled={busy} onClick={() => { setPreview(null); setAllMode("request"); }} title="Publica todos los hallazgos abiertos en una sola revisión que pide cambios, sin aprobar">
-              Post all and request changes
+            <button className="btn sm p" type="button" disabled={busy} onClick={() => { setPreview(null); setAllMode("request"); }} title={allRequestsChanges ? "Publica todos los hallazgos abiertos en una sola revisión que pide cambios, sin aprobar" : "Publica todos los hallazgos abiertos en una sola revisión, sin aprobar"}>
+              {allRequestsChanges ? "Post all and request changes" : "Post all"}
             </button>
           ) : null}
           <button className={toPublish.length && !blockers.length ? "btn sm" : "btn sm p"} type="button" disabled={busy || blockers.length > 0} onClick={() => act("approve")} aria-describedby={blockers.length ? `rv-why-${r.id}` : undefined}>
